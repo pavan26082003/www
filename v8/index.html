@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Device Configuration</title>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #f0f4fb;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 880px;
+            width: 100%;
+            background: #ffffff;
+            border-radius: 32px;
+            box-shadow: 0 20px 60px -12px rgba(0, 20, 40, 0.25), 0 8px 24px -6px rgba(0, 0, 0, 0.05);
+            padding: 28px 32px 32px;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+
+        /* header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-weight: 600;
+            font-size: 1.9rem;
+            letter-spacing: -0.02em;
+            color: #0b1e33;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header h1 i {
+            color: #1e5fc7;
+            font-size: 2rem;
+            filter: drop-shadow(0 2px 6px rgba(30, 95, 199, 0.2));
+        }
+
+        .model-badge {
+            background: #e5eefb;
+            color: #1a4b8c;
+            font-weight: 500;
+            font-size: 0.8rem;
+            padding: 6px 18px;
+            border-radius: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(4px);
+            box-shadow: inset 0 1px 3px rgba(255, 255, 255, 0.8);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .model-badge i {
+            font-size: 0.75rem;
+            color: #2d6fb0;
+        }
+
+        /* button row */
+        .action-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 22px;
+            align-items: center;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 22px;
+            border: none;
+            border-radius: 60px;
+            font-weight: 500;
+            font-size: 0.95rem;
+            background: #ffffff;
+            color: #1f3a5f;
+            box-shadow: 0 2px 8px rgba(0, 20, 40, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: 1px solid rgba(0, 0, 0, 0.04);
+            flex: 0 1 auto;
+            min-width: 110px;
+            letter-spacing: 0.01em;
+        }
+
+        .btn i {
+            font-size: 1rem;
+        }
+
+        .btn-pause {
+            background: #f3b33d;
+            color: #1f2e44;
+            border: 1px solid #f3b33d;
+            box-shadow: 0 4px 12px -6px rgba(243, 179, 61, 0.3);
+        }
+
+        .btn-pause:hover {
+            background: #e09f2a;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 18px -8px rgba(243, 179, 61, 0.4);
+        }
+
+        .btn-pause:active {
+            transform: translateY(0px);
+        }
+
+        .btn-pause.active {
+            background: #2a7de1;
+            color: white;
+            border-color: #2a7de1;
+            box-shadow: 0 4px 12px -6px rgba(42, 125, 225, 0.4);
+        }
+
+        .btn-pause.active i {
+            color: white;
+        }
+
+        .btn-stop {
+            background: #d43f34;
+            color: white;
+            border: 1px solid #d43f34;
+            box-shadow: 0 4px 12px -6px rgba(212, 63, 52, 0.25);
+        }
+
+        .btn-stop:hover {
+            background: #b83228;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 18px -8px rgba(212, 63, 52, 0.35);
+        }
+
+        .btn-stop:active {
+            transform: translateY(0px);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #ccdae9;
+            color: #1f3a5f;
+        }
+
+        .btn-outline:hover {
+            background: rgba(26, 91, 191, 0.04);
+            border-color: #8aadf0;
+        }
+
+        .btn-clear {
+            margin-left: auto;
+        }
+
+        /* output box */
+        .output-wrapper {
+            background: #0b1a2b;
+            border-radius: 20px;
+            padding: 2px;
+            box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.06);
+            border: 1px solid #1d3347;
+        }
+
+        #output {
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 0.9rem;
+            line-height: 1.7;
+            padding: 20px 24px;
+            max-height: 340px;
+            min-height: 140px;
+            overflow-y: auto;
+            color: #d6e6ff;
+            background: transparent;
+            white-space: pre-wrap;
+            word-break: break-word;
+            scroll-behavior: smooth;
+        }
+
+        #output::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #output::-webkit-scrollbar-track {
+            background: #142b3f;
+            border-radius: 12px;
+        }
+
+        #output::-webkit-scrollbar-thumb {
+            background: #3b6a9e;
+            border-radius: 12px;
+        }
+
+        #output .error {
+            color: #ff9b8a;
+            font-weight: 500;
+        }
+
+        /* status footer */
+        .status-footer {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 18px;
+            flex-wrap: wrap;
+            border-top: 1px solid rgba(0, 0, 0, 0.04);
+            padding-top: 16px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #eef4fa;
+            padding: 4px 16px 4px 12px;
+            border-radius: 40px;
+            font-weight: 450;
+            font-size: 0.85rem;
+            color: #1f3a5f;
+        }
+
+        .status-badge .dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #3fb58b;
+            transition: background 0.2s ease;
+        }
+
+        .status-badge .dot.paused {
+            background: #f3b33d;
+        }
+
+        .status-badge .dot.stopped {
+            background: #9aaec9;
+        }
+
+        .status-badge .dot.error {
+            background: #d43f34;
+        }
+
+        .status-badge i {
+            font-size: 0.75rem;
+            color: #5a7a9e;
+        }
+
+        .footer-note {
+            margin-left: auto;
+            opacity: 0.5;
+            font-size: 0.7rem;
+            letter-spacing: 0.3px;
+            color: #1f3a5f;
+        }
+
+        /* responsive */
+        @media (max-width: 640px) {
+            .container {
+                padding: 20px 16px;
+            }
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            .action-bar .btn {
+                flex: 1 1 100%;
+                justify-content: center;
+            }
+            .btn-clear {
+                margin-left: 0;
+            }
+            #output {
+                padding: 14px 16px;
+                font-size: 0.8rem;
+                max-height: 260px;
+            }
+            .status-footer {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            .footer-note {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- header -->
+    <div class="header">
+        <h1>
+            <i class="fas fa-microchip"></i> Device Config
+        </h1>
+        <span class="model-badge">
+            <i class="fas fa-tag"></i> EF-003FMN03
+        </span>
+    </div>
+
+    <!-- action buttons -->
+    <div class="action-bar">
+        <button id="pauseButton" class="btn btn-pause">
+            <i class="fas fa-pause"></i> <span id="pauseLabel">Pause</span>
+        </button>
+        <button id="stopButton" class="btn btn-stop">
+            <i class="fas fa-stop-circle"></i> Stop
+        </button>
+        <button id="clearButton" class="btn btn-outline btn-clear">
+            <i class="fas fa-eraser"></i> Clear
+        </button>
+    </div>
+
+    <!-- output -->
+    <div class="output-wrapper">
+        <div id="output">Waiting for updates...</div>
+    </div>
+
+    <!-- status -->
+    <div class="status-footer">
+        <span class="status-badge">
+            <span class="dot" id="statusDot"></span>
+            <span id="statusText">live</span>
+        </span>
+        <span class="status-badge">
+            <i class="fas fa-arrow-right"></i> model: EF-003FMN03
+        </span>
+        <span class="footer-note">
+            <i class="far fa-clock"></i> real‑time
+        </span>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ----- DOM refs -----
+        const outputEl = document.getElementById('output');
+        const pauseBtn = document.getElementById('pauseButton');
+        const pauseLabel = document.getElementById('pauseLabel');
+        const stopBtn = document.getElementById('stopButton');
+        const clearBtn = document.getElementById('clearButton');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+
+        // ----- state (exactly as original, but with UI helpers) -----
+        let controller = new AbortController();
+        let isPaused = false;
+        let reader;
+
+        // ----- helper: reset pause button (matches original resetPauseButton) -----
+        function resetPauseButton() {
+            const pauseButton = document.getElementById('pauseButton');
+            pauseButton.textContent = 'Pause';
+            pauseButton.classList.remove('highlight');
+            // also update icon and label
+            pauseBtn.classList.remove('active');
+            pauseLabel.textContent = 'Pause';
+            const icon = pauseBtn.querySelector('i');
+            if (icon) icon.className = 'fas fa-pause';
+            isPaused = false;
+            // update status dot
+            if (statusDot) {
+                statusDot.className = 'dot';
+                statusDot.classList.remove('paused', 'stopped', 'error');
+            }
+            if (statusText) statusText.textContent = 'live';
+        }
+
+        // ----- stop operation (original, with UI extras) -----
+        async function stopOperation() {
+            try {
+                const response = await fetch('https://efactor.tech/v8/stop_process.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model_number: 'EF-003FMN03' })
+                });
+                const result = await response.json();
+                console.log(result.message);
+
+                // Reset the Pause button when the operation is stopped
+                resetPauseButton();
+                // update status to stopped
+                if (statusDot) {
+                    statusDot.className = 'dot stopped';
+                }
+                if (statusText) statusText.textContent = 'stopped';
+            } catch (error) {
+                console.error('Error stopping operation:', error);
+                if (statusDot) {
+                    statusDot.className = 'dot error';
+                }
+                if (statusText) statusText.textContent = 'error';
+            }
+        }
+
+        // ----- fetch updates (original, with status sync) -----
+        async function fetchUpdates() {
+            try {
+                const response = await fetch(`https://efactor.tech/v8/product_config.php?action=Product_config&model_number=EF-003FMN03`, {
+                    signal: controller.signal
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok: ' + response.statusText);
+                }
+
+                reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                // Automatically set the button to "Pause" when the operation starts
+                const pauseButton = document.getElementById('pauseButton');
+                pauseButton.textContent = 'Pause';
+                pauseButton.classList.remove('highlight');
+                // sync icon
+                pauseBtn.classList.remove('active');
+                pauseLabel.textContent = 'Pause';
+                const icon = pauseBtn.querySelector('i');
+                if (icon) icon.className = 'fas fa-pause';
+                // status live
+                if (statusDot) {
+                    statusDot.className = 'dot';
+                    statusDot.classList.remove('paused', 'stopped', 'error');
+                }
+                if (statusText) statusText.textContent = 'live';
+
+                while (true) {
+                    if (isPaused) {
+                        // If paused, stop processing new chunks
+                        await new Promise(resolve => setTimeout(resolve, 100)); // Check every 100ms
+                        continue;
+                    }
+
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        console.log('Stream complete');
+                        resetPauseButton(); // Reset the button when the stream is complete
+                        if (statusDot) {
+                            statusDot.className = 'dot stopped';
+                        }
+                        if (statusText) statusText.textContent = 'stopped';
+                        break;
+                    }
+                    const chunk = decoder.decode(value, { stream: true });
+                    document.getElementById('output').textContent += chunk + '\n';
+                }
+            } catch (error) {
+                console.error('Error fetching updates:', error);
+                document.getElementById('output').innerHTML = `<p class="error"><strong>Error:</strong> ${error.message}</p>`;
+                if (statusDot) {
+                    statusDot.className = 'dot error';
+                }
+                if (statusText) statusText.textContent = 'error';
+            }
+        }
+
+        // ----- Toggle pause/resume (original logic + UI sync) -----
+        document.getElementById('pauseButton').addEventListener('click', function() {
+            isPaused = !isPaused; // Toggle pause state
+            this.textContent = isPaused ? 'Resume' : 'Pause'; // Update button text
+            this.classList.toggle('highlight', isPaused); // Highlight the button when paused
+
+            // sync icon & label
+            if (isPaused) {
+                pauseBtn.classList.add('active');
+                pauseLabel.textContent = 'Resume';
+                const icon = pauseBtn.querySelector('i');
+                if (icon) icon.className = 'fas fa-play';
+                if (statusDot) {
+                    statusDot.className = 'dot paused';
+                }
+                if (statusText) statusText.textContent = 'paused';
+            } else {
+                pauseBtn.classList.remove('active');
+                pauseLabel.textContent = 'Pause';
+                const icon = pauseBtn.querySelector('i');
+                if (icon) icon.className = 'fas fa-pause';
+                if (statusDot) {
+                    statusDot.className = 'dot';
+                    statusDot.classList.remove('paused', 'stopped', 'error');
+                }
+                if (statusText) statusText.textContent = 'live';
+            }
+
+            if (!isPaused) {
+                fetchUpdates(); // Resume fetching updates
+            }
+        });
+
+        // ----- stop button (original) -----
+        document.getElementById('stopButton').addEventListener('click', stopOperation);
+
+        // ----- clear button (extra: clears output) -----
+        document.getElementById('clearButton').addEventListener('click', function() {
+            document.getElementById('output').innerHTML = '';
+        });
+
+        // ----- Start fetching updates initially (original) -----
+        fetchUpdates();
+
+        // optional: sync status on load
+        if (statusDot) {
+            statusDot.className = 'dot';
+        }
+        if (statusText) statusText.textContent = 'live';
+    })();
+</script>
+</body>
+</html>

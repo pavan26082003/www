@@ -1,0 +1,1087 @@
+/* =========================================================
+   MOMENTS (STORIES) PAGE
+========================================================= */
+
+.moments-page {
+  position: absolute;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  color: #111827;
+  overflow: hidden;
+  font-family: inherit;
+  animation: smoothMomentsOpen 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
+
+  /* Status-ring "viewed" color, theme-aware so inline conic-gradient styles
+     (computed in JS) automatically follow light/dark without extra logic. */
+  --status-ring-viewed: #cbd5e1;
+}
+
+[data-theme="dark"] .moments-page {
+  --status-ring-viewed: #475569;
+}
+
+.moments-page.closing {
+  animation: smoothMomentsClose 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes smoothMomentsOpen {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.996);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes smoothMomentsClose {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.996);
+  }
+}
+
+@media (min-width: 1025px) {
+  .moments-page {
+    left: var(--sidebar-width, 210px);
+    right: 0;
+    transition: left var(--transition-normal);
+  }
+
+  .app-content:has(.sidebar.sidebar-collapsed) .moments-page,
+  .app-content.sidebar-is-collapsed .moments-page {
+    left: var(--sidebar-collapsed-width, 68px);
+  }
+}
+
+/* Header */
+.moments-header {
+  height: 64px;
+  flex: 0 0 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f3f9;
+  z-index: 10;
+}
+
+.moments-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.moments-back-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.moments-back-btn:hover {
+  background: var(--color-primary-light, rgba(245, 158, 11, 0.16));
+  color: var(--color-primary, #f59e0b);
+}
+
+.moments-title-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.moments-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+
+.moments-subtitle {
+  font-size: 11.5px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.moments-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.moments-action-circle-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-primary-light, rgba(245, 158, 11, 0.16));
+  border: none;
+  color: var(--color-primary, #f59e0b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.moments-action-circle-btn:hover {
+  background: #e4dcff;
+  color: #5b21b6;
+  transform: translateY(-1px);
+}
+
+.moments-action-circle-btn.primary {
+  background: var(--color-primary, #f59e0b);
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(112, 71, 235, 0.28);
+}
+
+.moments-action-circle-btn.primary:hover {
+  background: var(--color-primary-hover, #d97706);
+}
+
+/* Header 3-dot dropdown menu — positioned near the button, never a centered modal */
+.moments-more-wrap {
+  position: relative;
+}
+
+.moments-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+
+  min-width: 200px;
+  max-width: calc(100vw - 32px);
+
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+
+  background: #ffffff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(28, 41, 64, 0.14);
+
+  animation: momentsMenuPop 0.15s ease-out;
+}
+
+@keyframes momentsMenuPop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.moments-dropdown-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #334155;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.moments-dropdown-menu button:hover {
+  background: #f8f9fe;
+  color: var(--color-primary, #f59e0b);
+}
+
+.moments-dropdown-menu button i {
+  width: 16px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.moments-dropdown-menu button:hover i {
+  color: var(--color-primary, #f59e0b);
+}
+
+/* Scroll Area */
+.moments-scroll-area {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 18px 90px;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.moments-scroll-area::-webkit-scrollbar {
+  width: 5px;
+}
+
+.moments-scroll-area::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+
+/* My Status Card */
+.my-status-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #fbfbfe;
+  border: 1px solid #edf1f8;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.my-status-card:hover {
+  background: #f4f3ff;
+  border-color: #e0d7fe;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(112, 71, 235, 0.08);
+}
+
+.my-status-avatar-wrap {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Reserved even without a ring, so the avatar doesn't shift once you post */
+  padding: 2.5px;
+}
+
+/* Only drawn when you actually have a live status. One status gives an
+   unbroken ring; several get a segmented ring set as an inline background. */
+.my-status-avatar-wrap.has-status {
+  background: linear-gradient(135deg, var(--color-primary, #00a884), #059669, #f59e0b);
+}
+
+.my-status-avatar-wrap img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.my-status-add-badge {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--color-primary, #f59e0b);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(112, 71, 235, 0.3);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.my-status-add-badge:hover {
+  transform: scale(1.1);
+}
+
+/* My Status "+" contextual action menu (Photos & videos / Text) — anchored to
+   the avatar, never a full-screen/centered modal */
+.status-action-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: -4px;
+  z-index: 40;
+
+  min-width: 190px;
+  max-width: calc(100vw - 32px);
+
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+
+  background: #ffffff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(28, 41, 64, 0.14);
+
+  animation: momentsMenuPop 0.15s ease-out;
+}
+
+.status-action-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #334155;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.status-action-menu button:hover {
+  background: #f8f9fe;
+  color: var(--color-primary, #f59e0b);
+}
+
+.status-action-menu button i {
+  width: 16px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.status-action-menu button:hover i {
+  color: var(--color-primary, #f59e0b);
+}
+
+.my-status-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.my-status-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 3px;
+}
+
+.my-status-time {
+  font-size: 12.5px;
+  color: #64748b;
+  margin: 0;
+  font-weight: 500;
+}
+
+.my-status-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quick-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--color-primary-light, rgba(245, 158, 11, 0.16));
+  color: var(--color-primary, #f59e0b);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quick-icon-btn:hover {
+  background: var(--color-primary, #f59e0b);
+  color: #ffffff;
+}
+
+/* My Status 3-dot menu — anchored beside the button, never centered on screen */
+.my-status-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+
+  min-width: 210px;
+  max-width: calc(100vw - 32px);
+
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+
+  background: #ffffff;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(28, 41, 64, 0.14);
+
+  animation: momentsMenuPop 0.15s ease-out;
+}
+
+.my-status-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #334155;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.my-status-menu button:hover {
+  background: #f8f9fe;
+  color: var(--color-primary, #f59e0b);
+}
+
+.my-status-menu button i {
+  width: 16px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.my-status-menu button:hover i {
+  color: var(--color-primary, #f59e0b);
+}
+
+.my-status-menu button.danger {
+  color: #ef4444;
+}
+
+.my-status-menu button.danger:hover {
+  background: rgba(239, 68, 68, 0.08);
+  color: #dc2626;
+}
+
+.my-status-menu button.danger i {
+  color: #ef4444;
+}
+
+.my-status-menu button.danger:hover i {
+  color: #dc2626;
+}
+
+.my-status-menu-confirm {
+  padding: 10px 12px 6px;
+}
+
+.my-status-menu-confirm p {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.my-status-menu-confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.my-status-menu-confirm-actions button {
+  width: auto;
+  padding: 8px 14px;
+  border-radius: 18px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.my-status-menu-confirm-actions button:not(.danger) {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.my-status-menu-confirm-actions button:not(.danger):hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.my-status-menu-confirm-actions button.danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #ffffff;
+}
+
+.my-status-menu-confirm-actions button.danger:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #ffffff;
+}
+
+/* Horizontal Reel Section */
+.moments-reel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.moments-reel-scroll {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+  scrollbar-width: none;
+}
+
+.moments-reel-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.reel-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.reel-avatar-wrap {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  padding: 2.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.18s ease;
+}
+
+.reel-item:hover .reel-avatar-wrap {
+  transform: scale(1.06);
+}
+
+.reel-avatar-wrap.active-ring {
+  background: linear-gradient(135deg, var(--color-primary, #f59e0b), #f97316, #f59e0b);
+}
+
+.reel-avatar-wrap.viewed {
+  background: #cbd5e1;
+}
+
+.reel-avatar-wrap img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #ffffff;
+}
+
+.reel-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #334155;
+  white-space: nowrap;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+/* Vertical Sections (Recent & Viewed) */
+.moments-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.moments-section-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin: 0;
+}
+
+.moments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.moment-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #f1f3f9;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.moment-card:hover {
+  background: #f8f9fe;
+  border-color: #e2e8f0;
+  transform: translateX(2px);
+}
+
+.moment-card.viewed {
+  opacity: 0.85;
+}
+
+.moment-card-avatar-wrap {
+  width: 50px;
+  height: 50px;
+  flex: 0 0 50px;
+  border-radius: 50%;
+  padding: 2.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.moment-card-avatar-wrap.active-ring {
+  background: linear-gradient(135deg, var(--color-primary, #f59e0b), #059669, #f97316);
+}
+
+.moment-card-avatar-wrap.viewed-ring {
+  background: #cbd5e1;
+}
+
+.moment-card-avatar-wrap img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #ffffff;
+}
+
+.moment-card-details {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.moment-card-name,
+.creator-name {
+  font-size: var(--font-secondary, 14px);
+  font-weight: var(--weight-medium, 500);
+  color: #111827;
+  margin: 0 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.moment-card-time,
+.reel-views-time {
+  font-size: var(--font-caption, 12px);
+  color: #64748b;
+  font-weight: var(--weight-regular, 400);
+  line-height: 1.4;
+}
+
+.reel-title,
+.moment-reel-title {
+  font-size: var(--font-user-name, 16px);
+  font-weight: var(--weight-semibold, 600);
+  line-height: 1.4;
+}
+
+.moment-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Per-type media counters (video / image / text) — pinned to the far right of
+   the card row via flex, never stacked underneath it. */
+.status-media-counters {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.status-counter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: none;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.status-counter-pill:hover:not(:disabled) {
+  background: #e2e8f0;
+  transform: translateY(-1px);
+}
+
+.status-counter-pill:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.status-counter-pill i {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.viewed-icon {
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+/* Empty state — nobody has posted a status */
+.moments-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 44px 24px 28px;
+  color: #64748b;
+}
+
+.moments-empty i {
+  font-size: 34px;
+  color: #cbd5e1;
+  margin-bottom: 6px;
+}
+
+.moments-empty h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.moments-empty p {
+  margin: 0;
+  font-size: 13px;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+[data-theme="dark"] .moments-empty h3 {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .moments-empty {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .moments-empty i {
+  color: #334155;
+}
+
+/* Privacy Banner */
+.moments-privacy-banner {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #f8f9fe;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  justify-content: center;
+}
+
+.moments-privacy-banner i {
+  color: var(--color-primary, #f59e0b);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+/* =========================================================
+   DARK THEME OVERRIDES ([data-theme="dark"])
+========================================================= */
+
+[data-theme="dark"] .moments-page {
+  background: #0b0f19;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .moments-header {
+  background: #111827;
+  border-bottom: 1px solid #1e293b;
+}
+
+[data-theme="dark"] .moments-title {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .moments-subtitle {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .moments-back-btn {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .moments-back-btn:hover {
+  background: #1e1b4b;
+  color: #a78bfa;
+}
+
+[data-theme="dark"] .moments-action-circle-btn:not(.primary) {
+  background: #1e1b4b;
+  color: #a78bfa;
+}
+
+[data-theme="dark"] .moments-action-circle-btn:not(.primary):hover {
+  background: #2e286e;
+  color: #c4b5fd;
+}
+
+[data-theme="dark"] .moments-dropdown-menu,
+[data-theme="dark"] .status-action-menu {
+  background: #161f30;
+  border-color: #28354d;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .moments-dropdown-menu button,
+[data-theme="dark"] .status-action-menu button {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .moments-dropdown-menu button:hover,
+[data-theme="dark"] .status-action-menu button:hover {
+  background: #1e293b;
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .moments-dropdown-menu button i,
+[data-theme="dark"] .status-action-menu button i {
+  color: #64748b;
+}
+
+[data-theme="dark"] .moments-dropdown-menu button:hover i,
+[data-theme="dark"] .status-action-menu button:hover i {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .moments-scroll-area::-webkit-scrollbar-thumb {
+  background: #24324a;
+}
+
+[data-theme="dark"] .my-status-card {
+  background: #111827;
+  border-color: #1e293b;
+}
+
+[data-theme="dark"] .my-status-card:hover {
+  background: #161f30;
+  border-color: #312e81;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .my-status-avatar-wrap img {
+  border-color: #111827;
+}
+
+[data-theme="dark"] .my-status-add-badge {
+  border-color: #111827;
+}
+
+[data-theme="dark"] .my-status-name {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .my-status-time {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .quick-icon-btn {
+  background: #1e1b4b;
+  color: #a78bfa;
+}
+
+[data-theme="dark"] .quick-icon-btn:hover {
+  background: var(--color-primary, #f59e0b);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .my-status-menu {
+  background: #161f30;
+  border-color: #28354d;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .my-status-menu button {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .my-status-menu button:hover {
+  background: #1e293b;
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .my-status-menu button i {
+  color: #64748b;
+}
+
+[data-theme="dark"] .my-status-menu button:hover i {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .my-status-menu button.danger {
+  color: #f87171;
+}
+
+[data-theme="dark"] .my-status-menu button.danger:hover {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .my-status-menu button.danger i {
+  color: #f87171;
+}
+
+[data-theme="dark"] .my-status-menu button.danger:hover i {
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .my-status-menu-confirm p {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .my-status-menu-confirm-actions button:not(.danger) {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .my-status-menu-confirm-actions button:not(.danger):hover {
+  background: #334155;
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] .section-label,
+[data-theme="dark"] .moments-section-heading {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .reel-avatar-wrap img {
+  border-color: #111827;
+}
+
+[data-theme="dark"] .reel-avatar-wrap.viewed {
+  background: #334155;
+}
+
+[data-theme="dark"] .reel-name {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .moment-card {
+  background: #111827;
+  border-color: #1e293b;
+}
+
+[data-theme="dark"] .moment-card:hover {
+  background: #161f30;
+  border-color: #24324a;
+}
+
+[data-theme="dark"] .moment-card-avatar-wrap img {
+  border-color: #111827;
+}
+
+[data-theme="dark"] .moment-card-avatar-wrap.viewed-ring {
+  background: #334155;
+}
+
+[data-theme="dark"] .moment-card-name {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .moment-card-time {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .status-counter-pill {
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .status-counter-pill i {
+  color: #64748b;
+}
+
+[data-theme="dark"] .viewed-icon {
+  color: #64748b;
+}
+
+[data-theme="dark"] .moments-privacy-banner {
+  background: #111827;
+  border: 1px solid #1e293b;
+  color: #94a3b8;
+}
+
+/* Gracefully compress the media counters on very narrow phones instead of
+   wrapping them to a second row or letting them overflow the card. */
+@media (max-width: 380px) {
+  .moment-card {
+    gap: 10px;
+    padding: 9px 10px;
+  }
+
+  .status-media-counters {
+    gap: 3px;
+  }
+
+  .status-counter-pill {
+    gap: 3px;
+    min-height: 26px;
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+}
+

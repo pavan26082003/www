@@ -1,0 +1,348 @@
+/* =========================================================
+   STATUS PRIVACY / STATUS DOWNLOAD
+   Visually matches the existing Contact Info / Media, links
+   and docs secondary-panel shell (same header, spacing, motion).
+========================================================= */
+
+.status-settings-panel {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  color: #111827;
+  position: relative;
+  overflow: hidden;
+  font-family: inherit;
+  animation: statusPanelSlideIn 0.2s ease-out;
+}
+
+@keyframes statusPanelSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Header — matches .all-media-header / .panel-secondary-header elsewhere */
+.panel-secondary-header {
+  height: 60px;
+  min-height: 60px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f3f9;
+  z-index: 10;
+}
+
+.panel-secondary-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.panel-secondary-back-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #00a884;
+  font-size: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.panel-secondary-back-btn:hover {
+  background: #e6f7f4;
+  color: #008f6f;
+}
+
+.panel-secondary-title-wrap h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.panel-secondary-header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.panel-secondary-icon-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.panel-secondary-icon-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+/* Scrollable body */
+.panel-secondary-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 18px 20px 32px;
+  scrollbar-width: thin;
+  background: #ffffff;
+}
+
+.panel-secondary-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.panel-secondary-scroll::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+
+.status-settings-question {
+  margin: 4px 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.status-options-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.status-option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.status-option-row:hover {
+  background: #f8fafc;
+}
+
+.status-option-row.selected {
+  background: rgba(0, 168, 132, 0.06);
+}
+
+.status-option-row input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.status-option-radio-dot {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  margin-top: 2px;
+  border-radius: 50%;
+  border: 2px solid #cbd5e1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s ease;
+}
+
+.status-option-radio-dot::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #00a884;
+  transform: scale(0);
+  transition: transform 0.15s ease;
+}
+
+.status-option-row.selected .status-option-radio-dot {
+  border-color: #00a884;
+}
+
+.status-option-row.selected .status-option-radio-dot::after {
+  transform: scale(1);
+}
+
+.status-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.status-option-label {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.status-option-description {
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* Picked people under "My contacts except..." / "Only share with..." */
+.status-option-people {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: -4px 0 8px 42px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #eef2f7;
+}
+
+.status-option-people-avatars {
+  display: flex;
+  align-items: center;
+}
+
+.status-option-people-avatars img {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #ffffff;
+  margin-right: -8px;
+}
+
+.status-option-people-more {
+  margin-left: 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.status-option-people-count {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.status-option-edit-btn {
+  border: none;
+  background: transparent;
+  color: #00a884;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.status-option-edit-btn:hover {
+  background: #e6f7f4;
+}
+
+/* Dark theme */
+[data-theme="dark"] .status-option-people {
+  background: #1e293b;
+  border-color: #243449;
+}
+
+[data-theme="dark"] .status-option-people-avatars img {
+  border-color: #111827;
+}
+
+[data-theme="dark"] .status-option-people-count,
+[data-theme="dark"] .status-option-people-more {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .status-option-edit-btn:hover {
+  background: rgba(0, 168, 132, 0.16);
+}
+
+[data-theme="dark"] .status-settings-panel,
+[data-theme="dark"] .panel-secondary-scroll {
+  background: #111827 !important;
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .panel-secondary-header {
+  background: #111827 !important;
+  border-bottom: 1px solid #1e293b !important;
+}
+
+[data-theme="dark"] .panel-secondary-title-wrap h2 {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .panel-secondary-icon-btn {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .panel-secondary-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .status-settings-question {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .status-option-row:hover {
+  background: #1e293b;
+}
+
+[data-theme="dark"] .status-option-row.selected {
+  background: rgba(0, 168, 132, 0.12);
+}
+
+[data-theme="dark"] .status-option-label {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .status-option-description {
+  color: #94a3b8;
+}
+
+@media (max-width: 1024px) {
+  .panel-secondary-header {
+    padding: 0 12px;
+  }
+
+  .panel-secondary-scroll {
+    padding: 16px 14px 28px;
+  }
+}

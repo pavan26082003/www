@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🍽️ Kitchen Dashboard - Live Orders</title>
+ 
+<style>
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+    padding: 20px;
+  }
+
+  /* Main Dashboard Container */
+  .dashboard-container {
+    max-width: 900px;
+    margin: auto;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    padding: 20px;
+  }
+
+  h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #333;
+    animation: fadeInDown 0.6s ease-out;
+  }
+
+  /* Control Panel (Top Buttons) */
+  .control-panel {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .ctrl-btn {
+    padding: 10px 20px;
+    font-size: 15px;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    color: white;
+    transition: transform 0.2s;
+  }
+
+  .ctrl-btn:hover {
+    transform: scale(1.05);
+  }
+
+  .ctrl-btn.refresh { background: #007bff; }
+  .ctrl-btn.served { background: #28a745; }
+  .ctrl-btn.live { background: #17a2b8; }
+
+  /* Orders Section */
+  .orders-section {
+    max-height: 70vh;
+    overflow-y: auto;
+    padding-right: 5px;
+  }
+
+  /* Order Card */
+  .order-box {
+    border: 2px solid #ccc;
+    border-left: 10px solid orange;
+    padding: 20px;
+    margin: 20px auto;
+    border-radius: 10px;
+    background-color: #fff8e1;
+    width: 90%;
+    max-width: 700px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    animation: bounceIn 0.6s ease;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .order-box:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  }
+
+  .order-box.preparing {
+    border-left-color: #2196f3;
+    background-color: #e3f2fd;
+  }
+
+  .order-box.ready {
+    border-left-color: #4caf50;
+    background-color: #e8f5e9;
+  }
+
+  .order-box.served {
+    border-left-color: gray;
+    background-color: #eeeeee;
+  }
+
+  /* FLEX BUTTONS */
+ .status-btns {
+    display: flex;
+    justify-content: center; /* center horizontally */
+    align-items: center; /* vertically center */
+    gap: 40px; /* gap between circles */
+    flex-wrap: nowrap; /* stay in one row */
+    margin-top: 20px;
+}
+
+.status-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.status-btn button {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    font-size: 42px;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    transition: transform 0.2s ease, opacity 0.3s ease;
+}
+
+.status-btn button:hover {
+    transform: scale(1.1);
+    opacity: 0.9;
+}
+
+.status-label-text {
+    margin-top: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #333;
+    text-align: center;
+}
+
+/* Colors */
+.status-btn.preparing button { background: #2196f3; }
+.status-btn.ready button { background: #4caf50; }
+.status-btn.served button { background: #9e9e9e; }
+
+
+  /* Served History Cancel Button */
+  .cancel-btn {
+    margin-top: 10px;
+    background: red;
+    color: white;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  /* Animations */
+  @keyframes bounceIn {
+    0% { opacity: 0; transform: scale(0.8); }
+    60% { opacity: 1; transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Mobile Responsive */
+  @media (max-width: 600px) {
+    .order-box { padding: 15px; }
+    .status-btn button { width: 90px; height: 90px; font-size: 24px; }
+    .status-label-text { font-size: 12px; }
+    .ctrl-btn { font-size: 14px; padding: 8px 14px; }
+  }
+</style>
+
+
+</head>
+<body>
+  <div class="dashboard-container">
+    <h2>🍽️ Kitchen Order Dashboard</h2>
+
+    <!-- Top Control Panel -->
+    <div class="control-panel">
+      <button class="ctrl-btn refresh" onclick="renderOrders()">🔁 Refresh Orders</button>
+      <button class="ctrl-btn served" onclick="showServedHistory()">🍽️ Show Served History</button>
+      <button class="ctrl-btn live" onclick="renderOrders()">🔄 Back to Live Orders</button>
+    </div>
+
+    <!-- Orders Section -->
+    <div class="orders-section" id="kitchen-orders"></div>
+
+    <!-- Notification Sound -->
+    <audio id="notifySound" src="https://notificationsounds.com/storage/sounds/file-sounds-1155-pristine.mp3" preload="auto"></audio>
+  </div>
+</body>
+
+
+<!-- <script>
+// API base URL (apne project ka naam yaha set karo)
+// const API_BASE = "http://localhost/your_project/public";
+const API_BASE = "http://localhost/public";
+
+
+function initOrderStream() {
+    const source = new EventSource(`${API_BASE}/orders/stream`);
+
+    source.onmessage = function (event) {
+        const orders = JSON.parse(event.data);
+        renderOrdersFromData(orders);
+    };
+
+    source.onerror = function () {
+        console.error("SSE connection lost, retrying...");
+    };
+}
+
+function renderOrdersFromData(orders) {
+    const container = document.getElementById("kitchen-orders");
+    container.innerHTML = "";
+
+    if (!orders.length) {
+        container.innerHTML = "<p style='text-align:center;'>No orders received yet.</p>";
+        return;
+    }
+
+    orders.forEach(order => {
+        const status = order.status || "Preparing";
+
+        let itemsHTML = JSON.parse(order.items).map(item => {
+            const addOnsHTML = item.addons?.length
+                ? `<div style="font-size: 13px; color: #666;"><em>Add-ons: ${item.addons.join(", ")}</em></div>`
+                : '';
+            const noteHTML = item.note
+                ? `<div style="font-size: 13px; color: #666;"><em>Note: ${item.note}</em></div>`
+                : '';
+            return `<li>${item.name} × ${item.quantity}${addOnsHTML}${noteHTML}</li>`;
+        }).join("");
+
+        const box = document.createElement("div");
+        box.className = `order-box ${status.toLowerCase()}`;
+        box.innerHTML = `
+            <h3>🧾 Order #${order.id} | Table ${order.table_id} | ${order.timestamp}</h3>
+            <p><strong>Status:</strong> ${status}</p>
+            <ul>${itemsHTML}</ul>
+        `;
+        container.appendChild(box);
+    });
+}
+
+// Start real-time stream
+initOrderStream();
+
+
+
+async function renderOrders() {
+    try {
+        // ✅ Yaha apne project ka sahi URL dalna zaroori hai
+        // Example: "http://localhost/app/public" ya jo tumhara actual path ho
+        const API_BASE = "http://localhost/app/public"; 
+
+        const res = await fetch(`${API_BASE}/orders`);
+
+        if (!res.ok) {
+            console.error(`❌ Server returned ${res.status} ${res.statusText}`);
+            document.getElementById("kitchen-orders").innerHTML =
+                `<p style="text-align:center; color:red;">Error: Cannot load orders (${res.status})</p>`;
+            return;
+        }
+
+        // ✅ Safe JSON parsing
+        let orders = [];
+        try {
+            orders = await res.json();
+        } catch (jsonErr) {
+            console.error("❌ Invalid JSON received from server", jsonErr);
+            document.getElementById("kitchen-orders").innerHTML =
+                `<p style="text-align:center; color:red;">Error: Invalid data from server</p>`;
+            return;
+        }
+
+        const container = document.getElementById("kitchen-orders");
+        container.innerHTML = "";
+
+        if (!orders.length) {
+            container.innerHTML = "<p style='text-align:center;'>No orders received yet.</p>";
+            return;
+        }
+
+        orders.forEach(order => {
+            const status = order.status || "Preparing";
+
+            let itemsHTML = [];
+            try {
+                itemsHTML = JSON.parse(order.items).map(item => {
+                    const addOnsHTML = item.addons?.length
+                        ? `<div style="font-size: 13px; color: #666;"><em>Add-ons: ${item.addons.join(", ")}</em></div>`
+                        : '';
+                    const noteHTML = item.note
+                        ? `<div style="font-size: 13px; color: #666;"><em>Note: ${item.note}</em></div>`
+                        : '';
+                    return `<li>${item.name} × ${item.quantity}${addOnsHTML}${noteHTML}</li>`;
+                });
+            } catch (itemErr) {
+                console.error("❌ Error parsing order items", itemErr);
+            }
+
+            const box = document.createElement("div");
+            box.className = `order-box ${status.toLowerCase()}`;
+            box.innerHTML = `
+                <h3>🧾 Order #${order.id} | Table ${order.table_id} | ${order.timestamp}</h3>
+                <p><strong>Status:</strong> <span class="status-label">${status}</span></p>
+                <ul>${itemsHTML.join("")}</ul>
+                <div class="status-btns">
+                    <div class="status-btn preparing">
+                        <button onclick="setStatus(${order.id}, 'Preparing')">🔵</button>
+                        <div class="status-label-text">Preparing</div>
+                    </div>
+                    <div class="status-btn ready">
+                        <button onclick="setStatus(${order.id}, 'Ready')">🟢</button>
+                        <div class="status-label-text">Ready</div>
+                    </div>
+                    <div class="status-btn served">
+                        <button onclick="setStatus(${order.id}, 'Served')">⚪</button>
+                        <div class="status-label-text">Served</div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(box);
+        });
+    } catch (err) {
+        console.error("❌ Error fetching orders:", err);
+        document.getElementById("kitchen-orders").innerHTML =
+            `<p style="text-align:center; color:red;">Error: Cannot connect to server</p>`;
+    }
+}
+
+async function setStatus(orderId, newStatus) {
+    try {
+        await fetch(`${API_BASE}/orders/status/${orderId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: newStatus })
+        });
+        // No need to manually call renderOrders() — SSE will auto-update UI
+    } catch (err) {
+        console.error("❌ Error updating status:", err);
+    }
+}
+
+// ✅ Show served orders history
+async function showServedHistory() {
+    try {
+        const res = await fetch(`${API_BASE}/orders`);
+        const orders = await res.json();
+        const servedOrders = orders.filter(o => o.status === "Served");
+
+        const container = document.getElementById("kitchen-orders");
+        container.innerHTML = "";
+
+        if (!servedOrders.length) {
+            container.innerHTML = "<p style='text-align:center;'>No served orders yet.</p>";
+            return;
+        }
+
+        servedOrders.forEach(order => {
+            let itemsHTML = JSON.parse(order.items).map(item => `<li>${item.name} × ${item.quantity}</li>`).join("");
+            const box = document.createElement("div");
+            box.className = "order-box served";
+            box.innerHTML = `
+                <h3>🧾 Order #${order.id} | Table ${order.table_id} | ${order.timestamp}</h3>
+                <ul>${itemsHTML}</ul>
+                <p><strong>Served At:</strong> ${order.served_at || "N/A"}</p>
+            `;
+            container.appendChild(box);
+        });
+    } catch (err) {
+        console.error("❌ Error fetching served orders:", err);
+    }
+}
+
+// ✅ Auto-refresh orders every 5 sec
+setInterval(renderOrders, 5000);
+renderOrders();
+</script>
+ -->
+<script>
+// ✅ API base URL — apne project ka sahi naam yaha set karo
+// Example: http://localhost/app/public
+const API_BASE = "http://localhost/app/public";
+
+// 🔴 Initialize real-time SSE for kitchen orders
+function initOrderStream() {
+    const source = new EventSource(`${API_BASE}/orders/stream`);
+
+    source.onmessage = function (event) {
+        const orders = JSON.parse(event.data);
+        renderOrdersFromData(orders);
+    };
+
+    source.onerror = function () {
+        console.error("❌ SSE connection lost, retrying...");
+    };
+}
+
+// 🔵 Render orders from SSE or fetch
+function renderOrdersFromData(orders) {
+    const container = document.getElementById("kitchen-orders");
+    container.innerHTML = "";
+
+    if (!orders.length) {
+        container.innerHTML = "<p style='text-align:center;'>No orders received yet.</p>";
+        return;
+    }
+
+    orders.forEach(order => {
+        const status = order.status || "Preparing";
+
+        let itemsHTML = JSON.parse(order.items).map(item => {
+            const addOnsHTML = item.addons?.length
+                ? `<div style="font-size: 13px; color: #666;"><em>Add-ons: ${item.addons.join(", ")}</em></div>`
+                : '';
+            const noteHTML = item.note
+                ? `<div style="font-size: 13px; color: #666;"><em>Note: ${item.note}</em></div>`
+                : '';
+            return `<li>${item.name} × ${item.quantity}${addOnsHTML}${noteHTML}</li>`;
+        }).join("");
+
+        const box = document.createElement("div");
+        box.className = `order-box ${status.toLowerCase()}`;
+        box.innerHTML = `
+            <h3>🧾 Order #${order.id} | Table ${order.table_id} | ${order.timestamp}</h3>
+            <p><strong>Status:</strong> ${status}</p>
+            <ul>${itemsHTML}</ul>
+        `;
+        container.appendChild(box);
+    });
+}
+
+// 🔵 Fetch and render orders (manual refresh or auto-refresh)
+async function renderOrders() {
+    try {
+        const res = await fetch(`${API_BASE}/orders`);
+
+        if (!res.ok) {
+            console.error(`❌ Server returned ${res.status} ${res.statusText}`);
+            document.getElementById("kitchen-orders").innerHTML =
+                `<p style="text-align:center; color:red;">Error: Cannot load orders (${res.status})</p>`;
+            return;
+        }
+
+        let orders = [];
+        try {
+            orders = await res.json();
+        } catch (jsonErr) {
+            console.error("❌ Invalid JSON from server", jsonErr);
+            document.getElementById("kitchen-orders").innerHTML =
+                `<p style="text-align:center; color:red;">Error: Invalid data from server</p>`;
+            return;
+        }
+
+        renderOrdersFromData(orders);
+
+    } catch (err) {
+        console.error("❌ Error fetching orders:", err);
+        document.getElementById("kitchen-orders").innerHTML =
+            `<p style="text-align:center; color:red;">Error: Cannot connect to server</p>`;
+    }
+}
+
+// 🟢 Update order status
+async function setStatus(orderId, newStatus) {
+    try {
+        await fetch(`${API_BASE}/orders/status/${orderId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: newStatus })
+        });
+        // SSE will auto-update UI
+    } catch (err) {
+        console.error("❌ Error updating status:", err);
+    }
+}
+
+// 🟡 Show served orders history
+async function showServedHistory() {
+    try {
+        const res = await fetch(`${API_BASE}/orders`);
+        const orders = await res.json();
+        const servedOrders = orders.filter(o => o.status === "Served");
+
+        const container = document.getElementById("kitchen-orders");
+        container.innerHTML = "";
+
+        if (!servedOrders.length) {
+            container.innerHTML = "<p style='text-align:center;'>No served orders yet.</p>";
+            return;
+        }
+
+        servedOrders.forEach(order => {
+            let itemsHTML = JSON.parse(order.items).map(item => `<li>${item.name} × ${item.quantity}</li>`).join("");
+            const box = document.createElement("div");
+            box.className = "order-box served";
+            box.innerHTML = `
+                <h3>🧾 Order #${order.id} | Table ${order.table_id} | ${order.timestamp}</h3>
+                <ul>${itemsHTML}</ul>
+                <p><strong>Served At:</strong> ${order.served_at || "N/A"}</p>
+            `;
+            container.appendChild(box);
+        });
+    } catch (err) {
+        console.error("❌ Error fetching served orders:", err);
+    }
+}
+
+// ⏳ Auto-refresh orders every 5 sec
+setInterval(renderOrders, 5000);
+
+// 🔥 Start
+renderOrders();
+initOrderStream();
+</script>
+
+
+</body>
+</html>

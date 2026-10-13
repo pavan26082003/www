@@ -1,0 +1,16 @@
+Api of chat Service: https://efactor.tech/v8/api.php?action=call_services&node_id=FFFFFFFFFFFFFFFF7EC2000000036100
+Body : {"data":"g","device_id":"FFFFFFFFFFFFFFFF7EC2000000036100"}
+
+Api of Chat Response: https://efactor.tech/v8/api.php?action=call_services_response_for_app&node_id=FFFFFFFFFFFFFFFF7EC2000000036100
+Body : {"data":"g","device_id":"FFFFFFFFFFFFFFFF7EC2000000036100"}
+
+Pretty:
+
+[
+    {
+        "ticket_name": "BAJAJ-001FMN013610061980",
+        "created_at": "2025-03-24 13:54:22",
+        "message": "hi",
+        "flag_output": "Pending"
+    }
+]

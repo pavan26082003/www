@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link rel="stylesheet" href="style (12).css">
+     <script src="https://cdn.tailwindcss.com"></script>
+  
+
+    <title>Hotel Delights - Restaurant Menu</title>
+    
+</head>
+<body>
+    <header>
+        <div class="header-overlay"></div>
+        <div class="header-content">
+            <h1>Hotel Delights</h1>
+            <p class="tagline">Fine dining experience with exquisite flavors</p>
+        </div>
+        <div class="fab-group">
+    <div class="top-action-buttons">
+  <div class="circle-btn water-btn" onclick="toggleDropdown()" title="Request Water">
+    <i class="fas fa-tint"></i>
+  </div>
+   <div class="dropdown-menu" id="mainDropdown" style="display: none;">
+
+    <div class="dropdown-item" onclick="handleWaterRequest('1 Glass')">1 Glass</div>
+    <!-- <div class="dropdown-item" onclick="showSubDropdown()">1 Bottle</div> -->
+    <div class="dropdown-item" onclick="handleWaterRequest('Hot Water')">Normal Water</div>
+    <div class="dropdown-item" onclick="closeDropdown()">Cancel</div>
+  </div>
+  <div class="circle-btn waiter-btn" onclick="callWaiter()" title="Call Waiter">
+    <i class="fas fa-user-tie"></i>
+  </div>
+</div>
+
+<!-- <div class="dropdown-wrapper">
+  <div class="circle-btn water-btn" onclick="toggleDropdown()" title="Request Water">
+    <i class="fas fa-tint"></i>
+  </div> -->
+
+  <!-- ✅ Main Dropdown -->
+  <!-- <div class="dropdown-menu" id="mainDropdown"> -->
+    <div class="dropdown-menu" id="mainDropdown" style="display: none;">
+
+    <div class="dropdown-item" onclick="handleWaterRequest('1 Glass')">1 Glass</div>
+    <!-- <div class="dropdown-item" onclick="showSubDropdown()">1 Bottle</div> -->
+    <div class="dropdown-item" onclick="handleWaterRequest('Hot Water')">Normal Water</div>
+    <div class="dropdown-item" onclick="closeDropdown()">Cancel</div>
+  </div>
+
+  <!-- ✅ Sub Dropdown (Child + Normal bottle only) -->
+  <!-- <div class="dropdown-menu" id="subDropdown" style="display: none;"> -->
+    <!-- ✅ Sub Dropdown (HIDDEN by default) -->
+<!-- <div class="dropdown-menu" id="subDropdown" style="display: none;">
+
+    <div class="dropdown-item" onclick="handleWaterRequest('Child Bottle')">Child Bottle</div>
+    <div class="dropdown-item" onclick="handleWaterRequest('Normal Bottle')">Normal Bottle</div>
+    <div class="dropdown-item" onclick="showMainDropdown()">⬅ Back</div>
+  </div> -->
+</div>
+    <!-- <div class="circle-btn waiter-btn" title="Call Waiter">
+        <i class="fas fa-user-tie"></i>
+    </div> -->
+    </header>
+
+    <div class="container">
+        <div class="category-tabs">
+            <div class="category-tab active" data-category="all">All Items</div>
+            <div class="category-tab" data-category="starters">Starters</div>
+            <div class="category-tab" data-category="main-course">Main Course</div>
+            <div class="category-tab" data-category="desserts">Desserts</div>
+            <div class="category-tab" data-category="drinks">Drinks</div>
+            <div class="category-tab" data-category="waters">waters</div>
+        </div>
+
+<!-- <div id="orderStatusWrapper">
+    <div id="orderStatusBox">
+        <span>Current Status:</span>
+        <strong id="currentOrderStatus">No Active Order</strong>
+        <span id="dropdownIcon">▼</span>
+    </div>
+    <div id="orderStatusDropdown" class="hidden"></div>
+</div> -->
+
+<div id="orderStatusWrapper">
+    <div id="orderStatusBox">
+        <span>Order Status</span>
+        <span id="statusCount" class="status-count">0</span>
+        <span id="dropdownIcon">▼</span>
+    </div>
+    <div id="orderStatusDropdown" class="hidden"></div>
+</div>
+
+<div id="order-status" style="margin-top:10px; font-weight:bold; color:blue;">
+    Order Status: Waiting...
+</div>
+
+        <div class="menu-grid">
+           
+<div class="menu-item" data-category="main-course">
+  <div class="item-image">
+    <!-- <img src="IMAGES/veg2.jpg" alt="Shahi Veg" width="200" /> -->
+     <!-- <img src="IMAGES/veg2.jpg" alt="Shahi Veg" width="200" loading="lazy" height="auto" /> -->
+       <img src="https://efactor.tech/RestUi/IMAGES/veg2.jpg" alt="Shahi Veg" width="200" loading="lazy" height="auto" />
+
+  </div>
+  <div class="item-details">
+    <h3 class="item-name">Shahi Veg</h3>
+    <p class="item-description">
+      Premium 300g ribeye steak with your choice of sauce, roasted garlic mash, and seasonal vegetables.
+    </p>
+    <div class="item-footer" id="action-1">
+      <span class="item-price">₹980</span>
+
+      <!-- Add Button -->
+  <!-- <button class="add-btn" data-id="${id}" data-name="${name}" data-price="${price}" data-image="${image}" onclick="addToCart(event)">Add to Cart</button> -->
+
+  <!-- Quantity Control (Initially hidden) -->
+  <div class="quantity-control" id="qty-1" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="1">−</button>
+    <span id="qty-value-1">1</span>
+    <button onclick="increaseQuantity(event)" data-id="1">+</button>
+  </div>
+       <!-- <button onclick="openModal()">Add</button> --> 
+         <!-- <button class="add-to-cart" data-id="1" data-name="Shahi Veg" data-price="980" data-image="images/veg2.jpg">Add to Cart</button> -->
+           <button class="add-to-cart" data-id="1" data-name="Shahi Veg" data-price="980" data-image="https://efactor.tech/RestUi/IMAGES/veg2.jpg">Add to Cart</button>
+    </div>
+  </div>
+</div> 
+
+
+<div class="menu-item" data-category="main-course">
+  <div class="item-image">
+    <!-- <img src="images/Paneer.jpg" alt="Shahi-Paneer" loading="lazy" height="auto" /> -->
+      <img src="https://efactor.tech/RestUi/IMAGES/Paneer.jpg" alt="Shahi-Paneer" loading="lazy" height="auto" />
+  </div>
+  <div class="item-details">
+    <h3 class="item-name">Shahi-Paneer</h3>
+    <p class="item-description">
+      Creamy Arborio rice cooked with wild mushrooms, white wine, and finished with truffle oil and parmesan.
+    </p>
+    <div class="item-footer" id="action-2">
+      <span class="item-price">₹650</span>
+       <div class="quantity-control" id="qty-2" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="2">−</button>
+    <span id="qty-value-2">1</span>
+    <button onclick="increaseQuantity(event)" data-id="2">+</button>
+  </div>
+     
+          <!-- <button class="add-to-cart" data-id="2" data-name="Shahi-Paneer" data-price="650" data-image="images/Paneer.jpg">Add to Cart</button> -->
+           <button class="add-to-cart" data-id="2" data-name="Shahi-Paneer" data-price="650" data-image="https://efactor.tech/RestUi/IMAGES/Paneer.jpg">Add to Cart</button>
+    </div>
+  </div>
+</div> 
+
+            <!-- Item 5 -->
+            <div class="menu-item" data-category="main-course">
+                <div class="item-image">
+                    <!-- <img src="C:\Users\DELL\Desktop\Rest Ui\IMAGES\veg1.jpg" alt="Grilled salmon fillet with crispy skin served on a bed of quinoa and asparagus" loading="lazy" height="auto" /> -->
+                 <img src="https://efactor.tech/RestUi/IMAGES/veg1.jpg" alt="Grilled salmon fillet with crispy skin served on a bed of quinoa and asparagus" loading="lazy" height="auto" />
+                  </div>
+                <div class="item-details">
+                    <h3 class="item-name">Chole Curry</h3>
+                    <p class="item-description">Fresh Norwegian salmon with lemon herb butter, wild rice pilaf, and roasted seasonal vegetables.</p>
+                    <div class="item-footer"id="action-3">
+                        <span class="item-price">₹890</span>
+                         <div class="quantity-control" id="qty-3" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="3">−</button>
+    <span id="qty-value-3">1</span>
+    <button onclick="increaseQuantity(event)" data-id="3">+</button>
+  </div>
+                        <!-- <button class="add-to-cart" data-id="3" data-name="Chole Curry" data-price="890" data-image="C:\Users\DELL\Desktop\Rest Ui\IMAGES\veg1.jpg">Add to Cart</button> -->
+                     <button class="add-to-cart" data-id="3" data-name="Chole Curry" data-price="890" data-image="https://efactor.tech/RestUi/IMAGES/veg1.jpg">Add to Cart</button>
+                      </div>
+                </div>
+            </div>
+ <div class="menu-item" data-category="starters">
+                <div class="item-image">
+                    <!-- <img src="C:\Users\DELL\Desktop\Rest Ui\IMAGES\Onion Fried Start.jpg" alt="Appetizing bruschetta with fresh tomatoes, basil, and garlic on toasted bread, drizzled with olive oil" loading="lazy" height="auto" /> -->
+                      <img src="https://efactor.tech/RestUi/IMAGES/Onion Fried Start.jpg" alt="Appetizing bruschetta with fresh tomatoes, basil, and garlic on toasted bread, drizzled with olive oil" loading="lazy" height="auto" />
+                </div>
+                <div class="item-details">
+                    <h3 class="item-name">Onion Fried</h3>
+                    <p class="item-description">Italian antipasto featuring grilled bread rubbed with garlic, topped with fresh tomatoes, basil, and olive oil.</p>
+                    <div class="item-footer"id="action-4">
+                        <span class="item-price">₹220</span>
+                         <div class="quantity-control" id="qty-4" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="4">−</button>
+    <span id="qty-value-4">1</span>
+    <button onclick="increaseQuantity(event)" data-id="4">+</button>
+  </div>
+                        <!-- <button class="add-to-cart" data-id="4" data-name="Onion Fried" data-price="220" data-image="C:\Users\DELL\Desktop\Rest Ui\IMAGES\Onion Fried Start.jpg">Add to Cart</button> -->
+  <button class="add-to-cart" data-id="4" data-name="Onion Fried" data-price="220" data-image="https://efactor.tech/RestUi/IMAGES/Onion Fried Start.jpg">Add to Cart</button>
+                      </div>
+                </div>
+            </div>
+ <div class="menu-item" data-category="starters">
+                <div class="item-image">
+                    <!-- <img src="C:\Users\DELL\Desktop\Rest Ui\IMAGES\Veg Start.jpg" alt="Appetizing bruschetta with fresh tomatoes, basil, and garlic on toasted bread, drizzled with olive oil" loading="lazy" height="auto" /> -->
+ <img src="https://efactor.tech/RestUi/IMAGES/Veg Start.jpg" alt="Appetizing bruschetta with fresh tomatoes, basil, and garlic on toasted bread, drizzled with olive oil" loading="lazy" height="auto" />
+                  </div>
+                <div class="item-details">
+                    <h3 class="item-name">Onion Kabab</h3>
+                    <p class="item-description">Italian antipasto featuring grilled bread rubbed with garlic, topped with fresh tomatoes, basil, and olive oil.</p>
+                    <div class="item-footer"id="action-5">
+                        <span class="item-price">₹220</span>
+                         <div class="quantity-control" id="qty-5" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="5">−</button>
+    <span id="qty-value-5">1</span>
+    <button onclick="increaseQuantity(event)" data-id="5">+</button>
+  </div>
+                        <!-- <button class="add-to-cart" data-id="5" data-name="Onion Kabab" data-price="220" data-image="C:\Users\DELL\Desktop\Rest Ui\IMAGES\Veg Start.jpg">Add to Cart</button> -->
+                            <button class="add-to-cart" data-id="5" data-name="Onion Kabab" data-price="220" data-image="https://efactor.tech/RestUi/IMAGES/Veg Start.jpg">Add to Cart</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Item 2 -->
+            <div class="menu-item" data-category="starters">
+                
+                <div class="item-image">
+  <!-- <img src="C:\Users\DELL\Desktop\Rest Ui\IMAGES\MAshroom.jpg" alt="Soup" loading="lazy" height="auto"> -->
+    <img src="https://efactor.tech/RestUi/IMAGES/MAshroom.jpg" alt="Soup" loading="lazy" height="auto">
+</div>
+
+                <div class="item-details">
+                    <h3 class="item-name">Mashroom Soup</h3>
+                    <p class="item-description">Crispy fried squid rings served with tangy lemon mayo and spicy marinara dipping sauces.</p>
+                    <div class="item-footer"id="action-6">
+                        <span class="item-price">₹340</span>
+                         <div class="quantity-control" id="qty-6" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="6">−</button>
+    <span id="qty-value-6">1</span>
+    <button onclick="increaseQuantity(event)" data-id="6">+</button>
+  </div>
+                        <!-- <button class="add-to-cart" data-id="6" data-name="MAshroom Soup" data-price="340" data-image="C:\Users\DELL\Desktop\Rest Ui\IMAGES\MAshroom.jpg">Add to Cart</button> -->
+ <button class="add-to-cart" data-id="6" data-name="MAshroom Soup" data-price="340" data-image="https://efactor.tech/RestUi/IMAGES/MAshroom.jpg">Add to Cart</button>
+                      </div>
+                </div>
+            </div>
+            <!-- Item 6 -->
+            <div class="menu-item" data-category="desserts">
+                <div class="item-image">
+                    <!-- <img src="C:\Users\DELL\Desktop\Rest Ui\IMAGES\black Chocklate.jpg" alt="Decadent chocolate lava cake with melting center, garnished with fresh berries and mint" loading="lazy" height="auto" /> -->
+                       <img src="https://efactor.tech/RestUi/IMAGES/black Chocklate.jpg" alt="Decadent chocolate lava cake with melting center, garnished with fresh berries and mint" loading="lazy" height="auto" />
+                </div>
+                <div class="item-details">
+                    <h3 class="item-name">Chocolate Lava Cake</h3>
+                    <p class="item-description">Warm chocolate cake with a molten center, served with vanilla bean ice cream and raspberry coulis.</p>
+                    <div class="item-footer"id="action-7">
+                        <span class="item-price">₹320</span>
+                         <div class="quantity-control" id="qty-7" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="7">−</button>
+    <span id="qty-value-7">1</span>
+    <button onclick="increaseQuantity(event)" data-id="7">+</button>
+  </div>
+                        <!-- <button class="add-to-cart" data-id="7" data-name="Chocolate Lava Cake" data-price="320" data-image="C:\Users\DELL\Desktop\Rest Ui\IMAGES\black Chocklate.jpg">Add to Cart</button> -->
+ <button class="add-to-cart" data-id="7" data-name="Chocolate Lava Cake" data-price="320" data-image="https://efactor.tech/RestUi/IMAGES/black Chocklate.jpg">Add to Cart</button>
+                      </div>
+                </div>
+            </div>
+              <div class="menu-item" data-category="desserts">
+                <div class="item-image">
+                    <!-- <img src="C:\Users\DELL\Desktop\Rest Ui\IMAGES\pinapple.jpg" alt="Decadent chocolate lava cake with melting center, garnished with fresh berries and mint" loading="lazy" height="auto"/> -->
+ <img src="https://efactor.tech/RestUi/IMAGES/pinapple.jpg" alt="Decadent chocolate lava cake with melting center, garnished with fresh berries and mint" loading="lazy" height="auto"/>
+                  </div>
+                <div class="item-details">
+                    <h3 class="item-name">Vanilla Special</h3>
+                    <p class="item-description">Warm chocolate cake with a molten center, served with vanilla bean ice cream and raspberry coulis.</p>
+                    <div class="item-footer"id="action-8">
+                        <span class="item-price">₹320</span>
+                         <div class="quantity-control" id="qty-8" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="8">−</button>
+    <span id="qty-value-8">1</span>
+    <button onclick="increaseQuantity(event)" data-id="8">+</button>
+   </div>
+                        <!-- <button class="add-to-cart" data-id="8" data-name="Vanilla Special" data-price="320" data-image="C:\Users\DELL\Desktop\Rest Ui\IMAGES\pinapple.jpg">Add to Cart</button> -->
+                          <button class="add-to-cart" data-id="8" data-name="Vanilla Special" data-price="320" data-image="https://efactor.tech/RestUi/IMAGES/pinapple.jpg">Add to Cart</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Item 7 -->
+            <div class="menu-item" data-category="desserts">
+                <div class="item-image">
+                    <!-- <img src="C:\Users\DELL\Desktop\Rest Ui\IMAGES\vanilla.jpg" alt="French crème brûlée with caramelized sugar crust and fresh berries" loading="lazy" height="auto" /> -->
+                     <img src="https://efactor.tech/RestUi/IMAGES/vanilla.jpg" alt="French crème brûlée with caramelized sugar crust and fresh berries" loading="lazy" height="auto" />
+                </div>
+                <div class="item-details">
+                    <h3 class="item-name">Crème Brûlée</h3>
+                    <p class="item-description">Classic French vanilla custard with a crisp caramelized sugar topping and seasonal fruits.</p>
+                    <div class="item-footer"id="action-9">
+                        <span class="item-price">₹280</span>
+                         <div class="quantity-control" id="qty-9" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="9">−</button>
+    <span id="qty-value-9">1</span>
+    <button onclick="increaseQuantity(event)" data-id="9">+</button>
+  </div>
+                        <!-- <button class="add-to-cart" data-id="9" data-name="Crème Brûlée" data-price="280" data-image="C:\Users\DELL\Desktop\Rest Ui\IMAGES\vanilla.jpg">Add to Cart</button> -->
+                         <button class="add-to-cart" data-id="9" data-name="Crème Brûlée" data-price="280" data-image="https://efactor.tech/RestUi/IMAGES/vanilla.jpg">Add to Cart</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Item 8 -->
+            <div class="menu-item" data-category="drinks">
+                <div class="item-image">
+                    <!-- <img src="C:\Users\DELL\Desktop\Rest Ui\IMAGES\Softdrink.jpg" alt="Artisanal craft cocktail with fresh herbs and citrus garnish in a copper mug" loading="lazy" height="auto" /> -->
+                      <img src="https://efactor.tech/RestUi/IMAGES/Softdrink.jpg" alt="Artisanal craft cocktail with fresh herbs and citrus garnish in a copper mug" loading="lazy" height="auto" />
+                </div>
+                <div class="item-details">
+                    <h3 class="item-name">Softdrink</h3>
+                    <p class="item-description">Premium white rum muddled with fresh mint, lime juice, sugar and topped with soda water.</p>
+                    <div class="item-footer"id="action-10">
+                        <span class="item-price">₹380</span>
+                         <div class="quantity-control" id="qty-10" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="10">−</button>
+    <span id="qty-value-10">1</span>
+    <button onclick="increaseQuantity(event)" data-id="10">+</button>
+  </div>
+                        <!-- <button class="add-to-cart" data-id="10" data-name="Softdrink" data-price="380" data-image="C:\Users\DELL\Desktop\Rest Ui\IMAGES\Softdrink.jpg">Add to Cart</button> -->
+ <button class="add-to-cart" data-id="10" data-name="Softdrink" data-price="380" data-image="https://efactor.tech/RestUi/IMAGES/Softdrink.jpg">Add to Cart</button>
+                      </div>
+                </div>
+            </div>
+
+            <!-- Item 9 -->
+            <div class="menu-item" data-category="drinks">
+                <div class="item-image">
+                    <!-- <img src="C:\Users\DELL\Desktop\Rest Ui\IMAGES\cofee.jpg" alt="Freshly brewed artisanal coffee with latte art in a ceramic cup"  loading="lazy" height="auto"/> -->
+                      <img src="https://efactor.tech/RestUi/IMAGES/cofee.jpg" alt="Freshly brewed artisanal coffee with latte art in a ceramic cup"  loading="lazy" height="auto"/>
+                </div>
+                <div class="item-details">
+                    <h3 class="item-name">Specialty Coffee</h3>
+                    <p class="item-description">Single-origin espresso based drinks prepared by our master baristas.</p>
+                    <div class="item-footer"id="action-11">
+                        <span class="item-price">₹180</span>
+                         <div class="quantity-control" id="qty-11" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="${id}">−</button>
+    <span id="qty-value-11">1</span>
+    <button onclick="increaseQuantity(event)" data-id="11">+</button>
+  </div>
+                        <!-- <button class="add-to-cart" data-id="11" data-name="Specialty Coffee" data-price="180" data-image="C:\Users\DELL\Desktop\Rest Ui\IMAGES\cofee.jpg">Add to Cart</button> -->
+                           <button class="add-to-cart" data-id="11" data-name="Specialty Coffee" data-price="180" data-image="https://efactor.tech/RestUi/IMAGES/cofee.jpg">Add to Cart</button>
+                    </div>
+                </div>
+                
+            </div>
+             <div class="menu-item" data-category="drinks">
+                <div class="item-image">
+                    <!-- <img src="C:\Users\DELL\Desktop\Rest Ui\IMAGES\MAngo drink.jpg" alt="Artisanal craft cocktail with fresh herbs and citrus garnish in a copper mug" loading="lazy" height="auto" /> -->
+                      <img src="https://efactor.tech/RestUi/IMAGES/MAngo drink.jpg" alt="Artisanal craft cocktail with fresh herbs and citrus garnish in a copper mug" loading="lazy" height="auto" />
+                </div>
+                <div class="item-details">
+                    <h3 class="item-name">Mango Juice</h3>
+                    <p class="item-description">Premium white rum muddled with fresh mint, lime juice, sugar and topped with soda water.</p>
+                    <div class="item-footer"id="action-12">
+                        <span class="item-price">₹380</span>
+                         <div class="quantity-control" id="qty-12" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="12">−</button>
+    <span id="qty-value-12">1</span>
+    <button onclick="increaseQuantity(event)" data-id="12">+</button>
+  </div>
+                        <!-- <button class="add-to-cart" data-id="12" data-name="Mango Juice" data-price="380" data-image="C:\Users\DELL\Desktop\Rest Ui\IMAGES\MAngo drink.jpg">Add to Cart</button> -->
+                    <button class="add-to-cart" data-id="12" data-name="Mango Juice" data-price="380" data-image="https://efactor.tech/RestUi/IMAGES/MAngo drink.jpg">Add to Cart</button>
+                      </div>
+                </div>
+                
+    </div>
+    <!-- <water section ></water> -->
+     <div class="menu-item" data-category="waters">
+                <div class="item-image">
+                    <!-- <img src="IMAGES/download.jpg" alt="Artisanal craft cocktail with fresh herbs and citrus garnish in a copper mug" loading="lazy" height="auto" /> -->
+                       <img src="https://efactor.tech/RestUi/IMAGES/download.jpg" alt="Artisanal craft cocktail with fresh herbs and citrus garnish in a copper mug" loading="lazy" height="auto" />
+                </div>
+                <div class="item-details">
+                    <h3 class="item-name">Bisleri</h3>
+                    <p class="item-description">Fresh 1 liter water.</p>
+                    <div class="item-footer"id="action-13">
+                        <span class="item-price">₹20</span>
+                         <div class="quantity-control" id="qty-13" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="13">−</button>
+    <span id="qty-value-13">1</span>
+    <button onclick="increaseQuantity(event)" data-id="13">+</button>
+  </div>
+                        <!-- <button class="add-to-cart" data-id="13" data-name="Bisleri Bottle" data-price="20" data-image="IMAGES/download.jpg">Add to Cart</button> -->
+                         <button class="add-to-cart" data-id="13" data-name="Bisleri Bottle" data-price="20" data-image="https://efactor.tech/RestUi/IMAGES/download.jpg">Add to Cart</button>
+                    </div>
+                </div>
+                
+    </div>
+
+    <div class="menu-item" data-category="waters">
+                <div class="item-image">
+                    <!-- <img src="IMAGES/bailey_.jpg" alt="Artisanal craft cocktail with fresh herbs and citrus garnish in a copper mug" loading="lazy" height="auto" /> -->
+                     <img src="https://efactor.tech/RestUi/IMAGES/bailey_.jpg" alt="Artisanal craft cocktail with fresh herbs and citrus garnish in a copper mug" loading="lazy" height="auto" />
+                </div>
+                <div class="item-details">
+                    <h3 class="item-name">Bailey</h3>
+                    <p class="item-description">Fresh 1 liter water.</p>
+                    <div class="item-footer"id="action-14">
+                        <span class="item-price">₹20</span>
+                         <div class="quantity-control" id="qty-14" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="14">−</button>
+    <span id="qty-value-14">1</span>
+    <button onclick="increaseQuantity(event)" data-id="14">+</button>
+  </div>
+                        <!-- <button class="add-to-cart" data-id="14" data-name="Bailey Bottle" data-price="20" data-image="IMAGES/bailey_.jpg">Add to Cart</button> -->
+                           <button class="add-to-cart" data-id="14" data-name="Bailey Bottle" data-price="20" data-image="https://efactor.tech/RestUi/IMAGES/bailey_.jpg">Add to Cart</button>
+                    </div>
+                </div>
+                
+    </div>
+    
+    <div class="menu-item" data-category="waters">
+                <div class="item-image">
+                    <!-- <img src="IMAGES/Kinley.webp" alt="Artisanal craft cocktail with fresh herbs and citrus garnish in a copper mug" loading="lazy" height="auto" /> -->
+                     <img src="https://efactor.tech/RestUi/IMAGES/Kinley.webp" alt="Artisanal craft cocktail with fresh herbs and citrus garnish in a copper mug" loading="lazy" height="auto" />
+                </div>
+                <div class="item-details">
+                    <h3 class="item-name">kinley</h3>
+                    <p class="item-description">Fresh 1 liter water.</p>
+                    <div class="item-footer"id="action-15">
+                        <span class="item-price">₹20</span>
+                         <div class="quantity-control" id="qty-15" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="15">−</button>
+    <span id="qty-value-15">1</span>
+    <button onclick="increaseQuantity(event)" data-id="15">+</button>
+  </div>
+                        <!-- <button class="add-to-cart" data-id="15" data-name="Bisleri Bottle" data-price="20" data-image="IMAGES/Kinley.webp">Add to Cart</button> -->
+                         <button class="add-to-cart" data-id="15" data-name="Bisleri Bottle" data-price="20" data-image="https://efactor.tech/RestUi/IMAGES/Kinley.webp">Add to Cart</button>
+                    </div>
+                </div>
+                
+    </div>
+    <div class="menu-item" data-category="waters">
+                <div class="item-image">
+                    <!-- <img src="IMAGES/oxyrich.jpg" alt="Artisanal craft cocktail with fresh herbs and citrus garnish in a copper mug" loading="lazy" height="auto" /> -->
+                      <img src="https://efactor.tech/RestUi/IMAGES/oxyrich.jpg" alt="Artisanal craft cocktail with fresh herbs and citrus garnish in a copper mug" loading="lazy" height="auto" />
+                </div>
+                <div class="item-details">
+                    <h3 class="item-name">Oxyrich</h3>
+                    <p class="item-description">Fresh 1 liter water.</p>
+                    <div class="item-footer"id="action-16">
+                        <span class="item-price">₹20</span>
+                         <div class="quantity-control" id="qty-16" style="display: none;">
+    <button onclick="decreaseQuantity(event)" data-id="16">−</button>
+    <span id="qty-value-16">1</span>
+    <button onclick="increaseQuantity(event)" data-id="16">+</button>
+  </div>
+                        <!-- <button class="add-to-cart" data-id="16" data-name="Bisleri Bottle" data-price="20" data-image="IMAGES/Oxyrich.jpg">Add to Cart</button> -->
+                          <button class="add-to-cart" data-id="16" data-name="Bisleri Bottle" data-price="20" data-image="https://efactor.tech/RestUi/IMAGES/Oxyrich.jpg">Add to Cart</button>
+                    </div>
+                </div>
+                
+    </div>
+    
+    
+                <div class="menu-item" data-category="main-course">
+  
+      
+        <video autoplay muted loop playsinline width="100%" height="auto" loading="lazy" >
+  <!-- <source src="IMAGES/Chole 2025-07-30 at 09.48.52.mp4" type="video/mp4" /> -->
+   <source src="https://efactor.tech/RestUi/IMAGES/Chole 2025-07-30 at 09.48.52.mp4" type="video/mp4" />
+  Your browser does not support the video tag.
+</video>
+
+      <center> <h3 class="item-name">Chole Curry</h3></center> 
+    </div>
+    <!-- <div class="item-details">
+        
+    </div> -->
+     <div class="menu-item" data-category="main-course">
+  
+        <video autoplay muted loop playsinline width="100%" height="auto" loading="lazy">
+            <!-- <source src="IMAGES/Shahi Paneer2025-07-30 at 09.41.43.mp4" type="video/mp4"> -->
+              <source src="https://efactor.tech/RestUi/IMAGES/Shahi Paneer2025-07-30 at 09.41.43.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+         <center> <h3 class="item-name">Shahi Paneer</h3></center> 
+    </div>
+    <!-- <div class="item-details">
+        
+    </div> -->
+    <div class="menu-item" data-category="main-course">
+  
+        <video autoplay muted loop playsinline width="100%" height="auto" loading="lazy">
+            <!-- <source src="IMAGES/shahi Veg 2025-07-30 at 09.39.26.mp4" type="video/mp4"> -->
+             <source src="https://efactor.tech/RestUi/IMAGES/shahi Veg 2025-07-30 at 09.39.26.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+         <center> <h3 class="item-name">Shahi Veg</h3></center> 
+    </div>
+     <div class="menu-item" data-category="main-course">
+  
+        <video autoplay muted loop playsinline width="100%" height="auto"loading="lazy">
+            <!-- <source src="IMAGES/brinjal 2025-07-30 at 09.38.33.mp4" type="video/mp4"> -->
+              <source src="https://efactor.tech/RestUi/IMAGES/brinjal 2025-07-30 at 09.38.33.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+         <center> <h3 class="item-name">Brinjal Curry</h3></center> 
+    </div>
+</div>
+
+</div>
+
+<!-- APP INFO  -->
+
+
+
+    
+  
+    
+
+<body>
+  <section class="pattern-background scroll-section hidden-scroll max-w-7xl mx-auto px-6 py-16 flex flex-col md:flex-row items-center md:items-start gap-12 md:gap-20">
+    <!-- Left Text Content -->
+    <div class="md:w-1/2 max-w-xl"><br><br><br>
+      <h1 class="text-4xl md:text-5xl font-bold text-gray-900 mb-6 leading-tight">
+        Simple Way to Order<br />Your Food Faster
+      </h1>
+      <div class="restaurant-info">
+  <h2>🍽️ Welcome to Hotel Delight!</h2>
+  <p>
+    At <strong>Hotel Delight</strong>, we serve delicious, freshly prepared dishes that bring people together.
+    Whether you're craving comforting classics, spicy delights, or something completely new, our menu has something for every taste.
+  </p>
+  <p>
+    💬 <strong>No need to hesitate – order what feels right!</strong><br>
+    Our kitchen is ready, our chefs are passionate, and your next favorite meal is just a click away.
+  </p>
+  <p>
+    🛒 <strong>Order now, enjoy every bite – no pressure, just great food.</strong>
+  </p>
+</div>
+
+    </div> 
+
+    <!-- Right Images of mobile screens -->
+    <div class="md:w-1/2 flex gap-8 justify-center md:justify-end">
+      <!-- Left Phone -->
+      <div class="phone-frame max-w-[300px] w-full aspect-[9/19] relative">
+        <img 
+          src="https://efactor.tech/RestUi/IMAGES/mobile1.png" 
+          alt="Mobile phone screen showing a food ordering app main page with pictures and menu items in warm colors" 
+          class="w-full h-full object-cover" 
+          onerror="this.onerror=null;this.src='https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/891e19de-4f05-46ea-9a28-93e1b4f5f338.png';"
+        />
+      </div>
+      <!-- Right Phone -->
+      <div class="phone-frame max-w-[300px] w-full aspect-[9/19] relative">
+        <img 
+          src="https://efactor.tech/RestUi/IMAGES/mobile2.png" 
+          alt="Mobile phone screen showing food discovery app interface with food categories and discounts in a clean light style" 
+          class="w-full h-full object-cover" 
+          onerror="this.onerror=null;this.src='https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/31816533-be08-4595-af8e-fac2d479da73.png';"
+        />
+      </div>
+    </div>
+  </section>
+
+
+<body class="relative min-h-screen flex flex-col">
+  <!-- Social vertical bar right side -->
+  <aside class="fixed top-1/3 right-0 flex flex-col space-y-6 bg-transparent z-30 select-none">
+    <a href="#" class="social-text hover:text-red-700 transition">Facebook</a>
+    <a href="#" class="social-text hover:text-red-700 transition">Twitter</a>
+    <a href="#" class="social-text hover:text-red-700 transition">Instagram</a>
+  </aside>
+  <main class="container mx-auto px-6 py-16 flex flex-col md:flex-row items-center justify-between gap-10 max-w-7xl">
+    <!-- Left Content -->
+    <section class=" scroll-section hidden-scroll max-w-xl text-center md:text-left">
+      <p class="text-sm text-red-600 font-semibold mb-2 tracking-wide">Best In Catering</p>
+      <h1 class="text-4xl md:text-5xl font-extrabold text-gray-900 leading-tight">
+        Salad <span class="underline-salad text-red-600"></span><br />with Creamy Avocado
+      </h1>
+      <p class="mt-4 text-gray-600 text-base md:text-lg max-w-md">
+        Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua Quis.
+      </p>
+      <div class="mt-8 flex items-center justify-center md:justify-start gap-6">
+        <button class="btn-order px-6 py-3 bg-red-600 text-white font-semibold rounded shadow-md hover:bg-red-700 transition">
+          Order Now
+        </button>
+        
+         <a href="c:\Users\DELL\Desktop\Rest Ui\IMAGES\The salad I make for everyone who comes over _ FeelGoodFoodie.mp4" target="_blank" class="play-button flex items-center gap-3 px-4 py-3 rounded-full text-white font-semibold shadow-lg hover:shadow-xl transition" aria-label="Watch Video">
+  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 fill-current" viewBox="0 0 24 24">
+    <path d="M8 5v14l11-7z"/>
+  </svg>
+  Watch Video
+</a>
+
+      </div>
+      <!-- Pagination Dots -->
+      <div class="mt-12 flex justify-center md:justify-start space-x-4">
+        <span class="block w-10 h-1 bg-red-600 rounded-full"></span>
+        <span class="block w-10 h-1 bg-gray-300 rounded-full"></span>
+        <span class="block w-10 h-1 bg-gray-300 rounded-full"></span>
+      </div>
+    </section>
+    <!-- Right Content: Dish Image with 50% off -->
+    <section class=" scroll-section hidden-scroll relative max-w-sm w-full self-center">
+      <div class="rounded-full overflow-hidden shadow-lg ring-8 ring-red-50 hover:ring-red-100 transition">
+        <img 
+          src="https://efactor.tech/RestUi/IMAGES/salad.jpg" 
+          alt="Fresh bowl of BBQ chicken salad with colorful leafy greens, cherry tomatoes, sliced avocado, and grilled chicken with visible seasonings" 
+          width="400" 
+          height="400" 
+          class="object-cover w-full h-full"
+          onerror="this.onerror=null;this.src='https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/0ede5a96-e7a8-45b8-8918-92fb3c6fd504.png';"
+        />
+      </div>
+      <div class="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-red-600 px-5 py-2 rounded-lg shadow-lg text-white text-xl font-extrabold whitespace-nowrap select-none">
+        SPECIAL MENU <span class="text-4xl ml-2">50%</span> OFF
+      </div>
+    </section>
+  </main>
+
+
+
+<body>
+  <main class="max-w-7xl mx-auto px-6 py-16">
+    <section class=" scroll-section hidden-scroll hero-bg rounded-md flex flex-col md:flex-row items-center gap-8 px-8 py-16 md:py-24">
+      <div class="flex flex-col md:flex-row items-center gap-6 md:gap-12 md:flex-1 text-white">
+        <div class="play-icon flex-shrink-0" title="Play video about Hotel Delight">        
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-6 h-6" aria-hidden="true" focusable="false">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-3xl md:text-4xl font-bold leading-tight">
+            We Have Excellent Of Quality<br />Indian Food
+          </h1>
+          <p class="mt-4 max-w-md text-sm md:text-base tracking-wide opacity-90">
+            Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore
+          </p>
+        </div>
+      </div>
+      <aside class="bg-white rounded-md shadow-lg px-10 py-10 w-full max-w-md md:flex-shrink-0">
+        <h2 class="text-red-custom font-semibold mb-1 text-base md:text-lg">Opening Times</h2>
+        <h3 class="text-2xl font-extrabold mb-6">Check Availability</h3>
+        <div class="text-gray-600 text-sm mb-8">
+          <div class="availability-item flex justify-between py-1"><span>Sunday to Tuesday</span><span>09:00 - 00:00</span></div>
+          <div class="availability-item flex justify-between py-1"><span>Friday to Sunday</span><span>06:00 - 09:00</span></div>
+          <div class="availability-item flex justify-between py-1"><span>Sunday to Tuesday</span><span>09:00 - 06:00</span></div>
+          <div class="availability-item flex justify-between py-1"><span>Monday to Friday</span><span>06:00 - 09:00</span></div>
+          <div class="availability-item flex justify-between py-1"><span>Monday to Saturday</span><span>06:00 - 09:00</span></div>
+        </div>
+        <div class="text-center call-us font-semibold text-lg md:text-xl">
+          Call Us Now<br />
+          <a href="tel:+993240765230" class="text-black hover:text-red-600 transition duration-200 block mt-1">+993240-765230</a>
+        </div>
+      </aside>
+    </section>
+    
+  </main>
+
+
+
+
+<!-- </head>
+<body class="min-h-screen flex flex-col"> -->
+
+  <!-- Header with hotel name -->
+  <header class="bg-white shadow-sm sticky top-0 z-20">
+    <div class="max-w-7xl mx-auto px-6 py-5 flex items-center justify-center">
+      <h1 class="text-4xl font-extrabold tracking-wide text-amber-700">Hotel Delights</h1>
+    </div>
+  </header>
+
+  <!-- Main container -->
+  <main class="flex-grow max-w-7xl mx-auto px-6 py-20">
+    <section aria-label="Hotel features" class=" scroll-section hidden-scroll grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
+      
+      <!-- Feature Card 1 -->
+      <article class="feature-card bg-white border border-transparent rounded-md p-6 text-center flex flex-col items-center transition-shadow duration-300 cursor-pointer">
+        <div class="icon w-14 h-14 mb-4 text-amber-700 stroke-[2.5]">
+          <svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M7 10h10M7 14h10" /></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-3">100% Swiss Quality</h3>
+        <p class="text-gray-600 text-sm mb-5 max-w-[16rem]">Lorem ipsum dolor consectetur adipiscing elit, sed eiusmod tempor incididunt ut labore dolore magna aliqua.</p>
+        <button aria-label="Discover more about 100% Swiss Quality" class="text-sm font-medium text-gray-700 hover:text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 inline-flex items-center">
+          Discover More <span class="discover-arrow">&diamond;</span>
+        </button>
+      </article>
+      
+      <!-- Feature Card 2 -->
+      <article class="feature-card bg-white border border-transparent rounded-md p-6 text-center flex flex-col items-center transition-shadow duration-300 cursor-pointer">
+        <div class="icon w-14 h-14 mb-4 text-amber-700 stroke-[2.5]">
+          <svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 7c-1.657 0-3 1.343-3 3 0 2 3 5 3 5s3-3 3-5c0-1.657-1.343-3-3-3z" /></svg>
+          <path stroke="currentColor" d="M9 16v2a1 1 0 001 1h4a1 1 0 001-1v-2" />
+        </div>
+        <h3 class="font-semibold text-lg mb-3">Organic Production</h3>
+        <p class="text-gray-600 text-sm mb-5 max-w-[16rem]">Lorem ipsum dolor consectetur adipiscing elit, sed eiusmod tempor incididunt ut labore dolore magna aliqua.</p>
+        <button aria-label="Discover more about Organic Production" class="text-sm font-medium text-gray-700 hover:text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 inline-flex items-center">
+          Discover More <span class="discover-arrow">&diamond;</span>
+        </button>
+      </article>
+
+      <!-- Feature Card 3 -->
+      <article class="feature-card bg-white border border-transparent rounded-md p-6 text-center flex flex-col items-center transition-shadow duration-300 cursor-pointer">
+        <div class="icon w-14 h-14 mb-4 text-amber-700 stroke-[2.5]">
+          <svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="11" rx="2" ry="2" /><path d="M7 9V7a5 5 0 0110 0v2" /></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-3">Food Law Certified</h3>
+        <p class="text-gray-600 text-sm mb-5 max-w-[16rem]">Lorem ipsum dolor consectetur adipiscing elit, sed eiusmod tempor incididunt ut labore dolore magna aliqua.</p>
+        <button aria-label="Discover more about Food Law Certified" class="text-sm font-medium text-gray-700 hover:text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 inline-flex items-center">
+          Discover More <span class="discover-arrow">&diamond;</span>
+        </button>
+      </article>
+
+      <!-- Feature Card 4 -->
+      <article class="feature-card bg-white border border-transparent rounded-md p-6 text-center flex flex-col items-center transition-shadow duration-300 cursor-pointer">
+        <div class="icon w-14 h-14 mb-4 text-amber-700 stroke-[2.5]">
+          <svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="12" width="18" height="8" rx="2" ry="2" /><path d="M16 7c0 1.5-3 3-4 3s-4-1.5-4-3a4 4 0 018 0z"/></svg>
+        </div>
+        <h3 class="font-semibold text-lg mb-3">Food Production</h3>
+        <p class="text-gray-600 text-sm mb-5 max-w-[16rem]">Lorem ipsum dolor consectetur adipiscing elit, sed eiusmod tempor incididunt ut labore dolore magna aliqua.</p>
+        <button aria-label="Discover more about Food Production" class="text-sm font-medium text-gray-700 hover:text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 inline-flex items-center">
+          Discover More <span class="discover-arrow">&diamond;</span>
+        </button>
+      </article>
+
+    </section>
+  </main>
+
+  <footer class="py-6 text-center text-sm text-gray-500 bg-white border-t select-none">
+    &copy; 2024 Hotel Delight. All rights reserved.
+  </footer>
+
+
+
+<div id="menuModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow-lg w-[90%] max-w-md p-5 relative">
+    <button onclick="closeMenuModal()" class="absolute top-3 right-3 text-gray-500 hover:text-black">✕</button>
+
+    <!-- Hidden field for item data -->
+    <input type="hidden" id="modalItemData">
+
+    <div id="modalItemImage" class="mb-3">
+      <img src="" alt="" class="rounded-lg w-full h-48 object-cover">
+    </div>
+
+    <h2 id="modalItemName" class="text-xl font-bold mb-1"></h2>
+    <p id="modalItemPrice" class="text-lg text-green-600 font-semibold mb-2"></p>
+
+    <!-- Quantity Controls -->
+    <div class="flex items-center space-x-3 mb-4">
+      <button onclick="changeModalQty(-1)" class="px-3 py-1 bg-gray-200 rounded">−</button>
+      <span id="modalQty" class="font-semibold">1</span>
+      <button onclick="changeModalQty(1)" class="px-3 py-1 bg-gray-200 rounded">+</button>
+    </div>
+
+    <!-- Addons List -->
+    <div id="modalAddons" class="mb-4">
+      <!-- Addons checkboxes will be inserted dynamically -->
+    </div>
+
+    <!-- Custom Add-on -->
+    <div class="custom-addon-section mb-4">
+      <h4 class="font-semibold mb-1">Custom Add-on:</h4>
+      <input type="text" id="customAddonInput" placeholder="Type your custom request" 
+        class="w-full border rounded px-3 py-2 focus:outline-none focus:ring focus:border-green-500">
+    </div>
+
+    <!-- Confirm Button -->
+    <button onclick="confirmAddToCart()" 
+      class="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600">
+      Confirm Add to Cart
+    </button>
+  </div>
+</div>
+
+
+
+<!-- Payment Modal -->
+<!-- <div id="paymentModal" class="payment-modal">
+  <div class="payment-content">
+    <span class="close-btn" onclick="closePaymentModal()">&times;</span>
+    <h2>Select Payment Method</h2>
+
+    <div class="payment-options">
+      <button onclick="selectPayment('COD')">💵 Cash on Delivery</button>
+      <button onclick="selectPayment('UPI')">📲 UPI / QR Code</button>
+      <button onclick="selectPayment('Card')">💳 Card Payment</button>
+    </div>
+
+    <div id="upiSection" style="display:none; text-align:center;">
+      <h3>Scan to Pay</h3>
+      <img src="your-qr-code.png" alt="QR Code" style="width:200px; height:200px;">
+      <p><strong>Amount:</strong> ₹<span id="orderAmount"></span></p>
+    </div>
+  </div>
+</div> -->
+
+<!-- Final Payment Modal -->
+<div id="finalPaymentModal" class="payment-modal">
+  <div class="payment-modal-content">
+    <span class="close-payment-modal" onclick="closeFinalPaymentModal()">&times;</span>
+    
+    <h2>🧾 Final Bill Summary</h2>
+    <div id="finalBillDetails" style="white-space: pre-line; font-family: monospace; font-size: 14px;"></div>
+
+    <hr>
+    <h3>💳 Select Payment Method</h3>
+    <div class="payment-options">
+      <button class="pay-option" onclick="showQR('upi')">📱 UPI</button>
+      <button class="pay-option" onclick="showQR('card')">💳 Card</button>
+      <button class="pay-option" onclick="confirmCashPayment()">💵 Cash</button>
+    </div>
+
+    <div id="qrContainer" style="margin-top: 15px; text-align:center; display:none;">
+      <h4>Scan to Pay</h4>
+      <img id="qrContainer" src="https://efactor.tech/RestUi/IMAGES/upi.png" alt="QR Code" style="width:400px; height:200px; border:1px solid #ccc;">
+    </div>
+  </div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="add-btn-wrapper">
+    <div class="inline-total">
+        Total:<br> <span class="total-price" id="inline-grand-total">₹0.00</span>
+    </div>
+</div>
+
+            </div>
+        </div>
+    </div>
+    
+
+    <!-- Shopping Cart Button -->
+    <div class="cart-btn">
+        <i class="fas fa-shopping-cart"></i>
+        <span class="cart-count">0</span>
+    </div>
+
+    <!-- Shopping Cart Sidebar -->
+    <div class="cart-container">
+        <div class="cart-header">
+            <h2 class="cart-title">Your Order</h2>
+            <button class="close-cart">&times;</button>
+        </div>
+        <div class="cart-items" id="cart-items">
+            <!-- Cart items will be added here dynamically -->
+        </div>
+        <div class="cart-footer">
+           
+        
+<div class="cart-total">
+    <div>Total: ₹<span id="total">0.00</span></div>
+    <div>GST (18%): ₹<span id="gst">0.00</span></div>
+    
+    <div style="height: 20px;"></div> <!-- 2 line gap -->
+
+    <div style="border-top: 1px solid #ccc; padding-top: 10px;">
+        Grand Total: ₹<span id="bill">0.00</span>
+    </div>
+</div>
+
+
+            <!-- <button class="checkout-btn">Proceed to Checkout</button> -->
+             <button class="checkout-btn" style="display: none;">Proceed to Checkout</button>
+
+        </div>
+       
+<div class="cart-buttons">
+  <button id="checkoutBtn" class="order-btn">
+    ✅ Proceed To Order
+  </button>
+
+  <button id="finalPayBtn" class="pay-btn">
+    💳 Final Bill Payment
+  </button>
+</div>
+
+
+
+    </div>
+    <div id="foodModal" class="modal-overlay" style="display: none;">
+  <div class="modal-content">
+    <span class="close-modal" onclick="closeModal()">×</span>
+    <div class="modal-header">
+      <img id="modalFoodImage" src="" alt="" />
+      <h3 id="modalFoodName"></h3>
+    </div>
+
+    <div class="modal-body">
+      <div>
+        <strong>Quantity</strong>
+        <div class="quantity-selector">
+          <button onclick="changeQty(-1)">−</button>
+          <span id="modalQty">1</span>
+          <!-- <button onclick="changeQty(1)">+</button> -->
+           <!-- Menu me jab plus button ho -->
+<button class="qty-btn plus"
+  onclick="changeItemQty('ITEM_ID', 1, [], event)">
+  +
+</button>
+
+        </div>
+      </div>
+
+      <div>
+        <strong>Add a cooking request (optional)</strong>
+        <textarea id="cookingRequest" placeholder="e.g. Don’t make it too spicy" maxlength="100"></textarea>
+      </div>
+
+      <div id="addonList">
+        <!-- Add-ons injected here -->
+      </div>
+
+      <button id="confirmAddToCart" class="confirm-btn">Add Item ₹<span id="modalTotalPrice">0</span></button>
+    </div>
+  </div>
+</div>
+
+  <script src="script (17).js"></script>
+  <script src="scroll (3).js"></script>
+ 
+  <!-- <script src="scroll-reveal.js"></script> -->
+
+  <script src="scroll (3).js" defer></script>
+
+   
+</body>
+</html>
+ 

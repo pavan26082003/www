@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Efactor Library · Interactive Guide</title>
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <!-- Google Font: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f4f7fc;
+            color: #13233d;
+            padding: 2rem 1.5rem;
+            line-height: 1.5;
+        }
+
+        .page {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 32px;
+            box-shadow: 0 20px 60px rgba(18, 38, 64, 0.08);
+            padding: 2.5rem 2.5rem 3rem;
+        }
+
+        .guide-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            border-bottom: 1px solid #e9eef4;
+            padding-bottom: 1.75rem;
+            margin-bottom: 2rem;
+        }
+
+        .guide-header-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .guide-header-left .logo-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .guide-header-left .logo-wrapper img {
+            width: 120px;
+            height: 100px;
+            border-radius: 12px;
+            object-fit: cover;
+        }
+
+        .guide-header-left .badge-version {
+            background: #eef3fe;
+            color: #2a4b8d;
+            font-weight: 700;
+            font-size: 0.75rem;
+            padding: 0.3rem 0.85rem;
+            border-radius: 40px;
+            letter-spacing: 0.3px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .guide-header-left .badge-version i {
+            color: #2a4b8d;
+            font-size: 0.7rem;
+        }
+
+        .guide-header-left h1 {
+            font-size: 1.9rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #0b1e3a;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .guide-header-left h1 .dami-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #eef3fe;
+            border-radius: 60px;
+            padding: 0.2rem 0.8rem 0.2rem 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #1c3f77;
+            gap: 0.4rem;
+            border: 1px solid #d0dff0;
+            letter-spacing: -0.2px;
+        }
+
+        .guide-header-left h1 .dami-icon i {
+            color: #3266b0;
+            font-size: 0.8rem;
+        }
+
+        .guide-header-right {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            color: #4a6380;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .guide-header-right i {
+            color: #3266b0;
+        }
+
+        .guide-header-right .update-badge {
+            background: #eaf1fd;
+            padding: 0.3rem 1rem;
+            border-radius: 30px;
+            color: #1e4b8a;
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+
+        .step-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem 1rem;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px dashed #dce3ed;
+        }
+
+        .step-btn {
+            background: #f0f5fe;
+            border: 1.5px solid transparent;
+            padding: 0.6rem 1.4rem;
+            border-radius: 60px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: #1f3f6b;
+            cursor: pointer;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+            font-family: inherit;
+        }
+
+        .step-btn i {
+            color: #3266b0;
+            font-size: 1rem;
+        }
+
+        .step-btn:hover {
+            background: #e3edfc;
+            border-color: #b2c9e7;
+            transform: translateY(-2px);
+        }
+
+        .step-btn.active {
+            background: #1c3f77;
+            color: #fff;
+            border-color: #1c3f77;
+            box-shadow: 0 8px 18px rgba(28, 63, 119, 0.18);
+        }
+
+        .step-btn.active i {
+            color: #fff;
+        }
+
+        .step-content {
+            background: #fafcff;
+            border-radius: 24px;
+            border: 1px solid #e4ebf5;
+            padding: 1.8rem 2rem 2rem;
+            min-height: 200px;
+            transition: 0.25s;
+            animation: fadeSlide 0.25s ease;
+        }
+
+        @keyframes fadeSlide {
+            0% {
+                opacity: 0.6;
+                transform: translateY(6px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .step-content .step-title {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #10233f;
+            margin-bottom: 1.2rem;
+        }
+
+        .step-content .step-title .num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #1c3f77;
+            color: #fff;
+            width: 30px;
+            height: 30px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: 700;
+        }
+
+        .step-content .step-title i {
+            color: #2f62a3;
+            font-size: 1.3rem;
+            width: 2rem;
+        }
+
+        .code-block {
+            background: #0f1a2e;
+            color: #e3eaf5;
+            padding: 1.25rem 1.5rem;
+            border-radius: 16px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin: 0.75rem 0 1rem;
+            border: 1px solid #263449;
+        }
+
+        .code-block .hl-comment {
+            color: #7e97b9;
+        }
+        .code-block .hl-keyword {
+            color: #b3cfff;
+        }
+        .code-block .hl-string {
+            color: #c1e0b0;
+        }
+
+        .inline-code {
+            background: #eef3fa;
+            padding: 0.15rem 0.6rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #1a3f6b;
+        }
+
+        .badge-op {
+            display: inline-block;
+            background: #dfe8f5;
+            padding: 0.2rem 0.9rem;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #1f4379;
+            letter-spacing: 0.3px;
+        }
+
+        .list-checklist {
+            list-style: none;
+            padding: 0.5rem 0 0.25rem;
+        }
+
+        .list-checklist li {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.7rem;
+            padding: 0.3rem 0;
+            font-size: 0.95rem;
+        }
+
+        .list-checklist li i {
+            color: #1f7b4a;
+            font-size: 1rem;
+            margin-top: 0.15rem;
+            width: 1.2rem;
+        }
+
+        .grid-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            margin: 1.2rem 0 0.5rem;
+            border-radius: 16px;
+            border: 1px solid #e0e8f2;
+        }
+
+        .table-wrap table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            background: #fff;
+        }
+
+        .table-wrap th {
+            background: #f0f5fd;
+            color: #1d3c64;
+            font-weight: 700;
+            padding: 0.8rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid #d9e2ef;
+        }
+
+        .table-wrap td {
+            padding: 0.8rem 1rem;
+            border-bottom: 1px solid #e8eff7;
+            color: #1d3452;
+        }
+
+        .table-wrap tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .summary-box {
+            background: #e9f2fa;
+            border-radius: 20px;
+            padding: 1.5rem 2rem;
+            margin-top: 1.8rem;
+            border-left: 5px solid #2b5f9e;
+        }
+
+        .summary-box strong {
+            color: #0b2b55;
+        }
+
+        .footer-note {
+            margin-top: 2.8rem;
+            border-top: 1px solid #e3ebf5;
+            padding-top: 1.8rem;
+            color: #4f6c8d;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .footer-note .footer-left {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .footer-note .footer-left img {
+            width: 100px;
+            height: 95px;
+            border-radius: 12px;
+            object-fit: cover;
+        }
+
+        .footer-note i {
+            color: #2c5f9e;
+        }
+
+        .icon-check {
+            color: #1d7a4b;
+        }
+
+        .checklist-icon {
+            color: #3266b0;
+            width: 1.2rem;
+            text-align: center;
+            font-size: 0.95rem;
+        }
+
+        .icon-inline {
+            color: #3266b0;
+            margin-right: 0.4rem;
+            font-size: 0.95rem;
+        }
+
+        .icon-accent {
+            color: #2b5f9e;
+            margin-right: 0.3rem;
+        }
+
+        .checklist-heading-icon {
+            color: #1f784a;
+            margin-right: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        @media (max-width: 700px) {
+            .grid-2col {
+                grid-template-columns: 1fr;
+            }
+            .page {
+                padding: 1.5rem;
+            }
+            .guide-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .step-btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.8rem;
+            }
+            .guide-header-left .logo-wrapper img {
+                width: 36px;
+                height: 36px;
+            }
+            .guide-header-left h1 .dami-icon {
+                font-size: 0.75rem;
+                padding: 0.1rem 0.6rem 0.1rem 0.3rem;
+            }
+            .footer-note {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+
+        <!-- header with logo on the left of Efactor Library text -->
+        <div class="guide-header">
+            <div class="guide-header-left">
+                <div class="logo-wrapper">
+                    <!-- Using actual image from your directory -->
+                    <img src="/files/profile_images/EfactorLibrary.png" alt="Logo" />
+                    <h1>
+                         Library
+                        
+                    </h1>
+                </div>
+                <span class="badge-version"><i class="fa-regular fa-bookmark"></i> v1.7</span>
+            </div>
+            <div class="guide-header-right">
+                <i class="fa-regular fa-calendar"></i> Updated: 25-02-2025
+                <span class="update-badge"><i class="fa-regular fa-circle-check"></i> stable</span>
+            </div>
+        </div>
+
+        <!-- step buttons – each step has a unique icon -->
+        <div class="step-buttons" id="stepButtons">
+            <button class="step-btn active" data-step="1"><i class="fa-regular fa-file-zipper"></i> 1. Add Library</button>
+            <button class="step-btn" data-step="2"><i class="fa-solid fa-cubes"></i> 2. Dependencies</button>
+            <button class="step-btn" data-step="3"><i class="fa-solid fa-qrcode"></i> 3. Add Device</button>
+            <button class="step-btn" data-step="4"><i class="fa-solid fa-wifi"></i> 4. Connect Network</button>
+            <button class="step-btn" data-step="5"><i class="fa-solid fa-diagram-project"></i> 5. Node Management</button>
+            <button class="step-btn" data-step="6"><i class="fa-solid fa-rotate"></i> 6. Sync & Build</button>
+        </div>
+
+        <!-- dynamic content -->
+        <div class="step-content" id="stepContent">
+            <!-- rendered by JavaScript -->
+        </div>
+
+        <!-- summary checklist with dedicated icons for each item -->
+        <div style="background: #f0f6fe; border-radius: 24px; padding: 1.5rem 2rem; margin-top: 2.5rem; border: 1px solid #d6e3f5;">
+            <div style="display: flex; flex-wrap: wrap; gap: 1.2rem 2.5rem; align-items: center;">
+                <div></div>
+                <div>
+                    <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.5rem;">
+                        <i class="fa-solid fa-list-check checklist-heading-icon"></i> Quick checklist
+                    </h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.6rem 1.5rem;">
+                        <span><i class="fa-solid fa-code-branch checklist-icon"></i> Ivy repo</span>
+                        <span><i class="fa-solid fa-box-archive checklist-icon"></i> AAR dependency</span>
+                        <span><i class="fa-solid fa-cubes checklist-icon"></i> All deps</span>
+                        <span><i class="fa-solid fa-screwdriver-wrench checklist-icon"></i> Init managers</span>
+                        <span><i class="fa-solid fa-qrcode checklist-icon"></i> QR scan</span>
+                        <span><i class="fa-solid fa-plus-circle checklist-icon"></i> ADD_DEVICE</span>
+                        <span><i class="fa-solid fa-wifi checklist-icon"></i> Provision</span>
+                        <span><i class="fa-solid fa-diagram-project checklist-icon"></i> Node ops</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- footer with logo -->
+        <div class="footer-note">
+            <div class="footer-left">
+                <!-- Using actual image from your directory -->
+                <img src="/files/profile_images/EfactorLibrary.png" alt="Logo" />
+                <span> Library v1.7 · Integration Guide</span>
+            </div>
+            <span><i class="fa-regular fa-check-circle"></i> Ready for production</span>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // ---------- content snippets per step (with icons inside) ----------
+            const stepData = {
+                1: {
+                    title: 'Add Efactor Library',
+                    icon: 'fa-regular fa-file-zipper',
+                    html: `
+                        <p><strong><i class="fa-solid fa-code-branch icon-accent"></i>Configure Ivy repository</strong> in project-level <span class="inline-code">build.gradle</span>:</p>
+                        <div class="code-block">
+                            <span class="hl-comment">// project-level build.gradle</span>
+                            repositories {
+                                ivy {
+                                    url "https://efactor.tech/v8/download.php/\${CUSTOMER_ID}/\${ACCESS_KEY}/"
+                                    patternLayout {
+                                        artifact "[artifact]-[revision].[ext]" 
+                                    }
+                                    metadataSources { artifact() }
+                                }
+                            }
+                        </div>
+                        <p><strong><i class="fa-solid fa-box-archive icon-accent"></i>Include AAR</strong> in app-level <span class="inline-code">build.gradle</span>:</p>
+                        <div class="code-block">
+                            dependencies {
+                                implementation 'proto:efactorprotov2:1.3@aar'
+                            }
+                        </div>
+                        <div class="list-checklist">
+                            <li><i class="fa-regular fa-circle-check icon-check"></i> Library downloaded &amp; linked correctly</li>
+                        </div>
+                    `
+                },
+                2: {
+                    title: 'Required Dependencies',
+                    icon: 'fa-solid fa-cubes',
+                    html: `
+                        <p> <strong><i class="fa-solid fa-play icon-accent"></i>Manually add</strong> these in <span class="inline-code">app/build.gradle</span>:</p>
+                        <div class="code-block">
+                            dependencies {
+                                implementation "androidx.room:room-runtime:2.5.1"
+                                annotationProcessor "androidx.room:room-compiler:2.5.1"
+                                implementation 'org.java-websocket:Java-WebSocket:1.5.1'
+                                implementation 'org.greenrobot:eventbus:3.3.1'
+                                implementation 'com.auth0.android:jwtdecode:1.4.0'
+                                implementation 'com.google.code.gson:gson:2.8.6'
+                                implementation 'com.squareup.okhttp3:logging-interceptor:4.9.0'
+                                implementation 'com.google.crypto.tink:tink-android:1.6.1'
+                                implementation 'com.google.protobuf:protobuf-javalite:3.18.0'
+                                implementation 'com.google.android.gms:play-services-threadnetwork:16.0.1'
+                            }
+                        </div>
+                        <div class="list-checklist">
+                            <li><i class="fa-regular fa-circle-check icon-check"></i> All required dependencies available</li>
+                        </div>
+                    `
+                },
+                3: {
+                    title: 'Add a Device (QR scan)',
+                    icon: 'fa-solid fa-qrcode',
+                    html: `
+                        <p><i class="fa-solid fa-screwdriver-wrench icon-inline"></i> <strong></i>Initialize managers</strong> in your Activity:</p>
+                        <div class="code-block">
+                            libraryManager = EfactorLibraryManager.init(this, api_key);
+                            provisionManager = EfactorProvisionManager.getInstance(getApplicationContext());
+                        </div>
+                        <p><i class="fa-solid fa-qrcode icon-inline"></i> <strong>Scan &amp; decode QR</strong> → then add device:</p>
+                        <div class="code-block">
+                            EfactorProvisionManager.getInstance(context).decodeScannedQrData(scannedData, new ApiLibResponseListener() {
+                                @Override public void onSuccess(Bundle bundle) {
+                                    String deviceId = bundle.getString("id");
+                                    addDevice(deviceId);
+                                }
+                                @Override public void onResponseFailure(Bundle bundle) { /* handle error */ }
+                                @Override public void onNetworkFailure(Bundle bundle) { /* handle network error */ }
+                            });
+                        </div>
+                        <div class="code-block" style="margin-top: 0.8rem;">
+                            <span class="hl-comment">// addDevice() – send ADD_DEVICE operation</span>
+                            EfactorDeviceOperationRequest req = new EfactorDeviceOperationRequest();
+                            req.setNodeId(id); req.setApiKey(accessToken);
+                            req.setOperation(EfactorConstants.OperationType.ADD_DEVICE);
+                            EfactorLibraryManager.getInstance().sendData(req, listener);
+                        </div>
+                        <div class="list-checklist">
+                            <li><i class="fa-regular fa-circle-check icon-check"></i> Device verified by Efactor cloud</li>
+                        </div>
+                        <p style="margin-top: 0.5rem; font-weight: 600; font-size: 0.9rem;"><strong><i class="fa-solid fa-list icon-accent"></i>Operation types:</strong></p>
+                        <div class="table-wrap">
+                            <table>
+                                <thead><tr><th><strong>Operation</strong></th><th>Required fields</th></tr></thead>
+                                <tbody>
+                                    <tr><td><span class="badge-op"><i class="fa-solid fa-plus"></i> ADD</span></td><td>ApiKey, NodeId</td></tr>
+                                    <tr><td><span class="badge-op"><i class="fa-solid fa-trash"></i> REMOVE</span></td><td>ApiKey, NodeId, DeviceId</td></tr>
+                                    <tr><td><span class="badge-op"><i class="fa-solid fa-paper-plane"></i> SEND_DATA</span></td><td>Payload, ParamName, PageName, ApiKey, NodeId, Lat, Lng</td></tr>
+                                    <tr><td><span class="badge-op"><i class="fa-solid fa-link"></i> ADD (to network)</span></td><td>ApiKey, NodeId, SecretKey</td></tr>
+                                    <tr><td><span class="badge-op"><i class="fa-solid fa-signal"></i> GET_CONNECTIVITY_STATUS</span></td><td>NodeId, Lat, Lng</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    `
+                },
+                4: {
+                    title: 'Connect Device to Network',
+                    icon: 'fa-solid fa-wifi',
+                    html: `
+                        <p><strong><i class="fa-solid fa-network-wired icon-accent"></i>ProvisionLanding:</strong> create device &amp; start connection</p>
+                        <div class="code-block">
+                            provisionManager.createEfactorDevice(TRANSPORT_SOFTAP, SECURITY_1, deviceId);
+                            provisionManager.getEfactorDevice().setProofOfPossession(deviceId);
+                            provisionManager.getEfactorDevice().setDeviceId(deviceId);
+                            <span class="hl-comment">// after permission check</span>
+                            provisionManager.getEfactorDevice().getcrds();
+                        </div>
+                        <p><i class="fa-regular fa-broadcast icon-inline"></i> <strong>Listen for connection events</strong> (EventBus):</p>
+                        <div class="code-block">
+                            @Subscribe(threadMode = ThreadMode.MAIN)
+                            public void onEvent(DeviceConnectionEvent event) {
+                                switch (event.getEventType()) {
+                                    case EfactorConstants.EVENT_DEVICE_CONNECTED:
+                                        checkDeviceCapabilities(); <span class="hl-comment">// proceed</span>
+                                        break;
+                                    case EfactorConstants.EVENT_DEVICE_CONNECTION_FAILED:
+                                        connectDevice(); <span class="hl-comment">// retry</span>
+                                        break;
+                                }
+                            }
+                        </div>
+                        <p><i class="fa-regular fa-check-circle" style="color:#1f7b4a;"></i> <strong>Check capabilities</strong> → show Wi‑Fi list → user selects home network.</p>
+                        <div class="list-checklist">
+                            <li><i class="fa-regular fa-circle-check icon-check"></i> Device online &amp; ready for provisioning</li>
+                        </div>
+                    `
+                },
+                5: {
+                    title: 'Node Management',
+                    icon: 'fa-solid fa-diagram-project',
+                    html: `
+                        <div class="grid-2col">
+                            <div>
+                                <p><strong><i class="fa-solid fa-download icon-accent"></i> Fetch node</strong></p>
+                                <div class="code-block" style="font-size: 0.75rem; padding: 0.9rem 1rem;">
+                                    EfactorLibraryManager.getInstance().fetchNewNode(id, accessToken, listener);
+                                </div>
+                            </div>
+                            <div>
+                                <p><strong><i class="fa-regular fa-trash-can icon-inline"></i> Remove node</strong></p>
+                                <div class="code-block" style="font-size: 0.75rem; padding: 0.9rem 1rem;">
+                                    EfactorDeviceOperationRequest req = new EfactorDeviceOperationRequest();
+                                    req.setOperation(EfactorConstants.OperationType.REMOVE);
+                                    req.setNodeId(deviceId); req.setDeviceId(nodeId); req.setApiKey(accessToken);
+                                    EfactorLibraryManager.getInstance().sendData(req, listener);
+                                </div>
+                            </div>
+                        </div>
+                        <div class="summary-box">
+                            <strong><i class="fa-solid fa-list icon-accent"></i>Summary</strong><br/>
+                            <i class="fa-regular fa-check-circle" style="color:#1f7b4a;"></i> <strong>Fetch Node</strong> – retrieve node details from cloud<br/>
+                            <i class="fa-regular fa-circle-xmark" style="color:#b91c1c;"></i> <strong>Remove Node</strong> – delete node from network
+                        </div>
+                    `
+                },
+                6: {
+                    title: 'Sync Gradle & Build',
+                    icon: 'fa-solid fa-rotate',
+                    html: `
+                        <div class="list-checklist">
+                            <li><strong><i class="fa-solid fa-mobile-screen icon-accent"></i>Android Studio:</strong> <span class="inline-code">Sync Now</span></li>
+                            <li><strong><i class="fa-solid fa-code icon-accent"></i>Or terminal:</strong> <span class="inline-code">./gradlew clean</span> &amp; <span class="inline-code">./gradlew build --refresh-dependencies</span></li>
+                        </div>
+                        <div style="background: #dce8f8; padding: 0.7rem 1.2rem; border-radius: 30px; display: inline-block; margin-top: 0.5rem;">
+                            <strong><i class="fa-solid fa-check-circle icon-accent"></i>Project ready for Efactor Library!</strong>
+                        </div>
+                    `
+                }
+            };
+
+            // ---------- render step ----------
+            const contentEl = document.getElementById('stepContent');
+            const buttons = document.querySelectorAll('.step-btn');
+
+            function renderStep(stepNumber) {
+                const data = stepData[stepNumber];
+                if (!data) return;
+
+                const titleHtml = `
+                            <div class="step-title">
+                                <span class="num">${stepNumber}</span>
+                                <i class="${data.icon}"></i>
+                                ${data.title}
+                            </div>
+                        `;
+
+                contentEl.innerHTML = titleHtml + data.html;
+
+                buttons.forEach(btn => {
+                    btn.classList.remove('active');
+                    if (parseInt(btn.dataset.step, 10) === stepNumber) {
+                        btn.classList.add('active');
+                    }
+                });
+            }
+
+            buttons.forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    const step = parseInt(this.dataset.step, 10);
+                    if (!isNaN(step)) {
+                        renderStep(step);
+                    }
+                });
+            });
+
+            renderStep(1);
+        })();
+    </script>
+</body>
+</html>

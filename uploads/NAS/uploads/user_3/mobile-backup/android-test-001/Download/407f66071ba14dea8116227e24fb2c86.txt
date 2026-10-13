@@ -1,0 +1,45 @@
+FILE-MANAGER-V2/
+├── app/
+│   ├── Config/
+│   │   ├── App.php
+│   │   └── Database.php
+│   ├── Controllers/
+│   │   ├── Api/
+│   │   │   └── V1/
+│   │   │       ├── FileController.php
+│   │   │       ├── FolderController.php
+│   │   │       ├── DashboardController.php
+│   │   │       ├── SyncController.php
+│   │   │       ├── ShareController.php
+│   │   │       └── ClusterController.php
+│   │   └── Controller.php
+│   ├── Models/
+│   │   ├── File.php
+│   │   ├── Folder.php
+│   │   ├── User.php
+│   │   ├── Cluster.php
+│   │   ├── Share.php
+│   │   └── StarredItem.php
+│   ├── Repositories/
+│   │   ├── FileRepository.php
+│   │   ├── FolderRepository.php
+│   │   ├── UserRepository.php
+│   │   ├── ClusterRepository.php
+│   │   ├── ShareRepository.php
+│   │   └── StarredRepository.php
+│   ├── Services/
+│   │   ├── FileService.php
+│   │   ├── FolderService.php
+│   │   ├── StorageService.php
+│   │   ├── PermissionService.php
+│   │   ├── SyncService.php
+│   │   └── ShareService.php
+│   ├── Helpers/
+│   │   ├── FileHelper.php
+│   │   └── ResponseHelper.php
+│   ├── Middleware/
+│   │   └── AuthMiddleware.php
+│   └── Routes/
+│       └── Api.php
+├── bootstrap/
+│   └── App.php

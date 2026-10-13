@@ -1,0 +1,30 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /app/file-manager-v3/
+    
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+    
+    # API routes - forward to public/index.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^api/v1/(.*)$ public/index.php [QSA,L]
+    
+    # Frontend routes
+    RewriteRule ^login$ public/login.php [L]
+    RewriteRule ^register$ public/register.php [L]
+    RewriteRule ^home$ public/home.php [L]
+    RewriteRule ^dashboard$ public/dashboard.php [L]
+    
+    # Root - go to login
+    RewriteRule ^$ public/login.php [L]
+    
+    # Assets - serve directly
+    RewriteRule ^assets/(.*)$ public/assets/$1 [L]
+    
+    # If the file/directory doesn't exist, send to index.php
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^(.*)$ public/index.php [QSA,L]
+</IfModule>

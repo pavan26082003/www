@@ -1,0 +1,13 @@
+{
+  "name": "grid-team-react",
+  "version": "1.0.0",
+  "description": "Standalone React application for GRID Team Workspace",
+  "scripts": {
+    "build": "npx esbuild index.jsx --bundle --outfile=dist/team_bundle.js --format=iife",
+    "watch": "npx esbuild index.jsx --bundle --outfile=dist/team_bundle.js --format=iife --watch"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  }
+}

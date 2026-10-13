@@ -1,0 +1,449 @@
+/* ============================================================
+   EMOJI PICKER — WhatsApp-style complete picker
+   Light + Dark theme. Responsive Desktop & Mobile.
+   ============================================================ */
+
+/* ---- Position anchor ---- */
+.composer-area {
+  position: relative;
+}
+
+/* ---- Picker container ---- */
+.emoji-picker {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+
+  z-index: 9999;
+
+  width: 360px;
+  max-width: calc(100vw - 24px);
+
+  display: flex;
+  flex-direction: column;
+
+  background: #ffffff;
+  border: 1px solid #e9edef;
+  border-radius: 14px;
+  box-shadow:
+    0 12px 40px rgba(17, 27, 33, 0.18),
+    0 3px 10px rgba(17, 27, 33, 0.08);
+
+  overflow: hidden;
+
+  /* Open animation */
+  animation: epFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: bottom left;
+}
+
+@keyframes epFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.93) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ---- Search row ---- */
+.ep-search-wrap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 8px;
+  background: #f0f2f5;
+  border-bottom: 1px solid #e9edef;
+}
+
+.ep-search-icon {
+  flex: 0 0 auto;
+  color: #8696a0;
+  display: flex;
+  align-items: center;
+}
+
+.ep-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #111b21;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.4;
+  placeholder-color: #8696a0;
+}
+
+.ep-search-input::placeholder {
+  color: #8696a0;
+}
+
+.ep-search-clear {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  color: #8696a0;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.ep-search-clear:hover {
+  color: #111b21;
+  background: rgba(17, 27, 33, 0.08);
+}
+
+/* ---- Category tabs ---- */
+.ep-category-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 0;
+  padding: 4px 6px;
+  background: #ffffff;
+  border-bottom: 1px solid #e9edef;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ep-category-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.ep-cat-btn {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  padding: 6px 7px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  position: relative;
+}
+
+.ep-cat-btn:hover {
+  opacity: 0.85;
+  background: #f0f2f5;
+}
+
+.ep-cat-btn.active {
+  opacity: 1;
+  background: rgba(0, 168, 132, 0.10);
+}
+
+.ep-cat-btn.active::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 3px;
+  background: var(--color-primary, #00a884);
+  border-radius: 2px;
+}
+
+.ep-cat-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* ---- Scroll area ---- */
+.ep-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 320px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding: 6px 6px 12px;
+
+  scrollbar-width: thin;
+  scrollbar-color: #d7dce5 transparent;
+}
+
+.ep-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.ep-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ep-scroll::-webkit-scrollbar-thumb {
+  background: #d7dce5;
+  border-radius: 99px;
+}
+
+/* ---- Section ---- */
+.ep-section {
+  margin-bottom: 4px;
+}
+
+.ep-section-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #8696a0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 6px 4px;
+  position: sticky;
+  top: 0;
+  background: #ffffff;
+  z-index: 2;
+}
+
+/* ---- Emoji grid ---- */
+.ep-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 1px;
+}
+
+/* ---- Emoji button ---- */
+.ep-emoji-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1;
+  font-size: 22px;
+  line-height: 1;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.1s ease, transform 0.1s ease;
+  user-select: none;
+  box-sizing: border-box;
+  min-width: 36px;
+  min-height: 36px;
+}
+
+/* Hover zoom only for mouse devices; on touch it "sticks" after a tap */
+@media (hover: hover) and (pointer: fine) {
+  .ep-emoji-btn:hover {
+    background: #f0f2f5;
+    transform: scale(1.15);
+  }
+}
+
+.ep-emoji-btn:active {
+  transform: scale(0.92);
+  background: #e9edef;
+}
+
+.ep-emoji-btn:focus-visible {
+  outline: 2px solid var(--color-primary, #00a884);
+  outline-offset: 1px;
+}
+
+/* ---- No results ---- */
+.ep-no-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  gap: 10px;
+  color: #8696a0;
+  text-align: center;
+}
+
+.ep-no-results span {
+  font-size: 36px;
+  line-height: 1;
+}
+
+.ep-no-results p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.ep-no-results strong {
+  color: #111b21;
+}
+
+/* ============================================================
+   DARK THEME
+   ============================================================ */
+
+[data-theme="dark"] .emoji-picker {
+  background: #202c33;
+  border-color: #2a3942;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.65),
+    0 3px 12px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .ep-search-wrap {
+  background: #111b21;
+  border-bottom-color: #2a3942;
+}
+
+[data-theme="dark"] .ep-search-input {
+  color: #e9edef;
+}
+
+[data-theme="dark"] .ep-search-input::placeholder {
+  color: #8696a0;
+}
+
+[data-theme="dark"] .ep-search-icon {
+  color: #8696a0;
+}
+
+[data-theme="dark"] .ep-search-clear {
+  color: #8696a0;
+}
+
+[data-theme="dark"] .ep-search-clear:hover {
+  color: #e9edef;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .ep-category-tabs {
+  background: #202c33;
+  border-bottom-color: #2a3942;
+}
+
+[data-theme="dark"] .ep-cat-btn:hover {
+  background: #2a3942;
+}
+
+[data-theme="dark"] .ep-cat-btn.active {
+  background: rgba(0, 168, 132, 0.15);
+}
+
+[data-theme="dark"] .ep-section-label {
+  background: #202c33;
+  color: #8696a0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-theme="dark"] .ep-emoji-btn:hover {
+    background: #2a3942;
+  }
+}
+
+[data-theme="dark"] .ep-emoji-btn:active {
+  background: #3d5263;
+}
+
+[data-theme="dark"] .ep-no-results {
+  color: #8696a0;
+}
+
+[data-theme="dark"] .ep-no-results strong {
+  color: #e9edef;
+}
+
+/* ============================================================
+   RESPONSIVE — Mobile (≤ 1024px)
+   ============================================================ */
+
+@media (max-width: 1024px) {
+  .emoji-picker {
+    /* Full width of the composer (= screen width), sitting on top of it — never wider than the screen */
+    left: 0;
+    right: 0;
+    width: auto;
+    max-width: 100%;
+    bottom: 100%;
+    max-height: min(55vh, 460px);
+    box-sizing: border-box;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    border-radius: 16px 16px 0 0;
+    transform-origin: bottom center;
+  }
+
+  .ep-search-wrap {
+    padding: 10px 14px 8px;
+  }
+
+  .ep-search-input {
+    /* 16px stops iOS Safari from zooming the page when the field is tapped */
+    font-size: 16px;
+    min-width: 0;
+  }
+
+  /* All category tabs fit on one row, even at 320px */
+  .ep-category-tabs {
+    justify-content: space-between;
+    padding: 4px 8px;
+  }
+
+  .ep-cat-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 52px;
+    padding: 7px 0;
+  }
+
+  .ep-cat-icon {
+    font-size: 20px;
+  }
+
+  .ep-scroll {
+    height: auto;
+    max-height: calc(min(55vh, 460px) - 104px);
+    padding: 4px 8px 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ep-section-label {
+    padding: 8px 4px 4px;
+  }
+
+  /* As many 44px touch targets per row as fit (8 on a phone, more on a tablet) */
+  .ep-grid {
+    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+    gap: 2px;
+  }
+
+  .ep-emoji-btn {
+    aspect-ratio: auto;
+    height: 44px;
+    min-width: 0;
+    min-height: 44px;
+    font-size: 26px;
+    border-radius: 10px;
+  }
+}
+
+/* ============================================================
+   SMALL PHONES (≤ 360px)
+   ============================================================ */
+@media (max-width: 360px) {
+  .ep-grid {
+    grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  }
+
+  .ep-emoji-btn {
+    height: 40px;
+    min-height: 40px;
+    font-size: 24px;
+  }
+
+  .ep-cat-icon {
+    font-size: 18px;
+  }
+}

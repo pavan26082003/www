@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Commander Label Designer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .app-container {
+            display: flex;
+            gap: 20px;
+        }
+        .controls {
+            width: 300px;
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 5px;
+            height: fit-content;
+        }
+        .labels-container {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .labels-container.horizontal {
+            flex-direction: row;
+        }
+        .labels-container.vertical {
+            flex-direction: column;
+        }
+        .label-box {
+            width: 300px;
+            height: 200px;
+            border: 2px solid #000;
+            position: relative;
+            background: white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+            margin-bottom: 5px;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: inline-block;
+            width: 120px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            padding: 5px;
+            width: 150px;
+        }
+        textarea {
+            height: 60px;
+            resize: vertical;
+        }
+        button {
+            padding: 8px 15px;
+            margin: 5px 0;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.print-btn {
+            background: #2196F3;
+        }
+        button.print-btn:hover {
+            background: #0b7dda;
+        }
+        button.lock-btn {
+            background: #ff9800;
+        }
+        button.lock-btn:hover {
+            background: #e68a00;
+        }
+        @media print {
+            .no-print {
+                display: none;
+            }
+            body {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                margin: 0;
+                padding: 0;
+            }
+            .labels-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+                margin: 0 auto;
+            }
+            .label-box {
+                border: 2px solid #000 !important;
+                margin: 10px auto;
+                page-break-after: auto;
+            }
+            .labels-container.horizontal {
+                flex-direction: row;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+        }
+        @media (max-width: 1000px) {
+            .app-container {
+                flex-direction: column;
+            }
+            .controls {
+                width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1 class="no-print">Commander Label Designer</h1>
+    
+    <div class="app-container">
+        <div class="controls no-print">
+            <h2>Company Information</h2>
+            <div class="control-group">
+                <label for="companyName">Company Name:</label>
+                <input type="text" id="companyName" value="Factor Enovations Pvt LtC">
+            </div>
+            <div class="control-group">
+                <label for="website">Website:</label>
+                <input type="text" id="website" value="efactor.tech">
+            </div>
+            <div class="control-group">
+                <label for="address">Address:</label>
+                <input type="text" id="address" value="Hyderabad -62">
+            </div>
+            <div class="control-group">
+                <label for="tagline">Tagline:</label>
+                <input type="text" id="tagline" value="Will for Faster Provoitons Put Us!">
+            </div>
+            
+            <h2>Product Specifications</h2>
+            <div class="control-group">
+                <label for="productName">Product Name:</label>
+                <input type="text" id="productName" value="COMMANDER DIGITAL ELECTRONIC VOLTAGE CORRECTOR">
+            </div>
+            <div class="control-group">
+                <label for="modelInput">Model:</label>
+                <input type="text" id="modelInput" value="RC 2K DD ITD SPECIAL">
+            </div>
+            <div class="control-group">
+                <label for="capacityInput">Capacity:</label>
+                <input type="text" id="capacityInput" value="7 Amps Load">
+            </div>
+            <div class="control-group">
+                <label for="rangeInput">Working Range:</label>
+                <input type="text" id="rangeInput" value="170 - 286 Volts">
+            </div>
+            <div class="control-group">
+                <label for="outputInput">Output:</label>
+                <input type="text" id="outputInput" value="220V +/- 10%">
+            </div>
+            <div class="control-group">
+                <label for="domInput">DOM:</label>
+                <input type="text" id="domInput" value="30.04.25">
+            </div>
+            <div class="control-group">
+                <label for="serialInput">SL.No:</label>
+                <input type="text" id="serialInput" value="04252001">
+            </div>
+            <div class="control-group">
+                <label for="mrpInput">MRP:</label>
+                <input type="text" id="mrpInput" value="3,600 / = (Inclusive of all Taxes)">
+            </div>
+            <div class="control-group">
+                <label for="qrImageUrl">QR Image URL:</label>
+                <input type="text" id="qrImageUrl" placeholder="Enter URL for QR image">
+            </div>
+            
+            <h2>Print Settings</h2>
+            <div class="control-group">
+                <label for="labelCount">Number of Labels:</label>
+                <select id="labelCount">
+                    <option value="1">1</option>
+                    <option value="2" selected>2</option>
+                    <option value="4">4</option>
+                    <option value="6">6</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="printLayout">Print Layout:</label>
+                <select id="printLayout">
+                    <option value="horizontal">Horizontal</option>
+                    <option value="vertical">Vertical</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="logoUpload">Upload Logo:</label>
+                <input type="file" id="logoUpload" accept="image/*">
+            </div>
+            <button onclick="updateAllLabels()">Update Labels</button>
+            <button class="print-btn" onclick="printLabels()">Print Labels</button>
+            <button class="lock-btn" onclick="toggleLockAll()">Lock/Unlock All</button>
+        </div>
+        
+        <div class="labels-container horizontal" id="labelsContainer">
+            <!-- Labels will be generated here -->
+        </div>
+    </div>
+
+    <script>
+        // Array to store all canvases
+        let canvases = [];
+        let isLocked = false;
+        
+        // Initialize the application
+        function initApp() {
+            const labelCount = parseInt(document.getElementById('labelCount').value);
+            const printLayout = document.getElementById('printLayout').value;
+            const container = document.getElementById('labelsContainer');
+            
+            // Set container class based on layout
+            container.className = `labels-container ${printLayout}`;
+            
+            // Clear existing canvases
+            container.innerHTML = '';
+            canvases = [];
+            
+            // Create new canvases
+            for (let i = 0; i < labelCount; i++) {
+                const labelBox = document.createElement('div');
+                labelBox.className = 'label-box';
+                labelBox.innerHTML = `<canvas id="label-canvas-${i}" width="300" height="200"></canvas>`;
+                container.appendChild(labelBox);
+                
+                // Initialize fabric canvas
+                const canvas = new fabric.Canvas(`label-canvas-${i}`, {
+                    selection: true,
+                    preserveObjectStacking: true
+                });
+                canvases.push(canvas);
+                initLabel(canvas);
+            }
+        }
+        
+        function initLabel(canvasInstance) {
+            // Background rectangle (slightly smaller to account for border)
+            const bgRect = new fabric.Rect({
+                width: 296,
+                height: 196,
+                left: 2,
+                top: 2,
+                fill: '#ffffff',
+                stroke: '#000000',
+                strokeWidth: 1.5,
+                selectable: false,
+                evented: false,
+                name: 'background'
+            });
+            canvasInstance.add(bgRect);
+            
+            // Update with current values
+            updateLabelContent(canvasInstance);
+        }
+        
+        function updateLabelContent(canvasInstance) {
+            // Remove existing dynamic content
+            canvasInstance.getObjects().forEach(obj => {
+                if (obj.name !== 'background' && obj.name !== 'logo' && obj.name !== 'qrCode') {
+                    canvasInstance.remove(obj);
+                }
+            });
+            
+            // Add header text
+            const productName = document.getElementById('productName').value;
+            const nameLines = splitTextIntoLines(productName, 30);
+            
+            let topPosition = 10;
+            
+            // Product name lines
+            nameLines.forEach((line, index) => {
+                const text = new fabric.Text(line, {
+                    left: 20,
+                    top: topPosition,
+                    fontSize: index === 0 ? 14 : 10,
+                    fontWeight: index === 0 ? 'bold' : 'normal',
+                    fill: '#000000',
+                    fontFamily: 'Arial',
+                    selectable: true,
+                    evented: true,
+                    hasControls: true,
+                    name: 'productName_' + index
+                });
+                canvasInstance.add(text);
+                topPosition += index === 0 ? 16 : 12;
+            });
+            
+            // Add "SPECIFICATIONS" text
+            const specsText = new fabric.Text('SPECIFICATIONS', {
+                left: 20,
+                top: topPosition,
+                fontSize: 12,
+                fontWeight: 'bold',
+                fill: '#000000',
+                fontFamily: 'Arial',
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                name: 'specsTitle'
+            });
+            canvasInstance.add(specsText);
+            topPosition += 20;
+            
+            // Add dynamic content
+            const modelObj = new fabric.Text(`Model: ${document.getElementById('modelInput').value}`, {
+                left: 20,
+                top: topPosition,
+                fontSize: 10,
+                fill: '#000000',
+                fontFamily: 'Arial',
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                name: 'model'
+            });
+            topPosition += 15;
+            
+            const capacityObj = new fabric.Text(`Capacity: ${document.getElementById('capacityInput').value}`, {
+                left: 20,
+                top: topPosition,
+                fontSize: 10,
+                fill: '#000000',
+                fontFamily: 'Arial',
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                name: 'capacity'
+            });
+            topPosition += 15;
+            
+            const rangeObj = new fabric.Text(`Working Range: ${document.getElementById('rangeInput').value}`, {
+                left: 20,
+                top: topPosition,
+                fontSize: 10,
+                fill: '#000000',
+                fontFamily: 'Arial',
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                name: 'range'
+            });
+            topPosition += 15;
+            
+            const outputObj = new fabric.Text(`Out Put: ${document.getElementById('outputInput').value}`, {
+                left: 20,
+                top: topPosition,
+                fontSize: 10,
+                fill: '#000000',
+                fontFamily: 'Arial',
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                name: 'output'
+            });
+            topPosition += 15;
+            
+            const domObj = new fabric.Text(`DOM: ${document.getElementById('domInput').value}`, {
+                left: 20,
+                top: topPosition,
+                fontSize: 10,
+                fill: '#000000',
+                fontFamily: 'Arial',
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                name: 'dom'
+            });
+            topPosition += 15;
+            
+            const serialObj = new fabric.Text(`SL.No: ${document.getElementById('serialInput').value}`, {
+                left: 20,
+                top: topPosition,
+                fontSize: 10,
+                fill: '#000000',
+                fontFamily: 'Arial',
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                name: 'serial'
+            });
+            topPosition += 15;
+            
+            const mrpObj = new fabric.Text(`MRP: ${document.getElementById('mrpInput').value}`, {
+                left: 20,
+                top: topPosition,
+                fontSize: 10,
+                fill: '#000000',
+                fontFamily: 'Arial',
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                name: 'mrp'
+            });
+            topPosition += 15;
+            
+            // Add manufacturer info
+            const companyName = document.getElementById('companyName').value;
+            const address = document.getElementById('address').value;
+            const website = document.getElementById('website').value;
+            const tagline = document.getElementById('tagline').value;
+            
+            const manufacturerText1 = new fabric.Text(`Mfd By: ${companyName}`, {
+                left: 20,
+                top: topPosition,
+                fontSize: 8,
+                fill: '#000000',
+                fontFamily: 'Arial',
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                name: 'manufacturer'
+            });
+            topPosition += 12;
+            
+            const manufacturerText2 = new fabric.Text(`${address}, ${website}`, {
+                left: 20,
+                top: topPosition,
+                fontSize: 8,
+                fill: '#000000',
+                fontFamily: 'Arial',
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                name: 'address'
+            });
+            topPosition += 12;
+            
+            const taglineText = new fabric.Text(tagline, {
+                left: 20,
+                top: topPosition,
+                fontSize: 8,
+                fontWeight: 'bold',
+                fill: '#000000',
+                fontFamily: 'Arial',
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                name: 'tagline'
+            });
+            
+            // Add all elements to canvas
+            canvasInstance.add(
+                modelObj, capacityObj, rangeObj, outputObj, 
+                domObj, serialObj, mrpObj, manufacturerText1, 
+                manufacturerText2, taglineText, specsText
+            );
+            
+            // Update QR code (either from URL or generated)
+            updateQRCode(canvasInstance);
+            
+            canvasInstance.renderAll();
+        }
+        
+        function splitTextIntoLines(text, maxLength) {
+            const words = text.split(' ');
+            const lines = [];
+            let currentLine = words[0];
+            
+            for (let i = 1; i < words.length; i++) {
+                if (currentLine.length + words[i].length + 1 <= maxLength) {
+                    currentLine += ' ' + words[i];
+                } else {
+                    lines.push(currentLine);
+                    currentLine = words[i];
+                }
+            }
+            lines.push(currentLine);
+            return lines;
+        }
+        
+        function updateQRCode(canvasInstance) {
+            const qrImageUrl = document.getElementById('qrImageUrl').value;
+            
+            // Remove existing QR code
+            canvasInstance.getObjects().forEach(obj => {
+                if (obj.name === 'qrCode') {
+                    canvasInstance.remove(obj);
+                }
+            });
+            
+            if (qrImageUrl) {
+                // Load QR code from URL
+                fabric.Image.fromURL(qrImageUrl, function(img) {
+                    img.set({
+                        left: 210,
+                        top: 70,
+                        width: 60,
+                        height: 60,
+                        selectable: true,
+                        evented: true,
+                        hasControls: true,
+                        name: 'qrCode'
+                    });
+                    canvasInstance.add(img);
+                    canvasInstance.renderAll();
+                }, {
+                    crossOrigin: 'anonymous'
+                });
+            } else {
+                // Generate QR code dynamically
+                const model = document.getElementById('modelInput').value;
+                const serial = document.getElementById('serialInput').value;
+                const qrContent = `Model: ${model}\nSL.No: ${serial}\nDOM: ${document.getElementById('domInput').value}`;
+                
+                const qr = new QRious({
+                    value: qrContent,
+                    size: 60,
+                    foreground: '#000000'
+                });
+                
+                fabric.Image.fromURL(qr.toDataURL(), function(img) {
+                    img.set({
+                        left: 210,
+                        top: 70,
+                        selectable: true,
+                        evented: true,
+                        hasControls: true,
+                        name: 'qrCode'
+                    });
+                    canvasInstance.add(img);
+                    canvasInstance.renderAll();
+                });
+            }
+        }
+        
+        function updateAllLabels() {
+            canvases.forEach(canvas => {
+                updateLabelContent(canvas);
+            });
+        }
+        
+        function printLabels() {
+            // Lock all elements before printing
+            canvases.forEach(canvas => {
+                canvas.getObjects().forEach(obj => {
+                    if (obj.name !== 'background') {
+                        obj.selectable = false;
+                        obj.evented = false;
+                    }
+                });
+                canvas.renderAll();
+            });
+            
+            // Update layout for printing
+            const printLayout = document.getElementById('printLayout').value;
+            const container = document.getElementById('labelsContainer');
+            container.className = `labels-container ${printLayout}`;
+            
+            window.print();
+        }
+        
+        function toggleLockAll() {
+            isLocked = !isLocked;
+            canvases.forEach(canvas => {
+                canvas.getObjects().forEach(obj => {
+                    if (obj.name !== 'background') {
+                        obj.selectable = !isLocked;
+                        obj.evented = !isLocked;
+                    }
+                });
+                canvas.renderAll();
+            });
+            
+            const lockBtn = document.querySelector('.lock-btn');
+            lockBtn.textContent = isLocked ? 'Unlock All' : 'Lock All';
+        }
+        
+        // Set up logo upload handler
+        document.getElementById('logoUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                fabric.Image.fromURL(event.target.result, function(img) {
+                    canvases.forEach(canvas => {
+                        const existingLogo = canvas.getObjects().find(obj => obj.name === 'logo');
+                        if (existingLogo) canvas.remove(existingLogo);
+                        
+                        const scale = Math.min(50 / img.width, 25 / img.height);
+                        img.clone(clone => {
+                            clone.set({
+                                left: 20,
+                                top: 10,
+                                scaleX: scale,
+                                scaleY: scale,
+                                selectable: true,
+                                evented: true,
+                                hasControls: true,
+                                name: 'logo'
+                            });
+                            canvas.add(clone);
+                            canvas.sendToBack(clone);
+                            canvas.renderAll();
+                        });
+                    });
+                });
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        // Initialize label count selector
+        document.getElementById('labelCount').addEventListener('change', initApp);
+        
+        // Initialize print layout selector
+        document.getElementById('printLayout').addEventListener('change', initApp);
+        
+        // Initialize the app
+        initApp();
+    </script>
+</body>
+</html>

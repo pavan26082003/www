@@ -1,0 +1,91 @@
+{
+    "widget": "SizedBox",
+    "width": 500.0,
+    "height": 500.0,
+    "child": {
+      "type": "AnimatedRadialGauge",
+      "radius": 150.0,
+      "duration": 2000,
+      "curve": "Curves.elasticOut",
+      "value": 65.0,
+      "builder": {
+        "type": "RadialGaugeLabel",
+        "style": {
+          "color": "#002E5F",
+          "fontSize": 46.0,
+          "fontWeight": "bold"
+        },
+        "value": "value"
+      },
+      "axis": {
+        "min": 0,
+        "max": 100,
+        "sweepDegrees": 260.0,
+        "pointer": {
+          "type": "GaugePointer.triangle",
+          "width": 36.0,
+          "height": 36.0,
+          "borderRadius": 4.5,
+          "color": "#175F00",
+          "position": {
+            "type": "GaugePointerPosition.surface",
+            "offset": {
+              "dx": 0,
+              "dy": 3.0
+            }
+          },
+          "border": {
+            "color": "#FFFFFF",
+            "width": 4.5
+          }
+        },
+        "progressBar": {
+          "type": "GaugeProgressBar.basic",
+          "color": "#B02729",
+          "placement": "GaugeProgressPlacement.inside"
+        },
+        "transformer": {
+          "type": "GaugeAxisTransformer.colorFadeIn",
+          "interval": {
+            "start": 0.0,
+            "end": 0.3
+          },
+          "background": "#D9DEEB"
+        },
+        "style": {
+          "thickness": 5.0,
+          "zoneSpacing": 19.73,
+          "blendColors": false,
+          "cornerRadius": {
+            "radius": 8.0
+          }
+        },
+        "zones": [
+          {
+            "from": 0.0,
+            "to": 60.0,
+            "color": "#D9DEEB",
+            "cornerRadius": {
+              "radius": 20.0
+            }
+          },
+          {
+            "from": 60.0,
+            "to": 85.0,
+            "color": "#D9DEEB",
+            "cornerRadius": {
+              "radius": 20.0
+            }
+          },
+          {
+            "from": 85.0,
+            "to": 100.0,
+            "color": "#D9DEEB",
+            "cornerRadius": {
+              "radius": 20.0
+            }
+          }
+        ]
+      }
+    }
+  }

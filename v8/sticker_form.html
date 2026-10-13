@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sticker Form with Dropdown Fields</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f9f9f9;
+    }
+    .form-container {
+      width: 700px;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 20px;
+      margin: auto;
+      box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .field-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      align-items: center;
+    }
+    .field-name {
+      flex: 2;
+    }
+    .field-value {
+      flex: 2;
+    }
+    .input-method {
+      flex: 1;
+    }
+    select, input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      border: 1px solid #ddd;
+    }
+    .add-field {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      text-align: center;
+      margin: 15px 0;
+      cursor: pointer;
+      width: 100%;
+    }
+    .remove-field {
+      background-color: #f44336;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    .submit-btn {
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      text-align: center;
+      margin: 20px 0 10px;
+      cursor: pointer;
+      width: 100%;
+    }
+    .global-qr-upload {
+      background: #f0f7fb;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 5px;
+      border: 1px dashed #ccc;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="form-container">
+    <h2>Sticker Form</h2>
+    
+    <form id="stickerForm">
+      <div id="fieldsContainer">
+        <!-- Initial field row -->
+        <div class="field-row">
+          <div class="field-name">
+            <input type="text" class="field-name-input" placeholder="Enter field name">
+          </div>
+          
+          <div class="input-method">
+            <select class="input-type" onchange="toggleInputMethod(this)">
+              <option value="manual">Manual Entry</option>
+              <option value="qr">From QR</option>
+              <option value="datetime">Date/Time</option>
+            </select>
+          </div>
+          
+          <div class="field-value">
+            <input type="text" placeholder="Enter value" class="field-input">
+          </div>
+          
+          <button type="button" class="remove-field" onclick="removeField(this)" disabled>×</button>
+        </div>
+      </div>
+
+      <button type="button" class="add-field" onclick="addField()">+ Add Another Field</button>
+      
+      <div class="global-qr-upload">
+        <h3>QR Code Data Source</h3>
+        <input type="file" id="globalQrUpload" accept="image/*" capture="environment">
+        <p>Upload a QR code image to auto-fill fields marked "From QR"</p>
+        <div id="qrDataDisplay" style="margin-top: 10px; padding: 10px; background: #fff; border: 1px solid #ddd; display: none;">
+          <h4>QR Code Data:</h4>
+          <pre id="qrDataContent"></pre>
+        </div>
+      </div>
+      
+      <button type="button" class="submit-btn" onclick="submitForm()">Submit Form</button>
+    </form>
+  </div>
+
+  <script>
+    // Add new field row
+    function addField() {
+      const container = document.getElementById('fieldsContainer');
+      const newRow = document.createElement('div');
+      newRow.className = 'field-row';
+      newRow.innerHTML = `
+        <div class="field-name">
+          <input type="text" class="field-name-input" placeholder="Enter field name">
+        </div>
+        
+        <div class="input-method">
+          <select class="input-type" onchange="toggleInputMethod(this)">
+            <option value="manual">Manual Entry</option>
+            <option value="qr">From QR</option>
+            <option value="datetime">Date/Time</option>
+          </select>
+        </div>
+        
+        <div class="field-value">
+          <input type="text" placeholder="Enter value" class="field-input">
+        </div>
+        
+        <button type="button" class="remove-field" onclick="removeField(this)">×</button>
+      `;
+      container.appendChild(newRow);
+    }
+
+    // Remove field row
+    function removeField(button) {
+      button.closest('.field-row').remove();
+    }
+
+    // Toggle input method
+    function toggleInputMethod(select) {
+      const row = select.closest('.field-row');
+      const valueInput = row.querySelector('.field-input');
+      
+      if (select.value === 'datetime') {
+        const now = new Date();
+        valueInput.value = now.toLocaleString();
+        valueInput.disabled = true;
+      } else if (select.value === 'qr') {
+        valueInput.placeholder = "Will be filled from QR";
+        valueInput.disabled = true;
+      } else {
+        valueInput.disabled = false;
+        valueInput.placeholder = "Enter value";
+      }
+    }
+
+    // Submit form
+    function submitForm() {
+      const formData = [];
+      const rows = document.querySelectorAll('.field-row');
+      
+      rows.forEach(row => {
+        const nameInput = row.querySelector('.field-name-input');
+        const valueInput = row.querySelector('.field-input');
+        const inputType = row.querySelector('.input-type').value;
+        
+        const fieldName = nameInput.value;
+        const fieldValue = valueInput.value;
+        
+        if (fieldName && fieldValue) {
+          formData.push({
+            fieldName,
+            fieldValue,
+            inputType
+          });
+        }
+      });
+      
+      console.log("Form data:", formData);
+      alert(`Form submitted with ${formData.length} fields!\n\n${JSON.stringify(formData, null, 2)}`);
+    }
+
+    // QR code upload handling
+    document.getElementById('globalQrUpload').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      // In a real app, you would use a QR decoding library here
+      // For this demo, we'll simulate QR data entry
+      const qrData = prompt("Enter the data that would be decoded from the QR code (for simulation):");
+      
+      if (qrData) {
+        document.getElementById('qrDataDisplay').style.display = 'block';
+        document.getElementById('qrDataContent').textContent = qrData;
+        
+        // Try to parse as JSON if possible
+        let parsedData = {};
+        try {
+          parsedData = JSON.parse(qrData);
+        } catch (e) {
+          // If not JSON, treat as plain text
+          parsedData = {"QR Content": qrData};
+        }
+        
+        // Auto-fill fields marked "From QR"
+        document.querySelectorAll('.input-type').forEach(select => {
+          if (select.value === 'qr') {
+            const row = select.closest('.field-row');
+            const nameInput = row.querySelector('.field-name-input');
+            const valueInput = row.querySelector('.field-input');
+            const fieldName = nameInput.value;
+            
+            if (fieldName && parsedData[fieldName]) {
+              valueInput.value = parsedData[fieldName];
+            } else if (!fieldName) {
+              // If field name isn't set yet, prompt user to map the QR data
+              const availableKeys = Object.keys(parsedData);
+              if (availableKeys.length > 0) {
+                const selectedKey = prompt(`Which QR data field should map to this field?\nAvailable fields: ${availableKeys.join(', ')}`);
+                if (selectedKey && parsedData[selectedKey]) {
+                  nameInput.value = selectedKey;
+                  valueInput.value = parsedData[selectedKey];
+                }
+              }
+            }
+          }
+        });
+        
+        alert("QR data processed! Fields marked 'From QR' have been updated.");
+      }
+    });
+  </script>
+</body>
+</html>

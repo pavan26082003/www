@@ -1,0 +1,31 @@
+# ============================================================
+# eFactor NAS Standalone Bearer API
+# Production
+# Public base: https://efactor.tech/nas_api/
+# ============================================================
+
+Options -Indexes
+Options -MultiViews
+
+DirectoryIndex index.php
+
+
+<IfModule mod_rewrite.c>
+
+    RewriteEngine On
+    RewriteBase /nas_api/
+
+    # Preserve Authorization: Bearer <token>
+    RewriteCond %{HTTP:Authorization} ^(.+)$
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+
+    # Existing real files/directories are served normally.
+    # Example: db_runtime_check.php
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Everything else goes through the standalone NAS API router.
+    RewriteRule ^ index.php [QSA,L]
+
+</IfModule>

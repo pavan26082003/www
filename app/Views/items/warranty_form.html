@@ -1,0 +1,2106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warranty Card Generator · Premium</title>
+  <!-- Bootstrap 4.6 + Font Awesome 6 (free) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <!-- Animate.css for animations -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+  <style>
+    /* ----- NEW PALETTE: rgb(72,52,52) · rgb(107,79,79) · rgb(238,214,196) · rgb(255,243,228) ----- */
+    /* :root {
+      --primary-dark: #483434;
+      --primary-mid: #6B4F4F;
+      --primary-light: #fff5ee;
+      --bg-warm: #ffffff;
+      --card-bg: rgba(255, 243, 228, 0.85);
+      --glass-border: rgba(255, 243, 228, 0.7);
+      --shadow-soft: 0 20px 45px -12px rgba(72, 52, 52, 0.25);
+      --text-main: #3A2A2A;
+      --text-muted: #5A4A4A;
+      --border-light: rgba(72, 52, 52, 0.10);
+      --radius-card: 28px;
+      --radius-input: 18px;
+      --transition: 0.3s cubic-bezier(0.2, 0, 0, 1);
+      --body-bg-start: #F5E8DC;
+      --body-bg-end: #EDDDD0;
+      --preview-bg: rgba(255, 243, 228, 0.3);
+      --template-bg: rgba(255, 243, 228, 0.5);
+      --upload-bg: rgba(255, 243, 228, 0.35);
+      --input-bg: rgba(255, 243, 228, 0.6);
+      --input-bg-focus: rgba(255, 243, 228, 0.8);
+      --header-gradient-start: #483434;
+      --header-gradient-end: #6B4F4F;
+      --scrollbar-track: rgba(107, 79, 79, 0.08);
+      --scrollbar-thumb: #6B4F4F;
+      --scrollbar-thumb-hover: #483434;
+    } */
+
+   
+
+
+
+    :root {
+      --primary-dark: #483434;
+      --primary-mid: #6B4F4F;
+      --primary-light: #EED6C4;
+
+      /* Backgrounds */
+      --bg-warm: #F4EFEB;
+      --body-bg-start: #F8F4F0;
+      --body-bg-end: #EDE4DC;
+
+      /* Cards & surfaces */
+      --card-bg: #FFFFFF;
+      --surface-raised: #FAF7F4;
+      --glass-border: rgba(72, 52, 52, 0.12);
+
+      /* Text */
+      --text-main: #2D2222;
+      --text-muted: #6B5E5E;
+      --placeholder-color: #9A8A8A;
+
+      /* Borders & Shadows */
+      --border-light: rgba(72, 52, 52, 0.14);
+      --border-input: rgba(72, 52, 52, 0.18);
+      --shadow-soft: 0 12px 30px rgba(72, 52, 52, 0.08);
+
+      /* Radius */
+      --radius-card: 28px;
+      --radius-input: 18px;
+      --transition: 0.3s cubic-bezier(0.2, 0, 0, 1);
+
+      /* Component backgrounds — distinct from page & card */
+      --preview-bg: #FAF7F4;
+      --preview-header-bg: #F0E8E2;
+      --template-bg: #FAF7F4;
+      --upload-bg: #FAF7F4;
+      --input-bg: #FFFFFF;
+      --input-bg-focus: #FFFFFF;
+      --label-icon-bg: rgba(72, 52, 52, 0.07);
+      --replaced-info-bg: rgba(72, 52, 52, 0.06);
+      --spinner-overlay-bg: rgba(244, 239, 235, 0.88);
+
+      /* Header */
+      --header-gradient-start: #483434;
+      --header-gradient-end: #6B4F4F;
+
+      /* Scrollbar */
+      --scrollbar-track: #EDE6E0;
+      --scrollbar-thumb: #6B4F4F;
+      --scrollbar-thumb-hover: #483434;
+    }
+
+    [data-theme="dark"] {
+      --bg-warm: #121010;
+      --body-bg-start: #1A1515;
+      --body-bg-end: #0E0C0C;
+      --card-bg: #221C1C;
+      --surface-raised: #2A2323;
+      --glass-border: rgba(238, 214, 196, 0.10);
+      --shadow-soft: 0 20px 45px -12px rgba(0, 0, 0, 0.55);
+      --text-main: #F0E6DC;
+      --text-muted: #B8A898;
+      --placeholder-color: #8A7A72;
+      --border-light: rgba(238, 214, 196, 0.10);
+      --border-input: rgba(238, 214, 196, 0.18);
+      --preview-bg: #2A2323;
+      --preview-header-bg: #322A2A;
+      --template-bg: #2A2323;
+      --upload-bg: #2A2323;
+      --input-bg: #1E1818;
+      --input-bg-focus: #262020;
+      --label-icon-bg: rgba(238, 214, 196, 0.08);
+      --replaced-info-bg: rgba(238, 214, 196, 0.06);
+      --spinner-overlay-bg: rgba(18, 16, 16, 0.88);
+      --header-gradient-start: #3A2A2A;
+      --header-gradient-end: #5A4040;
+      --primary-dark: #C4A8A8;
+      --primary-mid: #A88888;
+      --primary-light: #EED6C4;
+      --scrollbar-track: rgba(184, 152, 152, 0.08);
+      --scrollbar-thumb: #5A4040;
+      --scrollbar-thumb-hover: #7A5A5A;
+    }
+
+
+
+    /* ----- MODERN SCROLLBAR STYLING ----- */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border-radius: 10px;
+      transition: var(--transition);
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--scrollbar-thumb-hover);
+    }
+
+    ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+
+    .preview-box::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    .preview-box::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+      border-radius: 10px;
+    }
+
+    .preview-box::-webkit-scrollbar-thumb {
+      background: var(--primary-mid);
+      border-radius: 10px;
+      transition: var(--transition);
+    }
+
+    .preview-box::-webkit-scrollbar-thumb:hover {
+      background: var(--primary-dark);
+    }
+
+    textarea.form-control::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    textarea.form-control::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+      border-radius: 10px;
+    }
+
+    textarea.form-control::-webkit-scrollbar-thumb {
+      background: var(--primary-mid);
+      border-radius: 10px;
+      transition: var(--transition);
+    }
+
+    textarea.form-control::-webkit-scrollbar-thumb:hover {
+      background: var(--primary-dark);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: radial-gradient(circle at 10% 20%, var(--body-bg-start) 0%, transparent 45%),
+                  radial-gradient(circle at 90% 80%, var(--body-bg-end) 0%, transparent 45%),
+                  var(--bg-warm);
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: var(--text-main);
+      padding: 28px 16px;
+      min-height: 100vh;
+      transition: var(--transition);
+      overflow-x: hidden;
+    }
+
+    body::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    body::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+    }
+
+    body::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border-radius: 10px;
+    }
+
+    body::-webkit-scrollbar-thumb:hover {
+      background: var(--scrollbar-thumb-hover);
+    }
+
+    .main-wrapper { max-width: 1280px; margin: 0 auto; width: 100%; }
+
+    /* ----- HEADER (premium glass, palette) ----- */
+    .page-header {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(145deg, var(--header-gradient-start), var(--header-gradient-end));
+      border-radius: 34px;
+      padding: 20px 38px;
+      margin-bottom: 32px;
+      color: #fff;
+      box-shadow: 0 16px 40px -8px rgba(72, 52, 52, 0.35);
+      backdrop-filter: blur(2px);
+      animation: fadeInDown 0.8s ease;
+      transition: var(--transition);
+    }
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 14px;
+      position: relative;
+      z-index: 3;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .header-left i {
+      font-size: 32px;
+      opacity: 0.95;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.08));
+    }
+    .page-title {
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin: 0;
+      background: rgba(255, 243, 228, 0.12);
+      padding: 4px 16px 4px 12px;
+      border-radius: 60px;
+      backdrop-filter: blur(4px);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .back-btn {
+      background: rgba(255, 243, 228, 0.15);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 243, 228, 0.2);
+      border-radius: 60px;
+      padding: 8px 22px;
+      font-weight: 600;
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+    .back-btn i { font-size: 16px; color: #fff; }
+    .back-btn:hover {
+      background: rgba(255, 243, 228, 0.25);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      color: #fff;
+      text-decoration: none;
+    }
+
+    .mode-toggle-btn {
+      background: rgba(255, 243, 228, 0.15);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 243, 228, 0.2);
+      border-radius: 60px;
+      padding: 8px 18px;
+      font-weight: 600;
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .mode-toggle-btn i {
+      font-size: 16px;
+      transition: var(--transition);
+    }
+    .mode-toggle-btn:hover {
+      background: rgba(255, 243, 228, 0.25);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    }
+
+    .page-subtitle {
+      font-size: 15px;
+      opacity: 0.92;
+      max-width: 680px;
+      line-height: 1.6;
+      position: relative;
+      z-index: 3;
+      margin-top: 6px;
+      font-weight: 400;
+      letter-spacing: 0.2px;
+    }
+    .page-subtitle i { margin-right: 8px; opacity: 0.8; }
+
+    /* ----- MAIN CARD (glassmorphism + palette) ----- */
+    .main-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: var(--radius-card);
+      padding: 42px 44px;
+      box-shadow: var(--shadow-soft);
+      border: 1px solid var(--glass-border);
+      transition: var(--transition);
+      animation: fadeInUp 0.8s ease;
+    }
+
+    .section-title {
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 32px;
+      display: flex;
+      align-items: center;
+      color: var(--text-main);
+      gap: 14px;
+      transition: var(--transition);
+    }
+    .section-title-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .section-title-left i {
+      color: var(--primary-mid);
+      font-size: 28px;
+      background: var(--label-icon-bg);
+      padding: 10px;
+      border-radius: 16px;
+      transition: var(--transition);
+    }
+    .section-title-left::before {
+      content: '';
+      width: 6px;
+      height: 34px;
+      border-radius: 20px;
+      background: linear-gradient(to bottom, var(--primary-dark), var(--primary-mid));
+      margin-right: 4px;
+      transition: var(--transition);
+    }
+
+    /* ----- FORM GRID (3 cols) ----- */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px 28px;
+      margin-bottom: 6px;
+    }
+    .form-grid-2 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px 28px;
+      margin-bottom: 6px;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .form-group label {
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--text-main);
+      letter-spacing: 0.2px;
+      transition: var(--transition);
+    }
+    .form-group label i {
+      color: var(--primary-mid);
+      font-size: 17px;
+      width: 22px;
+      text-align: center;
+      background: var(--label-icon-bg);
+      padding: 4px;
+      border-radius: 10px;
+      transition: var(--transition);
+    }
+
+    .form-control {
+      height: 54px;
+      border-radius: var(--radius-input);
+      border: 1.5px solid var(--border-input);
+      background: var(--input-bg);
+      padding: 14px 20px;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text-main);
+      transition: var(--transition);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    .form-control:focus {
+      background: var(--input-bg-focus);
+      border-color: var(--primary-mid);
+      box-shadow: 0 0 0 4px rgba(107, 79, 79, 0.15), inset 0 1px 2px rgba(0, 0, 0, 0.03);
+      outline: none;
+      transform: translateY(-1px);
+    }
+    .form-control:not(:placeholder-shown) {
+      background: var(--input-bg);
+      border-color: var(--border-input);
+    }
+    .form-control:-webkit-autofill,
+    .form-control:-webkit-autofill:hover,
+    .form-control:-webkit-autofill:focus {
+      -webkit-box-shadow: 0 0 0px 1000px var(--input-bg) inset !important;
+      -webkit-text-fill-color: var(--text-main) !important;
+      border: 1.5px solid var(--border-input) !important;
+      transition: background-color 5000s ease-in-out 0s;
+    }
+    .form-control::placeholder {
+      color: var(--placeholder-color);
+      font-weight: 400;
+    }
+    textarea.form-control {
+      min-height: 220px;
+      resize: vertical;
+      line-height: 1.7;
+      height: auto;
+    }
+    textarea.form-control:not(:placeholder-shown) {
+      background: var(--input-bg);
+    }
+
+    .char-counter {
+      text-align: right;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      opacity: 0.7;
+      transition: var(--transition);
+    }
+    .char-counter .warning {
+      color: #c0392b;
+    }
+    .char-counter .danger {
+      color: #e74c3c;
+    }
+
+    /* ----- SIDE BY SIDE (content + upload) ----- */
+    .side-by-side {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      margin-top: 18px;
+      align-items: stretch;
+    }
+    .side-item {
+      display: flex;
+      flex-direction: column;
+    }
+    .side-item .form-group {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .side-item .form-group textarea {
+      flex: 1;
+      min-height: 220px;
+    }
+
+    .template-wrapper {
+      background: var(--template-bg);
+      border-radius: 24px;
+      padding: 20px 22px 18px;
+      border: 1.5px solid var(--border-light);
+      height: 100%;
+      transition: var(--transition);
+    }
+    .template-wrapper:hover {
+      border-color: var(--border-input);
+      box-shadow: 0 8px 20px -8px rgba(72, 52, 52, 0.08);
+    }
+    .template-wrapper .form-group { margin-bottom: 0; }
+    .template-wrapper .form-group textarea {
+      min-height: 220px;
+      background: var(--input-bg);
+    }
+    .template-wrapper .form-group textarea:not(:placeholder-shown) {
+      background: var(--input-bg);
+    }
+
+    .upload-box {
+      border: 2px dashed var(--border-input);
+      border-radius: 24px;
+      padding: 28px 20px 22px;
+      text-align: center;
+      background: var(--upload-bg);
+      transition: var(--transition);
+      cursor: pointer;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    .upload-box:hover {
+      border-color: var(--primary-mid);
+      background: var(--surface-raised);
+      box-shadow: 0 8px 24px -8px rgba(72, 52, 52, 0.12);
+      transform: translateY(-2px);
+    }
+    .upload-box.dragover {
+      border-color: var(--primary-dark);
+      background: var(--surface-raised);
+      transform: scale(1.01);
+    }
+    .upload-icon {
+      font-size: 48px;
+      margin-bottom: 10px;
+      display: block;
+      line-height: 1;
+      color: var(--primary-mid);
+      background: var(--label-icon-bg);
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: auto;
+      margin-right: auto;
+      transition: var(--transition);
+    }
+    .upload-box input[type="file"] {
+      display: block;
+      margin: 10px auto 0;
+      width: auto;
+      max-width: 100%;
+      border: none;
+      background: transparent;
+      padding: 6px 0;
+      font-size: 14px;
+      color: var(--text-main);
+    }
+    .upload-box input[type="file"]::file-selector-button {
+      background: var(--primary-dark);
+      color: #fff;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 60px;
+      font-weight: 600;
+      font-size: 13px;
+      transition: var(--transition);
+      cursor: pointer;
+    }
+    .upload-box input[type="file"]::file-selector-button:hover {
+      background: var(--header-gradient-end);
+      transform: scale(0.97);
+    }
+    .upload-filename {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--primary-mid);
+      font-weight: 600;
+      transition: var(--transition);
+    }
+    .note {
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      transition: var(--transition);
+    }
+    .note i { margin-right: 6px; color: var(--primary-mid); }
+
+    /* ----- PREVIEW PANEL (elegant) ----- */
+    .preview-panel {
+      margin-top: 40px;
+      border-radius: 24px;
+      background: var(--preview-bg);
+      border: 1.5px solid var(--border-light);
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+      transition: var(--transition);
+    }
+    .preview-header {
+      padding: 14px 26px;
+      background: var(--preview-header-bg);
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      transition: var(--transition);
+    }
+    .preview-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: var(--transition);
+    }
+    .preview-title i { color: var(--primary-mid); font-size: 20px; }
+    
+    .preview-actions {
+      margin-left: auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .preview-actions button {
+      background: var(--primary-mid);
+      border: none;
+      border-radius: 12px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      transition: var(--transition);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .preview-actions button:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+    .preview-actions button:disabled {
+      opacity: 0.65;
+      cursor: wait;
+      transform: none;
+    }
+    .preview-actions button i {
+      margin-right: 6px;
+    }
+
+    .preview-box {
+      padding: 36px 24px 44px;
+      min-height: 280px;
+      overflow: auto;
+      background: radial-gradient(ellipse at center, #3D3535 0%, #252020 70%);
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      transition: var(--transition);
+    }
+
+    /* ----- PROFESSIONAL WARRANTY CARD (print-style) ----- */
+    .warranty-card-wrap {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .warranty-card-preview-zone {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      padding: 0;
+      background: transparent;
+      border-radius: 0;
+    }
+    [data-theme="dark"] .warranty-card-preview-zone {
+      background: transparent;
+    }
+
+    .warranty-card {
+      width: 100%;
+      max-width: 460px;
+      background: linear-gradient(160deg, #FFFDF9 0%, #FBF6F0 45%, #F5EDE4 100%) !important;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow:
+        0 2px 0 #E8DDD0,
+        0 24px 60px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(72, 52, 52, 0.15);
+      border: 3px solid #483434;
+      font-family: Georgia, 'Times New Roman', serif;
+      color: #2A2020 !important;
+      color-scheme: light;
+      position: relative;
+    }
+
+    /* Paper texture overlay */
+    .warranty-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23483334' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Watermark */
+    .warranty-card::after {
+      content: 'WARRANTY';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-28deg);
+      font-size: 72px;
+      font-weight: 900;
+      letter-spacing: 12px;
+      color: rgba(72, 52, 52, 0.04);
+      pointer-events: none;
+      z-index: 0;
+      white-space: nowrap;
+    }
+
+    .wc-inner {
+      position: relative;
+      z-index: 1;
+      padding: 0;
+    }
+
+    /* Top band */
+    .wc-top-band {
+      background: linear-gradient(135deg, #483434 0%, #5C4242 50%, #6B4F4F 100%);
+      padding: 20px 24px 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      position: relative;
+    }
+    .wc-top-band::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 24px;
+      right: 24px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #EED6C4, #FFF3E4, #EED6C4, transparent);
+    }
+
+    .wc-shield {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.12);
+      border: 2px solid rgba(238, 214, 196, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .wc-shield i {
+      font-size: 22px;
+      color: #EED6C4;
+    }
+
+    .wc-top-text {
+      flex: 1;
+      min-width: 0;
+    }
+    .wc-cert-label {
+      display: block;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: rgba(238, 214, 196, 0.85);
+      margin-bottom: 4px;
+    }
+    .wc-title {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 17px;
+      font-weight: 700;
+      color: #FFFFFF !important;
+      margin: 0;
+      line-height: 1.35;
+      letter-spacing: 0.2px;
+    }
+    .wc-title.is-placeholder {
+      opacity: 0.75;
+      font-style: italic;
+    }
+
+    .wc-years-pill {
+      flex-shrink: 0;
+      background: linear-gradient(135deg, #EED6C4, #FFF3E4);
+      color: #483434;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 6px 12px;
+      border-radius: 20px;
+      text-align: center;
+      line-height: 1.3;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      max-width: 90px;
+    }
+    .wc-years-pill.is-placeholder {
+      opacity: 0.6;
+    }
+
+    /* Product strip */
+    .wc-product-strip {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      background: rgba(72, 52, 52, 0.06);
+      border-bottom: 1px solid rgba(72, 52, 52, 0.1);
+    }
+    .wc-product-cell {
+      padding: 10px 20px;
+      border-right: 1px solid rgba(72, 52, 52, 0.08);
+    }
+    .wc-product-cell:last-child { border-right: none; }
+    .wc-product-cell label {
+      display: block;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #6B4F4F;
+      margin-bottom: 2px;
+    }
+    .wc-product-cell span {
+      display: block;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: #2A2020 !important;
+    }
+    .wc-product-cell span.is-placeholder {
+      color: #9A8A8A !important;
+      font-weight: 500;
+      font-style: italic;
+    }
+
+    /* Main content from template */
+    .wc-body {
+      padding: 18px 24px 14px;
+      background: transparent !important;
+    }
+    .wc-highlight {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(90deg, rgba(72,52,52,0.08), rgba(72,52,52,0.03));
+      border-left: 3px solid #6B4F4F;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      border-radius: 0 8px 8px 0;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      color: #483434 !important;
+      line-height: 1.4;
+    }
+    .wc-highlight i {
+      color: #6B4F4F;
+      font-size: 14px;
+    }
+    .wc-paragraphs {
+      margin: 0;
+      padding: 0;
+    }
+    .wc-paragraph {
+      font-size: 12.5px;
+      line-height: 1.75;
+      color: #3A2E2E !important;
+      margin: 0 0 10px;
+      text-align: justify;
+      hyphens: auto;
+    }
+    .wc-paragraph:last-child { margin-bottom: 0; }
+    .wc-paragraph.is-placeholder {
+      color: #9A8A8A !important;
+      font-style: italic;
+      text-align: center;
+    }
+
+    /* Support block */
+    .wc-support-block {
+      margin: 0 24px;
+      padding: 12px 16px;
+      background: rgba(72, 52, 52, 0.05);
+      border: 1px dashed rgba(72, 52, 52, 0.2);
+      border-radius: 8px;
+    }
+    .wc-support-title {
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+      color: #6B4F4F;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .wc-support-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 16px;
+    }
+    .wc-support-item {
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .wc-support-item.full-width { grid-column: 1 / -1; }
+    .wc-support-item .si-label {
+      display: block;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #8A7A7A;
+    }
+    .wc-support-item .si-value {
+      color: #2A2020 !important;
+      font-weight: 600;
+      word-break: break-word;
+    }
+    .wc-support-item .si-value.is-placeholder {
+      color: #9A8A8A !important;
+      font-weight: 400;
+      font-style: italic;
+    }
+
+    /* Footer */
+    .wc-card-footer {
+      padding: 12px 24px 18px;
+      text-align: center;
+      border-top: 1px solid rgba(72, 52, 52, 0.12);
+      margin-top: 14px;
+    }
+    .wc-footer-line {
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-size: 10px;
+      color: #8A7A7A !important;
+      font-style: italic;
+      letter-spacing: 0.3px;
+    }
+    .wc-footer-brand {
+      font-family: Georgia, serif;
+      font-size: 11px;
+      font-weight: 700;
+      color: #483434 !important;
+      margin-bottom: 2px;
+    }
+
+    /* Corner marks */
+    .wc-corner {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-color: rgba(238, 214, 196, 0.4);
+      border-style: solid;
+      z-index: 2;
+      pointer-events: none;
+    }
+    .wc-corner-tl { top: 8px; left: 8px; border-width: 2px 0 0 2px; }
+    .wc-corner-tr { top: 8px; right: 8px; border-width: 2px 2px 0 0; }
+    .wc-corner-bl { bottom: 8px; left: 8px; border-width: 0 0 2px 2px; }
+    .wc-corner-br { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; }
+
+    .warranty-card-preview-zone.card-updated {
+      animation: cardPulse 0.35s ease;
+    }
+    @keyframes cardPulse {
+      0%   { box-shadow: 0 0 0 0 rgba(107, 79, 79, 0.35); }
+      70%  { box-shadow: 0 0 0 10px rgba(107, 79, 79, 0); }
+      100% { box-shadow: none; }
+    }
+    .live-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4CAF50;
+      margin-left: 8px;
+      animation: liveBlink 1.2s infinite;
+    }
+    @keyframes liveBlink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.35; }
+    }
+
+    /* Hidden export clone (fixed size for crisp PNG) */
+    #exportCardContainer {
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      z-index: -1;
+      pointer-events: none;
+    }
+    #exportCardContainer .warranty-card {
+      width: 460px;
+      max-width: none;
+    }
+
+    /* ----- SUBMIT BUTTON (premium gradient) ----- */
+    .submit-btn {
+      width: 100%;
+      height: 62px;
+      border: none;
+      border-radius: 20px;
+      background: linear-gradient(145deg, var(--primary-dark), var(--primary-mid));
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+      margin-top: 34px;
+      transition: var(--transition);
+      letter-spacing: 0.3px;
+      box-shadow: 0 8px 24px rgba(72, 52, 52, 0.25);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .submit-btn i { font-size: 22px; }
+    .submit-btn::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(45deg, transparent, rgba(255,255,255,0.05), transparent);
+      transform: rotate(45deg);
+      transition: 0.6s;
+    }
+    .submit-btn:hover::after {
+      left: 100%;
+    }
+    .submit-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 16px 40px rgba(72, 52, 52, 0.35);
+      background: linear-gradient(145deg, #3A2A2A, #5A3F3F);
+    }
+    .submit-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* Toast notification */
+    .toast-container {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      z-index: 9999;
+    }
+    .toast-custom {
+      background: var(--primary-dark);
+      color: #fff;
+      padding: 16px 24px;
+      border-radius: 16px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      animation: slideInRight 0.5s ease;
+      margin-bottom: 10px;
+      min-width: 280px;
+    }
+    .toast-custom i {
+      font-size: 24px;
+    }
+    .toast-custom .toast-close {
+      margin-left: auto;
+      cursor: pointer;
+      opacity: 0.7;
+      transition: 0.2s;
+    }
+    .toast-custom .toast-close:hover {
+      opacity: 1;
+    }
+    @keyframes slideInRight {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Loading spinner */
+    .spinner-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--spinner-overlay-bg);
+      backdrop-filter: blur(8px);
+      z-index: 9998;
+      justify-content: center;
+      align-items: center;
+    }
+    .spinner-overlay.active {
+      display: flex;
+    }
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid var(--border-light);
+      border-top-color: var(--primary-dark);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Tooltip */
+    .tooltip-custom {
+      position: relative;
+      cursor: help;
+    }
+    .tooltip-custom .tooltip-text {
+      visibility: hidden;
+      width: 220px;
+      background: var(--primary-dark);
+      color: #fff;
+      text-align: center;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-bottom: 8px;
+      opacity: 0;
+      transition: 0.3s;
+    }
+    .tooltip-custom .tooltip-text::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: var(--primary-dark);
+    }
+    .tooltip-custom:hover .tooltip-text {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    /* Small label for replaced values */
+    .replaced-values-info {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      padding: 8px 12px;
+      background: var(--replaced-info-bg);
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .replaced-values-info span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .replaced-values-info .label {
+      font-weight: 600;
+    }
+    .replaced-values-info .value {
+      color: var(--primary-dark);
+      font-weight: 500;
+    }
+
+    /* ----- RESPONSIVE ----- */
+    @media (max-width: 991px) {
+      .form-grid { grid-template-columns: 1fr 1fr; }
+      .form-grid-2 { grid-template-columns: 1fr 1fr; }
+      .side-by-side { grid-template-columns: 1fr; gap: 20px; }
+      .main-card { padding: 28px 24px; }
+      .warranty-card { max-width: 100%; }
+    }
+    @media (max-width: 700px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-grid-2 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      body { padding: 12px 10px; }
+      .page-header { padding: 16px 18px; border-radius: 24px; margin-bottom: 20px; }
+      .page-title { font-size: 20px; padding: 2px 12px; }
+      .header-left i { font-size: 22px; }
+      .back-btn { padding: 6px 14px; font-size: 12px; gap: 6px; }
+      .back-btn i { font-size: 13px; }
+      .mode-toggle-btn { padding: 6px 14px; font-size: 12px; gap: 6px; }
+      .mode-toggle-btn i { font-size: 13px; }
+      .main-card { padding: 18px 14px; border-radius: 20px; }
+      .section-title { font-size: 19px; margin-bottom: 22px; }
+      .form-control { height: 48px; font-size: 14px; padding: 12px 14px; }
+      textarea.form-control { min-height: 150px; }
+      .submit-btn { height: 54px; font-size: 15px; margin-top: 24px; }
+      .preview-box { padding: 16px 12px 24px; }
+      .template-wrapper { padding: 14px; }
+      .header-row { flex-direction: column; align-items: stretch; }
+      .header-actions {
+        justify-content: space-between;
+        width: 100%;
+      }
+      .page-subtitle { font-size: 13px; }
+      .toast-container { bottom: 15px; right: 15px; left: 15px; }
+      .toast-custom { min-width: auto; }
+      .preview-header {
+        padding: 12px 14px;
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .preview-title { font-size: 16px; }
+      .preview-actions {
+        margin-left: 0;
+        width: 100%;
+        justify-content: stretch;
+      }
+      .preview-actions button {
+        flex: 1 1 calc(50% - 4px);
+        font-size: 11px;
+        padding: 8px 10px;
+        text-align: center;
+      }
+      .replaced-values-info { font-size: 10px; }
+      .preview-box { padding: 20px 12px 28px; }
+      .warranty-card { max-width: 100%; border-width: 2px; }
+      .wc-top-band { padding: 16px 16px 14px; gap: 10px; }
+      .wc-shield { width: 40px; height: 40px; }
+      .wc-shield i { font-size: 18px; }
+      .wc-title { font-size: 15px; }
+      .wc-years-pill { font-size: 10px; padding: 5px 10px; max-width: 76px; }
+      .wc-body { padding: 14px 16px 12px; }
+      .wc-support-block { margin: 0 16px; padding: 10px 12px; }
+      .wc-support-grid { grid-template-columns: 1fr; }
+      .wc-product-strip { grid-template-columns: 1fr; }
+      .wc-product-cell { border-right: none; border-bottom: 1px solid rgba(72,52,52,0.08); }
+      .wc-product-cell:last-child { border-bottom: none; }
+      .warranty-card::after { font-size: 48px; letter-spacing: 6px; }
+      .upload-icon { width: 64px; height: 64px; font-size: 36px; }
+      .upload-box { padding: 20px 14px; }
+    }
+    @media (max-width: 380px) {
+      .preview-actions button {
+        flex: 1 1 100%;
+      }
+      .header-actions {
+        flex-direction: column;
+        gap: 8px;
+      }
+      .back-btn, .mode-toggle-btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+
+    /* Animations */
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in {
+      animation: fadeIn 0.6s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading Spinner -->
+<div class="spinner-overlay" id="spinnerOverlay">
+  <div class="spinner"></div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="main-wrapper">
+
+  <!-- HEADER -->
+  <div class="page-header">
+    <div class="header-row">
+      <div class="header-left">
+        <i class="fas fa-file-signature"></i>
+        <span class="page-title">
+          Warranty Card
+        </span>
+      </div>
+      <div class="header-actions">
+        <button class="mode-toggle-btn" id="modeToggleBtn" title="Toggle Dark/Light Mode">
+          <i class="fas fa-moon" id="modeIcon"></i>
+          <span id="modeText">Dark</span>
+        </button>
+        <a href="#" class="back-btn" onclick="history.back(); return false;">
+          <i class="fas fa-arrow-left"></i> Back
+        </a>
+      </div>
+    </div>
+    <div class="page-subtitle">
+      <i class="fas fa-magic"></i> Premium warranty generator · real-time preview & upload · drag & drop support
+    </div>
+  </div>
+
+  <!-- MAIN CARD -->
+  <div class="main-card">
+
+    <div class="section-title">
+      <div class="section-title-left">
+        <i class="fas fa-pen-fancy"></i> Warranty Information
+      </div>
+    </div>
+
+    <form method="POST" action="save_warranty.php" enctype="multipart/form-data" id="warrantyForm">
+
+      <!-- ROW 1: Model, Brand, Years -->
+      <div class="form-grid">
+        <div class="form-group">
+          <label><i class="fas fa-microchip"></i> Model Name</label>
+          <input type="text" name="model_name" id="modelName" class="form-control" placeholder="e.g. SmartDrive Pro" required>
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-tag"></i> Brand Name</label>
+          <input type="text" name="brand" id="brandName" class="form-control" placeholder="e.g. E-Factor" required>
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-calendar-alt"></i> Warranty Years</label>
+          <input type="number" name="warranty_years" id="warrantyYears" class="form-control" placeholder="2" min="1" max="10" required>
+        </div>
+      </div>
+
+      <!-- ROW 2: Email, Website, Address (3 cols) -->
+      <div class="form-grid-2">
+        <div class="form-group">
+          <label><i class="fas fa-envelope"></i> Support Email</label>
+          <input type="email" name="support_email" id="supportEmail" class="form-control" placeholder="support@example.com" required>
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-globe"></i> Website</label>
+          <input type="text" name="website" id="website" class="form-control" placeholder="www.example.com">
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-map-pin"></i> Company Address</label>
+          <input type="text" name="address" id="companyAddress" class="form-control" placeholder="123 Tech Park">
+        </div>
+      </div>
+
+      <!-- SIDE BY SIDE: Warranty Content + Upload -->
+      <div class="side-by-side">
+        <!-- left: template -->
+        <div class="side-item">
+          <div class="template-wrapper">
+            <div class="form-group mb-0">
+              <label>
+                <i class="fas fa-scroll"></i> Warranty Card Content
+                <span class="tooltip-custom" style="margin-left:auto;">
+                  <i class="fas fa-info-circle" style="color:var(--primary-mid);"></i>
+                  <span class="tooltip-text">Use {BRAND}, {MODEL_NAME}, {WARRANTY_YEARS}, {SUPPORT_EMAIL}, {WEBSITE}, {ADDRESS} as placeholders</span>
+                </span>
+              </label>
+              <textarea
+                name="template"
+                id="templateBox"
+                class="form-control"
+                rows="6"
+                maxlength="2000"
+              >{BRAND} – Warranty &amp; Guarantee Card
+
+Thank you for purchasing the {MODEL_NAME}.
+
+We are committed to providing reliable products and seamless after-sales support.
+
+🔧 {BRAND} Hardware Warranty – {WARRANTY_YEARS} Years Limited
+
+📞 Support:
+Email: {SUPPORT_EMAIL}
+Website: {WEBSITE}
+Address: {ADDRESS}
+
+{BRAND} &amp; E-Factor
+Smart Technology. Reliable Support.</textarea>
+              <div class="char-counter" id="charCounter">0 / 2000 characters</div>
+              <div class="replaced-values-info" id="replacedValuesInfo">
+                <span><span class="label">📌 Replaced Values:</span></span>
+                <span><span class="label">Brand:</span> <span class="value" id="displayBrand">-</span></span>
+                <span><span class="label">Model:</span> <span class="value" id="displayModel">-</span></span>
+                <span><span class="label">Years:</span> <span class="value" id="displayYears">-</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- right: upload -->
+        <div class="side-item">
+          <div class="form-group">
+            <label><i class="fas fa-cloud-upload-alt"></i> Upload Warranty Card File</label>
+            <div class="upload-box" id="uploadBox">
+              <span class="upload-icon"><i class="fas fa-file-pdf"></i></span>
+              <input
+                type="file"
+                name="warranty_file"
+                class="form-control-file"
+                accept=".txt,.pdf,.doc,.docx,.html,.htm"
+                id="fileInput"
+              >
+              <div class="upload-filename" id="fileName"></div>
+              <div class="note">
+                <i class="fas fa-check-circle"></i> Supported: TXT, PDF, DOC, DOCX, HTML
+              </div>
+              <div class="note" style="margin-top:4px;">
+                <i class="fas fa-info-circle"></i> Upload overrides typed content.
+              </div>
+              <div class="note" style="margin-top:4px;">
+                <i class="fas fa-upload"></i> Drag & drop or click to choose
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PREVIEW -->
+      <div class="preview-panel">
+        <div class="preview-header">
+          <div class="preview-title">
+            <i class="fas fa-id-card"></i> Warranty Card Preview <span class="live-dot" title="Updates as you type"></span>
+          </div>
+          <div class="preview-actions">
+            <button onclick="copyPreview()" title="Copy to clipboard">
+              <i class="fas fa-copy"></i> Copy
+            </button>
+            <button onclick="downloadPreview()" id="downloadBtn" title="Download as warranty card image">
+              <i class="fas fa-download"></i> Download Card
+            </button>
+            <button onclick="clearWarrantyInfo()" title="Clear Warranty Information">
+              <i class="fas fa-eraser"></i> Clear Fields
+            </button>
+          </div>
+          <span style="font-size:13px; color:var(--text-muted); margin-left:8px;">
+          </span>
+        </div>
+        <div class="preview-box" id="previewBox">
+          <div class="warranty-card-preview-zone" id="warrantyPreviewZone">
+            <div class="warranty-card-wrap">
+              <div class="warranty-card" id="warrantyCardPreview">
+                <div class="wc-corner wc-corner-tl"></div>
+                <div class="wc-corner wc-corner-tr"></div>
+                <div class="wc-corner wc-corner-bl"></div>
+                <div class="wc-corner wc-corner-br"></div>
+                <div class="wc-inner">
+                  <div class="wc-top-band">
+                    <div class="wc-shield"><i class="fas fa-shield-alt"></i></div>
+                    <div class="wc-top-text">
+                      <span class="wc-cert-label">Certificate of Warranty</span>
+                      <h1 class="wc-title is-placeholder" id="cardTitle">Warranty &amp; Guarantee Card</h1>
+                    </div>
+                    <div class="wc-years-pill is-placeholder" id="cardYearsPill">— Yrs</div>
+                  </div>
+                  <div class="wc-product-strip">
+                    <div class="wc-product-cell">
+                      <label>Brand</label>
+                      <span id="cardBrand" class="is-placeholder">Your Brand</span>
+                    </div>
+                    <div class="wc-product-cell">
+                      <label>Model</label>
+                      <span id="cardModel" class="is-placeholder">Your Model</span>
+                    </div>
+                  </div>
+                  <div class="wc-body">
+                    <div class="wc-highlight" id="cardHighlight" style="display:none;">
+                      <i class="fas fa-tools"></i>
+                      <span id="cardHighlightText"></span>
+                    </div>
+                    <div class="wc-paragraphs" id="cardParagraphs">
+                      <p class="wc-paragraph is-placeholder">Your warranty content will appear here as you fill in the form…</p>
+                    </div>
+                  </div>
+                  <div class="wc-support-block" id="cardSupportBlock">
+                    <div class="wc-support-title"><i class="fas fa-headset"></i> Customer Support</div>
+                    <div class="wc-support-grid">
+                      <div class="wc-support-item">
+                        <span class="si-label">Email</span>
+                        <span class="si-value is-placeholder" id="cardEmail">—</span>
+                      </div>
+                      <div class="wc-support-item">
+                        <span class="si-label">Website</span>
+                        <span class="si-value is-placeholder" id="cardWebsite">—</span>
+                      </div>
+                      <div class="wc-support-item full-width">
+                        <span class="si-label">Address</span>
+                        <span class="si-value is-placeholder" id="cardAddress">—</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="wc-card-footer">
+                    <div class="wc-footer-brand" id="cardFooterBrand">—</div>
+                    <div class="wc-footer-line" id="cardStamp">Smart Technology. Reliable Support.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BUTTON -->
+      <button type="submit" class="submit-btn" id="submitBtn">
+        <i class="fas fa-save"></i> Generate & Save Warranty Card
+      </button>
+
+    </form>
+  </div>
+</div>
+
+<!-- Off-screen clone for high-res PNG export -->
+<div id="exportCardContainer" aria-hidden="true"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  var FIELD_IDS = ['modelName', 'brandName', 'warrantyYears', 'supportEmail', 'website', 'companyAddress', 'templateBox'];
+
+  var form, templateBox, warrantyCardPreview, exportCardContainer, downloadBtn;
+  var charCounter, fileInput, fileName, uploadBox, submitBtn, spinner, toastContainer;
+  var modeToggleBtn, modeIcon, modeText;
+  var modelName, brandName, warrantyYears, supportEmail, website, companyAddress;
+  var displayBrand, displayModel, displayYears;
+  var cardTitle, cardYearsPill, cardBrand, cardModel, cardHighlight, cardHighlightText;
+  var cardParagraphs, cardEmail, cardWebsite, cardAddress, cardFooterBrand, cardStamp;
+  var previewZone;
+  var currentTheme = 'light';
+  var html2canvasLoaded = false;
+  var warrantyCardGenerated = false;
+
+  var REQUIRED_FIELD_IDS = ['modelName', 'brandName', 'warrantyYears', 'supportEmail'];
+  var REQUIRED_FIELD_LABELS = {
+    modelName: 'Model Name',
+    brandName: 'Brand Name',
+    warrantyYears: 'Warranty Years',
+    supportEmail: 'Support Email'
+  };
+
+  function $(id) { return document.getElementById(id); }
+
+  function fieldValue(el) {
+    return el && typeof el.value === 'string' ? el.value.trim() : '';
+  }
+
+  function areRequiredFieldsFilled() {
+    for (var i = 0; i < REQUIRED_FIELD_IDS.length; i++) {
+      if (!fieldValue($(REQUIRED_FIELD_IDS[i]))) return false;
+    }
+    return true;
+  }
+
+  function getMissingRequiredLabels() {
+    var missing = [];
+    for (var i = 0; i < REQUIRED_FIELD_IDS.length; i++) {
+      var id = REQUIRED_FIELD_IDS[i];
+      if (!fieldValue($(id))) missing.push(REQUIRED_FIELD_LABELS[id]);
+    }
+    return missing;
+  }
+
+  function markCardAsNotGenerated() {
+    warrantyCardGenerated = false;
+  }
+
+  function validateBeforeGenerate() {
+    if (!areRequiredFieldsFilled()) {
+      var missing = getMissingRequiredLabels();
+      alert('Please fill all required fields before generating the warranty card.\n\nMissing: ' + missing.join(', '));
+      return false;
+    }
+    return true;
+  }
+
+  function validateBeforeDownload() {
+    if (!areRequiredFieldsFilled()) {
+      alert('Please fill all required fields before downloading the warranty card.');
+      return false;
+    }
+    if (!warrantyCardGenerated) {
+      alert('Please click "Generate & Save Warranty Card" before downloading.');
+      return false;
+    }
+    return true;
+  }
+
+  function getReplacedContent(template) {
+    var brand = fieldValue(brandName) || '{BRAND}';
+    var model = fieldValue(modelName) || '{MODEL_NAME}';
+    var years = fieldValue(warrantyYears) || '{WARRANTY_YEARS}';
+    var email = fieldValue(supportEmail) || '{SUPPORT_EMAIL}';
+    var web = fieldValue(website) || '{WEBSITE}';
+    var addr = fieldValue(companyAddress) || '{ADDRESS}';
+
+    return String(template)
+      .replace(/\{BRAND\}/g, brand)
+      .replace(/\{MODEL_NAME\}/g, model)
+      .replace(/\{WARRANTY_YEARS\}/g, years)
+      .replace(/\{SUPPORT_EMAIL\}/g, email)
+      .replace(/\{WEBSITE\}/g, web)
+      .replace(/\{ADDRESS\}/g, addr);
+  }
+
+  function parseWarrantyContent(text) {
+    var lines = text.split('\n');
+    var parsed = {
+      title: '',
+      paragraphs: [],
+      highlight: '',
+      support: { email: '', website: '', address: '' },
+      footerBrand: '',
+      footerTagline: ''
+    };
+    var inSupport = false;
+    var bodyLines = [];
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line) continue;
+
+      if (!parsed.title) {
+        parsed.title = line;
+        continue;
+      }
+
+      if (/^📞|^support\s*:/i.test(line)) {
+        inSupport = true;
+        continue;
+      }
+
+      if (/^email\s*:/i.test(line)) {
+        parsed.support.email = line.replace(/^email\s*:\s*/i, '');
+        inSupport = true;
+        continue;
+      }
+      if (/^website\s*:/i.test(line)) {
+        parsed.support.website = line.replace(/^website\s*:\s*/i, '');
+        inSupport = true;
+        continue;
+      }
+      if (/^address\s*:/i.test(line)) {
+        parsed.support.address = line.replace(/^address\s*:\s*/i, '');
+        inSupport = true;
+        continue;
+      }
+
+      if (/hardware warranty|years limited/i.test(line) || /^🔧/.test(line)) {
+        parsed.highlight = line.replace(/^🔧\s*/, '');
+        continue;
+      }
+
+      if (/smart technology|reliable support/i.test(line) && !/hardware/i.test(line)) {
+        parsed.footerTagline = line;
+        continue;
+      }
+
+      if (/&/.test(line) && /factor|support/i.test(line) && line.length < 60) {
+        parsed.footerBrand = line;
+        continue;
+      }
+
+      if (!inSupport) {
+        bodyLines.push(line);
+      }
+    }
+
+    parsed.paragraphs = bodyLines;
+    return parsed;
+  }
+
+  function setEl(el, value, placeholder) {
+    if (!el) return;
+    var v = value ? String(value).trim() : '';
+    var has = !!v;
+    el.textContent = has ? v : (placeholder || '—');
+    el.classList.toggle('is-placeholder', !has);
+  }
+
+  function renderParagraphs(container, paragraphs) {
+    if (!container) return;
+    container.innerHTML = '';
+    if (!paragraphs || !paragraphs.length) {
+      var p = document.createElement('p');
+      p.className = 'wc-paragraph is-placeholder';
+      p.textContent = 'Your warranty content will appear here as you fill in the form…';
+      container.appendChild(p);
+      return;
+    }
+    paragraphs.forEach(function(text) {
+      var p = document.createElement('p');
+      p.className = 'wc-paragraph';
+      p.textContent = text;
+      container.appendChild(p);
+    });
+  }
+
+  function flashPreview() {
+    if (!previewZone) return;
+    previewZone.classList.remove('card-updated');
+    void previewZone.offsetWidth;
+    previewZone.classList.add('card-updated');
+  }
+
+  function updatePreview() {
+    if (!templateBox) return;
+
+    var template = templateBox.value || '';
+    var replaced = getReplacedContent(template);
+    var parsed = parseWarrantyContent(replaced);
+
+    var brand = fieldValue(brandName);
+    var model = fieldValue(modelName);
+    var years = fieldValue(warrantyYears);
+    var email = fieldValue(supportEmail) || parsed.support.email;
+    var web = fieldValue(website) || parsed.support.website;
+    var addr = fieldValue(companyAddress) || parsed.support.address;
+
+    // Title from template content
+    setEl(cardTitle, parsed.title, 'Warranty & Guarantee Card');
+
+    // Years pill
+    if (cardYearsPill) {
+      if (years) {
+        cardYearsPill.textContent = years + ' Yr' + (years === '1' ? '' : 's');
+        cardYearsPill.classList.remove('is-placeholder');
+      } else {
+        cardYearsPill.textContent = '— Yrs';
+        cardYearsPill.classList.add('is-placeholder');
+      }
+    }
+
+    setEl(cardBrand, brand, 'Your Brand');
+    setEl(cardModel, model, 'Your Model');
+
+    // Warranty highlight line from content
+    if (cardHighlight && cardHighlightText) {
+      if (parsed.highlight) {
+        cardHighlightText.textContent = parsed.highlight;
+        cardHighlight.style.display = 'flex';
+      } else if (years && brand) {
+        cardHighlightText.textContent = brand + ' Hardware Warranty — ' + years + ' Years Limited';
+        cardHighlight.style.display = 'flex';
+      } else {
+        cardHighlight.style.display = 'none';
+      }
+    }
+
+    // Body paragraphs from template content
+    renderParagraphs(cardParagraphs, parsed.paragraphs);
+
+    // Support block — form fields take priority
+    setEl(cardEmail, email, '—');
+    setEl(cardWebsite, web, '—');
+    setEl(cardAddress, addr, '—');
+
+    // Footer
+    if (cardFooterBrand) {
+      setEl(cardFooterBrand, parsed.footerBrand || (brand ? brand + ' & E-Factor' : ''), '—');
+    }
+    if (cardStamp) {
+      cardStamp.textContent = parsed.footerTagline || 'Smart Technology. Reliable Support.';
+    }
+
+    if (displayBrand) displayBrand.textContent = brand || '{BRAND}';
+    if (displayModel) displayModel.textContent = model || '{MODEL_NAME}';
+    if (displayYears) displayYears.textContent = years || '{WARRANTY_YEARS}';
+
+    if (charCounter) {
+      var len = template.length;
+      var max = 2000;
+      charCounter.textContent = len + ' / ' + max + ' characters';
+      charCounter.className = 'char-counter';
+      if (len > max * 0.8) charCounter.classList.add('warning');
+      if (len > max * 0.95) charCounter.classList.add('danger');
+    }
+
+    flashPreview();
+  }
+
+  function bindLivePreview() {
+    FIELD_IDS.forEach(function(id) {
+      var el = $(id);
+      if (!el) return;
+      el.addEventListener('input', function() {
+        if (REQUIRED_FIELD_IDS.indexOf(id) !== -1 || id === 'templateBox') markCardAsNotGenerated();
+        updatePreview();
+      });
+      el.addEventListener('change', function() {
+        if (REQUIRED_FIELD_IDS.indexOf(id) !== -1 || id === 'templateBox') markCardAsNotGenerated();
+        updatePreview();
+      });
+      el.addEventListener('keyup', updatePreview);
+      el.addEventListener('paste', function() {
+        setTimeout(function() {
+          if (REQUIRED_FIELD_IDS.indexOf(id) !== -1 || id === 'templateBox') markCardAsNotGenerated();
+          updatePreview();
+        }, 0);
+      });
+    });
+    if (form) {
+      form.addEventListener('input', updatePreview);
+      form.addEventListener('change', updatePreview);
+    }
+  }
+
+  function applyTheme(theme) {
+    var html = document.documentElement;
+    if (theme === 'dark') {
+      html.setAttribute('data-theme', 'dark');
+      if (modeIcon) modeIcon.className = 'fas fa-sun';
+      if (modeText) modeText.textContent = 'Light';
+    } else {
+      html.removeAttribute('data-theme');
+      if (modeIcon) modeIcon.className = 'fas fa-moon';
+      if (modeText) modeText.textContent = 'Dark';
+    }
+  }
+
+  function showToast(message, type) {
+    if (!toastContainer) return;
+    type = type || 'info';
+    var icons = { success: 'fa-check-circle', info: 'fa-info-circle', warning: 'fa-exclamation-triangle', error: 'fa-times-circle' };
+    var toast = document.createElement('div');
+    toast.className = 'toast-custom';
+    toast.innerHTML =
+      '<i class="fas ' + (icons[type] || icons.info) + '"></i>' +
+      '<span>' + message + '</span>' +
+      '<span class="toast-close" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></span>';
+    toastContainer.appendChild(toast);
+    setTimeout(function() { if (toast.parentElement) toast.remove(); }, 4000);
+  }
+
+  function loadHtml2Canvas() {
+    return new Promise(function(resolve, reject) {
+      if (typeof html2canvas !== 'undefined') {
+        html2canvasLoaded = true;
+        resolve();
+        return;
+      }
+      if (html2canvasLoaded) { resolve(); return; }
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      s.onload = function() { html2canvasLoaded = true; resolve(); };
+      s.onerror = function() { reject(new Error('html2canvas failed to load')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function init() {
+    form = $('warrantyForm');
+    templateBox = $('templateBox');
+    warrantyCardPreview = $('warrantyCardPreview');
+    exportCardContainer = $('exportCardContainer');
+    downloadBtn = $('downloadBtn');
+    charCounter = $('charCounter');
+    fileInput = $('fileInput');
+    fileName = $('fileName');
+    uploadBox = $('uploadBox');
+    submitBtn = $('submitBtn');
+    spinner = $('spinnerOverlay');
+    toastContainer = $('toastContainer');
+    modeToggleBtn = $('modeToggleBtn');
+    modeIcon = $('modeIcon');
+    modeText = $('modeText');
+
+    modelName = $('modelName');
+    brandName = $('brandName');
+    warrantyYears = $('warrantyYears');
+    supportEmail = $('supportEmail');
+    website = $('website');
+    companyAddress = $('companyAddress');
+
+    displayBrand = $('displayBrand');
+    displayModel = $('displayModel');
+    displayYears = $('displayYears');
+
+    cardTitle = $('cardTitle');
+    cardYearsPill = $('cardYearsPill');
+    cardBrand = $('cardBrand');
+    cardModel = $('cardModel');
+    cardHighlight = $('cardHighlight');
+    cardHighlightText = $('cardHighlightText');
+    cardParagraphs = $('cardParagraphs');
+    cardEmail = $('cardEmail');
+    cardWebsite = $('cardWebsite');
+    cardAddress = $('cardAddress');
+    cardFooterBrand = $('cardFooterBrand');
+    cardStamp = $('cardStamp');
+    previewZone = $('warrantyPreviewZone');
+
+    if (!form || !templateBox || !warrantyCardPreview) {
+      console.error('Warranty form: required elements missing');
+      return;
+    }
+
+    var urlParams = new URLSearchParams(window.location.search);
+    var modelFromUrl = urlParams.get('modelname');
+    if (modelFromUrl && modelName) {
+      modelName.value = decodeURIComponent(modelFromUrl);
+    }
+
+    currentTheme = localStorage.getItem('warrantyTheme') || 'light';
+    applyTheme(currentTheme);
+
+    bindLivePreview();
+    updatePreview();
+
+    if (modeToggleBtn) {
+      modeToggleBtn.addEventListener('click', function() {
+        currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+        applyTheme(currentTheme);
+        localStorage.setItem('warrantyTheme', currentTheme);
+        showToast('Switched to ' + currentTheme.charAt(0).toUpperCase() + currentTheme.slice(1) + ' Mode', 'info');
+      });
+    }
+
+    window.updatePreview = updatePreview;
+    window.clearWarrantyInfo = function() {
+      FIELD_IDS.forEach(function(id) {
+        if (id === 'templateBox') return;
+        var el = $(id);
+        if (el) el.value = '';
+      });
+      markCardAsNotGenerated();
+      updatePreview();
+      showToast('Warranty Information fields cleared!', 'info');
+    };
+
+    window.copyPreview = function() {
+      var text = getReplacedContent(templateBox.value || '');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+          showToast('Copied to clipboard!', 'success');
+        }).catch(function() {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          showToast('Copied to clipboard!', 'success');
+        });
+      }
+    };
+
+    window.downloadPreview = function() {
+      if (!validateBeforeDownload()) return;
+      if (!warrantyCardPreview || !exportCardContainer || !downloadBtn) return;
+      var brand = fieldValue(brandName) || 'Brand';
+      var filename = (brand || 'warranty_card').replace(/[^a-z0-9_\-\.]/gi, '_').substring(0, 60) + '_warranty_card.png';
+
+      downloadBtn.disabled = true;
+      var originalHtml = downloadBtn.innerHTML;
+      downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing...';
+
+      loadHtml2Canvas().then(function() {
+        exportCardContainer.innerHTML = '';
+        var clone = warrantyCardPreview.cloneNode(true);
+        clone.id = 'exportWarrantyCard';
+        exportCardContainer.appendChild(clone);
+        return html2canvas(clone, { scale: 2, useCORS: true, backgroundColor: '#FFFFFF', logging: false });
+      }).then(function(canvas) {
+        return new Promise(function(resolve) {
+          canvas.toBlob(function(blob) {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            exportCardContainer.innerHTML = '';
+            showToast('Warranty card downloaded as PNG!', 'success');
+            resolve();
+          }, 'image/png');
+        });
+      }).catch(function() {
+        showToast('Could not generate image. Check your connection and try again.', 'error');
+      }).finally(function() {
+        downloadBtn.disabled = false;
+        downloadBtn.innerHTML = originalHtml;
+      });
+    };
+
+    if (fileInput) {
+      fileInput.addEventListener('change', function() {
+        if (this.files && this.files[0]) {
+          if (fileName) fileName.textContent = '📎 ' + this.files[0].name;
+          showToast('File uploaded: ' + this.files[0].name, 'success');
+        } else if (fileName) {
+          fileName.textContent = '';
+        }
+      });
+    }
+
+    if (uploadBox) {
+      uploadBox.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('dragover'); });
+      uploadBox.addEventListener('dragleave', function(e) { e.preventDefault(); this.classList.remove('dragover'); });
+      uploadBox.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+        if (e.dataTransfer.files && e.dataTransfer.files[0] && fileInput) {
+          fileInput.files = e.dataTransfer.files;
+          if (fileName) fileName.textContent = '📎 ' + e.dataTransfer.files[0].name;
+          showToast('File dropped: ' + e.dataTransfer.files[0].name, 'success');
+        }
+      });
+    }
+
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      if (!validateBeforeGenerate()) return;
+
+      if (spinner) spinner.classList.add('active');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+      }
+      setTimeout(function() {
+        if (spinner) spinner.classList.remove('active');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fas fa-save"></i> Generate & Save Warranty Card';
+        }
+        warrantyCardGenerated = true;
+        showToast('Warranty card generated successfully! You can now download it.', 'success');
+      }, 1500);
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.ctrlKey && e.shiftKey && e.key === 'C') { e.preventDefault(); window.copyPreview(); }
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') { e.preventDefault(); window.downloadPreview(); }
+      if (e.ctrlKey && e.shiftKey && e.key === 'T' && modeToggleBtn) { e.preventDefault(); modeToggleBtn.click(); }
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>

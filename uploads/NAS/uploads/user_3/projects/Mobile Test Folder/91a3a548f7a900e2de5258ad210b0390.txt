@@ -1,0 +1,3519 @@
+wait first I will give you current all apis
+
+FILE-MANAGER-V2/apis/v1/auth
+
+login.php
+<?php
+// apis/v1/auth/login.php
+
+require_once __DIR__ . '/../bootstrap.php';
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+    exit();
+}
+
+// Get input
+$data = json_decode(file_get_contents('php://input'), true);
+$username = trim($data['username'] ?? '');
+$password = $data['password'] ?? '';
+
+// Debug logging
+error_log("Login attempt for username: " . $username);
+error_log("Password received length: " . strlen($password));
+
+if (empty($username) || empty($password)) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Username and password required']);
+    exit();
+}
+
+// Find user
+$stmt = $pdo->prepare("SELECT id, username, email, password FROM users WHERE username = ? OR email = ?");
+$stmt->execute([$username, $username]);
+$user = $stmt->fetch();
+
+// Debug logging
+if ($user) {
+    error_log("User found: " . $user['username']);
+    error_log("Stored hash: " . $user['password']);
+    
+    // Verify password
+    $passwordValid = password_verify($password, $user['password']);
+    error_log("Password valid: " . ($passwordValid ? 'YES' : 'NO'));
+} else {
+    error_log("User not found: " . $username);
+}
+
+if (!$user) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'User not found']);
+    exit();
+}
+
+if (!password_verify($password, $user['password'])) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Invalid credentials']);
+    exit();
+}
+
+// Update last login
+$stmt = $pdo->prepare("UPDATE users SET last_login = NOW() WHERE id = ?");
+$stmt->execute([$user['id']]);
+
+// Start session and set user data
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+$_SESSION['user_id'] = $user['id'];
+$_SESSION['username'] = $user['username'];
+$_SESSION['email'] = $user['email'];
+
+echo json_encode([
+    'success' => true,
+    'message' => 'Login successful',
+    'user' => [
+        'id' => $user['id'],
+        'username' => $user['username'],
+        'email' => $user['email']
+    ]
+]);
+?>
+
+logout.php
+<?php
+// apis/v1/auth/logout.php
+
+session_start();
+session_destroy();
+
+header('Location: /FILE-MANAGER-V2/file-manager/public/');
+exit();
+?>
+
+register.php
+<?php
+// apis/v1/auth/register.php
+// Clean registration - NO HTML output
+
+// Disable error display for API
+error_reporting(0);
+ini_set('display_errors', 0);
+
+require_once __DIR__ . '/../bootstrap.php';
+
+// Only allow POST
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+    exit();
+}
+
+// Get raw input
+$rawInput = file_get_contents('php://input');
+$data = json_decode($rawInput, true);
+
+// If JSON decode failed, try $_POST
+if (!$data) {
+    $data = $_POST;
+}
+
+// If still no data
+if (empty($data)) {
+    http_response_code(400);
+    echo json_encode([
+        'success' => false,
+        'message' => 'No data received. Please send JSON with username, email, and password.'
+    ]);
+    exit();
+}
+
+// Extract fields
+$username = trim($data['username'] ?? '');
+$email = trim($data['email'] ?? '');
+$password = $data['password'] ?? '';
+
+// Validate
+if (empty($username) || empty($email) || empty($password)) {
+    http_response_code(400);
+    echo json_encode([
+        'success' => false,
+        'message' => 'All fields are required: username, email, password'
+    ]);
+    exit();
+}
+
+if (strlen($username) < 3) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Username must be at least 3 characters']);
+    exit();
+}
+
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Invalid email format']);
+    exit();
+}
+
+if (strlen($password) < 6) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Password must be at least 6 characters']);
+    exit();
+}
+
+try {
+    // Check if user already exists
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
+    $stmt->execute([$username, $email]);
+    
+    if ($stmt->rowCount() > 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Username or email already exists']);
+        exit();
+    }
+
+    // Hash password
+    $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+
+    // Insert user
+    $stmt = $pdo->prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
+    $result = $stmt->execute([$username, $email, $passwordHash]);
+
+    if (!$result) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Failed to create user']);
+        exit();
+    }
+
+    $userId = $pdo->lastInsertId();
+
+    // Create user directory
+    $userDir = UPLOAD_PATH . '/user_' . $userId . '/';
+    if (!file_exists($userDir)) {
+        mkdir($userDir, 0755, true);
+    }
+
+    // Add clusters for new user
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO user_clusters (user_id, cluster_id)
+            SELECT ?, sc.id
+            FROM storage_clusters sc
+        ");
+        $stmt->execute([$userId]);
+    } catch (Exception $e) {
+        // Clusters might not exist, log but continue
+        error_log("Cluster creation warning: " . $e->getMessage());
+    }
+
+    // Return success
+    echo json_encode([
+        'success' => true,
+        'message' => 'Registration successful',
+        'user_id' => $userId
+    ]);
+
+} catch (PDOException $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+}
+?>
+
+FILE-MANAGER-V2/apis/v1/clusters
+
+index.php
+<?php
+// apis/v1/clusters/index.php
+// Get clusters with item counts
+
+require_once __DIR__ . '/../bootstrap.php';
+
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit();
+}
+
+$userId = $_SESSION['user_id'];
+$method = $_SERVER['REQUEST_METHOD'];
+
+try {
+    switch($method) {
+        case 'GET':
+            handleGetRequest($pdo, $userId);
+            break;
+        default:
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+    }
+} catch (Exception $e) {
+    error_log("Clusters API error: " . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+}
+
+// ============================================
+// GET - List Clusters with counts
+// ============================================
+
+// In handleGetRequest function, add the shared cluster count
+function handleGetRequest($pdo, $userId) {
+    try {
+
+        // Get shared items count
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) as count 
+            FROM shared_items 
+            WHERE shared_with_user_id = ?
+        ");
+        $stmt->execute([$userId]);
+        $sharedCount = (int)$stmt->fetch()['count'];
+
+        // Get all clusters for this user
+        $stmt = $pdo->prepare("
+            SELECT sc.* 
+            FROM storage_clusters sc
+            INNER JOIN user_clusters uc ON sc.id = uc.cluster_id
+            WHERE uc.user_id = ? AND uc.is_active = 1
+            ORDER BY sc.sort_order, sc.name
+        ");
+        $stmt->execute([$userId]);
+        $clusters = $stmt->fetchAll();
+
+        // Get counts for each cluster
+        $results = [];
+        $totalItems = 0;
+        
+        
+        
+        foreach ($clusters as $cluster) {
+            $clusterId = $cluster['id'];
+            $slug = $cluster['slug'];
+            
+            // Count root-level folders
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) as count 
+                FROM folders 
+                WHERE user_id = ? AND cluster_id = ? AND parent_id IS NULL AND deleted_at IS NULL
+            ");
+            $stmt->execute([$userId, $clusterId]);
+            $folderCount = (int)$stmt->fetch()['count'];
+            
+            // Count root-level files
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) as count 
+                FROM files 
+                WHERE user_id = ? AND cluster_id = ? AND folder_id IS NULL AND deleted_at IS NULL
+            ");
+            $stmt->execute([$userId, $clusterId]);
+            $fileCount = (int)$stmt->fetch()['count'];
+            
+            $totalForCluster = $folderCount + $fileCount;
+            
+            if ($slug === 'my-drive') {
+                // Get total root-level items across all clusters
+                $stmt = $pdo->prepare("
+                    SELECT COUNT(*) as count 
+                    FROM folders 
+                    WHERE user_id = ? AND parent_id IS NULL AND deleted_at IS NULL
+                ");
+                $stmt->execute([$userId]);
+                $totalFolders = (int)$stmt->fetch()['count'];
+                
+                $stmt = $pdo->prepare("
+                    SELECT COUNT(*) as count 
+                    FROM files 
+                    WHERE user_id = ? AND folder_id IS NULL AND deleted_at IS NULL
+                ");
+                $stmt->execute([$userId]);
+                $totalFiles = (int)$stmt->fetch()['count'];
+                
+                $totalItems = $totalFolders + $totalFiles;
+                
+                $results[] = [
+                    'id' => $cluster['id'],
+                    'name' => $cluster['name'],
+                    'slug' => $cluster['slug'],
+                    'icon' => $cluster['icon'],
+                    'description' => $cluster['description'],
+                    'is_system' => (bool)$cluster['is_system'],
+                    'is_default' => (bool)$cluster['is_default'],
+                    'folder_count' => $totalFolders,
+                    'file_count' => $totalFiles,
+                    'total_count' => $totalItems,
+                    'sort_order' => $cluster['sort_order']
+                ];
+            } else {
+                $results[] = [
+                    'id' => $cluster['id'],
+                    'name' => $cluster['name'],
+                    'slug' => $cluster['slug'],
+                    'icon' => $cluster['icon'],
+                    'description' => $cluster['description'],
+                    'is_system' => (bool)$cluster['is_system'],
+                    'is_default' => (bool)$cluster['is_default'],
+                    'folder_count' => $folderCount,
+                    'file_count' => $fileCount,
+                    'total_count' => $totalForCluster,
+                    'sort_order' => $cluster['sort_order']
+                ];
+            }
+        }
+        
+        // Add Shared cluster as a special cluster
+        $results[] = [
+            'id' => 0,
+            'name' => 'Shared with Me',
+            'slug' => 'shared',
+            'icon' => 'fa-share-alt',
+            'description' => 'Items shared with you',
+            'is_system' => true,
+            'is_default' => false,
+            'folder_count' => 0,
+            'file_count' => $sharedCount,
+            'total_count' => $sharedCount,
+            'sort_order' => 2
+        ];
+
+        echo json_encode([
+            'success' => true,
+            'clusters' => $results,
+            'total_items' => $totalItems
+        ]);
+
+    } catch (Exception $e) {
+        error_log("Error fetching clusters: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Error loading clusters: ' . $e->getMessage()]);
+    }
+}
+?>
+
+FILE-MANAGER-V2/apis/v1/config
+
+database.php
+
+<?php
+// apis/v1/config/database.php
+
+return [
+    'host' => 'localhost',
+    'database' => 'file_manager_v3',
+    'username' => 'root',
+    'password' => 'mysql',
+    'charset' => 'utf8mb4',
+    'options' => [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false
+    ]
+];
+?>
+
+FILE-MANAGER-V2/apis/v1/files
+
+debug.php
+
+<?php
+// apis/v1/files/debug.php
+// Debug file access
+
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+require_once __DIR__ . '/../bootstrap.php';
+
+if (!isset($_SESSION['user_id'])) {
+    die('User not logged in');
+}
+
+$userId = $_SESSION['user_id'];
+$fileId = isset($_GET['file_id']) ? (int)$_GET['file_id'] : 0;
+
+if (!$fileId) {
+    die('File ID required');
+}
+
+echo "<h2>Debug File Access</h2>";
+echo "User ID: $userId<br>";
+echo "File ID: $fileId<br><br>";
+
+try {
+    // Get file info
+    $stmt = $pdo->prepare("
+        SELECT f.*, 
+               f.original_name as name,
+               f.file_size as size,
+               f.file_type as type,
+               f.file_path as path,
+               f.folder_id,
+               f.user_id as file_owner_id
+        FROM files f
+        WHERE f.id = ? AND f.deleted_at IS NULL
+    ");
+    $stmt->execute([$fileId]);
+    $file = $stmt->fetch();
+
+    if (!$file) {
+        echo "❌ File not found<br>";
+        exit;
+    }
+    
+    echo "✅ File found:<br>";
+    echo "<pre>";
+    print_r($file);
+    echo "</pre><br>";
+    
+    $isOwner = ($file['file_owner_id'] == $userId);
+    echo "Is owner: " . ($isOwner ? 'YES' : 'NO') . "<br><br>";
+    
+    if ($isOwner) {
+        echo "✅ User is owner - FULL ACCESS<br>";
+        exit;
+    }
+    
+    // Check direct share
+    echo "Checking direct share...<br>";
+    $stmt = $pdo->prepare("
+        SELECT si.*, u.username as shared_by
+        FROM shared_items si
+        LEFT JOIN users u ON si.user_id = u.id
+        WHERE si.item_type = 'file' AND si.item_id = ? AND si.shared_with_user_id = ?
+        AND (si.expires_at IS NULL OR si.expires_at > NOW())
+    ");
+    $stmt->execute([$fileId, $userId]);
+    $share = $stmt->fetch();
+    
+    if ($share) {
+        echo "✅ File is directly shared:<br>";
+        echo "<pre>";
+        print_r($share);
+        echo "</pre><br>";
+        echo "Permission: " . $share['permissions'] . "<br>";
+        exit;
+    } else {
+        echo "❌ No direct share found<br><br>";
+    }
+    
+    // Check folder shares
+    $folderId = $file['folder_id'];
+    if ($folderId) {
+        echo "File is in folder ID: $folderId<br>";
+        echo "Checking folder shares...<br>";
+        
+        $currentFolderId = $folderId;
+        $foundShare = false;
+        
+        while ($currentFolderId && !$foundShare) {
+            $stmt = $pdo->prepare("
+                SELECT si.*, u.username as shared_by
+                FROM shared_items si
+                LEFT JOIN users u ON si.user_id = u.id
+                WHERE si.item_type = 'folder' AND si.item_id = ? AND si.shared_with_user_id = ?
+                AND (si.expires_at IS NULL OR si.expires_at > NOW())
+            ");
+            $stmt->execute([$currentFolderId, $userId]);
+            $folderShare = $stmt->fetch();
+            
+            if ($folderShare) {
+                echo "✅ Found share on folder $currentFolderId:<br>";
+                echo "<pre>";
+                print_r($folderShare);
+                echo "</pre><br>";
+                echo "Permission: " . $folderShare['permissions'] . "<br>";
+                $foundShare = true;
+                break;
+            }
+            
+            // Get parent
+            $stmt = $pdo->prepare("SELECT parent_id FROM folders WHERE id = ?");
+            $stmt->execute([$currentFolderId]);
+            $parent = $stmt->fetch();
+            $currentFolderId = $parent ? $parent['parent_id'] : null;
+            echo "→ Parent folder: " . ($currentFolderId ?? 'NULL') . "<br>";
+        }
+        
+        if (!$foundShare) {
+            echo "❌ No folder share found<br>";
+        }
+    } else {
+        echo "File is at root level (no folder)<br>";
+    }
+    
+    echo "<br>🔍 Summary:<br>";
+    echo "- User ID: $userId<br>";
+    echo "- File ID: $fileId<br>";
+    echo "- Is Owner: " . ($isOwner ? 'YES' : 'NO') . "<br>";
+    echo "- Direct Share: " . ($share ? 'YES (' . $share['permissions'] . ')' : 'NO') . "<br>";
+    echo "- Folder Share: " . ($foundShare ? 'YES' : 'NO') . "<br>";
+    
+} catch (Exception $e) {
+    echo "❌ Error: " . $e->getMessage() . "<br>";
+}
+?>
+
+download.php
+
+<?php
+// apis/v1/files/download.php
+// Download or preview file
+
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+require_once __DIR__ . '/../bootstrap.php';
+
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit();
+}
+
+$userId = $_SESSION['user_id'];
+$fileId = isset($_GET['file_id']) ? (int)$_GET['file_id'] : 0;
+$itemId = isset($_GET['item_id']) ? (int)$_GET['item_id'] : 0;
+$itemType = isset($_GET['item_type']) ? $_GET['item_type'] : 'file';
+$isPreview = isset($_GET['preview']) && $_GET['preview'] == 1;
+
+// Use item_id if provided, otherwise use file_id
+if ($itemId && $itemType === 'folder') {
+    // Handle folder download as ZIP
+    downloadFolder($pdo, $userId, $itemId);
+    exit();
+}
+
+// Default: get file
+if (!$fileId && $itemId) {
+    $fileId = $itemId;
+}
+
+if (!$fileId) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'File ID required']);
+    exit();
+}
+
+try {
+    // Get file info
+    $stmt = $pdo->prepare("
+        SELECT f.*, f.user_id as file_owner_id
+        FROM files f
+        WHERE f.id = ? AND f.deleted_at IS NULL
+    ");
+    $stmt->execute([$fileId]);
+    $file = $stmt->fetch();
+
+    if (!$file) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'message' => 'File not found']);
+        exit();
+    }
+
+    // Check if file exists on disk
+    $filePath = $file['file_path'];
+    if (!file_exists($filePath)) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'message' => 'File not found on server']);
+        exit();
+    }
+
+    $isOwner = ($file['file_owner_id'] == $userId);
+    $hasAccess = false;
+    $permission = 'view';
+
+    // If user is owner, they have full access
+    if ($isOwner) {
+        $hasAccess = true;
+        $permission = 'full';
+    } else {
+        // Check if file is directly shared with user
+        $stmt = $pdo->prepare("
+            SELECT si.permissions
+            FROM shared_items si
+            WHERE si.item_type = 'file' AND si.item_id = ? AND si.shared_with_user_id = ?
+            AND (si.expires_at IS NULL OR si.expires_at > NOW())
+        ");
+        $stmt->execute([$fileId, $userId]);
+        $share = $stmt->fetch();
+        
+        if ($share) {
+            $hasAccess = true;
+            $permission = $share['permissions'];
+        } else {
+            // Check if file is inside a shared folder
+            $folderId = $file['folder_id'];
+            if ($folderId) {
+                $currentFolderId = $folderId;
+                while ($currentFolderId && !$hasAccess) {
+                    $stmt = $pdo->prepare("
+                        SELECT si.permissions
+                        FROM shared_items si
+                        WHERE si.item_type = 'folder' AND si.item_id = ? AND si.shared_with_user_id = ?
+                        AND (si.expires_at IS NULL OR si.expires_at > NOW())
+                    ");
+                    $stmt->execute([$currentFolderId, $userId]);
+                    $folderShare = $stmt->fetch();
+                    
+                    if ($folderShare) {
+                        $hasAccess = true;
+                        $permission = $folderShare['permissions'];
+                        break;
+                    }
+                    
+                    $stmt = $pdo->prepare("SELECT parent_id FROM folders WHERE id = ? AND deleted_at IS NULL");
+                    $stmt->execute([$currentFolderId]);
+                    $parent = $stmt->fetch();
+                    $currentFolderId = $parent ? $parent['parent_id'] : null;
+                }
+            }
+        }
+    }
+
+    if (!$hasAccess) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Access denied']);
+        exit();
+    }
+
+    // ============================================
+    // IMPORTANT: For PREVIEW - Allow ALL users with access
+    // ============================================
+    if ($isPreview) {
+        // Get MIME type
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $filePath);
+        finfo_close($finfo);
+
+        // For PHP files, force text/plain for preview
+        $extension = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
+        if (in_array($extension, ['php', 'phar', 'phtml'])) {
+            $mimeType = 'text/plain';
+        }
+
+        // For code files, force text/plain
+        $codeExtensions = ['js', 'css', 'html', 'htm', 'json', 'xml', 'txt', 'py', 'java', 'cpp', 'c', 'h', 'sql', 'sh', 'bash', 'rb', 'go', 'rs', 'ts', 'jsx', 'tsx', 'vue'];
+        if (in_array($extension, $codeExtensions)) {
+            $mimeType = 'text/plain';
+        }
+
+        // For image files, serve as image
+        $imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+        if (in_array($extension, $imageExtensions)) {
+            // Keep original mime type for images
+        }
+
+        // Set headers for preview (inline display)
+        header('Content-Type: ' . $mimeType);
+        header('Content-Disposition: inline; filename="' . $file['original_name'] . '"');
+        header('Cache-Control: public, max-age=3600');
+        header('X-Content-Type-Options: nosniff');
+        header('Access-Control-Allow-Origin: *');
+        
+        // Read and output file
+        readfile($filePath);
+        exit();
+    }
+
+    // ============================================
+    // For DOWNLOAD: Check permission
+    // ============================================
+    $canDownload = $isOwner || in_array($permission, ['download', 'edit', 'share', 'full']);
+    
+    if (!$canDownload) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Download permission denied (view-only)']);
+        exit();
+    }
+
+    // Update last opened
+    $stmt = $pdo->prepare("UPDATE files SET last_opened = NOW() WHERE id = ?");
+    $stmt->execute([$fileId]);
+
+    // Get MIME type for download
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mimeType = finfo_file($finfo, $filePath);
+    finfo_close($finfo);
+
+    // Set headers for download
+    header('Content-Type: ' . $mimeType);
+    header('Content-Disposition: attachment; filename="' . $file['original_name'] . '"');
+    header('Content-Length: ' . filesize($filePath));
+    header('Cache-Control: private, max-age=0, must-revalidate');
+    header('Pragma: public');
+    
+    // Read and output file
+    readfile($filePath);
+    exit();
+
+} catch (Exception $e) {
+    error_log("Download error: " . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Error downloading file: ' . $e->getMessage()]);
+}
+
+// ============================================
+// FUNCTION: Download folder as ZIP
+// ============================================
+function downloadFolder($pdo, $userId, $folderId) {
+    // Check if user has access to folder
+    $stmt = $pdo->prepare("SELECT * FROM folders WHERE id = ? AND deleted_at IS NULL");
+    $stmt->execute([$folderId]);
+    $folder = $stmt->fetch();
+
+    if (!$folder) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'message' => 'Folder not found']);
+        exit();
+    }
+
+    $isOwner = ($folder['user_id'] == $userId);
+    $hasAccess = false;
+    $permission = 'view';
+
+    if ($isOwner) {
+        $hasAccess = true;
+        $permission = 'full';
+    } else {
+        // Check if folder is shared with user
+        $stmt = $pdo->prepare("
+            SELECT si.permissions
+            FROM shared_items si
+            WHERE si.item_type = 'folder' AND si.item_id = ? AND si.shared_with_user_id = ?
+            AND (si.expires_at IS NULL OR si.expires_at > NOW())
+        ");
+        $stmt->execute([$folderId, $userId]);
+        $share = $stmt->fetch();
+        
+        if ($share) {
+            $hasAccess = true;
+            $permission = $share['permissions'];
+        } else {
+            // Check parent folders
+            $currentFolderId = $folder['parent_id'];
+            while ($currentFolderId && !$hasAccess) {
+                $stmt = $pdo->prepare("
+                    SELECT si.permissions
+                    FROM shared_items si
+                    WHERE si.item_type = 'folder' AND si.item_id = ? AND si.shared_with_user_id = ?
+                    AND (si.expires_at IS NULL OR si.expires_at > NOW())
+                ");
+                $stmt->execute([$currentFolderId, $userId]);
+                $parentShare = $stmt->fetch();
+                
+                if ($parentShare) {
+                    $hasAccess = true;
+                    $permission = $parentShare['permissions'];
+                    break;
+                }
+                
+                $stmt = $pdo->prepare("SELECT parent_id FROM folders WHERE id = ? AND deleted_at IS NULL");
+                $stmt->execute([$currentFolderId]);
+                $parent = $stmt->fetch();
+                $currentFolderId = $parent ? $parent['parent_id'] : null;
+            }
+        }
+    }
+
+    if (!$hasAccess) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Access denied']);
+        exit();
+    }
+
+    // Check download permission
+    $canDownload = $isOwner || in_array($permission, ['download', 'edit', 'share', 'full']);
+    if (!$canDownload) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Download permission denied (view-only)']);
+        exit();
+    }
+
+    // Get all files in folder recursively
+    $files = getFolderFilesRecursive($pdo, $folderId, $folder['user_id']);
+    
+    if (empty($files)) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'message' => 'Folder is empty']);
+        exit();
+    }
+
+    // Create ZIP file
+    $zip = new ZipArchive();
+    $zipName = tempnam(sys_get_temp_dir(), 'folder_') . '.zip';
+    
+    if ($zip->open($zipName, ZipArchive::CREATE) !== true) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Could not create ZIP file']);
+        exit();
+    }
+
+    // Add files to ZIP
+    foreach ($files as $file) {
+        if (file_exists($file['file_path'])) {
+            $relativePath = $file['relative_path'];
+            $zip->addFile($file['file_path'], $relativePath);
+        }
+    }
+
+    $zip->close();
+
+    // Send ZIP file
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="' . $folder['name'] . '.zip"');
+    header('Content-Length: ' . filesize($zipName));
+    readfile($zipName);
+    unlink($zipName);
+    exit();
+}
+
+// ============================================
+// HELPER: Get folder files recursively
+// ============================================
+function getFolderFilesRecursive($pdo, $folderId, $userId, $basePath = '') {
+    $files = [];
+    
+    // Get files in this folder
+    $stmt = $pdo->prepare("
+        SELECT id, original_name, file_path
+        FROM files 
+        WHERE folder_id = ? AND user_id = ? AND deleted_at IS NULL
+    ");
+    $stmt->execute([$folderId, $userId]);
+    $folderFiles = $stmt->fetchAll();
+    
+    foreach ($folderFiles as $file) {
+        $files[] = [
+            'file_path' => $file['file_path'],
+            'relative_path' => ($basePath ? $basePath . '/' : '') . $file['original_name']
+        ];
+    }
+    
+    // Get subfolders
+    $stmt = $pdo->prepare("
+        SELECT id, name
+        FROM folders 
+        WHERE parent_id = ? AND user_id = ? AND deleted_at IS NULL
+    ");
+    $stmt->execute([$folderId, $userId]);
+    $subfolders = $stmt->fetchAll();
+    
+    foreach ($subfolders as $subfolder) {
+        $subPath = ($basePath ? $basePath . '/' : '') . $subfolder['name'];
+        $subFiles = getFolderFilesRecursive($pdo, $subfolder['id'], $userId, $subPath);
+        $files = array_merge($files, $subFiles);
+    }
+    
+    return $files;
+}
+?>
+
+index.php
+
+<?php
+// apis/v1/files/index.php
+// Complete File API with Cluster Support
+
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+require_once __DIR__ . '/../bootstrap.php';
+
+// Check if user is logged in
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit();
+}
+
+$userId = $_SESSION['user_id'];
+$method = $_SERVER['REQUEST_METHOD'];
+
+try {
+    switch($method) {
+        case 'GET':
+            handleGetRequest($pdo, $userId);
+            break;
+        case 'POST':
+            handlePostRequest($pdo, $userId);
+            break;
+        case 'PUT':
+            handlePutRequest($pdo, $userId);
+            break;
+        case 'DELETE':
+            handleDeleteRequest($pdo, $userId);
+            break;
+        default:
+            http_response_code(405);
+            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
+    }
+} catch (Exception $e) {
+    error_log("File API error: " . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+}
+
+// ============================================
+// GET - List Files with Cluster Support - FIXED
+// ============================================
+function handleGetRequest($pdo, $userId) {
+    $view = isset($_GET['view']) ? $_GET['view'] : 'my-drive';
+    $clusterSlug = $view;
+    $folderId = isset($_GET['folder_id']) && $_GET['folder_id'] !== '' ? (int)$_GET['folder_id'] : null;
+    $search = isset($_GET['search']) ? trim($_GET['search']) : null;
+
+    error_log("📂 GET Request - view: $view, folder_id: " . ($folderId ?? 'null') . ", search: " . ($search ?? 'null'));
+
+    // ============================================
+    // FIX: Get USER storage (total across all clusters)
+    // ============================================
+    $userStorage = getUserStorageInfo($pdo, $userId);
+
+    // ============================================
+    // SPECIAL CASE: Trash - FIXED
+    // ============================================
+    if ($clusterSlug === 'trash') {
+        $items = getTrashItems($pdo, $userId, $search);
+        echo json_encode([
+            'success' => true,
+            'cluster_id' => null,
+            'cluster_slug' => 'trash',
+            'items' => $items,
+            'storage' => $userStorage
+        ]);
+        return;
+    }
+
+    // ============================================
+    // SPECIAL CASE: Shared with Me
+    // ============================================
+    if ($clusterSlug === 'shared') {
+        $items = getSharedWithMeItems($pdo, $userId, $search);
+        $userStorage = getUserStorageInfo($pdo, $userId);
+        
+        echo json_encode([
+            'success' => true,
+            'cluster_id' => null,
+            'cluster_slug' => 'shared',
+            'items' => $items,
+            'storage' => $userStorage
+        ]);
+        return;
+    }
+
+    // ============================================
+    // SPECIAL CASE: Starred - FIXED
+    // ============================================
+    if ($clusterSlug === 'starred') {
+        $items = getStarredItems($pdo, $userId, $search);
+        echo json_encode([
+            'success' => true,
+            'cluster_id' => null,
+            'cluster_slug' => 'starred',
+            'items' => $items,
+            'storage' => $userStorage
+        ]);
+        return;
+    }
+
+    // ============================================
+    // SPECIAL CASE: My Drive
+    // ============================================
+    $isMyDrive = ($clusterSlug === 'my-drive' || $clusterSlug === 'drive' || $clusterSlug === 'home');
+    
+    if ($isMyDrive) {
+        $items = getMyDriveItems($pdo, $userId, $folderId, $search);
+        
+        echo json_encode([
+            'success' => true,
+            'cluster_id' => null,
+            'cluster_slug' => 'my-drive',
+            'items' => $items,
+            'storage' => $userStorage
+        ]);
+        return;
+    }
+
+    // ============================================
+    // OTHER CLUSTERS
+    // ============================================
+    
+    $clusterId = getClusterIdBySlug($pdo, $userId, $clusterSlug);
+    if (!$clusterId) {
+        $clusterId = getDefaultCluster($pdo, $userId);
+    }
+
+    if (!$clusterId) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'No clusters found']);
+        return;
+    }
+
+    try {
+        // ============================================
+        // Handle folder navigation properly
+        // ============================================
+        if ($folderId) {
+            $items = getFolderContents($pdo, $userId, $folderId);
+            error_log("📂 Folder contents count: " . count($items));
+        } else {
+            $items = getClusterRootItems($pdo, $userId, $clusterId, $clusterSlug, $search);
+            error_log("📂 Cluster root items count: " . count($items));
+        }
+
+        echo json_encode([
+            'success' => true,
+            'cluster_id' => $clusterId,
+            'cluster_slug' => $clusterSlug,
+            'items' => $items,
+            'storage' => $userStorage
+        ]);
+
+    } catch (Exception $e) {
+        error_log("❌ GET error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+}
+
+// ============================================
+// HELPER: Get User Storage Info
+// ============================================
+function getUserStorageInfo($pdo, $userId) {
+    try {
+        $stmt = $pdo->prepare("
+            SELECT storage_used, storage_limit 
+            FROM users 
+            WHERE id = ?
+        ");
+        $stmt->execute([$userId]);
+        $result = $stmt->fetch();
+        
+        if (!$result) {
+            return [
+                'used' => 0,
+                'limit' => 10737418240,
+                'used_formatted' => '0 B',
+                'limit_formatted' => '10 GB',
+                'percentage' => 0
+            ];
+        }
+        
+        $used = (int)$result['storage_used'];
+        $limit = (int)$result['storage_limit'];
+        $percentage = $limit > 0 ? ($used / $limit) * 100 : 0;
+        
+        return [
+            'used' => $used,
+            'limit' => $limit,
+            'used_formatted' => formatFileSize($used),
+            'limit_formatted' => formatFileSize($limit),
+            'percentage' => $percentage
+        ];
+    } catch (Exception $e) {
+        error_log("❌ getUserStorageInfo error: " . $e->getMessage());
+        return [
+            'used' => 0,
+            'limit' => 10737418240,
+            'used_formatted' => '0 B',
+            'limit_formatted' => '10 GB',
+            'percentage' => 0
+        ];
+    }
+}
+
+// ============================================
+// HELPER: Get Starred Items - FIXED (no duplicates)
+// ============================================
+// ============================================
+// HELPER: Get Starred Items - COMPLETE FIX
+// ============================================
+function getStarredItems($pdo, $userId, $search) {
+    try {
+        $items = [];
+        
+        // ============================================
+        // 1. Get user's OWN starred folders
+        // ============================================
+        $stmt = $pdo->prepare("
+            SELECT 
+                id, 
+                name as display_name, 
+                'folder' as type, 
+                created_at, 
+                is_starred, 
+                cluster_id, 
+                NULL as file_size, 
+                NULL as file_type,
+                1 as is_owner,
+                NULL as shared_by,
+                'owner' as star_type
+            FROM folders 
+            WHERE user_id = ? AND is_starred = 1 AND deleted_at IS NULL 
+        ");
+        $stmt->execute([$userId]);
+        $folders = $stmt->fetchAll();
+        $items = array_merge($items, $folders);
+
+        // ============================================
+        // 2. Get user's OWN starred files
+        // ============================================
+        $stmt = $pdo->prepare("
+            SELECT 
+                id, 
+                original_name as display_name, 
+                'file' as type, 
+                created_at, 
+                is_starred, 
+                cluster_id, 
+                file_size, 
+                file_type,
+                1 as is_owner,
+                NULL as shared_by,
+                'owner' as star_type
+            FROM files 
+            WHERE user_id = ? AND is_starred = 1 AND deleted_at IS NULL 
+        ");
+        $stmt->execute([$userId]);
+        $files = $stmt->fetchAll();
+        $items = array_merge($items, $files);
+
+        // ============================================
+        // 3. Get SHARED folders starred by this user
+        // ============================================
+        $stmt = $pdo->prepare("
+            SELECT 
+                f.id, 
+                f.name as display_name, 
+                'folder' as type, 
+                f.created_at, 
+                f.is_starred, 
+                f.cluster_id, 
+                NULL as file_size, 
+                NULL as file_type,
+                0 as is_owner,
+                u.username as shared_by,
+                'shared' as star_type
+            FROM user_starred_items usi
+            INNER JOIN folders f ON usi.item_id = f.id AND usi.item_type = 'folder'
+            INNER JOIN shared_items si ON si.item_id = f.id AND si.item_type = 'folder' AND si.shared_with_user_id = usi.user_id
+            INNER JOIN users u ON si.user_id = u.id
+            WHERE usi.user_id = ? 
+                AND f.deleted_at IS NULL
+                AND (si.expires_at IS NULL OR si.expires_at > NOW())
+        ");
+        $stmt->execute([$userId]);
+        $sharedFolders = $stmt->fetchAll();
+        
+        // Add shared folders (avoid duplicates)
+        foreach ($sharedFolders as $folder) {
+            $exists = false;
+            foreach ($items as $item) {
+                if ($item['id'] == $folder['id'] && $item['type'] === 'folder') {
+                    $exists = true;
+                    break;
+                }
+            }
+            if (!$exists) {
+                $items[] = $folder;
+            }
+        }
+
+        // ============================================
+        // 4. Get SHARED files starred by this user
+        // ============================================
+        $stmt = $pdo->prepare("
+            SELECT 
+                fl.id, 
+                fl.original_name as display_name, 
+                'file' as type, 
+                fl.created_at, 
+                fl.is_starred, 
+                fl.cluster_id, 
+                fl.file_size, 
+                fl.file_type,
+                0 as is_owner,
+                u.username as shared_by,
+                'shared' as star_type
+            FROM user_starred_items usi
+            INNER JOIN files fl ON usi.item_id = fl.id AND usi.item_type = 'file'
+            INNER JOIN shared_items si ON si.item_id = fl.id AND si.item_type = 'file' AND si.shared_with_user_id = usi.user_id
+            INNER JOIN users u ON si.user_id = u.id
+            WHERE usi.user_id = ? 
+                AND fl.deleted_at IS NULL
+                AND (si.expires_at IS NULL OR si.expires_at > NOW())
+        ");
+        $stmt->execute([$userId]);
+        $sharedFiles = $stmt->fetchAll();
+        
+        // Add shared files (avoid duplicates)
+        foreach ($sharedFiles as $file) {
+            $exists = false;
+            foreach ($items as $item) {
+                if ($item['id'] == $file['id'] && $item['type'] === 'file') {
+                    $exists = true;
+                    break;
+                }
+            }
+            if (!$exists) {
+                $items[] = $file;
+            }
+        }
+
+        // ============================================
+        // Apply search filter if provided
+        // ============================================
+        if ($search) {
+            $searchLower = strtolower($search);
+            $items = array_filter($items, function($item) use ($searchLower) {
+                return strpos(strtolower($item['display_name']), $searchLower) !== false;
+            });
+            $items = array_values($items);
+        }
+
+        // ============================================
+        // Format items
+        // ============================================
+        $formattedItems = array_map(function($item) {
+            $isFolder = isset($item['type']) && $item['type'] === 'folder';
+            $isShared = isset($item['star_type']) && $item['star_type'] === 'shared';
+            
+            return [
+                'id' => (int)$item['id'],
+                'name' => $item['display_name'],
+                'is_folder' => $isFolder,
+                'created_at' => $item['created_at'],
+                'is_starred' => true,
+                'file_size' => $isFolder ? null : (int)($item['file_size'] ?? 0),
+                'file_size_formatted' => $isFolder ? null : formatFileSize($item['file_size'] ?? 0),
+                'file_type' => $isFolder ? null : ($item['file_type'] ?? null),
+                'cluster_id' => (int)($item['cluster_id'] ?? 0),
+                'type' => $isFolder ? 'folder' : 'file',
+                'can_download' => true,
+                'is_shared' => $isShared,
+                'shared_by' => $item['shared_by'] ?? null,
+                'is_owner' => (bool)($item['is_owner'] ?? true)
+            ];
+        }, $items);
+
+        error_log("📊 Starred items found: " . count($formattedItems));
+        return $formattedItems;
+        
+    } catch (Exception $e) {
+        error_log("❌ getStarredItems error: " . $e->getMessage());
+        return [];
+    }
+}
+
+
+// ============================================
+// HELPER: Get My Drive Items
+// ============================================
+function getMyDriveItems($pdo, $userId, $folderId, $search) {
+    try {
+        error_log("📂 getMyDriveItems - folderId: " . ($folderId ?? 'null'));
+        
+        // If folderId is provided, show contents of that folder
+        if ($folderId) {
+            return getFolderContents($pdo, $userId, $folderId);
+        }
+        
+        // Show root level items across all clusters
+        // Get root folders (parent_id IS NULL)
+        $stmt = $pdo->prepare("
+            SELECT id, name as display_name, 'folder' as type, created_at, is_starred, cluster_id, NULL as file_size, NULL as file_type
+            FROM folders 
+            WHERE user_id = ? AND parent_id IS NULL AND deleted_at IS NULL 
+            ORDER BY name ASC
+        ");
+        $stmt->execute([$userId]);
+        $folders = $stmt->fetchAll();
+        error_log("📁 Found " . count($folders) . " root folders");
+
+        // Get root files (folder_id IS NULL)
+        $stmt = $pdo->prepare("
+            SELECT id, original_name as display_name, 'file' as type, created_at, is_starred, cluster_id, file_size, file_type
+            FROM files 
+            WHERE user_id = ? AND folder_id IS NULL AND deleted_at IS NULL 
+            ORDER BY original_name ASC
+        ");
+        $stmt->execute([$userId]);
+        $files = $stmt->fetchAll();
+        error_log("📄 Found " . count($files) . " root files");
+
+        $items = array_merge($folders, $files);
+
+        // Apply search filter if provided
+        if ($search) {
+            $searchLower = strtolower($search);
+            $items = array_filter($items, function($item) use ($searchLower) {
+                return strpos(strtolower($item['display_name']), $searchLower) !== false;
+            });
+            $items = array_values($items);
+        }
+
+        return formatItems($items);
+        
+    } catch (Exception $e) {
+        error_log("❌ getMyDriveItems error: " . $e->getMessage());
+        return [];
+    }
+}
+
+// ============================================
+// HELPER: Get Folder Contents
+// ============================================
+function getFolderContents($pdo, $userId, $folderId) {
+    try {
+        error_log("📂 getFolderContents called - folderId: $folderId");
+        
+        // First, verify the folder exists and belongs to the user
+        $stmt = $pdo->prepare("SELECT * FROM folders WHERE id = ? AND user_id = ? AND deleted_at IS NULL");
+        $stmt->execute([$folderId, $userId]);
+        $folder = $stmt->fetch();
+        
+        if (!$folder) {
+            error_log("❌ Folder $folderId not found for user $userId");
+            return [];
+        }
+        
+        error_log("✅ Folder found: " . $folder['name'] . " (cluster: " . $folder['cluster_id'] . ")");
+        
+        // Get subfolders in this folder
+        $stmt = $pdo->prepare("
+            SELECT id, name as display_name, 'folder' as type, created_at, is_starred, cluster_id, NULL as file_size, NULL as file_type
+            FROM folders 
+            WHERE user_id = ? AND parent_id = ? AND deleted_at IS NULL
+            ORDER BY name ASC
+        ");
+        $stmt->execute([$userId, $folderId]);
+        $subfolders = $stmt->fetchAll();
+        error_log("📁 Found " . count($subfolders) . " subfolders");
+
+        // Get files in this folder
+        $stmt = $pdo->prepare("
+            SELECT id, original_name as display_name, 'file' as type, created_at, is_starred, cluster_id, file_size, file_type
+            FROM files 
+            WHERE user_id = ? AND folder_id = ? AND deleted_at IS NULL
+            ORDER BY original_name ASC
+        ");
+        $stmt->execute([$userId, $folderId]);
+        $files = $stmt->fetchAll();
+        error_log("📄 Found " . count($files) . " files in folder");
+
+        $items = array_merge($subfolders, $files);
+
+        return formatItems($items);
+        
+    } catch (Exception $e) {
+        error_log("❌ getFolderContents error: " . $e->getMessage());
+        return [];
+    }
+}
+
+// ============================================
+// HELPER: Get Cluster Root Items
+// ============================================
+// ============================================
+// HELPER: Get Cluster Root Items - FIXED for Documents
+// ============================================
+function getClusterRootItems($pdo, $userId, $clusterId, $clusterSlug, $search) {
+    try {
+        error_log("📂 getClusterRootItems - clusterId: $clusterId, slug: $clusterSlug");
+        
+        // Get root folders for this cluster (parent_id IS NULL)
+        $stmt = $pdo->prepare("
+            SELECT id, name as display_name, 'folder' as type, created_at, is_starred, cluster_id, NULL as file_size, NULL as file_type
+            FROM folders 
+            WHERE user_id = ? AND cluster_id = ? AND parent_id IS NULL AND deleted_at IS NULL 
+            ORDER BY name ASC
+        ");
+        $stmt->execute([$userId, $clusterId]);
+        $folders = $stmt->fetchAll();
+        error_log("📁 Found " . count($folders) . " root folders for cluster");
+
+        // Get root files for this cluster (folder_id IS NULL)
+        $fileCondition = "";
+        $params = [$userId, $clusterId];
+        
+        switch($clusterSlug) {
+            case 'projects':
+                $fileCondition = "AND (file_type LIKE '%zip%' OR file_type LIKE '%rar%' OR file_type LIKE '%7z%' OR file_type LIKE '%tar%' OR file_type LIKE '%gz%')";
+                break;
+            case 'images':
+                $fileCondition = "AND (file_type LIKE '%image%' OR file_type LIKE 'image/%')";
+                break;
+            case 'videos':
+                $fileCondition = "AND (file_type LIKE '%video%' OR file_type LIKE 'video/%' OR file_type LIKE '%audio%' OR file_type LIKE 'audio/%')";
+                break;
+            case 'documents':
+                // ============================================
+                // FIX: Documents should show ALL document types including code files
+                // ============================================
+                $fileCondition = "AND (
+                    file_type LIKE '%pdf%' OR 
+                    file_type LIKE '%msword%' OR 
+                    file_type LIKE '%document%' OR 
+                    file_type LIKE '%text%' OR 
+                    file_type LIKE '%spreadsheet%' OR 
+                    file_type LIKE '%presentation%' OR
+                    file_type LIKE '%vnd.openxmlformats%' OR
+                    file_type LIKE '%javascript%' OR
+                    file_type LIKE '%css%' OR
+                    file_type LIKE '%html%' OR
+                    file_type LIKE '%json%' OR
+                    file_type LIKE '%xml%' OR
+                    file_type LIKE '%php%' OR
+                    file_type LIKE '%sql%' OR
+                    file_type LIKE '%x-php%' OR
+                    file_type LIKE '%octet-stream%'
+                )";
+                break;
+            case 'archives':
+                $fileCondition = "AND (file_type LIKE '%zip%' OR file_type LIKE '%rar%' OR file_type LIKE '%7z%' OR file_type LIKE '%tar%' OR file_type LIKE '%gz%' OR file_type LIKE 'application/x-%')";
+                break;
+            default:
+                $fileCondition = "";
+        }
+        
+        $sql = "
+            SELECT id, original_name as display_name, 'file' as type, created_at, is_starred, cluster_id, file_size, file_type
+            FROM files 
+            WHERE user_id = ? AND cluster_id = ? AND folder_id IS NULL AND deleted_at IS NULL
+            $fileCondition
+            ORDER BY original_name ASC
+        ";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $files = $stmt->fetchAll();
+        error_log("📄 Found " . count($files) . " root files for cluster");
+
+        $items = array_merge($folders, $files);
+
+        // Apply search filter if provided
+        if ($search) {
+            $searchLower = strtolower($search);
+            $items = array_filter($items, function($item) use ($searchLower) {
+                return strpos(strtolower($item['display_name']), $searchLower) !== false;
+            });
+            $items = array_values($items);
+        }
+
+        return formatItems($items);
+        
+    } catch (Exception $e) {
+        error_log("❌ getClusterRootItems error: " . $e->getMessage());
+        return [];
+    }
+}
+
+// ============================================
+// HELPER: Get Trash Items - ROOT ONLY (No subfolders or files)
+// ============================================
+function getTrashItems($pdo, $userId, $search) {
+    try {
+        // ============================================
+        // FIX: Get ONLY root trashed folders 
+        // (folders whose parent is NOT in trash)
+        // ============================================
+        $stmt = $pdo->prepare("
+            SELECT 
+                id, 
+                name as display_name, 
+                'folder' as type, 
+                created_at, 
+                is_starred, 
+                deleted_at, 
+                cluster_id, 
+                NULL as file_size, 
+                NULL as file_type,
+                NULL as folder_id
+            FROM folders f
+            WHERE user_id = ? AND deleted_at IS NOT NULL 
+            AND (
+                parent_id IS NULL 
+                OR NOT EXISTS (
+                    SELECT 1 FROM folders parent 
+                    WHERE parent.id = f.parent_id 
+                    AND parent.user_id = ? 
+                    AND parent.deleted_at IS NOT NULL
+                )
+            )
+            ORDER BY deleted_at DESC
+        ");
+        $stmt->execute([$userId, $userId]);
+        $folders = $stmt->fetchAll();
+
+        // ============================================
+        // FIX: Get ONLY root trashed files 
+        // (files whose folder is NOT in trash or folder_id is NULL)
+        // ============================================
+        $stmt = $pdo->prepare("
+            SELECT 
+                id, 
+                original_name as display_name, 
+                'file' as type, 
+                created_at, 
+                file_size, 
+                file_type, 
+                is_starred, 
+                deleted_at, 
+                cluster_id,
+                folder_id
+            FROM files 
+            WHERE user_id = ? AND deleted_at IS NOT NULL 
+            AND (
+                folder_id IS NULL 
+                OR NOT EXISTS (
+                    SELECT 1 FROM folders parent 
+                    WHERE parent.id = files.folder_id 
+                    AND parent.user_id = ? 
+                    AND parent.deleted_at IS NOT NULL
+                )
+            )
+            ORDER BY deleted_at DESC
+        ");
+        $stmt->execute([$userId, $userId]);
+        $files = $stmt->fetchAll();
+
+        // Combine
+        $items = array_merge($folders, $files);
+
+        // Apply search filter if provided
+        if ($search) {
+            $searchLower = strtolower($search);
+            $items = array_filter($items, function($item) use ($searchLower) {
+                return strpos(strtolower($item['display_name']), $searchLower) !== false;
+            });
+            $items = array_values($items);
+        }
+
+        return formatItems($items);
+        
+    } catch (Exception $e) {
+        error_log("❌ getTrashItems error: " . $e->getMessage());
+        return [];
+    }
+}
+
+// ============================================
+// HELPER: Format Trash Items with hierarchy
+// ============================================
+function formatTrashItems($items) {
+    $formatted = [];
+    
+    // First, build a map of all items
+    $itemMap = [];
+    $folderIds = [];
+    $fileIds = [];
+    
+    foreach ($items as $item) {
+        $isFolder = $item['type'] === 'folder';
+        $itemMap[$item['id']] = [
+            'id' => (int)$item['id'],
+            'name' => $item['display_name'],
+            'is_folder' => $isFolder,
+            'created_at' => $item['created_at'],
+            'deleted_at' => $item['deleted_at'],
+            'is_starred' => (bool)($item['is_starred'] ?? false),
+            'file_size' => $isFolder ? null : (int)($item['file_size'] ?? 0),
+            'file_size_formatted' => $isFolder ? null : formatFileSize($item['file_size'] ?? 0),
+            'file_type' => $isFolder ? null : ($item['file_type'] ?? null),
+            'cluster_id' => (int)($item['cluster_id'] ?? 0),
+            'type' => $isFolder ? 'folder' : 'file',
+            'parent_id' => $isFolder ? ($item['parent_id'] ?? null) : ($item['folder_id'] ?? null),
+            'is_shared' => false,
+            'can_download' => true,
+            'is_owner' => true,
+            'item_type' => $item['item_type'] ?? ($isFolder ? 'folder' : 'file')
+        ];
+        
+        if ($isFolder) {
+            $folderIds[] = $item['id'];
+        } else {
+            $fileIds[] = $item['id'];
+        }
+    }
+    
+    // ============================================
+    // Build hierarchy: Only show root items first
+    // ============================================
+    foreach ($itemMap as $id => &$item) {
+        $parentId = $item['parent_id'];
+        
+        // Check if parent exists and is in trash
+        if ($parentId && isset($itemMap[$parentId])) {
+            // This item has a parent that's also in trash
+            // Keep it but mark it as having a parent in trash
+            $item['parent_in_trash'] = true;
+            $item['parent_name'] = $itemMap[$parentId]['name'];
+        }
+    }
+    
+    // Sort: Folders first, then files
+    usort($items, function($a, $b) {
+        if ($a['type'] === 'folder' && $b['type'] === 'file') return -1;
+        if ($a['type'] === 'file' && $b['type'] === 'folder') return 1;
+        return strcasecmp($a['display_name'], $b['display_name']);
+    });
+    
+    // Return all items with hierarchy info
+    return array_values($itemMap);
+}
+
+// ============================================
+// POST - Upload Files - FIXED (Folders go to Projects)
+// ============================================
+function handlePostRequest($pdo, $userId) {
+    // Check if files were uploaded
+    if (!isset($_FILES) || empty($_FILES)) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'No files uploaded']);
+        exit();
+    }
+
+    // Get cluster from POST (if specified)
+    $clusterSlug = isset($_POST['cluster']) ? $_POST['cluster'] : null;
+    $folderId = isset($_POST['folder_id']) && $_POST['folder_id'] !== '' && $_POST['folder_id'] !== 'null' 
+        ? (int)$_POST['folder_id'] 
+        : null;
+    $paths = isset($_POST['paths']) ? $_POST['paths'] : [];
+    $rootFolder = isset($_POST['root_folder']) ? $_POST['root_folder'] : null;
+    $isFolderUpload = !empty($rootFolder);
+
+    // Process uploaded files - handle both single and multiple files
+    $files = [];
+    if (isset($_FILES['files'])) {
+        if (is_array($_FILES['files']['name'])) {
+            // Multiple files
+            for ($i = 0; $i < count($_FILES['files']['name']); $i++) {
+                if ($_FILES['files']['error'][$i] === UPLOAD_ERR_OK) {
+                    $files[] = [
+                        'name' => $_FILES['files']['name'][$i],
+                        'type' => $_FILES['files']['type'][$i],
+                        'tmp_name' => $_FILES['files']['tmp_name'][$i],
+                        'error' => $_FILES['files']['error'][$i],
+                        'size' => $_FILES['files']['size'][$i],
+                        'path' => isset($paths[$i]) ? $paths[$i] : ''
+                    ];
+                }
+            }
+        } else {
+            // Single file
+            if ($_FILES['files']['error'] === UPLOAD_ERR_OK) {
+                $files[] = [
+                    'name' => $_FILES['files']['name'],
+                    'type' => $_FILES['files']['type'],
+                    'tmp_name' => $_FILES['files']['tmp_name'],
+                    'error' => $_FILES['files']['error'],
+                    'size' => $_FILES['files']['size'],
+                    'path' => ''
+                ];
+            }
+        }
+    } elseif (isset($_FILES['file'])) {
+        if ($_FILES['file']['error'] === UPLOAD_ERR_OK) {
+            $files[] = [
+                'name' => $_FILES['files']['name'],
+                'type' => $_FILES['files']['type'],
+                'tmp_name' => $_FILES['files']['tmp_name'],
+                'error' => $_FILES['files']['error'],
+                'size' => $_FILES['files']['size'],
+                'path' => ''
+            ];
+        }
+    }
+
+    if (empty($files)) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'No valid files to upload']);
+        exit();
+    }
+
+    // ============================================
+    // AUTO-CATEGORIZE: Determine cluster
+    // ============================================
+    // If it's a folder upload, default to "projects"
+    if ($isFolderUpload) {
+        if (!$clusterSlug || $clusterSlug === 'home' || $clusterSlug === 'my-drive' || $clusterSlug === 'drive') {
+            $clusterSlug = 'projects';
+            error_log("📁 Folder upload - auto-detected cluster: $clusterSlug");
+        }
+    } else {
+        // For file uploads, detect based on file type
+        if (!$clusterSlug || $clusterSlug === 'home' || $clusterSlug === 'my-drive' || $clusterSlug === 'drive') {
+            $file = $files[0];
+            $fileType = $file['type'];
+            $fileName = strtolower($file['name']);
+            $clusterSlug = detectClusterFromFile($fileType, $fileName);
+            error_log("📤 File upload - auto-detected cluster: $clusterSlug for file: " . $file['name']);
+        }
+    }
+    
+    // Get cluster ID from slug
+    $clusterId = getClusterIdBySlug($pdo, $userId, $clusterSlug);
+    if (!$clusterId) {
+        $clusterId = getDefaultCluster($pdo, $userId);
+    }
+    
+    if (!$clusterId) {
+        addClustersForUser($pdo, $userId);
+        $clusterId = getDefaultCluster($pdo, $userId);
+    }
+
+    if (!$clusterId) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'No cluster found']);
+        exit();
+    }
+
+    // If folder_id is provided, use that folder's cluster
+    if ($folderId) {
+        $stmt = $pdo->prepare("SELECT cluster_id FROM folders WHERE id = ? AND user_id = ? AND deleted_at IS NULL");
+        $stmt->execute([$folderId, $userId]);
+        $folder = $stmt->fetch();
+        if ($folder) {
+            $clusterId = $folder['cluster_id'];
+            $stmt = $pdo->prepare("SELECT slug FROM storage_clusters WHERE id = ?");
+            $stmt->execute([$clusterId]);
+            $cluster = $stmt->fetch();
+            if ($cluster) {
+                $clusterSlug = $cluster['slug'];
+            }
+        }
+    }
+    
+    error_log("📤 Final cluster: $clusterSlug (ID: $clusterId)");
+
+    $uploadedFiles = [];
+    $errors = [];
+    $createdFolders = [];
+    $rootFolderId = $folderId;
+
+    // Check storage
+    $totalSize = array_sum(array_column($files, 'size'));
+    $used = getUserStorageUsed($pdo, $userId);
+    $limit = getUserStorageLimit($pdo, $userId);
+    $available = $limit - $used;
+
+    if ($totalSize > $available) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Not enough storage available. Need ' . formatFileSize($totalSize) . ', available: ' . formatFileSize($available)
+        ]);
+        exit();
+    }
+
+    // Create user directory
+    $userDir = UPLOAD_PATH . '/user_' . $userId . '/';
+    if (!file_exists($userDir)) {
+        mkdir($userDir, 0755, true);
+    }
+    
+    // Use the correct cluster slug for directory
+    $clusterDir = $userDir . $clusterSlug . '/';
+    if (!file_exists($clusterDir)) {
+        mkdir($clusterDir, 0755, true);
+    }
+
+    // Create root folder for folder upload
+    if ($isFolderUpload && $rootFolder) {
+        // Check if root folder already exists
+        $stmt = $pdo->prepare("
+            SELECT id FROM folders 
+            WHERE user_id = ? AND cluster_id = ? AND parent_id = ? AND name = ? AND deleted_at IS NULL
+        ");
+        $stmt->execute([$userId, $clusterId, $folderId, $rootFolder]);
+        $existing = $stmt->fetch();
+
+        if ($existing) {
+            $rootFolderId = $existing['id'];
+        } else {
+            // Create root folder in database
+            $stmt = $pdo->prepare("
+                INSERT INTO folders (user_id, cluster_id, parent_id, name) 
+                VALUES (?, ?, ?, ?)
+            ");
+            $stmt->execute([$userId, $clusterId, $folderId, $rootFolder]);
+            $rootFolderId = $pdo->lastInsertId();
+            $createdFolders[] = $rootFolder;
+            
+            // Create physical folder
+            $rootPath = $clusterDir . $rootFolder . '/';
+            if (!file_exists($rootPath)) {
+                mkdir($rootPath, 0755, true);
+            }
+        }
+    }
+
+    // Process each file with proper path handling
+    foreach ($files as $file) {
+        $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($extension, ALLOWED_EXTENSIONS)) {
+            $errors[] = 'File "' . $file['name'] . '" type not allowed';
+            continue;
+        }
+
+        if ($file['size'] > MAX_FILE_SIZE) {
+            $errors[] = 'File "' . $file['name'] . '" exceeds maximum allowed size';
+            continue;
+        }
+
+        $originalName = $file['name'];
+        $filename = uniqid() . '.' . $extension;
+        $targetFolderId = $rootFolderId;
+        $relativePath = isset($file['path']) ? $file['path'] : '';
+        
+        // Determine file path
+        if ($isFolderUpload && $rootFolder) {
+            $filePath = $clusterDir . $rootFolder . '/';
+        } else {
+            $filePath = $clusterDir;
+        }
+
+        // Handle nested folders in path
+        if (!empty($relativePath)) {
+            $pathParts = explode('/', rtrim($relativePath, '/'));
+            $currentParent = $rootFolderId;
+            $currentPhysicalPath = $isFolderUpload ? $clusterDir . $rootFolder . '/' : $clusterDir;
+
+            foreach ($pathParts as $folderName) {
+                if (empty($folderName)) continue;
+
+                $currentPhysicalPath .= $folderName . '/';
+                if (!file_exists($currentPhysicalPath)) {
+                    mkdir($currentPhysicalPath, 0755, true);
+                }
+
+                // Check if folder exists in database
+                $stmt = $pdo->prepare("
+                    SELECT id FROM folders 
+                    WHERE user_id = ? AND cluster_id = ? AND parent_id = ? AND name = ? AND deleted_at IS NULL
+                ");
+                $stmt->execute([$userId, $clusterId, $currentParent, $folderName]);
+                $existing = $stmt->fetch();
+
+                if ($existing) {
+                    $currentParent = $existing['id'];
+                } else {
+                    // Create subfolder in database
+                    $stmt = $pdo->prepare("
+                        INSERT INTO folders (user_id, cluster_id, parent_id, name) 
+                        VALUES (?, ?, ?, ?)
+                    ");
+                    $stmt->execute([$userId, $clusterId, $currentParent, $folderName]);
+                    $currentParent = $pdo->lastInsertId();
+                    $createdFolders[] = $folderName;
+                }
+            }
+
+            $targetFolderId = $currentParent;
+            $filePath = $currentPhysicalPath;
+        }
+
+        // Final file path
+        $filePath .= $originalName;
+
+        // Get file category
+        $category = getFileCategory($file['type']);
+
+        // Move file
+        if (move_uploaded_file($file['tmp_name'], $filePath)) {
+            try {
+                // Insert into database
+                $stmt = $pdo->prepare("
+                    INSERT INTO files (user_id, cluster_id, folder_id, filename, original_name, file_path, file_size, file_type, file_category) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([
+                    $userId, 
+                    $clusterId,
+                    $targetFolderId, 
+                    $filename,
+                    $originalName, 
+                    $filePath, 
+                    $file['size'], 
+                    $file['type'], 
+                    $category
+                ]);
+                $uploadedFiles[] = $file['name'];
+            } catch (Exception $e) {
+                if (file_exists($filePath)) {
+                    // If file already exists, add a suffix
+                    $pathInfo = pathinfo($originalName);
+                    $newName = $pathInfo['filename'] . '_' . time() . '.' . $pathInfo['extension'];
+                    $filePath = dirname($filePath) . '/' . $newName;
+                    $originalName = $newName;
+                }
+                $errors[] = 'Database error for file "' . $file['name'] . '": ' . $e->getMessage();
+            }
+        } else {
+            $errors[] = 'Failed to move file "' . $file['name'] . '"';
+        }
+    }
+
+    // Return proper response
+    if (count($uploadedFiles) > 0) {
+        $message = count($uploadedFiles) . ' file(s) uploaded successfully to "' . $clusterSlug . '" cluster';
+        if (count($createdFolders) > 0) {
+            $message .= ', ' . count($createdFolders) . ' folder(s) created';
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => $message,
+            'uploaded' => $uploadedFiles,
+            'folders_created' => $createdFolders,
+            'root_folder_id' => $rootFolderId,
+            'cluster_id' => $clusterId,
+            'cluster_slug' => $clusterSlug,
+            'total_files' => count($uploadedFiles),
+            'total_folders' => count($createdFolders),
+            'errors' => $errors
+        ]);
+    } else {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => 'No files were uploaded successfully',
+            'errors' => $errors
+        ]);
+    }
+}
+
+// ============================================
+// HELPER: Detect cluster from file type
+// ============================================
+
+// ============================================
+// HELPER: Detect cluster from file type - FIXED
+// ============================================
+function detectClusterFromFile($mimeType, $fileName) {
+    $fileName = strtolower($fileName);
+    $extension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+    
+    error_log("🔍 Detecting cluster for: $fileName, mime: $mimeType, ext: $extension");
+    
+    // ============================================
+    // FIX: ADD VIDEO DETECTION
+    // ============================================
+    $videoTypes = [
+        'video/mp4', 'video/webm', 'video/avi', 'video/mkv', 
+        'video/mov', 'video/wmv', 'video/flv', 'video/mpeg',
+        'video/quicktime', 'video/x-msvideo', 'video/x-flv',
+        'video/m4v', 'video/3gpp', 'video/ogv'
+    ];
+    $videoExtensions = ['mp4', 'webm', 'avi', 'mkv', 'mov', 'wmv', 'flv', 
+                        'm4v', 'mpg', 'mpeg', '3gp', 'ogv'];
+    if (in_array($mimeType, $videoTypes) || in_array($extension, $videoExtensions)) {
+        error_log("✅ Detected as VIDEO");
+        return 'videos';
+    }
+    
+    // ============================================
+    // FIX: ADD AUDIO DETECTION
+    // ============================================
+    $audioTypes = [
+        'audio/mpeg', 'audio/wav', 'audio/flac', 'audio/aac', 
+        'audio/ogg', 'audio/x-wav', 'audio/mp4', 'audio/m4a'
+    ];
+    $audioExtensions = ['mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a', 'opus'];
+    if (in_array($mimeType, $audioTypes) || in_array($extension, $audioExtensions)) {
+        error_log("✅ Detected as AUDIO");
+        return 'audio';
+    }
+    
+    // Images
+    $imageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/x-icon'];
+    $imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+    if (in_array($mimeType, $imageTypes) || in_array($extension, $imageExtensions)) {
+        error_log("✅ Detected as IMAGE");
+        return 'images';
+    }
+    
+    // Archives (ZIP, RAR, 7z, etc.)
+    $archiveTypes = ['application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed', 'application/x-tar', 'application/gzip'];
+    $archiveExtensions = ['zip', 'rar', '7z', 'tar', 'gz'];
+    if (in_array($mimeType, $archiveTypes) || in_array($extension, $archiveExtensions)) {
+        error_log("✅ Detected as ARCHIVE");
+        return 'archives';
+    }
+    
+    // Code files → Documents
+    $codeExtensions = ['php', 'js', 'css', 'html', 'htm', 'py', 'java', 'cpp', 'c', 'h', 'json', 'xml', 'yaml', 'yml', 'sql', 'sh', 'bash', 'rb', 'go', 'rs', 'ts', 'jsx', 'tsx', 'vue'];
+    if (in_array($extension, $codeExtensions)) {
+        error_log("✅ Detected as CODE → DOCUMENTS");
+        return 'documents';
+    }
+    
+    // Documents (PDF, Word, Excel, PowerPoint, Text)
+    $docTypes = [
+        'application/pdf', 
+        'application/msword', 
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'text/plain',
+        'text/rtf',
+        'text/csv',
+        'application/rtf',
+        'application/vnd.oasis.opendocument.text',
+        'application/vnd.oasis.opendocument.spreadsheet',
+        'application/vnd.oasis.opendocument.presentation',
+        'application/octet-stream'
+    ];
+    $docExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf', 'odt', 'ods', 'odp', 'csv'];
+    if (in_array($mimeType, $docTypes) || in_array($extension, $docExtensions)) {
+        error_log("✅ Detected as DOCUMENT");
+        return 'documents';
+    }
+    
+    // If we can't detect, check extension one more time
+    if (in_array($extension, $docExtensions) || in_array($extension, $codeExtensions)) {
+        error_log("✅ Detected as DOCUMENT (by extension fallback)");
+        return 'documents';
+    }
+    
+    // Default: My Drive
+    error_log("⚠️ Defaulting to MY-DRIVE for: $fileName");
+    return 'my-drive';
+}
+
+// ============================================
+// PUT - Update File
+// ============================================
+
+// ============================================
+// PUT - Update File - FIXED
+// ============================================
+function handlePutRequest($pdo, $userId) {
+    $input = json_decode(file_get_contents('php://input'), true);
+
+    if (!$input) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Invalid JSON data']);
+        exit();
+    }
+
+    $fileId = isset($input['file_id']) ? (int)$input['file_id'] : null;
+    $action = isset($input['action']) ? $input['action'] : 'rename';
+    $newName = trim($input['new_name'] ?? '');
+
+    if (!$fileId) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'File ID required']);
+        exit();
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM files WHERE id = ? AND deleted_at IS NULL");
+        $stmt->execute([$fileId]);
+        $file = $stmt->fetch();
+
+        if (!$file) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'File not found']);
+            exit();
+        }
+
+        $isOwner = ($file['user_id'] == $userId);
+        $isShared = false;
+        
+        // If not owner, check if shared with user
+        if (!$isOwner) {
+            $stmt = $pdo->prepare("
+                SELECT id FROM shared_items 
+                WHERE item_type = 'file' AND item_id = ? AND shared_with_user_id = ?
+                AND (expires_at IS NULL OR expires_at > NOW())
+            ");
+            $stmt->execute([$fileId, $userId]);
+            if ($stmt->fetch()) {
+                $isShared = true;
+            } else {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'message' => 'Access denied']);
+                exit();
+            }
+        }
+
+        if ($action === 'rename') {
+            if (!$isOwner) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'message' => 'Only the owner can rename this file']);
+                exit();
+            }
+            
+            if (empty($newName)) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'New name required']);
+                exit();
+            }
+            $stmt = $pdo->prepare("UPDATE files SET original_name = ? WHERE id = ? AND user_id = ?");
+            $stmt->execute([$newName, $fileId, $userId]);
+            echo json_encode(['success' => true, 'message' => 'File renamed successfully']);
+            exit();
+            
+        } elseif ($action === 'star') {
+            // ============================================
+            // FIX: Star for both owner and shared users
+            // ============================================
+            if ($isOwner) {
+                // Owner: update the file's is_starred
+                $newStatus = $file['is_starred'] ? 0 : 1;
+                $stmt = $pdo->prepare("UPDATE files SET is_starred = ? WHERE id = ? AND user_id = ?");
+                $stmt->execute([$newStatus, $fileId, $userId]);
+                
+                // Clear any output buffers
+                while (ob_get_level()) ob_end_clean();
+                
+                echo json_encode([
+                    'success' => true,
+                    'message' => $newStatus ? 'File starred' : 'File unstarred',
+                    'is_starred' => (bool)$newStatus
+                ]);
+                exit();
+            } else {
+                // Shared user: use user_starred_items table
+                $stmt = $pdo->prepare("
+                    SELECT id FROM user_starred_items 
+                    WHERE user_id = ? AND item_type = 'file' AND item_id = ?
+                ");
+                $stmt->execute([$userId, $fileId]);
+                $exists = $stmt->fetch();
+                
+                if ($exists) {
+                    // Unstar
+                    $stmt = $pdo->prepare("
+                        DELETE FROM user_starred_items 
+                        WHERE user_id = ? AND item_type = 'file' AND item_id = ?
+                    ");
+                    $stmt->execute([$userId, $fileId]);
+                    
+                    // Clear any output buffers
+                    while (ob_get_level()) ob_end_clean();
+                    
+                    echo json_encode([
+                        'success' => true,
+                        'message' => 'File unstarred',
+                        'is_starred' => false
+                    ]);
+                    exit();
+                } else {
+                    // Star
+                    $stmt = $pdo->prepare("
+                        INSERT INTO user_starred_items (user_id, item_type, item_id) 
+                        VALUES (?, 'file', ?)
+                    ");
+                    $stmt->execute([$userId, $fileId]);
+                    
+                    // Clear any output buffers
+                    while (ob_get_level()) ob_end_clean();
+                    
+                    echo json_encode([
+                        'success' => true,
+                        'message' => 'File starred',
+                        'is_starred' => true
+                    ]);
+                    exit();
+                }
+            }
+            
+        } elseif ($action === 'restore') {
+            if (!$isOwner) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'message' => 'Only the owner can restore this file']);
+                exit();
+            }
+            
+            // Get the file
+            $stmt = $pdo->prepare("SELECT * FROM files WHERE id = ? AND user_id = ?");
+            $stmt->execute([$fileId, $userId]);
+            $file = $stmt->fetch();
+            
+            if (!$file) {
+                http_response_code(404);
+                echo json_encode(['success' => false, 'message' => 'File not found']);
+                exit();
+            }
+            
+            // Check if parent folder exists and is not in trash
+            if ($file['folder_id']) {
+                $stmt = $pdo->prepare("
+                    SELECT id FROM folders 
+                    WHERE id = ? AND user_id = ? AND deleted_at IS NULL
+                ");
+                $stmt->execute([$file['folder_id'], $userId]);
+                $folder = $stmt->fetch();
+                
+                if (!$folder) {
+                    http_response_code(400);
+                    echo json_encode([
+                        'success' => false, 
+                        'message' => 'Parent folder is in trash. Please restore the folder first.'
+                    ]);
+                    exit();
+                }
+            }
+            
+            $stmt = $pdo->prepare("UPDATE files SET deleted_at = NULL WHERE id = ? AND user_id = ?");
+            $stmt->execute([$fileId, $userId]);
+            echo json_encode(['success' => true, 'message' => 'File restored successfully']);
+            exit();
+            
+        } elseif ($action === 'open') {
+            $stmt = $pdo->prepare("SELECT deleted_at FROM files WHERE id = ? AND user_id = ?");
+            $stmt->execute([$fileId, $userId]);
+            $file = $stmt->fetch();
+            
+            if ($file && $file['deleted_at'] !== null) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'message' => 'Cannot open file in trash']);
+                exit();
+            }
+            $stmt = $pdo->prepare("UPDATE files SET last_opened = NOW() WHERE id = ? AND user_id = ?");
+            $stmt->execute([$fileId, $userId]);
+            echo json_encode(['success' => true]);
+            exit();
+            
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Invalid action']);
+            exit();
+        }
+    } catch (Exception $e) {
+        // Clear any output buffers
+        while (ob_get_level()) ob_end_clean();
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+        exit();
+    }
+}
+
+// ============================================
+// DELETE - Delete File - COMPLETE FIX
+// ============================================
+function handleDeleteRequest($pdo, $userId) {
+    // ============================================
+    // FIX: Get input from both JSON and GET parameters
+    // ============================================
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    $fileId = null;
+    $folderId = null;
+    $permanent = false;
+    
+    // Try to get from JSON first
+    if ($input && !empty($input)) {
+        $fileId = isset($input['file_id']) ? (int)$input['file_id'] : null;
+        $folderId = isset($input['folder_id']) ? (int)$input['folder_id'] : null;
+        $permanent = isset($input['permanent']) ? (bool)$input['permanent'] : false;
+    }
+    
+    // If not found in JSON, try GET parameters
+    if (!$fileId && !$folderId) {
+        $fileId = isset($_GET['file_id']) ? (int)$_GET['file_id'] : null;
+        $folderId = isset($_GET['folder_id']) ? (int)$_GET['folder_id'] : null;
+        $permanent = isset($_GET['permanent']) ? $_GET['permanent'] === 'true' : false;
+    }
+    
+    // If we have folder_id, handle folder deletion
+    if ($folderId) {
+        handleFolderDelete($pdo, $userId, $folderId, $permanent);
+        return;
+    }
+    
+    // If no file_id, return error
+    if (!$fileId) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'File ID required']);
+        exit();
+    }
+    
+    try {
+        // ============================================
+        // FIX: Check if file exists (including trash)
+        // ============================================
+        $stmt = $pdo->prepare("SELECT * FROM files WHERE id = ? AND user_id = ?");
+        $stmt->execute([$fileId, $userId]);
+        $file = $stmt->fetch();
+
+        if (!$file) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'File not found']);
+            exit();
+        }
+
+        $isOwner = ($file['user_id'] == $userId);
+
+        if ($isOwner) {
+            // ============================================
+            // Owner: move to trash or permanently delete
+            // ============================================
+            if ($permanent || $file['deleted_at'] !== null) {
+                // Permanent delete - remove from database and disk
+                $pdo->beginTransaction();
+                
+                // Delete from database
+                $stmt = $pdo->prepare("DELETE FROM files WHERE id = ? AND user_id = ?");
+                $stmt->execute([$fileId, $userId]);
+
+                // Delete physical file
+                if (file_exists($file['file_path'])) {
+                    unlink($file['file_path']);
+                }
+                
+                // Update storage usage
+                $stmt = $pdo->prepare("UPDATE users SET storage_used = storage_used - ? WHERE id = ?");
+                $stmt->execute([$file['file_size'], $userId]);
+                
+                $pdo->commit();
+                
+                echo json_encode(['success' => true, 'message' => 'File permanently deleted']);
+            } else {
+                // Soft delete - move to trash
+                $stmt = $pdo->prepare("UPDATE files SET deleted_at = NOW() WHERE id = ? AND user_id = ?");
+                $stmt->execute([$fileId, $userId]);
+                echo json_encode(['success' => true, 'message' => 'File moved to trash']);
+            }
+        } else {
+            // ============================================
+            // Shared user - remove the share only
+            // ============================================
+            $pdo->beginTransaction();
+            
+            $stmt = $pdo->prepare("
+                DELETE FROM shared_items 
+                WHERE item_type = 'file' AND item_id = ? AND shared_with_user_id = ?
+            ");
+            $stmt->execute([$fileId, $userId]);
+            
+            // Also remove from starred items
+            $stmt = $pdo->prepare("
+                DELETE FROM user_starred_items 
+                WHERE user_id = ? AND item_type = 'file' AND item_id = ?
+            ");
+            $stmt->execute([$userId, $fileId]);
+            
+            $pdo->commit();
+            
+            echo json_encode(['success' => true, 'message' => 'File removed from your shared items']);
+        }
+    } catch (Exception $e) {
+        if (isset($pdo) && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+}
+
+// ============================================
+// HELPER: Handle Folder Delete
+// ============================================
+function handleFolderDelete($pdo, $userId, $folderId, $permanent) {
+    try {
+        // Get folder info
+        $stmt = $pdo->prepare("SELECT * FROM folders WHERE id = ? AND user_id = ?");
+        $stmt->execute([$folderId, $userId]);
+        $folder = $stmt->fetch();
+
+        if (!$folder) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Folder not found']);
+            exit();
+        }
+
+        if ($permanent || $folder['deleted_at'] !== null) {
+            // Permanent delete - remove folder and all contents
+            $pdo->beginTransaction();
+            
+            // Get all files in this folder (including subfolders recursively)
+            $fileIds = [];
+            $folderIds = [$folderId];
+            $totalSize = 0;
+            
+            // Get all subfolders recursively
+            $allFolderIds = getSubfolderIds($pdo, $folderId);
+            $folderIds = array_merge([$folderId], $allFolderIds);
+            
+            // Get all files in these folders
+            foreach ($folderIds as $fid) {
+                $stmt = $pdo->prepare("SELECT id, file_path, file_size FROM files WHERE folder_id = ? AND user_id = ?");
+                $stmt->execute([$fid, $userId]);
+                $files = $stmt->fetchAll();
+                foreach ($files as $file) {
+                    $fileIds[] = $file['id'];
+                    $totalSize += $file['file_size'];
+                    if (file_exists($file['file_path'])) {
+                        unlink($file['file_path']);
+                    }
+                }
+            }
+            
+            // Delete all files
+            if (!empty($fileIds)) {
+                $placeholders = implode(',', array_fill(0, count($fileIds), '?'));
+                $stmt = $pdo->prepare("DELETE FROM files WHERE id IN ($placeholders) AND user_id = ?");
+                $stmt->execute(array_merge($fileIds, [$userId]));
+            }
+            
+            // Delete all folders
+            $placeholders = implode(',', array_fill(0, count($folderIds), '?'));
+            $stmt = $pdo->prepare("DELETE FROM folders WHERE id IN ($placeholders) AND user_id = ?");
+            $stmt->execute(array_merge($folderIds, [$userId]));
+            
+            // Update storage usage
+            if ($totalSize > 0) {
+                $stmt = $pdo->prepare("UPDATE users SET storage_used = storage_used - ? WHERE id = ?");
+                $stmt->execute([$totalSize, $userId]);
+            }
+            
+            $pdo->commit();
+            
+            echo json_encode(['success' => true, 'message' => 'Folder and all contents permanently deleted']);
+        } else {
+            // Soft delete - move to trash
+            $stmt = $pdo->prepare("UPDATE folders SET deleted_at = NOW() WHERE id = ? AND user_id = ?");
+            $stmt->execute([$folderId, $userId]);
+            echo json_encode(['success' => true, 'message' => 'Folder moved to trash']);
+        }
+    } catch (Exception $e) {
+        if (isset($pdo) && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+}
+
+// ============================================
+// HELPER: Get all subfolder IDs recursively
+// ============================================
+function getSubfolderIds($pdo, $parentId) {
+    $result = [];
+    $stmt = $pdo->prepare("SELECT id FROM folders WHERE parent_id = ? AND deleted_at IS NULL");
+    $stmt->execute([$parentId]);
+    $subfolders = $stmt->fetchAll();
+    
+    foreach ($subfolders as $sub) {
+        $result[] = $sub['id'];
+        $result = array_merge($result, getSubfolderIds($pdo, $sub['id']));
+    }
+    
+    return $result;
+}
+
+// ============================================
+// HELPER: Check if user has access to item
+// ============================================
+
+function checkSharedAccess($pdo, $userId, $itemId, $itemType, $requiredPermission = 'view') {
+    try {
+        // Check if user is the owner
+        $table = $itemType === 'folder' ? 'folders' : 'files';
+        $stmt = $pdo->prepare("SELECT user_id FROM $table WHERE id = ? AND deleted_at IS NULL");
+        $stmt->execute([$itemId]);
+        $item = $stmt->fetch();
+        
+        if ($item && $item['user_id'] == $userId) {
+            return true; // Owner has full access
+        }
+        
+        // Check if shared with user
+        $permissionLevels = ['view' => 1, 'download' => 2, 'edit' => 3, 'share' => 4, 'full' => 5];
+        $requiredLevel = $permissionLevels[$requiredPermission] ?? 1;
+        
+        $stmt = $pdo->prepare("
+            SELECT permissions 
+            FROM shared_items 
+            WHERE item_type = ? AND item_id = ? AND shared_with_user_id = ?
+            AND (expires_at IS NULL OR expires_at > NOW())
+        ");
+        $stmt->execute([$itemType, $itemId, $userId]);
+        $share = $stmt->fetch();
+        
+        if ($share) {
+            $userLevel = $permissionLevels[$share['permissions']] ?? 0;
+            return $userLevel >= $requiredLevel;
+        }
+        
+        return false;
+        
+    } catch (Exception $e) {
+        error_log("Check shared access error: " . $e->getMessage());
+        return false;
+    }
+}
+
+// ============================================
+// HELPER: Get shared folder contents recursively
+// ============================================
+function getSharedFolderContents($pdo, $userId, $folderId, $ownerId) {
+    try {
+        $items = [];
+        
+        // Get folders inside this folder
+        $stmt = $pdo->prepare("
+            SELECT id, name as display_name, 'folder' as type, created_at, is_starred, cluster_id, NULL as file_size, NULL as file_type
+            FROM folders 
+            WHERE user_id = ? AND parent_id = ? AND deleted_at IS NULL
+            ORDER BY name ASC
+        ");
+        $stmt->execute([$ownerId, $folderId]);
+        $folders = $stmt->fetchAll();
+        
+        // Get files inside this folder
+        $stmt = $pdo->prepare("
+            SELECT id, original_name as display_name, 'file' as type, created_at, is_starred, cluster_id, file_size, file_type
+            FROM files 
+            WHERE user_id = ? AND folder_id = ? AND deleted_at IS NULL
+            ORDER BY original_name ASC
+        ");
+        $stmt->execute([$ownerId, $folderId]);
+        $files = $stmt->fetchAll();
+        
+        $items = array_merge($folders, $files);
+        
+        return formatItems($items);
+        
+    } catch (Exception $e) {
+        error_log("getSharedFolderContents error: " . $e->getMessage());
+        return [];
+    }
+}
+
+
+// ============================================
+// HELPER: Get shared file info
+// ============================================
+function getSharedFileInfo($pdo, $userId, $fileId) {
+    try {
+        // Check if user has access
+        $hasAccess = checkSharedAccess($pdo, $userId, $fileId, 'file');
+        if (!$hasAccess) {
+            return null;
+        }
+        
+        // Get file info
+        $stmt = $pdo->prepare("
+            SELECT f.*, u.username as owner_name
+            FROM files f
+            LEFT JOIN users u ON f.user_id = u.id
+            WHERE f.id = ? AND f.deleted_at IS NULL
+        ");
+        $stmt->execute([$fileId]);
+        return $stmt->fetch();
+        
+    } catch (Exception $e) {
+        error_log("getSharedFileInfo error: " . $e->getMessage());
+        return null;
+    }
+}
+
+// ============================================
+// HELPER: Get shared with me items - FIXED
+// ============================================
+// In apis/v1/files/index.php - Update getSharedWithMeItems function
+// ============================================
+// HELPER: Get shared with me items - FIXED
+// ============================================
+function getSharedWithMeItems($pdo, $userId, $search) {
+    try {
+        // Check if we're viewing a specific shared folder
+        $folderId = isset($_GET['folder_id']) ? (int)$_GET['folder_id'] : null;
+        
+        if ($folderId) {
+            // ============================================
+            // FIX: Check if folder exists and is NOT deleted
+            // ============================================
+            $stmt = $pdo->prepare("
+                SELECT user_id, name, parent_id, deleted_at 
+                FROM folders 
+                WHERE id = ?
+            ");
+            $stmt->execute([$folderId]);
+            $folder = $stmt->fetch();
+            
+            if (!$folder) {
+                error_log("Shared folder not found: $folderId");
+                return [];
+            }
+            
+            // ============================================
+            // FIX: If folder is deleted, return empty
+            // ============================================
+            if ($folder['deleted_at'] !== null) {
+                error_log("Shared folder $folderId is deleted by owner");
+                return [];
+            }
+            
+            // Check if user has access to this shared folder
+            $hasAccess = false;
+            $currentFolderId = $folderId;
+            $folderPermission = 'view';
+            
+            while ($currentFolderId && !$hasAccess) {
+                $stmt = $pdo->prepare("
+                    SELECT permissions FROM shared_items 
+                    WHERE item_type = 'folder' AND item_id = ? AND shared_with_user_id = ?
+                    AND (expires_at IS NULL OR expires_at > NOW())
+                ");
+                $stmt->execute([$currentFolderId, $userId]);
+                $share = $stmt->fetch();
+                if ($share) {
+                    $hasAccess = true;
+                    $folderPermission = $share['permissions'];
+                    break;
+                }
+                
+                // Get parent
+                $stmt = $pdo->prepare("SELECT parent_id FROM folders WHERE id = ?");
+                $stmt->execute([$currentFolderId]);
+                $parent = $stmt->fetch();
+                $currentFolderId = $parent ? $parent['parent_id'] : null;
+            }
+            
+            if (!$hasAccess) {
+                error_log("User $userId does not have access to folder $folderId");
+                return [];
+            }
+            
+            // Get contents of the shared folder
+            $ownerId = $folder['user_id'];
+            
+            // Get subfolders (only those not deleted)
+            $stmt = $pdo->prepare("
+                SELECT id, name as display_name, 'folder' as type, created_at, is_starred, cluster_id, NULL as file_size, NULL as file_type
+                FROM folders 
+                WHERE user_id = ? AND parent_id = ? AND deleted_at IS NULL
+                ORDER BY name ASC
+            ");
+            $stmt->execute([$ownerId, $folderId]);
+            $folders = $stmt->fetchAll();
+            
+            // Get files (only those not deleted)
+            $stmt = $pdo->prepare("
+                SELECT id, original_name as display_name, 'file' as type, created_at, is_starred, cluster_id, file_size, file_type
+                FROM files 
+                WHERE user_id = ? AND folder_id = ? AND deleted_at IS NULL
+                ORDER BY original_name ASC
+            ");
+            $stmt->execute([$ownerId, $folderId]);
+            $files = $stmt->fetchAll();
+            
+            $items = array_merge($folders, $files);
+            
+            // Add shared info to each item with the folder's permission
+            $result = array_map(function($item) use ($folderPermission, $folder) {
+                $isFolder = isset($item['type']) && $item['type'] === 'folder';
+                return [
+                    'id' => (int)$item['id'],
+                    'name' => $item['display_name'],
+                    'is_folder' => $isFolder,
+                    'created_at' => $item['created_at'],
+                    'is_starred' => (bool)($item['is_starred'] ?? false),
+                    'file_size' => $isFolder ? null : (int)($item['file_size'] ?? 0),
+                    'file_size_formatted' => $isFolder ? null : formatFileSize($item['file_size'] ?? 0),
+                    'file_type' => $isFolder ? null : ($item['file_type'] ?? null),
+                    'cluster_id' => (int)($item['cluster_id'] ?? 0),
+                    'type' => $isFolder ? 'folder' : 'file',
+                    'is_shared' => true,
+                    'permission' => $folderPermission,
+                    'shared_by' => $folder['user_id'] ? 'Owner' : null,
+                    'can_download' => in_array($folderPermission, ['download', 'edit', 'share', 'full']),
+                    'in_trash' => false
+                ];
+            }, $items);
+            
+            return $result;
+        }
+        
+        // ============================================
+        // FIX: Get all shared items - EXCLUDE DELETED ITEMS
+        // ============================================
+        $sql = "
+            SELECT si.*, 
+                   u.username as owner_username,
+                   u.id as owner_id,
+                   CASE 
+                       WHEN si.item_type = 'folder' THEN f.name 
+                       ELSE fl.original_name 
+                   END as item_name,
+                   f.user_id as folder_owner_id,
+                   fl.user_id as file_owner_id,
+                   f.parent_id as folder_parent_id,
+                   f.deleted_at as folder_deleted_at,
+                   fl.deleted_at as file_deleted_at,
+                   fl.file_size,
+                   fl.file_type,
+                   fl.created_at as file_created_at,
+                   f.created_at as folder_created_at
+            FROM shared_items si
+            LEFT JOIN users u ON si.user_id = u.id
+            LEFT JOIN folders f ON si.item_type = 'folder' AND si.item_id = f.id
+            LEFT JOIN files fl ON si.item_type = 'file' AND si.item_id = fl.id
+            WHERE si.shared_with_user_id = ?
+            AND (si.expires_at IS NULL OR si.expires_at > NOW())
+            AND (
+                (si.item_type = 'folder' AND f.id IS NOT NULL AND f.deleted_at IS NULL)
+                OR 
+                (si.item_type = 'file' AND fl.id IS NOT NULL AND fl.deleted_at IS NULL)
+            )
+        ";
+        
+        if ($search) {
+            $sql .= " AND (f.name LIKE ? OR fl.original_name LIKE ?)";
+            $searchTerm = '%' . $search . '%';
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$userId, $searchTerm, $searchTerm]);
+        } else {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$userId]);
+        }
+        
+        $items = $stmt->fetchAll();
+        $result = [];
+        
+        foreach ($items as $item) {
+            $isFolder = $item['item_type'] === 'folder';
+            $ownerId = $isFolder ? $item['folder_owner_id'] : $item['file_owner_id'];
+            $permission = $item['permissions'] ?? 'view';
+            
+            // ============================================
+            // FIX: Skip if item is deleted (extra safety check)
+            // ============================================
+            if ($isFolder && $item['folder_deleted_at'] !== null) {
+                continue;
+            }
+            if (!$isFolder && $item['file_deleted_at'] !== null) {
+                continue;
+            }
+            
+            // Check if user has starred this item
+            $stmt = $pdo->prepare("
+                SELECT id FROM user_starred_items 
+                WHERE user_id = ? AND item_type = ? AND item_id = ?
+            ");
+            $stmt->execute([$userId, $item['item_type'], $item['item_id']]);
+            $isStarred = $stmt->fetch() ? true : false;
+            
+            $result[] = [
+                'id' => (int)$item['item_id'],
+                'name' => $item['item_name'] ?? 'Unknown',
+                'is_folder' => $isFolder,
+                'created_at' => $isFolder ? $item['folder_created_at'] : $item['file_created_at'],
+                'is_starred' => $isStarred,
+                'file_size' => $isFolder ? null : (int)($item['file_size'] ?? 0),
+                'file_size_formatted' => $isFolder ? null : formatFileSize($item['file_size'] ?? 0),
+                'file_type' => $isFolder ? null : ($item['file_type'] ?? null),
+                'shared_by' => $item['owner_username'] ?? 'Unknown',
+                'shared_by_id' => (int)$item['owner_id'],
+                'permission' => $permission,
+                'share_id' => (int)$item['id'],
+                'type' => $isFolder ? 'folder' : 'file',
+                'parent_id' => $isFolder ? $item['folder_parent_id'] : null,
+                'is_shared' => true,
+                'is_folder' => $isFolder,
+                'can_download' => in_array($permission, ['download', 'edit', 'share', 'full']),
+                'is_owner' => false,
+                'in_trash' => false
+            ];
+        }
+        
+        return $result;
+        
+    } catch (Exception $e) {
+        error_log("getSharedWithMeItems error: " . $e->getMessage());
+        return [];
+    }
+}
+
+?>
+
+info.php
+
+<?php
+// apis/v1/files/info.php
+// Get file or folder information for preview and download
+
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+require_once __DIR__ . '/../bootstrap.php';
+
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit();
+}
+
+$userId = $_SESSION['user_id'];
+$fileId = isset($_GET['file_id']) ? (int)$_GET['file_id'] : 0;
+$itemId = isset($_GET['item_id']) ? (int)$_GET['item_id'] : 0;
+$itemType = isset($_GET['item_type']) ? $_GET['item_type'] : 'file';
+
+// Use item_id if provided, otherwise use file_id
+if ($itemId && $itemType === 'folder') {
+    // Get folder info
+    getFolderInfo($pdo, $userId, $itemId);
+    exit();
+}
+
+// Default: get file info
+if (!$fileId && $itemId) {
+    $fileId = $itemId;
+}
+
+if (!$fileId) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'File ID required']);
+    exit();
+}
+
+try {
+    // Get file info
+    $stmt = $pdo->prepare("
+        SELECT f.*, 
+               f.original_name as name,
+               f.file_size as size,
+               f.file_type as type,
+               f.file_path as path,
+               f.folder_id,
+               f.is_starred,
+               f.created_at,
+               f.user_id as file_owner_id
+        FROM files f
+        WHERE f.id = ? AND f.deleted_at IS NULL
+    ");
+    $stmt->execute([$fileId]);
+    $file = $stmt->fetch();
+
+    if (!$file) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'message' => 'File not found']);
+        exit();
+    }
+
+    $isOwner = ($file['file_owner_id'] == $userId);
+    $hasAccess = false;
+    $permission = 'view';
+    $sharedBy = null;
+    $isDirectShare = false;
+
+    // If user is owner, they have full access
+    if ($isOwner) {
+        $hasAccess = true;
+        $permission = 'full';
+    } else {
+        // Check if file is directly shared with user
+        $stmt = $pdo->prepare("
+            SELECT si.permissions, u.username as shared_by
+            FROM shared_items si
+            LEFT JOIN users u ON si.user_id = u.id
+            WHERE si.item_type = 'file' AND si.item_id = ? AND si.shared_with_user_id = ?
+            AND (si.expires_at IS NULL OR si.expires_at > NOW())
+        ");
+        $stmt->execute([$fileId, $userId]);
+        $share = $stmt->fetch();
+        
+        if ($share) {
+            $hasAccess = true;
+            $permission = $share['permissions'];
+            $sharedBy = $share['shared_by'];
+            $isDirectShare = true;
+        } else {
+            // Check if file is inside a shared folder
+            $folderId = $file['folder_id'];
+            if ($folderId) {
+                $currentFolderId = $folderId;
+                while ($currentFolderId && !$hasAccess) {
+                    $stmt = $pdo->prepare("
+                        SELECT si.permissions, u.username as shared_by
+                        FROM shared_items si
+                        LEFT JOIN users u ON si.user_id = u.id
+                        WHERE si.item_type = 'folder' AND si.item_id = ? AND si.shared_with_user_id = ?
+                        AND (si.expires_at IS NULL OR si.expires_at > NOW())
+                    ");
+                    $stmt->execute([$currentFolderId, $userId]);
+                    $folderShare = $stmt->fetch();
+                    
+                    if ($folderShare) {
+                        $hasAccess = true;
+                        $permission = $folderShare['permissions'];
+                        $sharedBy = $folderShare['shared_by'];
+                        break;
+                    }
+                    
+                    $stmt = $pdo->prepare("SELECT parent_id FROM folders WHERE id = ? AND deleted_at IS NULL");
+                    $stmt->execute([$currentFolderId]);
+                    $parent = $stmt->fetch();
+                    $currentFolderId = $parent ? $parent['parent_id'] : null;
+                }
+            }
+        }
+    }
+
+    if (!$hasAccess) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Access denied. You do not have permission to view this file.']);
+        exit();
+    }
+
+    // Get folder name if file is in a folder
+    $folderName = null;
+    if ($file['folder_id']) {
+        $stmt = $pdo->prepare("SELECT name FROM folders WHERE id = ?");
+        $stmt->execute([$file['folder_id']]);
+        $folder = $stmt->fetch();
+        if ($folder) {
+            $folderName = $folder['name'];
+        }
+    }
+
+    // Determine if file can be previewed
+    $canPreview = false;
+    $previewType = 'none';
+    
+    $fileType = strtolower($file['type']);
+    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    
+    // Image types
+    $imageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp', 'image/x-icon'];
+    $imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+    if (in_array($fileType, $imageTypes) || in_array($extension, $imageExtensions)) {
+        $canPreview = true;
+        $previewType = 'image';
+    }
+    // Video types
+    elseif (in_array($fileType, ['video/mp4', 'video/webm', 'video/avi', 'video/mkv', 'video/mov', 'video/wmv']) || 
+            in_array($extension, ['mp4', 'webm', 'avi', 'mkv', 'mov', 'wmv', 'flv'])) {
+        $canPreview = true;
+        $previewType = 'video';
+    }
+    // Audio types
+    elseif (in_array($fileType, ['audio/mpeg', 'audio/wav', 'audio/flac', 'audio/aac', 'audio/ogg']) || 
+            in_array($extension, ['mp3', 'wav', 'flac', 'aac', 'ogg', 'wma'])) {
+        $canPreview = true;
+        $previewType = 'audio';
+    }
+    // PDF
+    elseif ($fileType === 'application/pdf' || $extension === 'pdf') {
+        $canPreview = true;
+        $previewType = 'pdf';
+    }
+    // Text and code files
+    elseif (in_array($fileType, ['text/plain', 'text/html', 'text/css', 'text/javascript', 'application/json', 'application/xml', 'text/xml']) ||
+            in_array($extension, ['txt', 'html', 'htm', 'css', 'js', 'json', 'xml', 'php', 'py', 'java', 'cpp', 'c', 'h', 'sql', 'sh', 'bash', 'rb', 'go', 'rs', 'ts', 'jsx', 'tsx', 'vue'])) {
+        $canPreview = true;
+        $previewType = 'text';
+    }
+    // PHP files
+    elseif ($extension === 'php' || $extension === 'phar') {
+        $canPreview = true;
+        $previewType = 'text';
+    }
+    // OFFICE FILES
+    elseif (in_array($extension, ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp'])) {
+        $canPreview = true;
+        $previewType = 'office';
+    }
+    // ARCHIVES
+    elseif (in_array($extension, ['zip', 'rar', '7z', 'tar', 'gz', 'bz2'])) {
+        $canPreview = true;
+        $previewType = 'archive';
+    }
+    // EXECUTABLES - NOT Previewable (security)
+    elseif (in_array($extension, ['exe', 'bat', 'cmd', 'com', 'scr', 'pif', 'vbs', 'jar'])) {
+        $canPreview = false;
+        $previewType = 'dangerous';
+    }
+
+    // Build the base URL
+    $baseUrl = '/FILE-MANAGER-V2/apis/v1/files/download.php';
+    
+    // Build response
+    $response = [
+        'success' => true,
+        'file' => [
+            'id' => (int)$file['id'],
+            'name' => $file['name'],
+            'original_name' => $file['original_name'],
+            'filename' => $file['filename'],
+            'size' => (int)$file['size'],
+            'size_formatted' => formatFileSize($file['size']),
+            'type' => $file['type'],
+            'path' => $file['path'],
+            'folder_id' => $file['folder_id'] ? (int)$file['folder_id'] : null,
+            'folder_name' => $folderName,
+            'is_starred' => (bool)$file['is_starred'],
+            'created_at' => $file['created_at'],
+            'can_preview' => $canPreview,
+            'preview_type' => $previewType,
+            'url' => $baseUrl . '?file_id=' . $file['id'],
+            'preview_url' => $baseUrl . '?file_id=' . $file['id'] . '&preview=1',
+            'download_url' => $baseUrl . '?item_id=' . $file['id'] . '&item_type=file',
+            'is_owner' => $isOwner,
+            'is_direct_share' => $isDirectShare,
+            'can_download' => $isOwner || in_array($permission, ['download', 'edit', 'share', 'full']),
+            'permission' => $permission,
+            'shared_by' => $sharedBy
+        ]
+    ];
+
+    echo json_encode($response);
+
+} catch (Exception $e) {
+    error_log("Error getting file info: " . $e->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Error loading file: ' . $e->getMessage()
+    ]);
+}
+
+// ============================================
+// FUNCTION: Get folder info
+// ============================================
+function getFolderInfo($pdo, $userId, $folderId) {
+    try {
+        // Get folder info
+        $stmt = $pdo->prepare("
+            SELECT f.*, u.username as owner_name
+            FROM folders f
+            LEFT JOIN users u ON f.user_id = u.id
+            WHERE f.id = ? AND f.deleted_at IS NULL
+        ");
+        $stmt->execute([$folderId]);
+        $folder = $stmt->fetch();
+
+        if (!$folder) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Folder not found']);
+            exit();
+        }
+
+        $isOwner = ($folder['user_id'] == $userId);
+        $hasAccess = false;
+        $permission = 'view';
+        $sharedBy = null;
+
+        // If user is owner, they have full access
+        if ($isOwner) {
+            $hasAccess = true;
+            $permission = 'full';
+        } else {
+            // Check if folder is directly shared with user
+            $stmt = $pdo->prepare("
+                SELECT si.permissions, u.username as shared_by
+                FROM shared_items si
+                LEFT JOIN users u ON si.user_id = u.id
+                WHERE si.item_type = 'folder' AND si.item_id = ? AND si.shared_with_user_id = ?
+                AND (si.expires_at IS NULL OR si.expires_at > NOW())
+            ");
+            $stmt->execute([$folderId, $userId]);
+            $share = $stmt->fetch();
+            
+            if ($share) {
+                $hasAccess = true;
+                $permission = $share['permissions'];
+                $sharedBy = $share['shared_by'];
+            } else {
+                // Check parent folders recursively
+                $currentFolderId = $folder['parent_id'];
+                while ($currentFolderId && !$hasAccess) {
+                    $stmt = $pdo->prepare("
+                        SELECT si.permissions, u.username as shared_by
+                        FROM shared_items si
+                        LEFT JOIN users u ON si.user_id = u.id
+                        WHERE si.item_type = 'folder' AND si.item_id = ? AND si.shared_with_user_id = ?
+                        AND (si.expires_at IS NULL OR si.expires_at > NOW())
+                    ");
+                    $stmt->execute([$currentFolderId, $userId]);
+                    $parentShare = $stmt->fetch();
+                    
+                    if ($parentShare) {
+                        $hasAccess = true;
+                        $permission = $parentShare['permissions'];
+                        $sharedBy = $parentShare['shared_by'];
+                        break;
+                    }
+                    
+                    $stmt = $pdo->prepare("SELECT parent_id FROM folders WHERE id = ? AND deleted_at IS NULL");
+                    $stmt->execute([$currentFolderId]);
+                    $parent = $stmt->fetch();
+                    $currentFolderId = $parent ? $parent['parent_id'] : null;
+                }
+            }
+        }
+
+        if (!$hasAccess) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Access denied']);
+            exit();
+        }
+
+        // Get folder size (total size of all files in folder)
+        $folderSize = 0;
+        $fileCount = 0;
+        $folders = getFolderContentsRecursive($pdo, $folderId, $folder['user_id']);
+        
+        foreach ($folders as $item) {
+            if ($item['type'] === 'file') {
+                $folderSize += (int)$item['size'];
+                $fileCount++;
+            }
+        }
+
+        // Build response
+        $baseUrl = '/FILE-MANAGER-V2/apis/v1/files/download.php';
+        
+        $response = [
+            'success' => true,
+            'folder' => [
+                'id' => (int)$folder['id'],
+                'name' => $folder['name'],
+                'owner_id' => (int)$folder['user_id'],
+                'owner_name' => $folder['owner_name'],
+                'parent_id' => $folder['parent_id'] ? (int)$folder['parent_id'] : null,
+                'created_at' => $folder['created_at'],
+                'is_starred' => (bool)$folder['is_starred'],
+                'is_owner' => $isOwner,
+                'can_download' => $isOwner || in_array($permission, ['download', 'edit', 'share', 'full']),
+                'permission' => $permission,
+                'shared_by' => $sharedBy,
+                'folder_size' => $folderSize,
+                'folder_size_formatted' => formatFileSize($folderSize),
+                'file_count' => $fileCount,
+                'download_url' => $baseUrl . '?item_id=' . $folder['id'] . '&item_type=folder'
+            ]
+        ];
+
+        echo json_encode($response);
+
+    } catch (Exception $e) {
+        error_log("Error getting folder info: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Error loading folder: ' . $e->getMessage()
+        ]);
+    }
+}
+
+
+// ============================================
+// HELPER: Get folder contents recursively
+// ============================================
+function getFolderContentsRecursive($pdo, $folderId, $userId) {
+    $items = [];
+    
+    // Get files in this folder
+    $stmt = $pdo->prepare("
+        SELECT id, original_name as name, file_size as size, 'file' as type
+        FROM files 
+        WHERE folder_id = ? AND user_id = ? AND deleted_at IS NULL
+    ");
+    $stmt->execute([$folderId, $userId]);
+    $files = $stmt->fetchAll();
+    
+    foreach ($files as $file) {
+        $items[] = $file;
+    }
+    
+    // Get subfolders
+    $stmt = $pdo->prepare("
+        SELECT id, name, 'folder' as type
+        FROM folders 
+        WHERE parent_id = ? AND user_id = ? AND deleted_at IS NULL
+    ");
+    $stmt->execute([$folderId, $userId]);
+    $subfolders = $stmt->fetchAll();
+    
+    foreach ($subfolders as $subfolder) {
+        $items[] = $subfolder;
+        // Recursively get contents
+        $subItems = getFolderContentsRecursive($pdo, $subfolder['id'], $userId);
+        $items = array_merge($items, $subItems);
+    }
+    
+    return $items;
+}
+?>
+
+preview.php
+
+<?php
+// apis/v1/files/preview.php
+// Preview file content (for view-only users)
+
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+require_once __DIR__ . '/../bootstrap.php';
+
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit();
+}
+
+$userId = $_SESSION['user_id'];
+$fileId = isset($_GET['file_id']) ? (int)$_GET['file_id'] : 0;
+
+if (!$fileId) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'File ID required']);
+    exit();
+}
+
+try {
+    // Get file info
+    $stmt = $pdo->prepare("
+        SELECT f.*, f.user_id as file_owner_id
+        FROM files f
+        WHERE f.id = ? AND f.deleted_at IS NULL
+    ");
+    $stmt->execute([$fileId]);
+    $file = $stmt->fetch();
+
+    if (!$file) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'message' => 'File not found']);
+        exit();
+    }
+
+    // Check if file exists on disk
+    $filePath = $file['file_path'];
+    if (!file_exists($filePath)) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'message' => 'File not found on server']);
+        exit();
+    }
+
+    $isOwner = ($file['file_owner_id'] == $userId);
+    $hasAccess = false;
+
+    // Check access (same as download.php but without download permission check)
+    if ($isOwner) {
+        $hasAccess = true;
+    } else {
+        // Check direct share
+        $stmt = $pdo->prepare("
+            SELECT id FROM shared_items
+            WHERE item_type = 'file' AND item_id = ? AND shared_with_user_id = ?
+            AND (expires_at IS NULL OR expires_at > NOW())
+        ");
+        $stmt->execute([$fileId, $userId]);
+        if ($stmt->fetch()) {
+            $hasAccess = true;
+        } else {
+            // Check folder share
+            $folderId = $file['folder_id'];
+            if ($folderId) {
+                $currentFolderId = $folderId;
+                while ($currentFolderId && !$hasAccess) {
+                    $stmt = $pdo->prepare("
+                        SELECT id FROM shared_items
+                        WHERE item_type = 'folder' AND item_id = ? AND shared_with_user_id = ?
+                        AND (expires_at IS NULL OR expires_at > NOW())
+                    ");
+                    $stmt->execute([$currentFolderId, $userId]);
+                    if ($stmt->fetch()) {
+                        $hasAccess = true;
+                        break;
+                    }
+                    
+                    $stmt = $pdo->prepare("SELECT parent_id FROM folders WHERE id = ? AND deleted_at IS NULL");
+                    $stmt->execute([$currentFolderId]);
+                    $parent = $stmt->fetch();
+                    $currentFolderId = $parent ? $parent['parent_id'] : null;
+                }
+            }
+        }
+    }
+
+    if (!$hasAccess) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Access denied']);
+        exit();
+    }
+
+    // Get MIME type
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mimeType = finfo_file($finfo, $filePath);
+    finfo_close($finfo);
+
+    // For PHP files, force text/plain for preview
+    $extension = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
+    if (in_array($extension, ['php', 'phar', 'phtml'])) {
+        $mimeType = 'text/plain';
+    }
+
+    // For code files, force text/plain
+    $codeExtensions = ['js', 'css', 'html', 'htm', 'json', 'xml', 'txt', 'py', 'java', 'cpp', 'c', 'h', 'sql', 'sh', 'bash', 'rb', 'go', 'rs', 'ts', 'jsx', 'tsx', 'vue'];
+    if (in_array($extension, $codeExtensions)) {
+        $mimeType = 'text/plain';
+    }
+
+    // Set headers for preview
+    header('Content-Type: ' . $mimeType);
+    header('Content-Disposition: inline; filename="' . $file['original_name'] . '"');
+    header('Cache-Control: public, max-age=3600');
+    header('X-Content-Type-Options: nosniff');
+    header('Access-Control-Allow-Origin: *');
+    
+    readfile($filePath);
+    exit();
+
+} catch (Exception $e) {
+    error_log("Preview error: " . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Error loading preview: ' . $e->getMessage()]);
+}
+?>
+
+preview_content.php
+
+<?php
+// apis/v1/files/preview_content.php
+// DIRECT file content preview - NO PERMISSION CHECKS AT ALL
+
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+// ============================================
+// COMPLETELY BYPASS ALL PERMISSION CHECKS
+// NO SESSION - NO AUTH - NO PERMISSIONS
+// ============================================
+
+// Get file ID
+$fileId = isset($_GET['file_id']) ? (int)$_GET['file_id'] : 0;
+
+if (!$fileId) {
+    http_response_code(400);
+    echo "File ID required";
+    exit();
+}
+
+try {
+    // ============================================
+    // Include database config - FIXED PATH
+    // ============================================
+    $dbConfig = require_once __DIR__ . '/../config/database.php';
+    
+    // Create PDO connection from config array
+    $host = $dbConfig['host'] ?? 'localhost';
+    $dbname = $dbConfig['database'] ?? 'file_manager_v3';
+    $username = $dbConfig['username'] ?? 'root';
+    $password = $dbConfig['password'] ?? 'mysql';
+    $charset = $dbConfig['charset'] ?? 'utf8mb4';
+    $options = $dbConfig['options'] ?? [];
+    
+    $dsn = "mysql:host=$host;dbname=$dbname;charset=$charset";
+    $pdo = new PDO($dsn, $username, $password, $options);
+    
+    // Get file info - ONLY check if file exists in database
+    $stmt = $pdo->prepare("
+        SELECT f.* 
+        FROM files f
+        WHERE f.id = ? AND f.deleted_at IS NULL
+    ");
+    $stmt->execute([$fileId]);
+    $file = $stmt->fetch();
+
+    if (!$file) {
+        http_response_code(404);
+        echo "File not found";
+        exit();
+    }
+
+    // Check if file exists on disk
+    $filePath = $file['file_path'];
+    if (!file_exists($filePath)) {
+        http_response_code(404);
+        echo "File not found on server";
+        exit();
+    }
+
+    // Get file extension
+    $extension = strtolower(pathinfo($file['original_name'], PATHINFO_EXTENSION));
+    
+    // For ALL text/code files, serve as text/plain
+    header('Content-Type: text/plain');
+    header('Content-Disposition: inline; filename="' . $file['original_name'] . '"');
+    header('Cache-Control: public, max-age=3600');
+    header('X-Content-Type-Options: nosniff');
+    header('Access-Control-Allow-Origin: *');
+    
+    // Read and output file
+    readfile($filePath);
+    exit();
+
+} catch (Exception $e) {
+    error_log("Preview content error: " . $e->getMessage());
+    http_response_code(500);
+    echo "Error loading file: " . $e->getMessage();
+    exit();
+}
+?>
+
+restore.php
+
+<?php
+// apis/v1/files/restore.php
+header('Content-Type: application/json');
+session_start();
+
+require_once __DIR__ . '/../bootstrap.php';
+
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    exit();
+}
+
+$userId = $_SESSION['user_id'];
+$data = json_decode(file_get_contents('php://input'), true);
+
+if (!$data) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Invalid JSON data']);
+    exit();
+}
+
+$fileId = isset($data['file_id']) ? (int)$data['file_id'] : null;
+
+if (!$fileId) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'File ID required']);
+    exit();
+}
+
+try {
+    // Check if file exists and belongs to user
+    $stmt = $pdo->prepare("SELECT * FROM files WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL");
+    $stmt->execute([$fileId, $userId]);
+    $file = $stmt->fetch();
+    
+    if (!$file) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'message' => 'File not found in trash']);
+        exit();
+    }
+    
+    // Restore the file
+    $stmt = $pdo->prepare("UPDATE files SET deleted_at = NULL WHERE id = ? AND user_id = ?");
+    $stmt->execute([$fileId, $userId]);
+    
+    echo json_encode(['success' => true, 'message' => 'File restored successfully']);
+    
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+}
+?>

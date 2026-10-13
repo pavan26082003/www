@@ -1,0 +1,1215 @@
+{
+    "header": {
+        "title": "eFactor · IoE",
+        "subtitle": "Smart insights & tools"
+    },
+    "welcome": {
+        "greeting": "Welcome back",
+        "email": "",
+        "caption": "Manage your ecosystem"
+    },
+    "alerts": {
+        "count": 0,
+        "newUsers": 0,
+        "badgeText": "real-time",
+        "showBadge": true
+    },
+    "theme": {
+        "accentColor": "#7c3aed",
+        "accentGreen": "#22c55e",
+        "surfaceColor": "#151b2e",
+        "welcomeStart": "#7c3aed",
+        "welcomeEnd": "#4f46e5",
+        "phoneBg": "#0b0f1a",
+        "alertBg": "#151b2e",
+        "textPrimary": "#ffffff",
+        "textSecondary": "#e2e8f0",
+        "textMuted": "#64748b",
+        "welcomeTextColor": "#ffffff",
+        "navActiveColor": "#a78bfa",
+        "navBg": "#000000",
+        "bgStyle": "dark",
+        "gridGap": 8,
+        "gridColumns": 3,
+        "gridRows": 7,
+        "gridRowHeight": 96,
+        "cardBorderRadius": 22,
+        "cardSpeed": 24,
+        "logoIcon": "fa-crosshairs",
+        "showWelcome": true,
+        "showAlerts": true,
+        "showBottomNav": true,
+        "homeTemplate": "default",
+        "staticUiTemplate": null
+    },
+    "homeTemplate": "default",
+    "cards": [
+        {
+            "id": "user-modules",
+            "type": "stack",
+            "gridArea": "user-modules",
+            "title": "Online",
+            "label": "Online",
+            "icon": "fa-fingerprint",
+            "color": "#5c2436",
+            "textColor": "#f7f1e8",
+            "col": 1,
+            "row": 1,
+            "colSpan": 1,
+            "rowSpan": 2,
+            "tall": true,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "Online",
+                    "icon": "fa-fingerprint",
+                    "color": "#5c2436",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Active",
+                    "icon": "fa-chart-line",
+                    "color": "#4a1c2b",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Modules",
+                    "icon": "fa-th-large",
+                    "color": "#6e3144",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Users",
+                    "icon": "fa-th",
+                    "color": "#8a4558",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                }
+            ],
+            "orientation": "vertical",
+            "iconColor": "#f7f1e8"
+        },
+        {
+            "id": "grid",
+            "type": "stack",
+            "gridArea": "grid",
+            "title": "GRID",
+            "label": "GRID",
+            "subtitle": "",
+            "icon": "fa-border-all",
+            "color": "#c4a36a",
+            "textColor": "#1c140c",
+            "col": 2,
+            "row": 1,
+            "colSpan": 1,
+            "rowSpan": 1,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "GRID",
+                    "icon": "fa-border-all",
+                    "color": "#c4a36a",
+                    "textColor": "#1c140c",
+                    "iconColor": "#1c140c",
+                    "type": "stack",
+                    "label": "GRID",
+                    "route": "https://efactor.tech/index.php/grid"
+                },
+                {
+                    "title": "GRID",
+                    "subtitle": "Share & connect",
+                    "icon": "fa-border-all",
+                    "color": "#a68545",
+                    "iconColor": "#1c140c",
+                    "textColor": "#1c140c",
+                    "type": "stack"
+                },
+                {
+                    "title": "Network",
+                    "subtitle": "12 nodes",
+                    "icon": "fa-project-diagram",
+                    "color": "#d4b483",
+                    "iconColor": "#1c140c",
+                    "textColor": "#1c140c",
+                    "type": "stack"
+                },
+                {
+                    "title": "Connect",
+                    "subtitle": "Peers online",
+                    "icon": "fa-link",
+                    "color": "#e8d0a4",
+                    "iconColor": "#1c140c",
+                    "textColor": "#1c140c",
+                    "type": "stack"
+                }
+            ],
+            "orientation": "square",
+            "iconColor": "#1c140c",
+            "pageRoute": "https://efactor.tech/index.php/grid"
+        },
+        {
+            "id": "hrms",
+            "type": "stack",
+            "gridArea": "hrms",
+            "title": "HRMS",
+            "label": "HRMS",
+            "subtitle": "",
+            "icon": "fa-user-tie",
+            "color": "#1b4a38",
+            "textColor": "#f7f1e8",
+            "col": 3,
+            "row": 1,
+            "colSpan": 1,
+            "rowSpan": 1,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "HRMS",
+                    "icon": "fa-user-tie",
+                    "color": "#1b4a38",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack",
+                    "label": "HRMS",
+                    "route": "https://efactor.tech/index.php/hrms/admin"
+                },
+                {
+                    "title": "HRMS",
+                    "subtitle": "Employees & payroll",
+                    "icon": "fa-user-tie",
+                    "color": "#14382b",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Payroll",
+                    "subtitle": "This month",
+                    "icon": "fa-money-bill",
+                    "color": "#25664c",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Team",
+                    "subtitle": "24 active",
+                    "icon": "fa-users",
+                    "color": "#3d8466",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                }
+            ],
+            "orientation": "square",
+            "iconColor": "#f7f1e8",
+            "pageRoute": "https://efactor.tech/index.php/hrms/admin"
+        },
+        {
+            "id": "id-card",
+            "type": "stack",
+            "gridArea": "id-card",
+            "title": "Visiting Card Studio",
+            "label": "Visiting Card Studio",
+            "subtitle": "",
+            "icon": "fa-id-card",
+            "color": "#6e4a40",
+            "textColor": "#f7f1e8",
+            "col": 2,
+            "row": 2,
+            "colSpan": 1,
+            "rowSpan": 1,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "Visiting Card Studio",
+                    "icon": "fa-id-card",
+                    "color": "#6e4a40",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack",
+                    "label": "Visiting Card Studio",
+                    "route": "https://efactor.tech/visiting_card_studio.php"
+                },
+                {
+                    "title": "ID",
+                    "subtitle": "Efactor ID",
+                    "icon": "fa-fingerprint",
+                    "color": "#553830",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Profile",
+                    "subtitle": "Your card",
+                    "icon": "fa-id-card",
+                    "color": "#856055",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Badge",
+                    "subtitle": "Access pass",
+                    "icon": "fa-shield-alt",
+                    "color": "#9a7264",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                }
+            ],
+            "orientation": "square",
+            "iconColor": "#f7f1e8",
+            "pageRoute": "https://efactor.tech/visiting_card_studio.php"
+        },
+        {
+            "id": "appid",
+            "type": "stack",
+            "gridArea": "appid",
+            "title": "New",
+            "label": "New",
+            "subtitle": "",
+            "icon": "fa-plus",
+            "color": "#1c3354",
+            "textColor": "#f7f1e8",
+            "col": 3,
+            "row": 2,
+            "colSpan": 1,
+            "rowSpan": 1,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "New",
+                    "icon": "fa-plus",
+                    "color": "#1c3354",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "AppID",
+                    "subtitle": "Generation",
+                    "icon": "fa-key",
+                    "color": "#142640",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Active",
+                    "subtitle": "8 apps",
+                    "icon": "fa-mobile-alt",
+                    "color": "#2a4a72",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Keys",
+                    "subtitle": "Manage",
+                    "icon": "fa-lock",
+                    "color": "#3d6494",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                }
+            ],
+            "orientation": "square",
+            "iconColor": "#f7f1e8"
+        },
+        {
+            "id": "leads",
+            "type": "stack",
+            "gridArea": "leads",
+            "title": "Hot",
+            "label": "Hot",
+            "icon": "fa-th",
+            "color": "#2a5640",
+            "textColor": "#f7f1e8",
+            "col": 1,
+            "row": 3,
+            "colSpan": 1,
+            "rowSpan": 1,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "Hot",
+                    "icon": "fa-th",
+                    "color": "#2a5640",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Leads",
+                    "value": "52",
+                    "icon": "fa-users",
+                    "color": "#1e3f2e",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Converted",
+                    "icon": "fa-check",
+                    "color": "#3a7054",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Follow-up",
+                    "icon": "fa-phone",
+                    "color": "#4e8a68",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                }
+            ],
+            "orientation": "square",
+            "iconColor": "#f7f1e8"
+        },
+        {
+            "id": "recipe",
+            "type": "image",
+            "gridArea": "recipe",
+            "title": "Restaurant",
+            "label": "Restaurant",
+            "subtitle": "",
+            "color": "#6b4423",
+            "textColor": "#f7f1e8",
+            "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS9nRnvUVOQkiaxtC4b74ncSTLCgsysKDZ-apCDJrbaBw&s=10",
+            "imageFit": "contain",
+            "imagePosition": "center",
+            "col": 2,
+            "row": 3,
+            "colSpan": 1,
+            "rowSpan": 1,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "Restaurant",
+                    "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS9nRnvUVOQkiaxtC4b74ncSTLCgsysKDZ-apCDJrbaBw&s=10",
+                    "color": "#6b4423",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "image",
+                    "label": "Restaurant",
+                    "icon": "fa-utensils",
+                    "route": "https://efactor.tech/restaurant-system/main",
+                    "imageFit": "contain",
+                    "imagePosition": "center",
+                    "imageScale": 100,
+                    "subtitle": "",
+                    "hideIcon": false,
+                    "titleTextColor": "#f7f1e8",
+                    "subTextColor": "#f7f1e8",
+                    "iconSize": 20,
+                    "titleFontSize": 12,
+                    "subFontSize": 9,
+                    "titleFontFamily": "system",
+                    "subFontFamily": "system"
+                },
+                {
+                    "title": "Ingredients",
+                    "icon": "fa-list",
+                    "color": "#8a5a2e",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "image",
+                    "imageFit": "contain",
+                    "imagePosition": "center",
+                    "imageScale": 100,
+                    "subtitle": "",
+                    "label": "Ingredients",
+                    "hideIcon": false,
+                    "titleTextColor": "#f7f1e8",
+                    "subTextColor": "#f7f1e8",
+                    "iconSize": 20,
+                    "titleFontSize": 12,
+                    "subFontSize": 9,
+                    "titleFontFamily": "system",
+                    "subFontFamily": "system",
+                    "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRPE8kb75ZRBv4m18Pdl_QqnOhFliuQCsZ-sw_aSod4dj2p4xhHqMasQZjL&s=10"
+                },
+                {
+                    "title": "Steps",
+                    "icon": "fa-clipboard-list",
+                    "color": "#a36b32",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "image",
+                    "imageFit": "contain",
+                    "imagePosition": "center",
+                    "imageScale": 100,
+                    "subtitle": "",
+                    "label": "Steps",
+                    "hideIcon": false,
+                    "titleTextColor": "#f7f1e8",
+                    "subTextColor": "#f7f1e8",
+                    "iconSize": 20,
+                    "titleFontSize": 12,
+                    "subFontSize": 9,
+                    "titleFontFamily": "system",
+                    "subFontFamily": "system",
+                    "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ33AXPPP5CuJyWdICxtN86qQ1MaGynkKPU87l7_94WoQ&s=10"
+                },
+                {
+                    "title": "Timer",
+                    "icon": "fa-hourglass-half",
+                    "color": "#6b4423",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "image",
+                    "imageFit": "contain",
+                    "imagePosition": "center",
+                    "imageScale": 100,
+                    "subtitle": "",
+                    "label": "Timer",
+                    "hideIcon": false,
+                    "titleTextColor": "#f7f1e8",
+                    "subTextColor": "#f7f1e8",
+                    "iconSize": 20,
+                    "titleFontSize": 12,
+                    "subFontSize": 9,
+                    "titleFontFamily": "system",
+                    "subFontFamily": "system",
+                    "image": "https://blog.swiggy.com/wp-content/uploads/2024/02/Masala-Dosa-1024x538.jpg"
+                }
+            ],
+            "orientation": "square",
+            "iconColor": "#f7f1e8",
+            "pageRoute": "https://efactor.tech/restaurant-system/main",
+            "icon": "fa-utensils",
+            "imageScale": 100,
+            "rotationEnabled": true,
+            "sameFaceColor": false,
+            "sameFaceTextColor": false,
+            "_imageFitUserSet": true
+        },
+        {
+            "id": "efactor-grid",
+            "type": "image",
+            "gridArea": "efactor-grid",
+            "title": "",
+            "label": "",
+            "tag": "",
+            "color": "#f4ecdf",
+            "textColor": "#1c140c",
+            "image": "https://efactor.tech/assets/images/GRID_Logo.png",
+            "imageFit": "contain",
+            "imagePosition": "center",
+            "col": 1,
+            "row": 4,
+            "colSpan": 3,
+            "rowSpan": 1,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "",
+                    "image": "https://efactor.tech/assets/images/GRID_Logo.png",
+                    "imageFit": "contain",
+                    "color": "#f4ecdf",
+                    "textColor": "#1c140c",
+                    "iconColor": "#1c140c",
+                    "type": "image",
+                    "imagePosition": "center",
+                    "imageScale": 100,
+                    "subtitle": "",
+                    "label": "",
+                    "icon": "fa-border-all",
+                    "hideIcon": false,
+                    "titleTextColor": "#1c140c",
+                    "subTextColor": "#1c140c",
+                    "iconSize": 20,
+                    "titleFontSize": 12,
+                    "subFontSize": 9,
+                    "titleFontFamily": "system",
+                    "subFontFamily": "system",
+                    "route": "https://efactor.tech/index.php/grid"
+                },
+                {
+                    "title": "GRID",
+                    "icon": "fa-border-all",
+                    "color": "#2c261f",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "image",
+                    "imageFit": "contain",
+                    "imagePosition": "center",
+                    "imageScale": 100,
+                    "subtitle": "",
+                    "label": "GRID",
+                    "hideIcon": false,
+                    "titleTextColor": "#f7f1e8",
+                    "subTextColor": "#f7f1e8",
+                    "iconSize": 20,
+                    "titleFontSize": 12,
+                    "subFontSize": 9,
+                    "titleFontFamily": "system",
+                    "subFontFamily": "system",
+                    "image": "https://efactor.tech/assets/images/efactor-logo.jpg",
+                    "route": "https://efactor.tech"
+                },
+                {
+                    "title": "Featured",
+                    "icon": "fa-star",
+                    "color": "#3d342c",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "image",
+                    "imageFit": "contain",
+                    "imagePosition": "center",
+                    "imageScale": 100,
+                    "subtitle": "",
+                    "label": "Featured",
+                    "hideIcon": false,
+                    "titleTextColor": "#f7f1e8",
+                    "subTextColor": "#f7f1e8",
+                    "iconSize": 20,
+                    "titleFontSize": 12,
+                    "subFontSize": 9,
+                    "titleFontFamily": "system",
+                    "subFontFamily": "system",
+                    "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ8zTv4ZBEXd-lyU_J6oyraOhEs-9V-0N4CciGOOEvLmw&s"
+                },
+                {
+                    "title": "Explore",
+                    "icon": "fa-compass",
+                    "color": "#51463c",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "image",
+                    "imageFit": "contain",
+                    "imagePosition": "center",
+                    "imageScale": 100,
+                    "subtitle": "",
+                    "label": "Explore",
+                    "hideIcon": false,
+                    "titleTextColor": "#f7f1e8",
+                    "subTextColor": "#f7f1e8",
+                    "iconSize": 20,
+                    "titleFontSize": 12,
+                    "subFontSize": 9,
+                    "titleFontFamily": "system",
+                    "subFontFamily": "system",
+                    "image": "https://efactor.tech/assets/images/GRID_Logo.png"
+                }
+            ],
+            "orientation": "wide3",
+            "iconColor": "#1c140c",
+            "imageScale": 100,
+            "rotationEnabled": true,
+            "pageRoute": "https://efactor.tech/index.php/grid",
+            "icon": "fa-border-all",
+            "sameFaceColor": false,
+            "sameFaceTextColor": false,
+            "_imageFitUserSet": true,
+            "subtitle": ""
+        },
+        {
+            "id": "signal",
+            "type": "stack",
+            "gridArea": "signal",
+            "title": "",
+            "label": "",
+            "icon": "fa-signal",
+            "color": "#3a2a52",
+            "textColor": "#f7f1e8",
+            "col": 3,
+            "row": 3,
+            "colSpan": 1,
+            "rowSpan": 1,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "",
+                    "icon": "fa-signal",
+                    "color": "#3a2a52",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Signal",
+                    "icon": "fa-wifi",
+                    "color": "#2c2040",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Network",
+                    "icon": "fa-broadcast-tower",
+                    "color": "#4e3a6c",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Status",
+                    "icon": "fa-chart-bar",
+                    "color": "#67508a",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                }
+            ],
+            "orientation": "square",
+            "iconColor": "#f7f1e8"
+        },
+        {
+            "id": "wifi",
+            "type": "stack",
+            "gridArea": "wifi",
+            "title": "WIFI",
+            "label": "WIFI",
+            "icon": "fa-wifi",
+            "color": "#241c16",
+            "textColor": "#f7f1e8",
+            "col": 1,
+            "row": 5,
+            "colSpan": 1,
+            "rowSpan": 1,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "WIFI",
+                    "icon": "fa-wifi",
+                    "color": "#241c16",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Network",
+                    "icon": "fa-signal",
+                    "color": "#1a1511",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Devices",
+                    "icon": "fa-broadcast-tower",
+                    "color": "#3a2e24",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Setup",
+                    "icon": "fa-plus",
+                    "color": "#514338",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                }
+            ],
+            "orientation": "square",
+            "iconColor": "#f7f1e8"
+        },
+        {
+            "id": "gallery",
+            "type": "stack",
+            "gridArea": "gallery",
+            "title": "Gallery",
+            "label": "Gallery",
+            "icon": "fa-image",
+            "color": "#efe4d2",
+            "textColor": "#1c140c",
+            "iconColor": "#1c140c",
+            "col": 2,
+            "row": 5,
+            "colSpan": 1,
+            "rowSpan": 1,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "Gallery",
+                    "icon": "fa-image",
+                    "color": "#efe4d2",
+                    "textColor": "#1c140c",
+                    "iconColor": "#1c140c",
+                    "type": "stack",
+                    "subtitle": "",
+                    "label": "Gallery",
+                    "hideIcon": false,
+                    "titleTextColor": "#334155",
+                    "subTextColor": "#334155",
+                    "iconSize": 20,
+                    "titleFontSize": 12,
+                    "subFontSize": 9,
+                    "titleFontFamily": "system",
+                    "subFontFamily": "system"
+                },
+                {
+                    "title": "Photos",
+                    "icon": "fa-images",
+                    "color": "#e4d5bc",
+                    "textColor": "#1c140c",
+                    "iconColor": "#1c140c",
+                    "type": "stack"
+                },
+                {
+                    "title": "Albums",
+                    "icon": "fa-folder",
+                    "color": "#d4c2a4",
+                    "textColor": "#1c140c",
+                    "iconColor": "#1c140c",
+                    "type": "stack"
+                },
+                {
+                    "title": "Camera",
+                    "icon": "fa-camera",
+                    "color": "#b7a288",
+                    "textColor": "#1c140c",
+                    "iconColor": "#1c140c",
+                    "type": "stack"
+                }
+            ],
+            "orientation": "square",
+            "rotationEnabled": true,
+            "pageRoute": "",
+            "sameFaceColor": false,
+            "sameFaceTextColor": false,
+            "subtitle": ""
+        },
+        {
+            "id": "gallery-tile",
+            "type": "stack",
+            "gridArea": "gallery-tile",
+            "title": "",
+            "label": "",
+            "icon": "fa-image",
+            "color": "#1a1613",
+            "textColor": "#f7f1e8",
+            "col": 3,
+            "row": 5,
+            "colSpan": 1,
+            "rowSpan": 2,
+            "tall": true,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "",
+                    "icon": "fa-image",
+                    "color": "#1a1613",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Photos",
+                    "icon": "fa-images",
+                    "color": "#2a241e",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Albums",
+                    "icon": "fa-folder",
+                    "color": "#3a322a",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Camera",
+                    "icon": "fa-camera",
+                    "color": "#4e4338",
+                    "iconColor": "#f7f1e8",
+                    "textColor": "#f7f1e8",
+                    "type": "stack"
+                }
+            ],
+            "orientation": "vertical",
+            "iconColor": "#f7f1e8"
+        },
+        {
+            "id": "inventory",
+            "type": "stack",
+            "gridArea": "inventory",
+            "title": "Inventory Management",
+            "label": "Inventory Management",
+            "icon": "fa-boxes",
+            "color": "#1c3354",
+            "textColor": "#f7f1e8",
+            "iconColor": "#f7f1e8",
+            "pageRoute": "https://efactor.tech/index.php/inventory",
+            "col": 1,
+            "row": 6,
+            "colSpan": 1,
+            "rowSpan": 1,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "Inventory Management",
+                    "icon": "fa-boxes",
+                    "route": "https://efactor.tech/index.php/inventory",
+                    "color": "#1c3354",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "label": "Inventory Management",
+                    "type": "stack"
+                },
+                {
+                    "title": "Inventory",
+                    "icon": "fa-boxes",
+                    "route": "https://efactor.tech/index.php/inventory",
+                    "color": "#1c3354",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Inventory",
+                    "icon": "fa-boxes",
+                    "route": "https://efactor.tech/index.php/inventory",
+                    "color": "#1c3354",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Inventory",
+                    "icon": "fa-boxes",
+                    "route": "https://efactor.tech/index.php/inventory",
+                    "color": "#1c3354",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack"
+                }
+            ],
+            "orientation": "square"
+        },
+        {
+            "id": "accounting",
+            "type": "stack",
+            "gridArea": "accounting",
+            "title": "Accounting & Finance",
+            "label": "Accounting & Finance",
+            "icon": "fa-file-invoice-dollar",
+            "color": "#a68545",
+            "textColor": "#1c140c",
+            "iconColor": "#1c140c",
+            "pageRoute": "https://efactor.tech/index.php/finance/main",
+            "col": 2,
+            "row": 6,
+            "colSpan": 1,
+            "rowSpan": 1,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "Accounting & Finance",
+                    "icon": "fa-file-invoice-dollar",
+                    "route": "https://efactor.tech/index.php/finance/main",
+                    "color": "#a68545",
+                    "textColor": "#1c140c",
+                    "iconColor": "#1c140c",
+                    "label": "Accounting & Finance",
+                    "type": "stack"
+                },
+                {
+                    "title": "Accounting",
+                    "icon": "fa-file-invoice-dollar",
+                    "route": "https://efactor.tech/index.php/finance/main",
+                    "color": "#a68545",
+                    "textColor": "#1c140c",
+                    "iconColor": "#1c140c",
+                    "type": "stack"
+                },
+                {
+                    "title": "Accounting",
+                    "icon": "fa-file-invoice-dollar",
+                    "route": "https://efactor.tech/index.php/finance/main",
+                    "color": "#a68545",
+                    "textColor": "#1c140c",
+                    "iconColor": "#1c140c",
+                    "type": "stack"
+                },
+                {
+                    "title": "Accounting",
+                    "icon": "fa-file-invoice-dollar",
+                    "route": "https://efactor.tech/index.php/finance/main",
+                    "color": "#a68545",
+                    "textColor": "#1c140c",
+                    "iconColor": "#1c140c",
+                    "type": "stack"
+                }
+            ],
+            "orientation": "square"
+        },
+        {
+            "id": "documents",
+            "type": "stack",
+            "gridArea": "documents",
+            "title": "Document Management",
+            "label": "Document Management",
+            "icon": "fa-folder-open",
+            "color": "#241c16",
+            "textColor": "#f7f1e8",
+            "iconColor": "#f7f1e8",
+            "pageRoute": "https://efactor.tech/index.php/dms",
+            "col": 1,
+            "row": 7,
+            "colSpan": 1,
+            "rowSpan": 1,
+            "borderRadius": 18,
+            "defaultFace": 0,
+            "rotationDir": "ltr",
+            "faces": [
+                {
+                    "title": "Document Management",
+                    "icon": "fa-folder-open",
+                    "route": "https://efactor.tech/index.php/dms",
+                    "color": "#241c16",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "label": "Document Management",
+                    "type": "stack"
+                },
+                {
+                    "title": "Documents",
+                    "icon": "fa-folder-open",
+                    "route": "https://efactor.tech/index.php/dms",
+                    "color": "#241c16",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Documents",
+                    "icon": "fa-folder-open",
+                    "route": "https://efactor.tech/index.php/dms",
+                    "color": "#241c16",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack"
+                },
+                {
+                    "title": "Documents",
+                    "icon": "fa-folder-open",
+                    "route": "https://efactor.tech/index.php/dms",
+                    "color": "#241c16",
+                    "textColor": "#f7f1e8",
+                    "iconColor": "#f7f1e8",
+                    "type": "stack"
+                }
+            ],
+            "orientation": "square"
+        }
+    ],
+    "activePage": "home",
+    "bottomNav": [
+        {
+            "id": "home",
+            "icon": "fa-home",
+            "label": "Home",
+            "active": true
+        },
+        {
+            "id": "devices",
+            "icon": "fa-th",
+            "label": "IoT",
+            "active": false
+        },
+        {
+            "id": "grid",
+            "icon": "fa-border-all",
+            "label": "Grid",
+            "active": false
+        },
+        {
+            "id": "profile",
+            "icon": "fa-user",
+            "label": "Profile",
+            "active": false
+        }
+    ],
+    "bottomNavCategoryTarget": "grid",
+    "gridPage": {
+        "id": "gridPage",
+        "routeId": "grid",
+        "logoUrl": "https://efactor.tech/assets/images/GRID_Logo.png",
+        "header": {
+            "title": "Grid",
+            "subtitle": "Your professional network space",
+            "logoUrl": "https://efactor.tech/assets/images/GRID_Logo.png",
+            "searchIconToken": "search",
+            "avatarInitial": "S",
+            "avatarColor": "#7c3aed"
+        },
+        "featureCards": [
+            {
+                "id": "professional-space",
+                "title": "Professional Space",
+                "subtitle": "Discover people, opportunities and grow your career.",
+                "iconToken": "user",
+                "image": "",
+                "imageUrl": "",
+                "url": "http://localhost/index.php/grid?grid_sso=MTc3LjE3OTE2MTc0OTguZDI5ZDE3OGQyY2RhNmExNQ.hNILtlo-40pVwwpS5hI0_sjbjgnk04ei4gRSz0Dh5s0",
+                "route": "http://localhost/index.php/grid?grid_sso=MTc3LjE3OTE2MTc0OTguZDI5ZDE3OGQyY2RhNmExNQ.hNILtlo-40pVwwpS5hI0_sjbjgnk04ei4gRSz0Dh5s0",
+                "color": "#5b6cff",
+                "gradientStart": "#dce4ff",
+                "gradientEnd": "#b7c4fb",
+                "textColor": "#312e81",
+                "actionId": "grid-open-professional-space"
+            },
+            {
+                "id": "circle-connect",
+                "title": "Circle Connect",
+                "subtitle": "Meaningful conversations. Stronger circles.",
+                "iconToken": "users",
+                "image": "",
+                "imageUrl": "",
+                "url": "http://localhost/index.php/grid-chat?grid_sso=MTc3LjE3OTE2MTc0OTguZDI5ZDE3OGQyY2RhNmExNQ.hNILtlo-40pVwwpS5hI0_sjbjgnk04ei4gRSz0Dh5s0",
+                "route": "http://localhost/index.php/grid-chat?grid_sso=MTc3LjE3OTE2MTc0OTguZDI5ZDE3OGQyY2RhNmExNQ.hNILtlo-40pVwwpS5hI0_sjbjgnk04ei4gRSz0Dh5s0",
+                "color": "#ea580c",
+                "gradientStart": "#ffe0cc",
+                "gradientEnd": "#f4b496",
+                "textColor": "#9a3412",
+                "actionId": "grid-open-circle-connect"
+            }
+        ],
+        "stats": [
+            {
+                "id": "professionals",
+                "label": "Professionals",
+                "value": 248
+            },
+            {
+                "id": "opportunities",
+                "label": "Opportunities",
+                "value": 36
+            },
+            {
+                "id": "active-circles",
+                "label": "Active Circles",
+                "value": 12
+            }
+        ],
+        "shareQr": {
+            "title": "Share Profile QR",
+            "subtitle": "Share your professional or circle profile with anyone.",
+            "iconToken": "grid",
+            "selectedMode": "professional",
+            "modes": [
+                {
+                    "id": "professional",
+                    "label": "Professional"
+                },
+                {
+                    "id": "circle",
+                    "label": "Circle"
+                }
+            ],
+            "qrCaption": "Scan to connect",
+            "qrPayload": "https://efactor.tech/grid/connect?mode=professional",
+            "qrImageUrl": "http://localhost/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dprofessional&size=160&mode=professional",
+            "qrImageUrlTemplate": "http://localhost/v8/qr_image.php?data={data}&mode={mode}&size=160",
+            "qrImageUrlsByMode": {
+                "professional": "http://localhost/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dprofessional&size=160&mode=professional",
+                "circle": "http://localhost/v8/qr_image.php?data=https%3A%2F%2Fefactor.tech%2Fgrid%2Fconnect%3Fmode%3Dcircle&size=160&mode=circle"
+            },
+            "shareActionId": "grid-share-qr",
+            "selectModeActionId": "grid-select-qr-mode"
+        },
+        "exploring": {
+            "title": "Continue Exploring",
+            "seeAllLabel": "See all",
+            "seeAllActionId": "grid-see-all-exploring",
+            "items": [
+                {
+                    "id": "find-talent",
+                    "title": "Find Talent",
+                    "subtitle": "People with skills you need",
+                    "iconToken": "user",
+                    "color": "#8b5cf6",
+                    "actionId": "grid-open-find-talent"
+                },
+                {
+                    "id": "join-circles",
+                    "title": "Join Circles",
+                    "subtitle": "Communities you'll love",
+                    "iconToken": "users",
+                    "color": "#14b8a6",
+                    "actionId": "grid-open-join-circles"
+                }
+            ]
+        },
+        "quote": {
+            "text": "Connections turn potential into progress.",
+            "iconToken": "quote"
+        }
+    },
+    "profilePage": {
+        "name": "",
+        "email": "",
+        "phone": "",
+        "memberId": "",
+        "language": "English (India)",
+        "languageOptions": [
+            "English (India)",
+            "English (US)",
+            "Hindi",
+            "Arabic",
+            "French",
+            "Spanish"
+        ],
+        "notificationsEnabled": true,
+        "privacyPolicyText": "We collect account details (name, email, phone) to provide IoE device control, Grid networking, and support.\n\nYour data is used to authenticate sessions, sync preferences (language, notifications, appearance), and improve reliability.\n\nYou can update profile details, notification preferences, and language any time from this Profile tab.\n\nFor questions about security or data controls, contact support@efactor.tech.",
+        "avatarUrl": ""
+    },
+    "devicesPage": {
+        "header": {
+            "title": "devices · iot",
+            "subtitle": "Tap a cube to control.",
+            "leftIcon": "fa-qrcode",
+            "rightIcon": "fa-ellipsis-h"
+        },
+        "status": {
+            "online": 0,
+            "offline": 0
+        },
+        "devices": []
+    },
+    "staticUiTemplate": null
+}

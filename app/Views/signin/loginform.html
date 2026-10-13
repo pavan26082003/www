@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>login</title>
+    <style>
+        body {
+            background-color: #f0f1ff;
+        }
+
+        .cover_box {
+            position: relative;
+            width: 350px;
+            height: 400px;
+            background: rgb(240, 240, 240);
+            border: 2px solid, black;
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 0 30px rgb(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /*  transform: scale(1);*/
+            /* overflow: hidden; */
+            transition: transform .5s ease, height .2s ease, border 0.5s ease;
+
+        }
+
+
+        .cover_box:hover {
+            border-color: black;
+
+        }
+
+        .cover_box.active-popup {
+            transform: scale(1);
+        }
+
+        .cover_box.active {
+            height: 520px;
+        }
+
+        .cover_box .form-box {
+            width: 100%;
+            padding: 40px;
+
+        }
+
+        .cover_box .form-box.login {
+            transition: transform .50s ease;
+            transform: translateX(0);
+        }
+
+        .cover_box.active .form-box.login {
+            transition: none;
+            transform: translateX(-400px);
+        }
+
+
+
+        .form-box h1 {
+            font-size: 2em;
+            color: black;
+            text-align: center;
+        }
+
+        .input-box {
+            position: relative;
+            width: 100%;
+            height: 40px;
+            margin: 30px 0;
+        }
+
+        .input-box img {
+
+            position: absolute;
+            right: 8px;
+            font-size: 1.2em;
+            color: #05190a;
+            line-height: 45px;
+            width: 25px;
+            cursor: pointer;
+            bottom: 8px;
+
+
+        }
+
+        .input-box label {
+            position: absolute;
+            top: 30%;
+            left: 40px;
+            transform: translate(-50%);
+            font-size: 1em;
+            color: #05190a;
+            font-weight: 500;
+            pointer-events: none;
+            transition: .5s;
+        }
+
+        .input-box input:focus~label,
+        .input-box input:valid~label {
+            top: -20px
+        }
+
+        .input-box input {
+            width: 250px;
+            height: 100%;
+            background: transparent;
+            border: 1px solid #05190a;
+            border-radius: 10px;
+            outline: none;
+            font-size: 1em;
+            color: #05190a;
+            font-weight: 600;
+            padding: 0 35px 0 5px;
+        }
+
+        .emailimg {
+            width: 50px;
+            height: 30px;
+        }
+
+        .remember-forget {
+            font-size: .9em;
+            color: #05190a;
+            font-weight: 500;
+            margin: 15px 0 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .remember-forget label input {
+            accent-color: #05190a;
+            margin-right: 3px;
+        }
+
+        .remember-forget a {
+            color: #05190a;
+            text-decoration: underline;
+        }
+
+        .btn {
+            width: 100%;
+            height: 45px;
+            background-color: black;
+            border: none;
+            border-radius: 100px;
+            cursor: pointer;
+            font-size: 1em;
+            color: #fff;
+            font-weight: 500;
+        }
+
+        .login-register {
+            font-size: .9em;
+
+            color: black;
+            text-align: center;
+            font-weight: 500;
+            margin: 25px 0 0px;
+        }
+
+        .login-register p a {
+            color: black;
+            text-decoration: none;
+            font-weight: 600;
+            text-decoration: underline;
+            color: black;
+        }
+
+        .login-register p a:hover {
+            text-decoration: underline;
+            color: black;
+        }
+
+        .cover_box {
+            text-align: center;
+            z-index: 2;
+            position: absolute;
+            margin-top: 100px;
+            margin-left: 450px;
+        }
+
+        .text {
+            opacity: 0.2;
+        }
+    </style>
+</head>
+
+<body>
+
+   
+    <div class="cover_box" id="cover_box">
+        <div class="form-box login">
+            <h1>Sign in</h1>
+            <form action="#">
+                <div class="input-box">
+                    <img src="email.png" class="emailimg">
+                    <input type="email" required>
+                    <label>Email</label>
+                </div>
+                <div class="input-box">
+
+                    <input type="Password" id="password" name="password" required>
+                    <img src="eye-off-outline.svg" id="eyeo">
+                    <label for="password">Password</label>
+                </div>
+
+                <div class="remember-forget">
+                    <lable><input type="checkbox">Remember me</lable>
+                    <a href="#">Forget Password</a>
+                </div>
+                <button type="submit" class="btn">Sign in</button>
+                <div class="login-register">
+                    <p>Don't have an account? <a href="register01.html"  class="register-link">Register</a></p>
+                </div>
+            </form>
+        </div>
+    </div>
+    <img src="text.png" class="text">
+    <script>
+        let eyeo = document.getElementById("eyeo");
+        let password = document.getElementById("password");
+
+        eyeo.onclick = function () {
+            if (password.type == "password") {
+                password.type = "text"
+                eyeo.src = "eye-outline.svg"
+            } else {
+                password.type = "password"
+                eyeo.src = "eye-off-outline.svg"
+            }
+        }
+    </script>
+ 
+
+
+
+</body>
+
+</html>

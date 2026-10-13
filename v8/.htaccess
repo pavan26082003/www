@@ -1,0 +1,10 @@
+Options -Indexes
+
+RewriteEngine On
+RewriteRule ^api/me/?$ grid_api.php [L,QSA]
+RewriteRule ^grid_api/?$ grid_api.php [L,QSA]
+
+
+
+
+

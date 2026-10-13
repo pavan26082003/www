@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>QR Sticker Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f9f9f9;
+    }
+    .form-container {
+      width: 500px;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 20px;
+      margin: auto;
+      box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      border: 1px solid #ddd;
+    }
+    .generate-btn {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      text-align: center;
+      margin: 20px 0;
+      cursor: pointer;
+      width: 100%;
+      font-size: 16px;
+    }
+    .qr-container {
+      text-align: center;
+      margin-top: 20px;
+      padding: 20px;
+      border: 1px dashed #ccc;
+      background: #f0f7fb;
+    }
+    #qrCode {
+      margin: 10px auto;
+    }
+    .print-btn {
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      text-align: center;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+    #formattedData {
+      margin-top: 15px;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #ddd;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .error {
+      color: red;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="form-container">
+    <h2>QR Sticker Generator</h2>
+    
+    <form id="qrForm">
+      <div class="form-group">
+        <label for="modelNumber">Model Number:</label>
+        <input type="text" id="modelNumber" placeholder="Enter model number (e.g., 1234)" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="date">Date (DD.MM.YY):</label>
+        <input type="text" id="date" placeholder="Enter date in DD.MM.YY format (e.g., 24.04.25)" required>
+        <div id="dateError" class="error"></div>
+      </div>
+      
+      <div class="form-group">
+        <label for="serialNumber">Serial Number:</label>
+        <input type="text" id="serialNumber" placeholder="Enter serial number (e.g., FFFF1234)" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="mrp">MRP:</label>
+        <input type="text" id="mrp" placeholder="Enter MRP (e.g., 3000.00)" required>
+        <div id="mrpError" class="error"></div>
+      </div>
+      
+      <button type="button" class="generate-btn" onclick="generateQR()">Generate QR Code</button>
+    </form>
+    
+    <div class="qr-container" id="qrResult" style="display: none;">
+      <h3>QR Sticker </h3>
+      <div id="formattedData"></div>
+      <div id="qrCode"></div>
+            <button class="print-btn" onclick="window.print()">Print Sticker</button>
+    </div>
+  </div>
+
+  <!-- Using QRCode.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  
+  <script>
+    function generateQR() {
+  // Clear previous errors and results
+  document.getElementById('dateError').textContent = '';
+  document.getElementById('mrpError').textContent = '';
+  document.getElementById('qrCode').innerHTML = '';
+  document.getElementById('qrResult').style.display = 'none';
+
+  // Get form values
+  const modelNumber = document.getElementById('modelNumber').value.trim();
+  const date = document.getElementById('date').value.trim();
+  const serialNumber = document.getElementById('serialNumber').value.trim();
+  const mrp = document.getElementById('mrp').value.trim();
+  
+  // Validate inputs
+  let isValid = true;
+  
+  if (!modelNumber) {
+    alert("Please enter Model Number");
+    isValid = false;
+  }
+  
+  // More flexible date validation
+  if (!date) {
+    document.getElementById('dateError').textContent = "Please enter date";
+    isValid = false;
+  } else if (!/^\d{1,2}\.\d{1,2}\.\d{2}$/.test(date)) {
+    document.getElementById('dateError').textContent = "Use D.M.YY or DD.MM.YY format (e.g., 24.04.25 or 1.1.25)";
+    isValid = false;
+  }
+  
+  if (!serialNumber) {
+    alert("Please enter Serial Number");
+    isValid = false;
+  }
+  
+  // More flexible MRP validation
+  if (!mrp) {
+    document.getElementById('mrpError').textContent = "Please enter MRP";
+    isValid = false;
+  } else if (!/^\d+(\.\d{1,2})?$/.test(mrp)) {
+    document.getElementById('mrpError').textContent = "Use format like 3000 or 3000.00";
+    isValid = false;
+  }
+  
+  if (!isValid) return;
+  
+  // Format MRP to ensure 2 decimal places
+  let formattedMRP = mrp;
+  if (!mrp.includes('.')) {
+    formattedMRP = mrp + '.00';
+  } else {
+    const parts = mrp.split('.');
+    if (parts[1].length === 1) {
+      formattedMRP = parts[0] + '.' + parts[1] + '0';
+    }
+  }
+  
+  // Format the data as required
+  const qrDataString = `${modelNumber} ${date}/S.NO;${serialNumber}/MRP.${formattedMRP}`;
+  
+  // Display the formatted data
+  document.getElementById('formattedData').textContent = qrDataString;
+  
+  // Generate QR code - using alternative method that's more reliable
+  try {
+    const qrCodeElement = document.getElementById('qrCode');
+    new QRCode(qrCodeElement, {
+      text: qrDataString,
+      width: 200,
+      height: 200,
+      correctLevel: QRCode.CorrectLevel.H
+    });
+    
+    // Show QR code container
+    document.getElementById('qrResult').style.display = 'block';
+    qrCodeElement.scrollIntoView({ behavior: 'smooth' });
+  } catch (error) {
+    console.error("QR Generation Error:", error);
+    alert("Error generating QR code. Please check console for details.");
+  }
+}
+
+
+
+
+
+
+
+
+
+
+// Set default date to today in DD.MM.YY format
+    function setDefaultDate() {
+      const today = new Date();
+      const day = String(today.getDate()).padStart(2, '0');
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const year = String(today.getFullYear()).slice(-2);
+      document.getElementById('date').value = `${day}.${month}.${year}`;
+    }
+    
+    // Set default date when page loads
+    window.onload = setDefaultDate;
+  </script>
+</body>
+</html>

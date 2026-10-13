@@ -1,0 +1,1133 @@
+/* =========================================================
+   GO LIVE STUDIO MODAL
+   Responsive Web + Mobile
+========================================================= */
+
+.go-live-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /*
+   * Use dynamic viewport units so mobile browser
+   * address/navigation bars are handled correctly.
+   */
+  min-height: 100dvh;
+
+  padding: 12px;
+  box-sizing: border-box;
+
+  overflow: hidden;
+
+  animation: fadeInModal 0.2s ease-out;
+}
+
+@keyframes fadeInModal {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* =========================================================
+   MAIN MODAL
+========================================================= */
+
+.go-live-modal {
+  width: min(100%, 800px);
+
+  /*
+   * CRITICAL:
+   * Prevent modal from becoming taller than screen.
+   */
+  max-height: calc(100dvh - 24px);
+
+  background: #ffffff;
+
+  border-radius: 20px;
+  border: 1px solid #eef2f8;
+
+  box-shadow:
+    0 20px 40px rgba(0, 0, 0, 0.20),
+    0 8px 20px rgba(0, 0, 0, 0.08);
+
+  overflow: hidden;
+
+  position: relative;
+
+  /*
+   * Make modal a vertical layout.
+   */
+  display: flex;
+  flex-direction: column;
+
+  animation: slideUpModal 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUpModal {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* =========================================================
+   COUNTDOWN OVERLAY
+========================================================= */
+
+.live-countdown-overlay {
+  position: absolute;
+  inset: 0;
+
+  background: rgba(15, 23, 42, 0.92);
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  z-index: 50;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  color: #ffffff;
+}
+
+.countdown-number {
+  font-size: clamp(56px, 10vw, 84px);
+  font-weight: 800;
+
+  color: #ef4444;
+
+  animation: pulseCountdown 0.85s infinite ease-in-out;
+}
+
+@keyframes pulseCountdown {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+
+    text-shadow:
+      0 0 30px rgba(239, 68, 68, 0.6);
+  }
+
+  100% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+}
+
+.countdown-subtext {
+  font-size: 16px;
+  font-weight: 600;
+
+  color: #94a3b8;
+
+  margin-top: 10px;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.go-live-modal-header {
+  flex: 0 0 auto;
+
+  min-height: 72px;
+
+  padding: 14px 20px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  border-bottom: 1px solid #f1f5f9;
+
+  box-sizing: border-box;
+}
+
+.modal-title-group {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  min-width: 0;
+}
+
+.title-icon-badge {
+  width: 40px;
+  height: 40px;
+
+  flex: 0 0 40px;
+
+  border-radius: 12px;
+
+  background: var(
+    --color-primary-light,
+    rgba(245, 158, 11, 0.16)
+  );
+
+  color: var(--color-primary, #f59e0b);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 17px;
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 700;
+
+  color: #0f172a;
+
+  margin: 0;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modal-subtitle {
+  font-size: 12px;
+
+  color: #64748b;
+
+  margin: 2px 0 0;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modal-close-btn {
+  flex: 0 0 32px;
+
+  background: transparent;
+
+  border: none;
+
+  font-size: 18px;
+
+  color: #64748b;
+
+  cursor: pointer;
+
+  width: 32px;
+  height: 32px;
+
+  border-radius: 50%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.modal-close-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.modal-close-btn:active {
+  transform: scale(0.94);
+}
+
+/* =========================================================
+   CAMERA PREVIEW
+========================================================= */
+
+.studio-camera-preview {
+  position: relative;
+
+  width: 100%;
+
+  /*
+   * Don't let 16:9 force the modal beyond the viewport.
+   */
+  aspect-ratio: 16 / 9;
+
+  /*
+   * Camera preview should shrink when screen is short.
+   */
+  height: min(
+    56.25vw,
+    48dvh
+  );
+
+  min-height: 180px;
+
+  max-height: 480px;
+
+  flex: 0 1 auto;
+
+  background: #0f172a;
+
+  overflow: hidden;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.studio-video-element {
+  width: 100%;
+  height: 100%;
+
+  /*
+   * Keep camera content inside the preview.
+   */
+  object-fit: cover;
+
+  display: block;
+}
+
+.studio-camera-placeholder {
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 8px;
+
+  color: #64748b;
+
+  font-size: 13px;
+
+  text-align: center;
+}
+
+.studio-camera-placeholder i {
+  font-size: 32px;
+
+  color: #475569;
+}
+
+/* =========================================================
+   PREVIEW STATUS BADGE
+========================================================= */
+
+.studio-preview-badge {
+  position: absolute;
+
+  top: 12px;
+  left: 12px;
+
+  background: rgba(15, 23, 42, 0.75);
+
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  color: #f8fafc;
+
+  padding: 5px 10px;
+
+  border-radius: 999px;
+
+  font-size: 10.5px;
+  font-weight: 700;
+
+  display: flex;
+  align-items: center;
+
+  gap: 6px;
+
+  border: 1px solid rgba(255, 255, 255, 0.15);
+
+  z-index: 5;
+}
+
+.studio-dot {
+  width: 6px;
+  height: 6px;
+
+  background: #10b981;
+
+  border-radius: 50%;
+
+  flex: 0 0 6px;
+}
+
+/* =========================================================
+   CAMERA / MICROPHONE CONTROLS
+========================================================= */
+
+.studio-device-controls {
+  position: absolute;
+
+  bottom: 12px;
+  right: 12px;
+
+  display: flex;
+
+  gap: 8px;
+
+  z-index: 10;
+}
+
+.studio-control-btn {
+  width: 36px;
+  height: 36px;
+
+  border-radius: 50%;
+
+  border: none;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 14px;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease;
+}
+
+.studio-control-btn:hover {
+  transform: scale(1.05);
+}
+
+.studio-control-btn:active {
+  transform: scale(0.94);
+}
+
+.studio-control-btn.active {
+  background: rgba(255, 255, 255, 0.92);
+
+  color: #0f172a;
+}
+
+.studio-control-btn.disabled {
+  background: #ef4444;
+
+  color: #ffffff;
+}
+
+/* =========================================================
+   FORM AREA
+========================================================= */
+
+.studio-fields-group {
+  /*
+   * IMPORTANT:
+   * This section becomes the scrollable area.
+   */
+  flex: 1 1 auto;
+
+  min-height: 0;
+
+  padding: 18px 22px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 14px;
+
+  overflow-y: auto;
+
+  overscroll-behavior: contain;
+
+  box-sizing: border-box;
+}
+
+/*
+ * Cleaner scrollbar.
+ */
+
+.studio-fields-group::-webkit-scrollbar {
+  width: 6px;
+}
+
+.studio-fields-group::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.studio-fields-group::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+
+  border-radius: 999px;
+}
+
+.studio-fields-group::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* =========================================================
+   FORM FIELDS
+========================================================= */
+
+.field-item {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 6px;
+
+  min-width: 0;
+}
+
+.field-row {
+  display: flex;
+
+  gap: 12px;
+
+  width: 100%;
+}
+
+.flex-1 {
+  flex: 1 1 0;
+
+  min-width: 0;
+}
+
+.field-label {
+  font-size: 12.5px;
+
+  font-weight: 600;
+
+  color: #334155;
+}
+
+.field-input,
+.field-select {
+  width: 100%;
+
+  height: 42px;
+
+  box-sizing: border-box;
+
+  border-radius: 10px;
+
+  border: 1px solid #cbd5e1;
+
+  padding: 0 12px;
+
+  font-size: 13.5px;
+
+  color: #0f172a;
+
+  background: #ffffff;
+
+  outline: none;
+
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.field-input:focus,
+.field-select:focus {
+  border-color: var(--color-primary, #f59e0b);
+
+  box-shadow:
+    0 0 0 3px rgba(245, 158, 11, 0.12);
+}
+
+/* =========================================================
+   ACTION FOOTER
+========================================================= */
+
+.go-live-actions {
+  flex: 0 0 auto;
+
+  min-height: 74px;
+
+  padding: 14px 22px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  border-top: 1px solid #f1f5f9;
+
+  box-sizing: border-box;
+
+  background: #ffffff;
+}
+
+.btn-cancel {
+  height: 40px;
+
+  padding: 0 16px;
+
+  background: #f1f5f9;
+
+  color: #475569;
+
+  border-radius: 10px;
+
+  font-size: 13px;
+
+  font-weight: 600;
+
+  border: none;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.btn-cancel:hover {
+  background: #e2e8f0;
+
+  color: #0f172a;
+}
+
+.btn-cancel:active {
+  transform: scale(0.97);
+}
+
+.btn-start-broadcast {
+  min-height: 40px;
+
+  padding: 0 20px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #ef4444 0%,
+      #dc2626 100%
+    );
+
+  color: #ffffff;
+
+  border-radius: 10px;
+
+  font-size: 13.5px;
+
+  font-weight: 700;
+
+  border: none;
+
+  cursor: pointer;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  box-shadow:
+    0 4px 12px rgba(239, 68, 68, 0.35);
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.btn-start-broadcast:hover:not(:disabled) {
+  background:
+    linear-gradient(
+      135deg,
+      #dc2626 0%,
+      #b91c1c 100%
+    );
+
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 6px 16px rgba(239, 68, 68, 0.45);
+}
+
+.btn-start-broadcast:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-start-broadcast:disabled {
+  background: #cbd5e1;
+
+  box-shadow: none;
+
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   DARK THEME
+========================================================= */
+
+[data-theme="dark"] .go-live-modal {
+  background: #111827;
+
+  border-color: #1e293b;
+
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="dark"] .go-live-modal-header {
+  border-bottom-color: #1e293b;
+}
+
+[data-theme="dark"] .modal-title {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .modal-subtitle {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .modal-close-btn {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .modal-close-btn:hover {
+  background: #24324a;
+
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .studio-fields-group::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+[data-theme="dark"] .studio-fields-group::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+[data-theme="dark"] .field-label {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .field-input,
+[data-theme="dark"] .field-select {
+  background: #161f30;
+
+  border-color: #24324a;
+
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .field-input:focus,
+[data-theme="dark"] .field-select:focus {
+  background: #1a2438;
+
+  border-color: var(--color-primary, #f59e0b);
+
+  box-shadow:
+    0 0 0 3px rgba(245, 158, 11, 0.12);
+}
+
+[data-theme="dark"] .go-live-actions {
+  background: #111827;
+
+  border-top-color: #1e293b;
+}
+
+[data-theme="dark"] .btn-cancel {
+  background: #161f30;
+
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .btn-cancel:hover {
+  background: #24324a;
+
+  color: #f8fafc;
+}
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 768px) {
+
+  .go-live-backdrop {
+    padding: 8px;
+  }
+
+  .go-live-modal {
+    width: 100%;
+
+    max-width: 680px;
+
+    max-height: calc(100dvh - 16px);
+
+    border-radius: 16px;
+  }
+
+  .go-live-modal-header {
+    min-height: 64px;
+
+    padding: 12px 16px;
+  }
+
+  .studio-camera-preview {
+    /*
+     * Smaller preview on shorter tablets.
+     */
+    height: min(56.25vw, 42dvh);
+
+    min-height: 170px;
+
+    max-height: 400px;
+  }
+
+  .studio-fields-group {
+    padding: 16px;
+  }
+
+  .go-live-actions {
+    padding: 12px 16px;
+  }
+}
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 600px) {
+
+  .go-live-backdrop {
+    align-items: center;
+
+    padding: 0;
+  }
+
+  .go-live-modal {
+    width: 100%;
+
+    max-width: none;
+
+    /*
+     * Almost full screen on mobile.
+     */
+    max-height: 100dvh;
+
+    height: min(100dvh, 100%);
+
+    border-radius: 0;
+
+    border: none;
+  }
+
+  /* Header */
+
+  .go-live-modal-header {
+    min-height: 60px;
+
+    padding:
+      10px 14px;
+
+    flex-shrink: 0;
+  }
+
+  .title-icon-badge {
+    width: 36px;
+    height: 36px;
+
+    flex-basis: 36px;
+
+    border-radius: 10px;
+  }
+
+  .modal-title {
+    font-size: 16px;
+  }
+
+  .modal-subtitle {
+    font-size: 11px;
+  }
+
+  /* Camera */
+
+  .studio-camera-preview {
+    /*
+     * Do NOT allow the camera to consume the
+     * complete mobile viewport.
+     */
+    height: min(
+      56.25vw,
+      38dvh
+    );
+
+    min-height: 170px;
+
+    max-height: 320px;
+
+    flex-shrink: 1;
+  }
+
+  .studio-preview-badge {
+    top: 8px;
+    left: 8px;
+
+    padding: 4px 8px;
+  }
+
+  .studio-device-controls {
+    right: 8px;
+    bottom: 8px;
+
+    gap: 6px;
+  }
+
+  .studio-control-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  /* Form */
+
+  .studio-fields-group {
+    padding: 14px;
+
+    gap: 12px;
+
+    /*
+     * Form scrolls instead of increasing modal height.
+     */
+    overflow-y: auto;
+  }
+
+  .field-row {
+    flex-direction: column;
+
+    gap: 12px;
+  }
+
+  .field-input,
+  .field-select {
+    height: 44px;
+
+    font-size: 14px;
+  }
+
+  /* Footer */
+
+  .go-live-actions {
+    min-height: auto;
+
+    padding:
+      10px 14px;
+
+    display: grid;
+
+    grid-template-columns: 1fr 1.5fr;
+
+    gap: 8px;
+
+    flex-shrink: 0;
+  }
+
+  .btn-cancel,
+  .btn-start-broadcast {
+    width: 100%;
+
+    height: 44px;
+
+    min-height: 44px;
+
+    padding: 0 12px;
+  }
+}
+
+/* =========================================================
+   VERY SHORT MOBILE SCREENS
+   Example: landscape / small Android devices
+========================================================= */
+
+@media (max-height: 650px) {
+
+  .go-live-backdrop {
+    padding: 0;
+  }
+
+  .go-live-modal {
+    max-height: 100dvh;
+
+    border-radius: 0;
+  }
+
+  .go-live-modal-header {
+    min-height: 54px;
+
+    padding: 8px 12px;
+  }
+
+  .title-icon-badge {
+    width: 32px;
+    height: 32px;
+
+    flex-basis: 32px;
+  }
+
+  .studio-camera-preview {
+    /*
+     * Short screens need a smaller camera area.
+     */
+    height: min(
+      56.25vw,
+      34dvh
+    );
+
+    min-height: 140px;
+
+    max-height: 280px;
+  }
+
+  .studio-fields-group {
+    padding: 10px 12px;
+
+    gap: 10px;
+  }
+
+  .go-live-actions {
+    min-height: 58px;
+
+    padding: 8px 12px;
+  }
+
+  .btn-cancel,
+  .btn-start-broadcast {
+    height: 40px;
+
+    min-height: 40px;
+  }
+}
+
+/* =========================================================
+   LANDSCAPE MOBILE
+========================================================= */
+
+@media (max-width: 900px) and (orientation: landscape) {
+
+  .go-live-modal {
+    max-height: 100dvh;
+
+    border-radius: 0;
+  }
+
+  .go-live-modal-header {
+    min-height: 52px;
+
+    padding: 7px 14px;
+  }
+
+  .studio-camera-preview {
+    /*
+     * In landscape, width is large but height is small.
+     * Limit preview based on viewport height.
+     */
+    height: min(
+      56.25vw,
+      52dvh
+    );
+
+    min-height: 130px;
+
+    max-height: 300px;
+  }
+
+  .studio-fields-group {
+    padding: 10px 14px;
+
+    gap: 10px;
+  }
+
+  .go-live-actions {
+    min-height: 58px;
+
+    padding: 8px 14px;
+  }
+}
+
+/* =========================================================
+   ACCESSIBILITY
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .go-live-backdrop,
+  .go-live-modal,
+  .countdown-number {
+    animation: none !important;
+  }
+
+  .studio-control-btn,
+  .btn-cancel,
+  .btn-start-broadcast,
+  .modal-close-btn {
+    transition: none !important;
+  }
+}
+
+/* =========================================================
+   SAFE AREA SUPPORT
+   For modern mobile devices with notches/home indicators.
+========================================================= */
+
+@supports (padding: env(safe-area-inset-bottom)) {
+
+  .go-live-backdrop {
+    padding-top: max(
+      8px,
+      env(safe-area-inset-top)
+    );
+
+    padding-bottom: max(
+      8px,
+      env(safe-area-inset-bottom)
+    );
+  }
+
+  @media (max-width: 600px) {
+
+    .go-live-modal-header {
+      padding-top: max(
+        10px,
+        env(safe-area-inset-top)
+      );
+    }
+
+    .go-live-actions {
+      padding-bottom: max(
+        10px,
+        env(safe-area-inset-bottom)
+      );
+    }
+  }
+}

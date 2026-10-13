@@ -1,0 +1,232 @@
+/* =========================================================
+   PEOPLE PICKER
+   Builds on the .new-contact-modal shell defined in
+   ChatList.css and only adds the multi-select list, the
+   selected chips and the footer layout.
+========================================================= */
+
+.people-picker-modal {
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  max-height: min(680px, 88vh);
+}
+
+.people-picker-modal .new-contact-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.people-picker-modal .new-contact-form::-webkit-scrollbar {
+  width: 5px;
+}
+
+.people-picker-modal .new-contact-form::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+
+.optional-label {
+  margin-left: auto;
+  color: #94a3b8;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+/* Chips for the people already chosen */
+.people-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.people-picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px 5px 5px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #1e293b;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.people-picker-chip:hover {
+  background: #eef2f7;
+  border-color: #cbd5e1;
+}
+
+.people-picker-chip img {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.people-picker-chip i {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+/* The selectable list */
+.people-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.people-picker-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.people-picker-list::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+
+.people-picker-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.people-picker-item:hover {
+  background: #f8fafc;
+}
+
+.people-picker-item.is-selected {
+  background: var(--color-primary-light, #e6f7f4);
+}
+
+.people-picker-item img {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.people-picker-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.people-picker-text strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.people-picker-text small {
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.people-picker-check {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 10px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.people-picker-item.is-selected .people-picker-check {
+  background: var(--color-primary, #00a884);
+  border-color: var(--color-primary, #00a884);
+}
+
+.people-picker-empty {
+  padding: 20px 10px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.people-picker-empty.is-error {
+  color: #ef4444;
+}
+
+/* Dark theme */
+[data-theme="dark"] .people-picker-chip {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .people-picker-chip:hover {
+  background: #263449;
+}
+
+[data-theme="dark"] .people-picker-item:hover {
+  background: #1e293b;
+}
+
+[data-theme="dark"] .people-picker-item.is-selected {
+  background: rgba(0, 168, 132, 0.16);
+}
+
+[data-theme="dark"] .people-picker-text strong {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .people-picker-text small,
+[data-theme="dark"] .people-picker-empty,
+[data-theme="dark"] .optional-label {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .people-picker-check {
+  border-color: #475569;
+}
+
+[data-theme="dark"] .people-picker-list::-webkit-scrollbar-thumb,
+[data-theme="dark"] .people-picker-modal .new-contact-form::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+@media (max-width: 520px) {
+  .people-picker-modal {
+    max-height: 92vh;
+  }
+
+  .people-picker-list {
+    max-height: 240px;
+  }
+}

@@ -1,0 +1,14 @@
+{
+    "name": "efactor/app",
+    "autoload": {
+        "psr-4": {
+            "Efactor\\App\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Sudha"
+        }
+    ],
+    "require": {}
+}

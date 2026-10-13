@@ -1,0 +1,461 @@
+/* =========================================================
+   SIDEBAR WORKSTATION
+   Modern, elegant, collapsible sidebar with real vibrant icon tiles
+========================================================= */
+
+.sidebar {
+  position: relative;
+  width: var(--sidebar-collapsed-width, 68px) !important;
+  max-width: var(--sidebar-collapsed-width, 68px) !important;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-right: 1px solid var(--color-border, #edf1f7);
+  overflow: hidden;
+  padding-top: 16px;
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   SIDEBAR TOGGLE BUTTON (Permanently Removed / Hidden)
+========================================================= */
+
+.sidebar-toggle {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  left: -9999px !important;
+  opacity: 0 !important;
+}
+
+/* =========================================================
+   NAVIGATION ITEMS
+========================================================= */
+
+.main-nav {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 10px;
+}
+
+.nav-item {
+  position: relative;
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  border-radius: 12px;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.15s ease;
+}
+
+.nav-item:hover {
+  background: #f8f9fe;
+  color: #0f172a;
+}
+
+.nav-item.active {
+  background: var(--color-primary-light, rgba(245, 158, 11, 0.1));
+  color: var(--color-primary, #f59e0b);
+}
+
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3.5px;
+  height: 24px;
+  border-radius: 0 4px 4px 0;
+  background: var(--color-primary, #f59e0b);
+}
+
+/* =========================================================
+   REAL THEMED APP ICON TILES
+========================================================= */
+
+.nav-icon-tile {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: var(--item-bg, #e6f7f4);
+  color: var(--item-color, #00a884);
+  font-size: 15px;
+  position: relative;
+  box-shadow: 0 1.5px 4px rgba(0, 0, 0, 0.04);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nav-item:hover .nav-icon-tile {
+  transform: translateY(-1.5px) scale(1.06);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.nav-item.active .nav-icon-tile {
+  background: var(--item-color, #00a884);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(0, 168, 132, 0.38), 0 0 0 2px rgba(255, 255, 255, 0.85);
+  transform: scale(1.04);
+}
+
+/* Pulsing Live Streaming Dot */
+.nav-live-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  animation: liveDotPulse 1.8s infinite;
+}
+
+@keyframes liveDotPulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+  }
+
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+.nav-item-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.18s ease;
+}
+
+.nav-item:hover .nav-item-label {
+  color: #0f172a;
+}
+
+.nav-item.active .nav-item-label {
+  color: var(--color-primary, #00a884);
+  font-weight: 700;
+}
+
+/* =========================================================
+   SIDEBAR FOOTER (PROFILE & SETTINGS)
+========================================================= */
+
+.sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px 14px;
+  gap: 4px;
+}
+
+.profile-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+  position: relative;
+}
+
+.profile-block:hover {
+  background: #f8f9fe;
+}
+
+.profile-block.active {
+  background: rgba(112, 71, 235, 0.08);
+}
+
+.profile-avatar {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #eef2f6;
+  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.profile-block:hover .profile-avatar {
+  transform: scale(1.06);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.profile-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 6px;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.profile-name span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chevron {
+  font-size: 9px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+/* =========================================================
+   COLLAPSED SIDEBAR (ICONS ONLY BY DEFAULT)
+========================================================= */
+
+.sidebar.sidebar-collapsed {
+  width: var(--sidebar-collapsed-width, 68px);
+}
+
+.sidebar.sidebar-collapsed .sidebar-toggle i {
+  transform: rotate(0deg);
+}
+
+.sidebar:not(.sidebar-collapsed) .sidebar-toggle i {
+  transform: rotate(0deg);
+}
+
+.sidebar.sidebar-collapsed .main-nav {
+  padding: 0 8px;
+}
+
+.sidebar.sidebar-collapsed .nav-item {
+  width: 100%;
+  justify-content: center;
+  padding: 6px 0;
+}
+
+.sidebar.sidebar-collapsed .nav-icon-tile {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 12px;
+}
+
+.sidebar.sidebar-collapsed .nav-item-label {
+  display: none;
+}
+
+.sidebar.sidebar-collapsed .nav-item.active::before {
+  left: 2px;
+  width: 3px;
+  height: 20px;
+}
+
+.sidebar.sidebar-collapsed .sidebar-footer {
+  padding: 8px 8px 14px;
+}
+
+.sidebar.sidebar-collapsed .profile-block {
+  width: 100%;
+  justify-content: center;
+  padding: 6px 0;
+  margin: 2px 0;
+}
+
+.sidebar.sidebar-collapsed .profile-name {
+  display: none;
+}
+
+/* =========================================================
+   FLOATING TOOLTIPS IN COLLAPSED MODE
+========================================================= */
+
+.sidebar.sidebar-collapsed .nav-item::after,
+.sidebar.sidebar-collapsed .profile-block::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%) scale(0.92);
+  background: #0f172a;
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+  z-index: 99999;
+}
+
+.sidebar.sidebar-collapsed .nav-item:hover::after,
+.sidebar.sidebar-collapsed .profile-block:hover::after {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+}
+
+.sidebar.sidebar-collapsed .nav-item::before,
+.sidebar.sidebar-collapsed .profile-block::before {
+  content: "";
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+  border-width: 5px 6px 5px 0;
+  border-style: solid;
+  border-color: transparent #0f172a transparent transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  z-index: 99999;
+}
+
+.sidebar.sidebar-collapsed .nav-item:hover::before,
+.sidebar.sidebar-collapsed .profile-block:hover::before {
+  opacity: 1;
+}
+
+/* Active indicator overriding the tooltip arrow on active items */
+.sidebar.sidebar-collapsed .nav-item.active::before {
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  border: none;
+  border-radius: 0 4px 4px 0;
+  background: var(--color-primary, #00a884);
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 10;
+}
+
+/* =========================================================
+   DARK THEME SYSTEM
+========================================================= */
+
+[data-theme="dark"] .sidebar {
+  background: #111827;
+  border-right-color: #1e293b;
+}
+
+[data-theme="dark"] .sidebar-toggle {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .sidebar-toggle:hover {
+  background: var(--color-primary, #00a884);
+  color: #ffffff;
+  border-color: var(--color-primary, #00a884);
+}
+
+[data-theme="dark"] .nav-item {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .nav-item.active {
+  background: var(--color-primary-light, rgba(245, 158, 11, 0.18));
+  color: var(--color-primary, #f59e0b);
+}
+
+[data-theme="dark"] .nav-icon-tile {
+  background: var(--item-dark-bg, rgba(0, 168, 132, 0.24));
+  color: var(--item-dark-color, #00a884);
+}
+
+[data-theme="dark"] .nav-item.active .nav-icon-tile {
+  background: var(--item-color, #00a884);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] .nav-live-dot {
+  border-color: #111827;
+}
+
+[data-theme="dark"] .nav-item-label {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .nav-item:hover .nav-item-label {
+  color: #ffffff;
+}
+
+[data-theme="dark"] .nav-item.active .nav-item-label {
+  color: var(--color-primary, #f59e0b);
+}
+
+[data-theme="dark"] .profile-block:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .profile-avatar {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+[data-theme="dark"] .profile-name {
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] .sidebar.sidebar-collapsed .nav-item::after,
+[data-theme="dark"] .sidebar.sidebar-collapsed .profile-block::after {
+  background: #1e293b;
+  border: 1px solid #334155;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .sidebar.sidebar-collapsed .nav-item::before,
+[data-theme="dark"] .sidebar.sidebar-collapsed .profile-block::before {
+  border-color: transparent #1e293b transparent transparent;
+}

@@ -1,0 +1,496 @@
+/* =========================================================
+   EDIT CONTACT VIEW (Reference Image 2)
+   Works on Web & Mobile, Light & Dark themes
+========================================================= */
+
+.edit-contact-page {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  color: #111827;
+  overflow: hidden;
+  position: relative;
+  font-family: inherit;
+}
+
+/* Header */
+.edit-contact-header {
+  height: 56px;
+  flex: 0 0 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f3f9;
+  z-index: 10;
+}
+
+.edit-back-btn,
+.edit-menu-btn {
+  width: 38px;
+  height: 38px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-size: 17px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.edit-back-btn:hover,
+.edit-menu-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.edit-header-title {
+  margin: 0;
+  flex: 1;
+  font-size: 17px;
+  font-weight: 600;
+  color: #0f172a;
+  padding-left: 8px;
+}
+
+/* Form Container */
+.edit-contact-form {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px 20px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* Form Row with Left Icon */
+.edit-form-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  width: 100%;
+}
+
+.edit-group-icon {
+  width: 28px;
+  padding-top: 14px;
+  display: flex;
+  justify-content: center;
+  color: #64748b;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.edit-group-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* Outlined Input Box with Floating Label (Matching Image 2) */
+.edit-input-container {
+  position: relative;
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px 14px 8px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.edit-input-container:focus-within {
+  border-color: #00a884;
+  box-shadow: 0 0 0 1px #00a884;
+}
+
+.edit-floating-label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.2;
+  margin-bottom: 2px;
+  pointer-events: none;
+}
+
+.edit-input-container:focus-within .edit-floating-label {
+  color: #00a884;
+}
+
+.edit-text-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: #0f172a;
+  outline: none;
+  font-family: inherit;
+}
+
+.edit-text-input::placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+/* Split Row for Country & Phone */
+.edit-phone-split-row {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.edit-country-container {
+  width: 115px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.edit-country-select-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.edit-country-select-box i {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.edit-phone-container {
+  flex: 1;
+}
+
+/* Sync to Phone Section */
+.edit-sync-group {
+  margin-top: 4px;
+}
+
+.edit-sync-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sync-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sync-text-info {
+  flex: 1;
+}
+
+.sync-title {
+  margin: 0 0 3px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.sync-subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+/* WhatsApp / iOS Style Green Switch */
+.sync-switch-label {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.sync-switch-label input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.sync-switch-slider {
+  position: absolute;
+  inset: 0;
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+  transition: 0.25s ease;
+  display: flex;
+  align-items: center;
+}
+
+.sync-switch-slider::before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.sync-switch-slider.is-checked {
+  background-color: #25d366;
+}
+
+.sync-switch-slider.is-checked::before {
+  transform: translateX(20px);
+}
+
+.sync-check-icon {
+  position: absolute;
+  right: 6px;
+  font-size: 9px;
+  color: #ffffff;
+}
+
+/* Sync to Email Dropdown */
+.sync-email-dropdown-wrap {
+  position: relative;
+  padding-top: 2px;
+}
+
+.sync-to-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.sync-email-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0 8px;
+  border-bottom: 1px solid #cbd5e1;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.sync-email-bar:hover {
+  border-color: #00a884;
+}
+
+.sync-email-text {
+  font-size: 14px;
+  color: #0f172a;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-email-bar i {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.sync-email-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 50;
+  overflow: hidden;
+}
+
+.sync-email-menu-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  font-size: 13.5px;
+  color: #1e293b;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.sync-email-menu-item:hover {
+  background: #f1f5f9;
+}
+
+.sync-email-menu-item.active {
+  background: #e6f7f4;
+  color: #00a884;
+  font-weight: 600;
+}
+
+/* Bottom Save Button (Matching Image 2) */
+.edit-contact-bottom-bar {
+  margin-top: auto;
+  padding-top: 16px;
+  width: 100%;
+}
+
+.edit-save-btn {
+  width: 100%;
+  height: 48px;
+  border-radius: 9999px;
+  border: none;
+  background: #00a884;
+  color: #ffffff;
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 14px rgba(0, 168, 132, 0.28);
+}
+
+.edit-save-btn:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 168, 132, 0.35);
+}
+
+.edit-save-btn:active {
+  transform: scale(0.99);
+}
+
+/* =========================================================
+   DARK THEME OVERRIDES (Matching Image 2 Screenshot)
+========================================================= */
+
+[data-theme="dark"] .edit-contact-page {
+  background: #0b1120;
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .edit-contact-header {
+  background: #0b1120;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .edit-back-btn,
+[data-theme="dark"] .edit-menu-btn {
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .edit-back-btn:hover,
+[data-theme="dark"] .edit-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .edit-header-title {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .edit-group-icon {
+  color: #8696a0;
+}
+
+[data-theme="dark"] .edit-input-container {
+  background: #0b1120;
+  border-color: #24324a;
+}
+
+[data-theme="dark"] .edit-input-container:focus-within {
+  border-color: #00a884;
+  box-shadow: 0 0 0 1px #00a884;
+}
+
+[data-theme="dark"] .edit-floating-label {
+  color: #8696a0;
+}
+
+[data-theme="dark"] .edit-input-container:focus-within .edit-floating-label {
+  color: #00a884;
+}
+
+[data-theme="dark"] .edit-text-input {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .edit-text-input::placeholder {
+  color: #4b5563;
+}
+
+[data-theme="dark"] .edit-country-select-box {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .edit-country-select-box i {
+  color: #8696a0;
+}
+
+[data-theme="dark"] .sync-title {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .sync-subtitle {
+  color: #8696a0;
+}
+
+[data-theme="dark"] .sync-switch-slider {
+  background-color: #334155;
+}
+
+[data-theme="dark"] .sync-switch-slider.is-checked {
+  background-color: #00a884;
+}
+
+[data-theme="dark"] .sync-to-label {
+  color: #8696a0;
+}
+
+[data-theme="dark"] .sync-email-bar {
+  border-bottom-color: #24324a;
+}
+
+[data-theme="dark"] .sync-email-text {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .sync-email-bar i {
+  color: #8696a0;
+}
+
+[data-theme="dark"] .sync-email-menu {
+  background: #111827;
+  border-color: #24324a;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .sync-email-menu-item {
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .sync-email-menu-item:hover {
+  background: #1e293b;
+}
+
+[data-theme="dark"] .sync-email-menu-item.active {
+  background: rgba(0, 168, 132, 0.15);
+  color: #00a884;
+}

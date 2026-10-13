@@ -1,0 +1,60 @@
+{
+    "vms": [
+        {
+            "name": "production-web-server",
+            "state": "stopped",
+            "vcpus": 4,
+            "cpu": 4,
+            "memory": 8192,
+            "mem": 8192,
+            "disk_size": 50,
+            "disk_path": "/vm_storage/images/production-web-server.qcow2",
+            "storage_pool": "/vm_storage/images/",
+            "os_variant": "ubuntu22.04",
+            "os_type": "ubuntu22.04",
+            "network": "default",
+            "iso_path": "/vm_storage/iso/ubuntu-22.04.iso",
+            "ip_address": "",
+            "created": "2026-08-11T08:08:11+00:00"
+        },
+        {
+            "name": "windows-test-01",
+            "state": "stopped",
+            "vcpus": 4,
+            "cpu": 4,
+            "memory": 8192,
+            "mem": 8192,
+            "disk_size": 100,
+            "disk_path": "/vm_storage/images/windows-test-01.qcow2",
+            "storage_pool": "/vm_storage/images",
+            "os_variant": "win10",
+            "os_type": "win10",
+            "network": "default",
+            "iso_path": "/vm_storage/iso/Windows.iso",
+            "ip_address": "",
+            "created": "2026-08-11T09:49:00+00:00"
+        }
+    ],
+    "disks": [
+        {
+            "name": "production-web-server",
+            "disk_path": "/vm_storage/images/production-web-server.qcow2",
+            "storage_path": "/vm_storage/images/",
+            "format": "qcow2",
+            "allocated_gb": 50,
+            "used_gb": 0,
+            "is_attached": true,
+            "vm_name": "production-web-server"
+        },
+        {
+            "name": "windows-test-01",
+            "disk_path": "/vm_storage/images/windows-test-01.qcow2",
+            "storage_path": "/vm_storage/images",
+            "format": "qcow2",
+            "allocated_gb": 100,
+            "used_gb": 0,
+            "is_attached": true,
+            "vm_name": "windows-test-01"
+        }
+    ]
+}

@@ -1,0 +1,187 @@
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+
+<?php
+
+$box_class = "mb15";
+$caption_class = "more";
+$caption_lang = " " . app_lang('more');
+if (isset($is_message_row)) {
+    $box_class = "message-images mb5 mt5";
+    $caption_class .= " message-more";
+    $caption_lang = "";
+}
+
+if ($files && count($files)) {
+
+    $timeline_file_path = get_setting("timeline_file_path");
+    $total_files = count($files);
+    echo "<div class='timeline-images " . $box_class . "'>";
+    $first_file = $files[0];
+
+    if (is_array($first_file)) {
+        $file_name = $first_file['file_name'];
+    } else {
+        $file_name = $first_file;
+    }
+    $more_image = "";
+    if ($total_files > 1) {
+        $more_count = $total_files - 1;
+        $more_image = "<span class='$caption_class'>+" . $more_count . $caption_lang . "</span>";
+    }
+
+    $shown_preview_image = false;
+    $is_localhost = is_localhost();
+
+    foreach ($files as $file) {
+        if (is_array($file)) {
+            $file_name = $file['file_name'];
+            $file_id = get_array_value($file, "file_id");
+            $service_type = get_array_value($file, "service_type");
+        } else {
+            $file_name = $file;
+            $file_id = "";
+            $service_type = "";
+            $file = array("file_name" => $file_name);
+        }
+
+        $url = get_source_url_of_file($file, $timeline_file_path);
+        $thumbnail = get_source_url_of_file($file, $timeline_file_path, "thumbnail");
+
+        $image = "";
+        $actual_file_name = remove_file_prefix($file_name);
+        if ((is_viewable_video_file($file_name) && !$file_id && $service_type != "google") || (is_viewable_video_file($file_name) && $file_id && $service_type == "google" && !get_setting("disable_google_preview"))) {
+
+            if (!$shown_preview_image) {
+                $image = "<img src='" . get_file_uri("assets/images/video_preview.jpg") . "' alt='video'/>$more_image";
+                $shown_preview_image = true;
+            }
+            echo "<a href='$url' data-title='" . $actual_file_name . "' class='mfp-iframe'>$image</a>";
+        } else if (is_viewable_image_file($file_name)) {
+
+            if (!$shown_preview_image) {
+                $image = "<img src='$thumbnail' alt='$file_name'/>$more_image";
+                $shown_preview_image = true;
+            }
+            $mfp_class = "mfp-image";
+            if ($file_id && $service_type == "google" && !get_setting("disable_google_preview")) {
+                $mfp_class = "mfp-iframe";
+            }
+            echo "<a href='$url' class='$mfp_class' data-title='" . $actual_file_name . "'>$image</a>";
+        } else {
+            if (!$shown_preview_image) {
+                // $image = "<div class='inline-block'><div class='file-mockup'><i data-feather='" . get_file_icon(strtolower(pathinfo($file_name, PATHINFO_EXTENSION))) . "' width='40px' height='40px' class='mt-12'></i></div></div>$more_image";
+                $image = "<div class='inline-block'><div class='file-mockup' data-file='{$file_name}'></div></div>$more_image";
+
+                $shown_preview_image = true;
+            }
+
+            if ($file_id && $service_type == "google" && !get_setting("disable_google_preview")) {
+                echo "<a data-viewer='google' href='$url' class='mfp-iframe' data-title='" . $actual_file_name . "'>$image</a>";
+            } else {
+                if (!$is_localhost && is_google_preview_available($file_name) && !get_setting("disable_google_preview")) {
+                    echo "<a data-viewer='google' href='https://drive.google.com/viewerng/viewer?url=$url?pid=explorer&efh=false&a=v&chrome=false&embedded=true' class='mfp-iframe' data-title='" . $actual_file_name . "'>$image</a>";
+                } else {
+                    $uid = uniqid(rand());
+                    echo "<a href='#$uid' class='mfp-inline' data-title='" . $actual_file_name . "'>" . $image . "</a>" . '<div id="' . $uid . '" class="mfp-hide">' . app_lang("file_preview_is_not_available") . '<div class="text-off">' . $actual_file_name . '</div>' . '</div>';
+                }
+            }
+        }
+    }
+    echo "</div>";
+}
+?>
+
+
+
+
+
+<script>
+    function renderFileIcons() {
+        document.querySelectorAll(".file-mockup").forEach(box => {
+            const file = box.dataset.file || "";
+            const ext = file.split(".").pop().toLowerCase();
+
+            let icon = "bi-file-earmark";
+            let color = "#5f6368";
+
+            const map = {
+                /* ===== Documents ===== */
+                pdf: ["bi-file-earmark-pdf", "#d93025"],
+
+                doc: ["bi-file-earmark-word", "#185abc"],
+                docx: ["bi-file-earmark-word", "#185abc"],
+
+                xls: ["bi-file-earmark-excel", "#188038"],
+                xlsx: ["bi-file-earmark-excel", "#188038"],
+                csv: ["bi-file-earmark-excel", "#188038"],
+
+                ppt: ["bi-file-earmark-ppt", "#c43e1c"],
+                pptx: ["bi-file-earmark-ppt", "#c43e1c"],
+
+                txt: ["bi-file-earmark-text", "#5f6368"],
+                rtf: ["bi-file-earmark-text", "#5f6368"],
+
+                /* ===== Images ===== */
+                jpg: ["bi-file-earmark-image", "#1a73e8"],
+                jpeg: ["bi-file-earmark-image", "#1a73e8"],
+                png: ["bi-file-earmark-image", "#1a73e8"],
+                gif: ["bi-file-earmark-image", "#1a73e8"],
+                webp: ["bi-file-earmark-image", "#1a73e8"],
+                svg: ["bi-file-earmark-image", "#1a73e8"],
+
+                /* ===== Video ===== */
+                mp4: ["bi-file-earmark-play", "#185abc"],
+                mkv: ["bi-file-earmark-play", "#185abc"],
+                avi: ["bi-file-earmark-play", "#185abc"],
+                mov: ["bi-file-earmark-play", "#185abc"],
+                webm: ["bi-file-earmark-play", "#185abc"],
+
+                /* ===== Audio ===== */
+                mp3: ["bi-file-earmark-music", "#8e24aa"],
+                wav: ["bi-file-earmark-music", "#8e24aa"],
+                ogg: ["bi-file-earmark-music", "#8e24aa"],
+                flac: ["bi-file-earmark-music", "#8e24aa"],
+
+                /* ===== Archives ===== */
+                zip: ["bi-file-earmark-zip", "#f29900"],
+                rar: ["bi-file-earmark-zip", "#f29900"],
+                "7z": ["bi-file-earmark-zip", "#f29900"],
+                tar: ["bi-file-earmark-zip", "#f29900"],
+                gz: ["bi-file-earmark-zip", "#f29900"],
+
+                /* ===== Code / Dev ===== */
+                html: ["bi-file-earmark-code", "#e37400"],
+                css: ["bi-file-earmark-code", "#2965f1"],
+                js: ["bi-file-earmark-code", "#f7df1e"],
+                json: ["bi-file-earmark-code", "#f7df1e"],
+                php: ["bi-file-earmark-code", "#7377ad"],
+                py: ["bi-file-earmark-code", "#3572A5"],
+                java: ["bi-file-earmark-code", "#b07219"],
+                c: ["bi-file-earmark-code", "#555555"],
+                cpp: ["bi-file-earmark-code", "#00599C"],
+                sql: ["bi-file-earmark-code", "#00618a"],
+
+                /* ===== System / Misc ===== */
+                exe: ["bi-file-earmark-binary", "#5f6368"],
+                dmg: ["bi-file-earmark-binary", "#5f6368"],
+                apk: ["bi-file-earmark-binary", "#3ddc84"],
+                iso: ["bi-file-earmark-binary", "#5f6368"],
+
+                /* ===== Default ===== */
+                default: ["bi-file-earmark", "#5f6368"]
+            };
+
+
+            if (map[ext]) {
+                icon = map[ext][0];
+                color = map[ext][1];
+            }
+
+            box.innerHTML = `<i class="bi ${icon}" style="font-size:50px;color:${color}"></i>`;
+        });
+    }
+
+    // call after DOM load
+
+    renderFileIcons();
+</script>

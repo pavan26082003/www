@@ -1,0 +1,8 @@
+{
+    "require": {
+        "php-mqtt/client": "^0.3.0",
+        "phpmailer/phpmailer": "^6.8",
+        "endroid/qr-code": "^4.6",
+        "mike42/escpos-php": "^4.0"
+    }
+}

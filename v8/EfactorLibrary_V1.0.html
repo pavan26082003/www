@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Efactor Library Integration Guide</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+        }
+        h1, h2, h3 {
+            color: #333;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 5px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .section h2 {
+            border-bottom: 2px solid #333;
+            padding-bottom: 5px;
+        }
+        .section h3 {
+            margin-top: 20px;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Efactor Library Integration Guide</h1>
+<p><strong>Version:</strong> v1.3</p>
+<p><strong>Updated On:</strong> <em>31-01-2025</em></p>
+
+<hr>
+
+<div class="section">
+    <h2>1. Adding Efactor Library to Your Project</h2>
+    <p>The Efactor Library is hosted on a <strong>custom Ivy repository</strong>. Follow these steps to integrate it into your Android project.</p>
+
+    <h3>Step 1: Configure Ivy Repository</h3>
+    <p>Add the following in your <strong>project-level</strong> <code>build.gradle</code> file:</p>
+    <pre><code>repositories {
+    ivy {
+        url "https://efactor.tech/v8/download.php/${CUSTOMER_ID}/${ACCESS_KEY}/"
+
+        patternLayout {
+            artifact "[artifact]-[revision].[ext]" 
+        }
+
+        metadataSources {
+            artifact() 
+        }
+    }
+}</code></pre>
+</div>
+
+<div class="section">
+    <h2>2. Adding Efactor Library</h2>
+    <p>Include the library dependency in your <strong>app-level</strong> <code>build.gradle</code> file:</p>
+    <pre><code>dependencies {
+    implementation 'proto:efactorprotov2:1.3@aar'
+}</code></pre>
+    <p class="success">✅ This ensures that the Efactor Library is downloaded and linked correctly.</p>
+</div>
+
+<div class="section">
+    <h2>3. Adding Required Dependencies</h2>
+    <p>Since the Efactor Library depends on external libraries, <strong>app developers must manually include them</strong> in their project.</p>
+    <p>Add the following dependencies in your <strong>app-level</strong> <code>build.gradle</code> file:</p>
+    <pre><code>dependencies {
+    implementation "androidx.room:room-runtime:2.5.1"
+    annotationProcessor "androidx.room:room-compiler:2.5.1"
+    implementation 'org.java-websocket:Java-WebSocket:1.5.1'
+    implementation 'org.greenrobot:eventbus:3.3.1'
+    implementation 'com.auth0.android:jwtdecode:1.4.0'
+    implementation 'com.google.code.gson:gson:2.8.6'
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.9.0'
+    implementation 'com.google.crypto.tink:tink-android:1.6.1'
+    implementation 'com.google.protobuf:protobuf-javalite:3.18.0'
+    implementation 'com.google.android.gms:play-services-threadnetwork:16.0.1'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.4'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.0'
+}</code></pre>
+    <p class="success">✅ This ensures that all required dependencies are available for the Efactor Library.</p>
+</div>
+
+<div class="section">
+    <h2>4. Adding a Device</h2>
+    <p>To add a device, follow these steps:</p>
+
+    <h3>Step 2: Initialize Provision Manager</h3>
+    <p>Before adding a device, initialize the <code>EfactorProvisionManager</code> in your <code>Activity</code> or <code>Fragment</code>:</p>
+    <pre><code>libraryManager = EfactorLibraryManager.init(this, api_key);
+provisionManager = EfactorProvisionManager.getInstance(getApplicationContext());</code></pre>
+
+    <h3>Step 3: Scan QR Code</h3>
+    <p>If the device provides a QR code, scan and decode it using:</p>
+    <pre><code>provisionManager.decodeScannedQrData(scannedData);</code></pre>
+    <p class="success">✅ Once the data is processed, the device will be verified by the Efactor cloud.</p>
+
+    <h3>sendData Operations</h3>
+    <p>The following operations are supported:</p>
+    <ol>
+        <li><strong>ADD_DEVICE</strong></li>
+        <li><strong>REMOVE</strong></li>
+        <li><strong>SEND_DATA</strong></li>
+        <li><strong>GET_CONNECTIVITY_STATUS</strong></li>
+        <li><strong>ADD</strong></li>
+    </ol>
+
+    <h4>1: ADD_DEVICE</h4>
+    <p>To add a device, <code>ApiKey</code>, <code>NodeId</code>, and <code>ApiKey</code> should not be null.</p>
+
+    <h4>2: REMOVE</h4>
+    <p>To remove a device, <code>ApiKey</code>, <code>NodeId</code>, and <code>DeviceId</code> should not be null.</p>
+
+    <h4>3: SEND_DATA</h4>
+    <p>To send data, <code>Payload</code>, <code>ParamName</code>, <code>PageName</code>, <code>ApiKey</code>, <code>NodeId</code>, <code>Latitude</code>, and <code>Longitude</code> should not be empty or null.</p>
+
+    <h4>4: GET_CONNECTIVITY_STATUS</h4>
+    <p>To get connectivity status, <code>NodeId</code>, <code>Latitude</code>, and <code>Longitude</code> should not be empty or null.</p>
+
+    <h4>5: ADD</h4>
+    <p>To add a device to the network, <code>ApiKey</code>, <code>NodeId</code>, and <code>SecretKey</code> should not be null.</p>
+
+    <h3>Example Code</h3>
+    <pre><code>EfactorLibraryManager.getInstance().sendData(req, new ApiLibResponseListener() {
+    @Override
+    public void onSuccess(Bundle response) {
+        Log.d("Efactor", "Device Connected: " + response);
+    }
+
+    @Override
+    public void onResponseFailure(Exception e) {
+        Log.e("Efactor", "Device Connection Failed: " + e.getMessage());
+    }
+
+    @Override
+    public void onNetworkFailure(Exception e) {
+        Log.e("Efactor", "Network Error: " + e.getMessage());
+    }
+});</code></pre>
+</div>
+
+<div class="section">
+    <h2>5. Connecting Device to Network</h2>
+    <p>After adding the device, follow these steps to connect it to a network:</p>
+
+    <h3>Step 4: Start Provisioning Process</h3>
+    <p>Once the device is added, follow these steps to connect it to a Wi-Fi network:</p>
+
+    <h4>1: ProvisionLanding</h4>
+    <pre><code>private void connectDevice() {
+    btnConnect.setEnabled(false);
+    btnConnect.setAlpha(0.5f);
+    txtConnectBtn.setText(R.string.btn_connecting);
+    progressBar.setVisibility(View.VISIBLE);
+
+    if (ActivityCompat.checkSelfPermission(ProvisionLanding.this, Manifest.permission.ACCESS_FINE_LOCATION) 
+        == PackageManager.PERMISSION_GRANTED) {
+        provisionManager.getEfactorDevice().getcrds();
+    } else {
+        Log.e(TAG, "Not able to connect device as Location permission is not granted.");
+        Toast.makeText(ProvisionLanding.this, 
+                       "Please give location permission to connect device", 
+                       Toast.LENGTH_LONG).show();
+    }
+}</code></pre>
+
+    <h4>2: ProvisionActivity</h4>
+    <p>Follow the steps in <code>ProvisionActivity.java</code>.</p>
+
+    <h4>3: Check Device Connection Status</h4>
+    <p>Once provisioning is complete, verify that the device is online:</p>
+    <p class="success">✅ Once the device is successfully connected, it is ready for operation.</p>
+</div>
+
+<div class="section">
+    <h2>6. Sync Gradle & Build</h2>
+    <p>After adding the dependencies, <strong>sync your project</strong> and rebuild:</p>
+
+    <h3>Sync Gradle</h3>
+    <ul>
+        <li><strong>In Android Studio:</strong> Click <code>Sync Now</code></li>
+        <li><strong>Or via Terminal:</strong></li>
+    </ul>
+    <pre><code>./gradlew clean
+./gradlew build --refresh-dependencies</code></pre>
+    <p class="success">✅ Now your project is ready to use Efactor Library! 🚀</p>
+</div>
+
+<hr>
+
+<h2>Summary</h2>
+<ul>
+    <li class="success">✔ <strong>Step 1:</strong> Add Efactor Ivy repository</li>
+    <li class="success">✔ <strong>Step 2:</strong> Include <code>efactorprotov2</code> AAR</li>
+    <li class="success">✔ <strong>Step 3:</strong> Manually add required dependencies</li>
+    <li class="success">✔ <strong>Step 4:</strong> Add device using QR code</li>
+    <li class="success">✔ <strong>Step 5:</strong> Connect device to network using provisioning steps</li>
+    <li class="success">✔ <strong>Step 6:</strong> Sync Gradle & Build</li>
+</ul>
+
+<p>🚀 Now you're ready to use Efactor Library in your project! 🚀</p>
+
+</body>
+</html>

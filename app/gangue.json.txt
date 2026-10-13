@@ -1,0 +1,70 @@
+SizedBox(
+    width: 500.0,
+    height: 500.0,
+    child: AnimatedRadialGauge(
+        radius: 150.0,
+        duration: Duration(milliseconds: 2000),
+        curve: Curves.elasticOut,
+        value: 65.0,
+        builder: (context, _, value) => RadialGaugeLabel(
+            style: TextStyle(
+                color: Color(0xFF002E5F),
+                fontSize: 46.0,
+                fontWeight: FontWeight.bold,
+            ),
+            value: value,
+        ),
+        axis: GaugeAxis(
+            min: 0,
+            max: 100,
+            sweepDegrees: 260.0,
+            pointer: GaugePointer.triangle(
+                width: 36.0,
+                height: 36.0,
+                borderRadius: 4.5,
+                color: Color(0xFF175F00),
+                position: GaugePointerPosition.surface(
+                    offset: Offset(0, 3.0),
+                ),
+                border: GaugePointerBorder(
+                    color: Colors.white,
+                    width: 4.5,
+                ),
+            ),
+            progressBar: GaugeProgressBar.basic(
+                color: Color(0xFFB02729),
+                placement: GaugeProgressPlacement.inside,
+            ),
+            transformer: GaugeAxisTransformer.colorFadeIn(
+                interval: Interval(0.0, 0.3),
+                background: Color(0xFFD9DEEB),
+            ),
+            style: GaugeAxisStyle(
+                thickness: 5.0,
+                zoneSpacing: 19.73,
+                blendColors: false,
+                cornerRadius: Radius.circular(8.0),
+            ),
+            zones: [
+                GaugeZone(
+                    from: 0.0,
+                    to: 60.0,
+                    color: Color(0xFFD9DEEB),
+                    cornerRadius: Radius.circular(20.0),
+                ),
+                GaugeZone(
+                    from: 60.0,
+                    to: 85.0,
+                    color: Color(0xFFD9DEEB),
+                    cornerRadius: Radius.circular(20.0),
+                ),
+                GaugeZone(
+                    from: 85.0,
+                    to: 100.0,
+                    color: Color(0xFFD9DEEB),
+                    cornerRadius: Radius.circular(20.0),
+                ),
+            ],
+        ),
+    ),
+)

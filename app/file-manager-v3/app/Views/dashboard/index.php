@@ -1,0 +1,392 @@
+<?php
+// app/Views/dashboard/index.php
+
+$apiBase = '/api/v1';
+$basePath = '/app/file-manager-v3';
+$username = $_SESSION['username'] ?? 'User';
+$userEmail = $_SESSION['email'] ?? '';
+$userInitial = strtoupper(substr($username, 0, 1));
+
+$view = isset($_GET['view']) ? $_GET['view'] : 'my-drive';
+
+$pageTitleMap = [
+    'my-drive' => 'My Drive',
+    'documents' => 'Documents',
+    'projects' => 'Projects',
+    'shared' => 'Shared with Me',
+    'trash' => 'Trash',
+    'starred' => 'Starred',
+    'images' => 'Images',
+    'videos' => 'Videos',
+    'archives' => 'Archives'
+];
+$pageTitle = $pageTitleMap[$view] ?? 'My Drive';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EFACTOR</title>
+    <link rel="stylesheet" href="<?php echo $basePath; ?>/assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Preview Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-php.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-xml-doc.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pptx2html@1.0.0/dist/pptx2html.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <button class="header-btn" id="menuToggle" title="Toggle Sidebar">
+                <i class="fas fa-bars"></i>
+            </button>
+            <a href="<?php echo $basePath; ?>/dashboard" class="logo">
+                <img src="<?php echo $basePath; ?>/assets/images/efactor.png" alt="eFactor" style="height: 32px; width: auto;">
+            </a>
+        </div>
+        
+        <div class="header-center">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Search for files">
+            </div>
+        </div>
+        
+        <div class="header-right">
+            <a href="<?php echo $basePath; ?>/home" class="header-btn" title="Home">
+                <i class="fas fa-home"></i>
+            </a>
+            <button class="header-btn" title="Settings">
+                <i class="fas fa-cog"></i>
+            </button>
+            <button onclick="syncAllFiles()" class="header-btn" title="Sync Files">
+                <i class="fas fa-sync"></i>
+            </button>
+            <div class="user-profile" id="userProfile">
+                <div class="user-avatar" id="userAvatar">
+                    <?php echo $userInitial; ?>
+                </div>
+                <div class="profile-dropdown" id="profileDropdown">
+                    <div class="profile-info">
+                        <div class="profile-avatar"><?php echo $userInitial; ?></div>
+                        <div class="profile-details">
+                            <div class="profile-name"><?php echo htmlspecialchars($username); ?></div>
+                            <div class="profile-email"><?php echo htmlspecialchars($userEmail); ?></div>
+                        </div>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <a href="#" onclick="logout()" class="dropdown-item">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+    <button class="new-btn" id="newBtn">
+        <i class="fas fa-plus"></i>
+        <span>New</span>
+    </button>
+    
+    <ul class="sidebar-nav" id="clusterNav">
+        <li class="loading-clusters">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Loading clusters...</span>
+        </li>
+    </ul>
+    
+    <div class="sidebar-divider"></div>
+    
+    <div class="storage-info">
+        <div class="storage-label">Storage</div>
+        <div class="storage-bar">
+            <div class="fill" id="storageFill" style="width: 0%"></div>
+        </div>
+        <div class="storage-text">
+            <span id="storageUsed">0 B</span> of <span id="storageLimit">10 GB</span> used
+        </div>
+    </div>
+</nav>
+
+    <!-- Main Content -->
+    <main class="main-content" id="mainContent">
+        <!-- Sync Section -->
+        <div class="sync-section" id="syncSection">
+            <div class="sync-header">
+                <h3><i class="fas fa-sync"></i> Synchronization</h3>
+                <div class="sync-header-buttons">
+                    <button class="sync-run-btn" id="syncRunBtn" onclick="runSync()">
+                        <i class="fas fa-play"></i> Sync Now
+                    </button>
+                    <button class="sync-add-btn" onclick="initSync()">
+                        <i class="fas fa-folder-plus"></i> Init Sync
+                    </button>
+                </div>
+            </div>
+            
+            <div class="sync-body" id="syncBody">
+                <!-- Sync Status -->
+                <div class="sync-status" id="syncStatus">
+                    <div class="sync-stats">
+                        <span>Total: <strong id="syncTotal">0</strong></span>
+                        <span>Synced: <strong id="syncSynced">0</strong></span>
+                        <span>Pending: <strong id="syncPending">0</strong></span>
+                        <span>Errors: <strong id="syncErrors">0</strong></span>
+                    </div>
+                    <div class="sync-folder-display">
+                        <i class="fas fa-folder"></i> 
+                        <span id="syncFolderDisplay">Not initialized</span>
+                    </div>
+                </div>
+                
+                <!-- Unsynced Files -->
+                <div class="sync-unsynced-section" id="syncUnsyncedSection">
+                    <div class="sync-unsynced-header" onclick="toggleUnsyncedFiles()">
+                        <span>
+                            <i class="fas fa-clock"></i> 
+                            Unsynced Files (<span id="unsyncedCount">0</span>)
+                        </span>
+                        <i class="fas fa-chevron-down" id="unsyncedToggleIcon"></i>
+                    </div>
+                    <div class="sync-unsynced-list" id="syncUnsyncedList">
+                        <div class="sync-empty-state">
+                            <i class="fas fa-check-circle" style="color:#34a853;"></i>
+                            <p>All files are synced! 🎉</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sync Folders -->
+                <div class="sync-folders" id="syncFoldersList">
+                    <!-- Sync folder will be auto-detected -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <h2 id="pageTitle"><?php echo $pageTitle; ?></h2>
+                <div class="breadcrumb" id="breadcrumb">
+                    <span onclick="navigateToRoot()">My Drive</span>
+                </div>
+            </div>
+            <div class="toolbar-right">
+                <button class="tool-btn" id="newFolderBtn">
+                    <i class="fas fa-folder-plus"></i> New Folder
+                </button>
+                <button class="tool-btn primary" id="uploadBtn">
+                    <i class="fas fa-upload"></i> Upload
+                </button>
+                <button class="tool-btn danger" id="emptyTrashBtn" style="display:none;">
+                    <i class="fas fa-trash"></i> Empty Trash
+                </button>
+                <input type="file" id="fileInput" style="display:none" multiple>
+                <div class="view-toggle">
+                    <button class="active" data-view="grid" title="Grid View">
+                        <i class="fas fa-th"></i>
+                    </button>
+                    <button data-view="list" title="List View">
+                        <i class="fas fa-list"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="fileGrid" class="file-grid">
+            <!-- Items will be loaded here -->
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <div class="modal-overlay" id="createFolderModal">
+        <div class="modal">
+            <h3>New Folder</h3>
+            <input type="text" id="folderNameInput" placeholder="Untitled folder" autofocus>
+            <div class="modal-actions">
+                <button class="cancel" onclick="document.getElementById('createFolderModal').classList.remove('active')">Cancel</button>
+                <button class="confirm" onclick="createFolder()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="confirm-dialog-overlay" id="confirmDialog">
+        <div class="confirm-dialog">
+            <div class="dialog-icon"><i class="fas fa-exclamation-triangle"></i></div>
+            <h3>Empty Trash?</h3>
+            <p id="confirmMessage">This will permanently delete all items in your trash. This action cannot be undone.</p>
+            <div class="dialog-actions">
+                <button class="cancel" onclick="closeConfirmDialog()">Cancel</button>
+                <button class="confirm-danger" id="confirmActionBtn">Empty Trash</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="actionMenuOverlay" class="action-menu-overlay" onclick="closeActionMenu()"></div>
+    <div id="actionMenu" class="action-menu">
+        <div class="menu-header" id="menuHeader">
+            <span class="item-name">Item</span>
+            <button class="close-menu" onclick="closeActionMenu()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="menuContent"></div>
+    </div>
+
+    <!-- Preview Modal -->
+<div id="previewModal" class="preview-modal-overlay">
+    <div class="preview-modal">
+        <div class="preview-modal-header">
+            <div class="preview-file-info">
+                <span class="preview-file-name" id="previewFileName">File Name</span>
+                <span class="preview-file-meta">
+                    <span id="previewFileSize">Size: 0 KB</span>
+                    <span id="previewFileType">Type: unknown</span>
+                    <span id="previewSharedBy" style="display:none;"></span>
+                    <span id="previewPermissionIndicator" style="display:none;"></span>
+                </span>
+            </div>
+            <div class="preview-modal-actions">
+                <button class="preview-btn download" id="previewDownloadBtn" title="Download">
+                    <i class="fas fa-download"></i> <span>Download</span>
+                </button>
+                <button class="preview-btn-close" onclick="closePreviewModal()" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="preview-modal-body" id="previewContent">
+            <div style="text-align:center;padding:40px;color:#5f6368;">
+                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- Share Modal - Pre-defined -->
+    <div id="shareModal" class="modal-overlay">
+        <div class="share-modal-content">
+            <div class="share-modal-header">
+                <div class="share-modal-title">
+                    <div class="share-item-icon" id="shareItemIcon">
+                        <i class="fas fa-file"></i>
+                    </div>
+                    <div class="share-title-text">
+                        <h3>Share</h3>
+                        <p class="share-item-name" id="shareItemName">Item name</p>
+                        <p class="share-item-type" id="shareItemType" style="font-size:12px;color:#5f6368;margin:2px 0 0;"></p>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeShareModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="share-modal-body">
+                <!-- Search Section -->
+                <div class="share-search-section">
+                    <label class="share-label"><i class="fas fa-user-plus"></i> Add people</label>
+                    <div class="share-search-box">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" id="shareSearchInput" placeholder="Enter email or name..." class="share-search-input">
+                        <button onclick="searchUsers()" class="share-search-btn">
+                            <i class="fas fa-arrow-right"></i> <span>Search</span>
+                        </button>
+                    </div>
+                    <div id="shareSearchResults" class="share-search-results" style="display:none;">
+                        <div id="shareUserList"></div>
+                    </div>
+                </div>
+                
+                <!-- Permission Section -->
+                <div class="share-permission-section">
+                    <label class="share-label"><i class="fas fa-lock"></i> Permission</label>
+                    <select id="sharePermission" class="share-select">
+                        <option value="view">👁️ View only</option>
+                        <option value="download">⬇️ View & download</option>
+                        <option value="edit">✏️ Edit</option>
+                        <option value="share">🔗 Share</option>
+                        <option value="full">⭐ Full access</option>
+                    </select>
+                </div>
+                
+                <!-- Expiration Section -->
+                <div class="share-expiration-section">
+                    <label class="share-label"><i class="fas fa-clock"></i> Expiration (optional)</label>
+                    <input type="datetime-local" id="shareExpires" class="share-date-input">
+                </div>
+                
+                <!-- Share Button -->
+                <button onclick="shareItem()" class="share-btn-primary" id="shareConfirmBtn">
+                    <i class="fas fa-share-alt"></i> Share
+                </button>
+                
+                <!-- Existing Shares -->
+                <div class="share-existing-section">
+                    <div class="share-existing-header">
+                        <h4>People with access</h4>
+                        <span class="share-count" id="shareCount">0</span>
+                    </div>
+                    <div id="existingShares" class="share-existing-list">
+                        <div class="share-empty-state">
+                            <i class="fas fa-users"></i>
+                            <p>No one has access yet</p>
+                            <span>Share this item with others</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">
+        <i class="fas fa-info-circle toast-icon"></i>
+        <span class="toast-text">Message</span>
+        <button class="close-toast" onclick="this.parentElement.classList.remove('show')">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    
+
+    <!-- JavaScript Configuration -->
+    <script>
+        window._apiBase = '/app/file-manager-v3/api/v1';
+        window._basePath = '/app/file-manager-v3';
+        window._userId = <?php echo json_encode($_SESSION['user_id']); ?>;
+        window._username = <?php echo json_encode($_SESSION['username']); ?>;
+        window._email = <?php echo json_encode($_SESSION['email'] ?? ''); ?>;
+        window._initialView = '<?php echo $view; ?>';
+    </script>
+    
+    <!-- Load JavaScript Modules -->
+    <script src="<?php echo $basePath; ?>/assets/js/config.js"></script>
+    <script src="<?php echo $basePath; ?>/assets/js/utils.js"></script>
+    <script src="<?php echo $basePath; ?>/assets/js/app.js"></script>
+    <script src="/app/file-manager-v3/public/assets/js/preview.js"></script>
+    <script src="<?php echo $basePath; ?>/assets/js/share.js"></script>
+    <script src="<?php echo $basePath; ?>/assets/js/excelpreview.js"></script>
+    
+    <script src="<?php echo $basePath; ?>/assets/js/sync.js"></script>
+    <script src="<?php echo $basePath; ?>/assets/js/websocket-client.js"></script>
+
+</body>
+</html>
