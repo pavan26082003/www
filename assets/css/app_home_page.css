@@ -1971,10 +1971,12 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
   font-size:18px;
   font-weight:800;
   line-height:1.15;
+  color:var(--ahp-text-primary,#0f172a)!important;
 }
 .ahp-m-brand p{
   margin:2px 0 0;
   font-size:11px;
+  color:var(--ahp-text-muted,#64748b)!important;
 }
 .ahp-m-logo.ahp-m-logo-img{
   width:auto!important;

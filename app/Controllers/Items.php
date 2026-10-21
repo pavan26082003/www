@@ -182,15 +182,6 @@ function online_products() {
 
      }
 
-      function vendor() {
-
-         $view_data['client_id'] =$this->login_user->client_id;
-
-         $view_data['categories_dropdown'] = $this->_get_categories_dropdown();
-
-        return $this->template->rander("items/vendor", $view_data);
-
-     }
 
 function getUserIdFromSession() {
 
@@ -1789,19 +1780,6 @@ public function savebrand_edit()
         return $this->template->view('items/modal_formcat', $view_data);
     }
 
-   //modal_vendorproduct
-      function modal_vendorproduct() {
-
-          $user_id = session()->get('user_id') ?? ($this->login_user->id ?? null);
-
-          if (!$user_id) {
-              return $this->response->setStatusCode(401)->setBody("Session user_id missing");
-          }
-
-          $view_data['categories_dropdown'] =  $this->Items_model->get_cats($user_id)->getResult();
-           $view_data['brand_dropdown'] =  $this->Items_model->get_brands($user_id)->getResult();
-           return $this->template->view('items/modal_vendorproduct', $view_data);
-      }
       
        function modal_vendor_admin_product() {
 
@@ -2600,110 +2578,6 @@ function modal_error() {
           echo "<script>location.href='https://efactor.tech/index.php/items/mapped';</script>";
 }
 
-     
-
-function savevendorproduct() {
-
-    $user_id = session()->get('user_id') ?? ($this->login_user->id ?? null);
-
-    if (!$user_id) {
-        return $this->response->setJSON(array("success" => false, "message" => "Session user_id missing"));
-    }
-
-
-    $id = (int) ($this->request->getPost('id') ?? 0);
-
-    $item_data = [
-        "brand" => $this->request->getPost('brand'),
-        "category" => $this->request->getPost('category'),
-        "modelname" => $this->request->getPost('modelname'),
-        "modelno" => $this->request->getPost('modelno'),
-        "description" => $this->request->getPost('description'),
-        "version" => $this->request->getPost('version'),
-        "batch" => $this->request->getPost('batch')
-    ];
-
-    if (trim((string) $item_data['modelname']) === '' || trim((string) $item_data['modelno']) === '') {
-        return $this->response->setJSON(array(
-            "success" => false,
-            "message" => "Model name and model number are required."
-        ));
-    }
-
-    $result = $this->Items_model->savevendorproduct($item_data, $user_id, $id);
-
-    if (is_string($result)) {
-        if ($this->request->isAJAX()) {
-            return $this->response->setJSON(array("success" => false, "message" => $result));
-        }
-
-        $view_data['error'] = $result;
-        return $this->template->rander("items/vendor", $view_data);
-    }
-
-    if (!$result) {
-        return $this->response->setJSON(array(
-            "success" => false,
-            "message" => "Unable to save model details."
-        ));
-    }
-
-    // Card edits are sent with AJAX. Return JSON so the page can reload the
-    // freshly saved database values without navigating away.
-    if ($this->request->isAJAX()) {
-        return $this->response->setJSON(array(
-            "success" => true,
-            "id" => $id,
-            "message" => $id ? "Model updated successfully." : "Model saved successfully."
-        ));
-    }
-
-    // Preserve the existing non-AJAX Add Model behaviour.
-    if (!$id) {
-        $this->getstatusfunt22($item_data, $user_id);
-    }
-
-    return redirect()->to(get_uri("items/vendor"));
-}
-
-
-/*
-function savevendorproduct() {
-
-    session_start();
-    $user_id = $_SESSION['user_id'];
-
-    $id = $this->request->getPost('id');
-
-    $item_data = [
-        "brand" => $this->request->getPost('brand'),
-        "category" => $this->request->getPost('category'),
-        "modelname" => $this->request->getPost('modelname'),
-        "modelno" => $this->request->getPost('modelno'),
-        "description" => $this->request->getPost('description')
-    ];
-
-    // 🔍 Print data
-    echo "<pre>";
-    print_r($item_data);
-    echo "</pre>";
-    exit;
-
-    $result = $this->Items_model->savevendorproduct($item_data, $user_id);
-
-    if (is_string($result)) {
-        $view_data['error'] = $result;
-    } else {
-        $this->getstatusfunt22($item_data, $user_id);
-        echo "<script>location.href='https://efactor.tech/index.php/items/vendor';</script>";
-        return;
-    }
-
-    return $this->template->rander("items/vendor", $view_data);
-}
-
-
-*/
 function savevendoradminproduct() {
 
     $user_id = session()->get('user_id') ?? ($this->login_user->id ?? null);
@@ -7228,25 +7102,6 @@ exit;
 
 
 
-     //deletevendorproduct
-      function deletevendorproduct() {
-
-     $id = $this->request->getPost('id');
-     if (!$id) {
-         return $this->response->setJSON(array("success" => false, "message" => "Missing model id"));
-     }
-
-     $user_id = session()->get('user_id') ?? ($this->login_user->id ?? null);
-     if (!$user_id) {
-         return $this->response->setJSON(array("success" => false, "message" => "Session user_id missing"));
-     }
-
-     $this->Items_model->deletevendorproduct($id, $user_id);
-
-     return $this->response->setJSON(array("success" => true, 'message' => app_lang('record_deleted')));
-
-
-     }
 
 
      
@@ -7681,28 +7536,6 @@ $row['options'] = modal_anchor(get_uri("items/modal_formbrand/" . $data->id), "<
 
    }
 
-   //list_data1vendor
-   function list_data1vendor() {
-
-        $user_id = session()->get('user_id') ?? ($this->login_user->id ?? null);
-
-        if (!$user_id) {
-            return $this->response->setJSON(array("data" => array(), "error" => "Session user_id missing"));
-        }
-
-        $list_data = $this->Items_model->get_vendorproducts($user_id)->getResult();
-
-        $result = array();
-        foreach ($list_data as $data) {
-
-            $result[] = $this->_make_item_row1_vendor($data);
-
-        }
-
-        return $this->response->setJSON(array("data" => $result));
-
-
-   }
 
 
 
@@ -8138,63 +7971,6 @@ private function _make_item_row1_vendor($data) {
 
 
 
-
-private function _make_item_row1_vendor($data) {
-    $getValue = function ($aliases, $default = '') use ($data) {
-        foreach ($aliases as $alias) {
-            if (isset($data->{$alias}) && $data->{$alias} !== '') {
-                return $data->{$alias};
-            }
-        }
-
-        return $default;
-    };
-
-    $id = (int) $getValue(array('id'), 0);
-    $modelNameValue = $getValue(array('model_name', 'modelname', 'modal_name', 'name'), 'N/A');
-    $brandValue = $getValue(array('brand_name', 'brand'), 'No Brand');
-    $categoryValue = $getValue(array('category_name', 'category', 'product_name', 'product_type'), 'N/A');
-    $productValue = $getValue(array('product_name', 'category_name', 'category', 'product_type'), $categoryValue);
-    $modelNoValue = $getValue(array('model_no', 'modelno', 'model_number'), $modelNameValue);
-    $versionValue = $getValue(array('version', 'model_version'), 'N/A');
-    $batchValue = $getValue(array('batch', 'Batch'), 'N/A');
-
-    $modelNo = rawurlencode((string) $modelNoValue);
-    $modelName = rawurlencode((string) $modelNameValue);
-    $category = rawurlencode((string) $categoryValue);
-    return array(
-        'id' => $id,
-        'model_name' => $modelNameValue,
-        'brand_name' => $brandValue,
-        'category_name' => $categoryValue,
-        'product_name' => $productValue,
-        'model_no' => $modelNoValue,
-        'version' => $versionValue,
-        'batch' => $batchValue,
-        'edit_url' => get_uri("items/viewapis/" . $id . "?modelno=" . $modelNo),
-        'copy_url' => get_uri("items/modal_api/" . $id),
-        'view_url' => get_uri("items/viewapis/" . $id . "?modelno=" . $modelNo),
-        'delete_url' => get_uri("items/deletevendorproduct"),
-        'actions' => array(
-            array('label' => 'Add API/Product', 'icon' => 'fa-plus-circle', 'url' => get_uri("items/modal_api/" . $id), 'class' => 'modal-action', 'title' => 'Add API/Product'),
-            array('label' => 'View APIs', 'icon' => 'fa-eye', 'url' => get_uri("items/viewapis/" . $id . "?modelno=" . $modelNo), 'class' => ''),
-            array('label' => 'Add Pages', 'icon' => 'fa-file-text', 'url' => get_uri("items/modal_pages/" . $id . "?modelno=" . $modelNo), 'class' => 'modal-action', 'title' => 'Add Page Names'),
-            array('label' => 'Linking Page', 'icon' => 'fa-link', 'url' => get_uri("items/api_page_linking/" . $id . "?modelno=" . $modelNo), 'class' => ''),
-            array('label' => 'Linked View UI', 'icon' => 'fa-eye', 'url' => get_uri("items/view_page_ui/" . $id . "?modelno=" . $modelNo), 'class' => ''),
-            array('label' => 'Specifications', 'icon' => 'fa-cogs', 'url' => get_uri("items/specifications/" . $id . "?modelno=" . $modelNo), 'class' => ''),
-            array('label' => 'Add API Frame Format', 'icon' => 'fa-plus-circle', 'url' => get_uri("items/api_frame_numbers/" . $id), 'class' => 'modal-action', 'title' => 'Add API Frame Format'),
-            array('label' => 'Add Description', 'icon' => 'fa-plus-circle', 'url' => get_uri("items/description_api/" . $id), 'class' => 'modal-action', 'title' => 'Add Description'),
-            array('label' => 'Auto Test Form', 'icon' => 'fa-flask', 'url' => get_uri("items/auto_test/" . $id . "?modelno=" . $modelNo), 'class' => ''),
-            array('label' => 'Auto Test Start', 'icon' => 'fa-flask', 'url' => get_uri("items/auto_test_start/" . $id . "?modelno=" . $modelNo), 'class' => ''),
-            array('label' => 'View UI Type', 'icon' => 'fa-desktop', 'url' => get_uri("items/callDisplayFunction/" . $modelNo . "?category=" . $category), 'class' => ''),
-            array('label' => 'Device Select', 'icon' => 'fa-cube', 'url' => get_uri("items/callDisplayId"), 'class' => ''),
-            array('label' => 'Sticker Update', 'icon' => 'fa-sticky-note', 'url' => get_uri("items/sticker_update/" . $id . "?modelno=" . $modelNo . "&category=" . $category . "&modelname=" . $modelName), 'class' => ''),
-            array('label' => 'Confirm', 'icon' => 'fa-check', 'url' => get_uri("items/callConfirmDisplayFunction/" . $modelNo), 'class' => 'confirm-action'),
-            array('label' => 'Warranty Card', 'icon' => 'fa-shield', 'url' => 'https://efactor.tech/warranty_form.html?modelname=' . $modelName, 'class' => 'external'),
-            array('label' => 'Delete', 'icon' => 'fa-trash', 'url' => get_uri("items/deletevendorproduct"), 'class' => 'delete-action')
-        )
-    );
-}
 
 
 

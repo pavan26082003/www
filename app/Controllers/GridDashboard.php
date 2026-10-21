@@ -180,8 +180,8 @@ class GridDashboard extends Security_Controller
             'routeId' => 'grid',
             'schema_version' => $schema['schemaVersion'] ?? '3.0.0',
             'gridApiUrl' => $gridApiUrl,
-            'professionalSpaceUrl' => \App\Libraries\GridWebSso::stripToken((string) ($meta['professionalSpaceUrl'] ?? '')),
-            'circleConnectUrl' => \App\Libraries\GridWebSso::stripToken((string) ($meta['circleConnectUrl'] ?? '')),
+            'professionalSpaceUrl' => \App\Libraries\GridWebSso::studioCardUrl('professional-space', (string) ($meta['professionalSpaceUrl'] ?? '')),
+            'circleConnectUrl' => \App\Libraries\GridWebSso::studioCardUrl('circle-connect', (string) ($meta['circleConnectUrl'] ?? '')),
             'content' => $schema['content'] ?? $content,
             'schema' => $schema,
         );

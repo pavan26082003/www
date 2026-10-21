@@ -18,10 +18,11 @@ if (file_exists($html_path)) {
     ];
 
     $app_data_script = '<script>window.__APP_DATA__ = ' . json_encode($app_data, JSON_UNESCAPED_SLASHES) . ';</script>';
+    $offline_script = '<script src="/grid-offline.js?v=1"></script>';
 
     // Inject App Data before closing head tag
     if (strpos($html, '</head>') !== false) {
-        $html = str_replace('</head>', $app_data_script . "\n</head>", $html);
+        $html = str_replace('</head>', $app_data_script . "\n" . $offline_script . "\n</head>", $html);
     } else {
         $html = $app_data_script . $html;
     }

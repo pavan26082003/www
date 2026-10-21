@@ -1760,10 +1760,28 @@
     card.rowSpan = Math.max(1, Math.min(16, parseInt(card.rowSpan, 10) || 1));
   }
 
+  function resolvePublicAvatarUrl(url) {
+    var src = String(url || '').trim();
+    if (!src || /^(data:|blob:)/i.test(src)) return '';
+    if (/\/assets\/images\/avatar\.jpg(\?|$)/i.test(src)) return '';
+    if (/^https?:\/\//i.test(src)) {
+      if (/^http:\/\//i.test(src) && !/localhost|127\.0\.0\.1|::1/i.test(src)) {
+        src = 'https://' + src.slice(7);
+      }
+      return src;
+    }
+    if (src.charAt(0) !== '/') {
+      src = src.indexOf('/') === -1 ? ('/files/profile_images/' + src) : ('/' + src);
+    }
+    return 'https://efactor.tech' + src;
+  }
+
   function getProfileAvatarUrl(profile, cfg) {
     profile = profile || {};
     cfg = cfg || {};
-    return String(profile.avatarUrl || (cfg.loginUserProfile && cfg.loginUserProfile.avatarUrl) || '').trim();
+    var fromProfile = resolvePublicAvatarUrl(profile.avatarUrl);
+    var fromLive = resolvePublicAvatarUrl(cfg.loginUserProfile && cfg.loginUserProfile.avatarUrl);
+    return fromLive || fromProfile;
   }
 
   function getProfileInitials(profile, cfg) {
@@ -2020,7 +2038,11 @@
   }
 
   function mergeLayoutProfile(layout, cfg) {
-    return Object.assign({}, (layout && layout.profilePage) || {}, (cfg && cfg.loginUserProfile) || {});
+    var page = (layout && layout.profilePage) || {};
+    var live = (cfg && cfg.loginUserProfile) || {};
+    var merged = Object.assign({}, page, live);
+    merged.avatarUrl = resolvePublicAvatarUrl(live.avatarUrl) || resolvePublicAvatarUrl(page.avatarUrl);
+    return merged;
   }
 
   function buildHomeHeaderComponent(layout, cfg, theme, usedIcons) {
@@ -2030,10 +2052,16 @@
     cfg = cfg || {};
     var titleText = resolveHomeHeaderTitle(layout);
     var subtitleText = resolveHomeHeaderSubtitle(layout);
+    var titleColor = theme.textPrimary || (theme.bgStyle === 'light' ? '#0f172a' : '#f8fafc');
+    var subtitleColor = theme.textMuted || (theme.bgStyle === 'light' ? '#64748b' : '#94a3b8');
     var logoUrl = (cfg && cfg.logoUrl) || 'https://efactor.tech/files/home/Logo_new.png';
-    return {
+    var profile = mergeLayoutProfile(layout, cfg);
+    var greetingName = getProfileGreetingName(profile, cfg);
+    var avatarUrl = getProfileAvatarUrl(profile, cfg);
+    var header = {
       id: 'home-header',
       type: 'homeHeader',
+      visible: true,
       overflowPolicy: 'ellipsis',
       logo: {
         imageUrl: logoUrl,
@@ -2054,7 +2082,8 @@
           fontSize: 18,
           fontWeight: 800,
           lineHeight: 1.15,
-          colorToken: 'colors.textPrimary'
+          colorToken: 'colors.textPrimary',
+          color: titleColor
         },
         RESPONSIVE_TEXT_OVERFLOW.title
       ),
@@ -2066,7 +2095,8 @@
           fontSize: 11,
           fontWeight: 400,
           lineHeight: 1.25,
-          colorToken: 'colors.textMuted'
+          colorToken: 'colors.textMuted',
+          color: subtitleColor
         },
         RESPONSIVE_TEXT_OVERFLOW.subtitle
       ),
@@ -2090,15 +2120,52 @@
         titleFontSize: 18,
         titleFontWeight: 800,
         titleLineHeight: 1.15,
+        titleColor: titleColor,
         subtitleFontSize: 11,
         subtitleFontWeight: 400,
         subtitleLineHeight: 1.25,
+        subtitleColor: subtitleColor,
         logoWidth: 96,
         logoHeight: 28,
         layoutGap: 10,
-        marginBottom: 12
+        marginBottom: 12,
+        backgroundColor: 'transparent'
       }
     };
+    // Market hides the welcome banner. Keep the same header row the app already
+    // knows (greeting + avatar are optional homeHeader props) so the top bar still renders.
+    if (theme.showWelcome === false) {
+      usedIcons.profile = true;
+      header.greeting = buildHomeHeaderGreetingBlock(greetingName);
+      if (header.greeting && header.greeting.typography) {
+        header.greeting.typography.color = subtitleColor;
+      }
+      header.avatar = {
+        initials: getProfileInitials(profile, cfg),
+        initialsBinding: {
+          '$bind': 'session.user.initials',
+          fallback: getProfileInitials(profile, cfg)
+        },
+        imageUrl: avatarUrl,
+        imageUrlBinding: avatarUrl ? {
+          '$bind': 'session.user.avatarUrl',
+          fallback: avatarUrl
+        } : undefined,
+        appearance: {
+          width: 46,
+          height: 46,
+          borderRadius: 999,
+          gradientStart: theme.welcomeStart || '#22c55e',
+          gradientEnd: theme.welcomeEnd || '#0ea5e9',
+          fontSize: 15,
+          fontWeight: 800,
+          textColor: '#ffffff'
+        },
+        events: { tap: { actionId: 'navigate-profile' } },
+        accessibilityLabel: 'Open profile'
+      };
+    }
+    return header;
   }
 
   function buildProfileAppearanceContract(theme) {
@@ -2178,7 +2245,6 @@
 
     usedIcons.profile = true;
     usedIcons.alerts = true;
-    usedIcons.language = true;
     usedIcons.appearance = true;
     usedIcons.shield = true;
     usedIcons.logout = true;
@@ -2232,6 +2298,7 @@
       phoneChip: phoneValue,
       avatarText: profileInitials,
       avatarUrl: profileAvatarUrl,
+      imageUrl: profileAvatarUrl,
       nameBinding: { '$state': 'session.user.displayName', fallback: displayName },
       titleBinding: { '$state': 'session.user.displayName', fallback: displayName },
       emailBinding: { '$state': 'session.user.email', fallback: displayEmail },
@@ -2239,7 +2306,22 @@
       memberIdBinding: { '$state': 'session.user.memberId', fallback: memberIdValue },
       eyebrowBinding: { '$state': 'session.user.memberId', fallback: memberIdValue },
       avatarUrlBinding: { '$bind': 'session.user.avatarUrl', fallback: profileAvatarUrl || '' },
+      imageUrlBinding: { '$bind': 'session.user.avatarUrl', fallback: profileAvatarUrl || '' },
       avatarTextBinding: { '$state': 'session.user.initials', fallback: profileInitials },
+      avatar: {
+        initials: profileInitials,
+        imageUrl: profileAvatarUrl,
+        imageUrlBinding: { '$bind': 'session.user.avatarUrl', fallback: profileAvatarUrl || '' },
+        appearance: {
+          width: profileAppearance.avatarSize || 64,
+          height: profileAppearance.avatarSize || 64,
+          borderRadius: 999,
+          objectFit: 'cover',
+          fontSize: profileAppearance.avatarFontSize || 22,
+          fontWeight: profileAppearance.avatarFontWeight || 800,
+          textColor: '#ffffff'
+        }
+      },
       fields: {
         memberId: { role: 'eyebrow', value: memberIdValue, binding: { '$state': 'session.user.memberId', fallback: memberIdValue } },
         name: { role: 'title', value: displayName, binding: { '$state': 'session.user.displayName', fallback: displayName } },
@@ -2295,14 +2377,6 @@
             : 'Alerts and reminders disabled',
           trailingIconToken: 'chevron-right',
           actionId: 'profile-notifications'
-        },
-        {
-          id: 'language',
-          iconToken: 'language',
-          label: { '$i18n': 'profile.language' },
-          subtitle: profile.language || { '$i18n': 'profile.languageSubtitle' },
-          trailingIconToken: 'chevron-right',
-          actionId: 'profile-language'
         },
         {
           id: 'appearance',
@@ -4523,10 +4597,10 @@
       ProfileHeader: componentDef('profileHeader', {
         requiredProps: ['name', 'email'],
         optionalProps: [
-          'phone', 'memberId', 'avatarText', 'avatarUrl', 'appearance', 'layout', 'fields',
+          'phone', 'memberId', 'avatarText', 'avatarUrl', 'imageUrl', 'avatar', 'appearance', 'layout', 'fields',
           'title', 'fullName', 'displayName', 'eyebrow', 'meta', 'chip', 'phoneChip',
           'nameBinding', 'titleBinding', 'emailBinding', 'phoneBinding', 'memberIdBinding',
-          'eyebrowBinding', 'avatarUrlBinding', 'avatarTextBinding'
+          'eyebrowBinding', 'avatarUrlBinding', 'imageUrlBinding', 'avatarTextBinding'
         ],
         propsSchema: {
           name: { type: ['string', 'object'] },
@@ -4536,6 +4610,8 @@
           memberId: { type: ['string', 'object'] },
           eyebrow: { type: ['string', 'object'] },
           avatarUrl: { type: 'string' },
+          imageUrl: { type: 'string' },
+          avatar: { type: 'object' },
           layout: { type: 'object' },
           fields: { type: 'object' },
           appearance: { type: 'object' }
@@ -4871,7 +4947,7 @@
           'reports.title': 'Reports',
           'reports.subtitle': 'Usage, performance and activity reports',
           'profile.title': 'Profile',
-          'profile.subtitle': 'Profile, language, privacy, and logout',
+          'profile.subtitle': 'Profile, privacy, and logout',
           'profile.edit': 'Edit profile',
           'profile.editSubtitle': 'Manage account details',
           'profile.notifications': 'Notifications',
@@ -5303,7 +5379,6 @@
   var PROFILE_SUB_ROUTES = [
     { routeId: 'profile-edit', titleKey: 'profile.edit', subtitleKey: 'profile.editSubtitle' },
     { routeId: 'profile-notifications', titleKey: 'profile.notifications', subtitleKey: 'profile.notificationsSubtitle' },
-    { routeId: 'profile-language', titleKey: 'profile.language', subtitleKey: 'profile.languageSubtitle' },
     { routeId: 'profile-appearance', titleKey: 'profile.appearance', subtitleKey: 'profile.appearanceSubtitle' },
     { routeId: 'profile-privacy', titleKey: 'profile.privacy', subtitleKey: 'profile.privacySubtitle' }
   ];
@@ -5538,7 +5613,6 @@
 
     out['profile-edit'] = { type: 'navigate', destination: { routeId: 'profile-edit' } };
     out['profile-notifications'] = { type: 'navigate', destination: { routeId: 'profile-notifications' } };
-    out['profile-language'] = { type: 'navigate', destination: { routeId: 'profile-language' } };
     out['profile-appearance'] = { type: 'navigate', destination: { routeId: 'profile-appearance' } };
     out['profile-privacy'] = { type: 'navigate', destination: { routeId: 'profile-privacy' } };
 
@@ -5590,35 +5664,6 @@
 
     out['apply-theme-light'] = buildApplyThemeAction('light', 'light');
     out['apply-theme-dark'] = buildApplyThemeAction('dark', 'dark');
-
-    var mergedProfile = (global.AhpSchemaV2 && global.AhpSchemaV2.mergeLayoutProfile)
-      ? global.AhpSchemaV2.mergeLayoutProfile(layout, cfg)
-      : Object.assign({}, layout.profilePage || {}, (cfg && cfg.loginUserProfile) || {});
-    var languageOptionsForActions = Array.isArray(mergedProfile.languageOptions) && mergedProfile.languageOptions.length
-      ? mergedProfile.languageOptions
-      : ['English (India)', 'English (US)', 'Hindi', 'Arabic', 'French', 'Spanish'];
-    languageOptionsForActions.forEach(function (lang, index) {
-      var label = String(lang || '').trim();
-      if (!label) return;
-      out['profile-language-select-' + index] = {
-        type: 'sequence',
-        actions: [
-          { type: 'set-state', path: 'pages.profile.language', value: label },
-          {
-            type: 'request',
-            request: {
-              method: 'POST',
-              endpoint: prefsApiBase + '/profile-preferences',
-              headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-              body: { language: label }
-            },
-            onSuccess: { type: 'show-snackbar', message: 'Language updated' },
-            onError: { type: 'show-snackbar', message: 'Could not save language' }
-          },
-          { type: 'host-action', actionId: 'save-profile-preferences', parameters: { language: label } }
-        ]
-      };
-    });
 
     out['show-devices-auth-error'] = {
       type: 'sequence',
@@ -6440,15 +6485,10 @@
     var profile = (global.AhpSchemaV2 && global.AhpSchemaV2.mergeLayoutProfile)
       ? global.AhpSchemaV2.mergeLayoutProfile(layout, cfg)
       : Object.assign({}, (layout && layout.profilePage) || {}, (cfg && cfg.loginUserProfile) || {});
-    var notifOn = profile.notificationsEnabled !== false;
-    var activeLanguage = profile.language || 'English (India)';
-    var languageOptions = Array.isArray(profile.languageOptions) && profile.languageOptions.length
-      ? profile.languageOptions
-      : ['English (India)', 'English (US)', 'Hindi', 'Arabic', 'French', 'Spanish'];
     var privacyText = String(profile.privacyPolicyText || profile.privacyPolicy || '').trim()
       || 'We collect account details (name, email, phone) to provide IoE device control, Grid networking, and support.\n\n'
-        + 'Your data is used to authenticate sessions, sync preferences (language, notifications, appearance), and improve reliability.\n\n'
-        + 'You can update profile details, notification preferences, and language any time from this Profile tab.\n\n'
+        + 'Your data is used to authenticate sessions, sync preferences (notifications, appearance), and improve reliability.\n\n'
+        + 'You can update profile details and notification preferences any time from this Profile tab.\n\n'
         + 'For questions about security or data controls, contact support@efactor.tech.';
     var subPad = profileAppearance.pagePadding || 16;
     var subGap = profileAppearance.pageGap || 12;
@@ -6583,39 +6623,6 @@
           selectedWhen: { equals: [{ '$state': 'pages.profile.notificationsEnabled' }, false] }
         }
       ]
-    };
-
-    // Language — selectable list from profilePage.languageOptions.
-    out['profile-language-page'] = {
-      id: 'profile-language-page',
-      type: 'scrollPage',
-      layout: subLayout,
-      children: ['profile-language-header', 'profile-language-menu']
-    };
-    out['profile-language-header'] = {
-      id: 'profile-language-header',
-      type: 'pageHeader',
-      title: i18n('profile.language'),
-      subtitle: activeLanguage
-    };
-    out['profile-language-menu'] = {
-      id: 'profile-language-menu',
-      type: 'profileMenu',
-      appearance: profileAppearance,
-      items: languageOptions.map(function (lang, index) {
-        var label = String(lang || '').trim();
-        if (!label) return null;
-        var idSafe = 'lang-' + index + '-' + label.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-        return {
-          id: idSafe,
-          iconToken: 'language',
-          label: label,
-          subtitle: label === activeLanguage ? 'Selected' : 'Tap to select',
-          trailingIconToken: 'chevron-right',
-          actionId: 'profile-language-select-' + index,
-          selectedWhen: { equals: [{ '$state': 'pages.profile.language' }, label] }
-        };
-      }).filter(Boolean)
     };
 
     // Appearance — light/dark selector (dynamic via global.themeMode).

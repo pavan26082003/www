@@ -909,8 +909,8 @@ class GridSduiSchemaBuilder
         }
 
         $proOk = $proUrl !== ''
-            && preg_match('#/(index\.php/)?grid(/|$)#i', $proUrl)
-            && !preg_match('#grid-(chat|dashboard)#i', $proUrl);
+            && preg_match('~/(index\.php/)?grid([/?#]|$)~i', $proUrl)
+            && !preg_match('#grid-(chat|dashboard)|app-web-entry#i', $proUrl);
         if (!$proOk) {
             $proUrl = class_exists(GridWebSso::class)
                 ? (string) (GridWebSso::defaultCardUrls()['professional-space'] ?? '')
@@ -924,6 +924,7 @@ class GridSduiSchemaBuilder
         }
 
         $circleOk = $circleUrl !== ''
+            && stripos($circleUrl, 'app-web-entry') === false
             && (stripos($circleUrl, 'grid-chat') !== false || stripos($circleUrl, 'grid_chat') !== false);
         if (!$circleOk) {
             $circleUrl = class_exists(GridWebSso::class)

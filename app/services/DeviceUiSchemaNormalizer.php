@@ -94,6 +94,9 @@ class DeviceUiSchemaNormalizer
         $schema = self::ensureDeviceConfigPagesFromControls($schema);
         $schema = self::applyCanonicalHeader($schema);
         $schema = self::applyCanonicalValueColors($schema);
+        // Timer schemaSlider with min/max labels and a kicker fails Flutter validation
+        // unless these style fields are present on props. Parameter bindings stay as-is.
+        $schema = self::applyTimerSliderStyleContract($schema);
         // Register semantic tokens before icon remapping so filled control icons stick.
         $schema = self::ensureRequiredIcons($schema);
         $schema = self::normalizeIcons($schema, $report);
@@ -1907,6 +1910,130 @@ class DeviceUiSchemaNormalizer
                 self::rewriteWidgetTreeValueColors($node[$key], $text, $depth + 1);
             }
         }
+    }
+
+    /**
+     * Flutter rejects schemaSlider when showMinMaxLabels, variant "timer" and a
+     * kicker are set but these style fields are absent. Only those fields are written.
+     */
+    private static function timerSliderStyleContract()
+    {
+        return [
+            'labelColor' => '#64748B',
+            'valueColor' => '#1E293B',
+            'rangeFontSize' => 12,
+            'currentValueFontSize' => 14,
+            'kickerColor' => '#64748B',
+            'kickerFontSize' => 12,
+        ];
+    }
+
+    private static function applyTimerSliderStyleContract(array $schema)
+    {
+        $style = self::timerSliderStyleContract();
+
+        if (isset($schema['components']['catalog']) && is_array($schema['components']['catalog'])) {
+            foreach ($schema['components']['catalog'] as &$entry) {
+                if (!is_array($entry)) {
+                    continue;
+                }
+                $id = strtolower(str_replace(['_', '-'], '', (string) (isset($entry['id']) ? $entry['id'] : '')));
+                if ($id !== 'autotriggertimer' || !isset($entry['widgetTree']) || !is_array($entry['widgetTree'])) {
+                    continue;
+                }
+                self::patchTimerSliderStyleNodes($entry['widgetTree'], $style);
+            }
+            unset($entry);
+        }
+
+        if (isset($schema['controls']) && is_array($schema['controls'])) {
+            foreach ($schema['controls'] as &$control) {
+                if (!is_array($control) || !self::controlIsTimerSlider($control)) {
+                    continue;
+                }
+                if (isset($control['component']['props']) && is_array($control['component']['props'])
+                    && self::timerSliderPropsNeedStyle($control['component']['props'])) {
+                    $control['component']['props'] = array_merge($control['component']['props'], $style);
+                }
+                if (isset($control['component']['widgetTree']) && is_array($control['component']['widgetTree'])) {
+                    self::patchTimerSliderStyleNodes($control['component']['widgetTree'], $style);
+                }
+            }
+            unset($control);
+        }
+
+        if (isset($schema['ui']['widgetTree']) && is_array($schema['ui']['widgetTree'])) {
+            self::patchTimerSliderStyleNodes($schema['ui']['widgetTree'], $style);
+        }
+        if (isset($schema['extensions']['serverDrivenUi']) && is_array($schema['extensions']['serverDrivenUi'])) {
+            self::patchTimerSliderStyleNodes($schema['extensions']['serverDrivenUi'], $style);
+        }
+        if (isset($schema['extensions']['universalUi']) && is_array($schema['extensions']['universalUi'])) {
+            self::patchTimerSliderStyleNodes($schema['extensions']['universalUi'], $style);
+        }
+
+        return $schema;
+    }
+
+    private static function controlIsTimerSlider(array $control)
+    {
+        $catalog = strtolower(str_replace(['_', '-'], '', (string) (isset($control['catalogComponentType']) ? $control['catalogComponentType'] : '')));
+        if ($catalog === 'autotriggertimer') {
+            return true;
+        }
+        $props = isset($control['component']['props']) && is_array($control['component']['props'])
+            ? $control['component']['props']
+            : [];
+        if (self::timerSliderPropsNeedStyle($props)) {
+            return true;
+        }
+        $haystack = strtolower(
+            (string) (isset($control['binding']) ? $control['binding'] : '') . ' '
+            . (string) (isset($control['parameterName']) ? $control['parameterName'] : '') . ' '
+            . (string) (isset($control['id']) ? $control['id'] : '')
+        );
+        if (strpos($haystack, 'auto_trigger_with_timer') === false && strpos($haystack, 'autotriggertimer') === false) {
+            return false;
+        }
+        $type = strtolower((string) (isset($control['componentType']) ? $control['componentType'] : ''));
+        $widget = strtolower((string) (
+            isset($control['flutterWidget'])
+                ? $control['flutterWidget']
+                : (isset($control['component']['flutterWidget']) ? $control['component']['flutterWidget'] : '')
+        ));
+
+        return $type === 'slider' || strpos($widget, 'slider') !== false;
+    }
+
+    private static function timerSliderPropsNeedStyle(array $props)
+    {
+        $variant = strtolower(trim((string) (isset($props['variant']) ? $props['variant'] : '')));
+        $kicker = strtolower(trim((string) (isset($props['kicker']) ? $props['kicker'] : '')));
+
+        return $variant === 'timer' || $kicker === 'timer';
+    }
+
+    private static function patchTimerSliderStyleNodes(&$node, array $style, $depth = 0)
+    {
+        if (!is_array($node) || $depth > 40) {
+            return;
+        }
+        $type = strtolower(trim((string) (isset($node['type']) ? $node['type'] : '')));
+        if ($type === 'schemaslider' || $type === 'slider') {
+            if (isset($node['properties']['props']) && is_array($node['properties']['props'])
+                && self::timerSliderPropsNeedStyle($node['properties']['props'])) {
+                $node['properties']['props'] = array_merge($node['properties']['props'], $style);
+            }
+            if (isset($node['props']) && is_array($node['props']) && self::timerSliderPropsNeedStyle($node['props'])) {
+                $node['props'] = array_merge($node['props'], $style);
+            }
+        }
+        foreach ($node as &$child) {
+            if (is_array($child)) {
+                self::patchTimerSliderStyleNodes($child, $style, $depth + 1);
+            }
+        }
+        unset($child);
     }
 
     private static function normalizeControlContracts(array $schema)

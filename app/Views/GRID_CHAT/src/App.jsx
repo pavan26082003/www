@@ -28,6 +28,7 @@ import {
   createClientId,
   fetchConversationMessages,
   sendConversationMessage,
+  inviteCall,
   uploadConversationMedia,
   markConversationRead,
   setConversationFavourite,
@@ -1115,8 +1116,11 @@ function App() {
   const handleStartCall = (contact, type = "audio") => {
     if (!contact) return;
 
+    const callId = createClientId();
+    const callType = type === "video" ? "video" : "audio";
     setActiveCall({
       id: contact.id ?? contact.conversationId ?? contact.name,
+      callId,
       // Kept separately so the finished call knows where to post its record.
       // A call from the Calls list has neither (that list is still mock data),
       // so it simply isn't logged.
@@ -1124,9 +1128,18 @@ function App() {
       userId: contact.userId ?? null,
       name: contact.name || "Unknown",
       avatar: contact.avatar || "",
-      type: type === "video" ? "video" : "audio",
+      type: callType,
       startedAt: new Date().toISOString(),
     });
+
+    if (HAS_BACKEND_SESSION && (contact.userId || contact.conversationId)) {
+      inviteCall({
+        callId,
+        calleeUserId: contact.userId,
+        conversationId: contact.conversationId,
+        callType,
+      });
+    }
   };
 
   /**
@@ -1164,6 +1177,7 @@ function App() {
         messageType: "call",
         text: isVideo ? "Video call" : "Voice call",
         callData: {
+          call_id: endedCall.callId || null,
           call_type: isVideo ? "video" : "audio",
           direction: "outgoing",
           status,

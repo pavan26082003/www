@@ -17895,7 +17895,17 @@ if (is_array($json_data) && isset($json_data['mobile_number'])) {
 //foreach ($header as $key => $val) {
 
 
-    $query = "SELECT * FROM users where email='$email' OR phone='$mobile_number'";
+    if (!isset($email)) { $email = ''; }
+if (!isset($mobile_number)) { $mobile_number = ''; }
+if (!isset($latitude)) { $latitude = ''; }
+if (!isset($longitude)) { $longitude = ''; }
+$mobile_digits = preg_replace('/\D+/', '', (string) $mobile_number);
+if (strlen($mobile_digits) > 10) { $mobile_digits = substr($mobile_digits, -10); }
+$digits_safe = $db->escape($mobile_digits);
+$query = "SELECT * FROM users where email='$email' OR phone='$mobile_number'";
+if (strlen($mobile_digits) === 10) {
+    $query .= " OR phone='$digits_safe'";
+}
 	$doctors = $db->get_results($query); 
 	$num = $db->num_rows($query);
       $row = $db->get_row($query);
@@ -17924,7 +17934,12 @@ $resp = '{"status": "success"}';
 
 else
 {
-$response['error']='access_token not valid';
+    $lat = $db->escape((string) $latitude);
+    $lng = $db->escape((string) $longitude);
+    if (strlen($mobile_digits) === 10 && $db->num_rows("SHOW COLUMNS FROM otps LIKE 'signup_latitude'") > 0) {
+        $db->query("UPDATE otps SET signup_latitude='$lat', signup_longitude='$lng' WHERE phone='$digits_safe'");
+    }
+    exit('{"status": "success"}');
 }
          
 

@@ -10,3 +10,4 @@
 
 $routes->get('app-home-page', 'AppHomePageController::index');
 $routes->match(['get', 'post', 'put', 'patch'], 'app-home-page/api/(:segment)', 'AppHomePageController::api/$1');
+$routes->get('app-web-entry/open', 'AppWebEntry::open');

@@ -351,7 +351,14 @@ function savevendorproduct($data, $user_id, $id = 0)
 
     /*
      * CREATE NEW PRODUCT
+     *
+     * Commit the model, default APIs, and Status page before page linking.
+     * Linking loads the device-ui schema, which runs CREATE/ALTER and
+     * SET SESSION. MySQL treats that DDL as an implicit commit, and a later
+     * failed query marks the CodeIgniter transaction failed. Rolling back
+     * then leaves the model in the database while the screen shows Save failed.
      */
+    $newItemId = 0;
     $this->db->transBegin();
 
     try {
@@ -369,6 +376,10 @@ function savevendorproduct($data, $user_id, $id = 0)
         }
 
         $newItemId = (int) $this->db->insertID();
+
+        if ($newItemId <= 0) {
+            $newItemId = $this->findVendorProductId($modelName, $modelNo, $user_id);
+        }
 
         if ($newItemId <= 0) {
             throw new \RuntimeException(
@@ -389,16 +400,17 @@ function savevendorproduct($data, $user_id, $id = 0)
             );
         }
 
-        /*
-         * Create Status page and page linking
-         */
-        if (!$this->createDefaultStatusPageAndLinking(
+        $modelNo = $modelNo !== '' ? $modelNo : $modelName;
+        $fullPageName = $this->defaultStatusPageFullName();
+
+        if (!$this->ensureDefaultStatusOperationPage(
             $newItemId,
-            $data,
-            $user_id
+            $user_id,
+            $modelNo,
+            $fullPageName
         )) {
             throw new \RuntimeException(
-                'Unable to create the default Status page and API linking for the new model.'
+                'Unable to create the default Status page for the new model.'
             );
         }
 
@@ -410,20 +422,51 @@ function savevendorproduct($data, $user_id, $id = 0)
 
         $this->db->transCommit();
 
-        return $newItemId;
-
     } catch (\Throwable $e) {
 
         $this->db->transRollback();
 
+        if ($newItemId > 0 && $this->vendorProductRowExists($newItemId)) {
+            log_message(
+                'error',
+                'savevendorproduct model row remained after rollback: ' .
+                $e->getMessage()
+            );
+        } else {
+            log_message(
+                'error',
+                'savevendorproduct default setup failed: ' .
+                $e->getMessage()
+            );
+
+            return $e->getMessage();
+        }
+    }
+
+    try {
+        $modelNo = $modelNo !== '' ? $modelNo : $modelName;
+        $fullPageName = $this->defaultStatusPageFullName();
+        $this->assignDefaultApisToStatusPage(
+            $newItemId,
+            $user_id,
+            $modelNo,
+            $fullPageName
+        );
+        $this->ensureDefaultStatusPageLinking(
+            $newItemId,
+            $user_id,
+            $modelNo,
+            $fullPageName
+        );
+    } catch (\Throwable $e) {
         log_message(
             'error',
-            'savevendorproduct default setup failed: ' .
+            'savevendorproduct page linking failed after the model was saved: ' .
             $e->getMessage()
         );
-
-        return false;
     }
+
+    return $newItemId;
 }
 // function savevendorproduct($data, $user_id, $id = 0) {
 //     $id = (int) $id;
@@ -1366,6 +1409,36 @@ private function defaultApiFilterTableData($tableName, array $data) {
 
 
 
+
+    private function findVendorProductId($modelName, $modelNo, $userId)
+    {
+        $builder = $this->db->table('vendorproducts')
+            ->select('id')
+            ->where('modelname', $modelName)
+            ->where('modelno', $modelNo)
+            ->orderBy('id', 'DESC');
+
+        $fields = $this->db->getFieldNames('vendorproducts');
+        if (in_array('user_id', $fields, true)) {
+            $builder->where('user_id', (int) $userId);
+        }
+
+        $row = $builder->get()->getRowArray();
+
+        return (int) ($row['id'] ?? 0);
+    }
+
+    private function vendorProductRowExists($id)
+    {
+        $id = (int) $id;
+        if ($id <= 0) {
+            return false;
+        }
+
+        return $this->db->table('vendorproducts')
+            ->where('id', $id)
+            ->countAllResults() > 0;
+    }
 
     function deletevendorproduct($id)
 

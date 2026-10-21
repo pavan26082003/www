@@ -9862,6 +9862,21 @@ if (!function_exists('view_ui_icon')) {
       }, visual);
     }
 
+    /**
+     * schemaSlider with min/max labels and a timer kicker is rejected unless these
+     * fields are on props. Colors are the studio muted label and slate value.
+     */
+    function buildTimerSliderLabelStyleProps() {
+      return {
+        labelColor: '#64748B',
+        valueColor: '#1E293B',
+        rangeFontSize: 12,
+        currentValueFontSize: 14,
+        kickerColor: '#64748B',
+        kickerFontSize: 12
+      };
+    }
+
     function buildGaugeGeometryProps(bounds, type) {
       const cx = NEEDLE_GAUGE_VIEW_WIDTH / 2;
       const cy = NEEDLE_GAUGE_PIVOT_Y;
@@ -12799,7 +12814,7 @@ if (!function_exists('view_ui_icon')) {
         } else if (baseType === 'slider') {
           const sliderVisual = buildSliderVisualSpec(item.id, {}, {}, 0, 255, 0);
           const variantConfig = getSliderVariantConfig(item.id);
-          entry.widgetTree = buildStacWidgetTree('schemaSlider', '{{binding}}', {
+          const catalogSliderProps = {
             min: 0,
             max: 255,
             step: 1,
@@ -12831,7 +12846,11 @@ if (!function_exists('view_ui_icon')) {
             kickerFontWeight: sliderVisual.kickerFontWeight,
             showTickMarks: sliderVisual.showTickMarks,
             kicker: item.sliderLabel || null
-          }, buildRangeInteractionEvents('{{binding}}'));
+          };
+          if (variantConfig.variant === 'timer') {
+            Object.assign(catalogSliderProps, buildTimerSliderLabelStyleProps());
+          }
+          entry.widgetTree = buildStacWidgetTree('schemaSlider', '{{binding}}', catalogSliderProps, buildRangeInteractionEvents('{{binding}}'));
         } else if (baseType === 'powerGauge') {
           entry.widgetTree = buildStacWidgetTree('AnimatedRadialGauge', '{{binding}}', buildAnimatedRadialGaugeProps(resolveGaugeNumericBounds({}, '65')), buildRangeInteractionEvents('{{binding}}'));
         } else if (baseType === 'button') {
@@ -15075,20 +15094,7 @@ if (!function_exists('view_ui_icon')) {
         const sliderEvents = buildRangeInteractionEvents(binding);
         const variantConfig = getSliderVariantConfig(componentType);
         const sliderVisual = buildSliderVisualSpec(componentType, override, meta, safeMin, safeMax, initialValue);
-        return {
-          events: sliderEvents,
-          accessory: buildStacWidgetTree('metaChip', binding, {
-            icon: metaIcon,
-            value: metaValue,
-            label: String((card && card.dataset && card.dataset.paramName) || ''),
-            text: String((card && card.dataset && card.dataset.paramName) || ''),
-            title: String((card && card.dataset && card.dataset.paramName) || ''),
-            backgroundColor: override.statusColor || 'rgba(37,99,235,0.12)',
-            textColor: colors.accentColor,
-            iconColor: colors.accentColor,
-            readOnly: true
-          }, []),
-          rangeRow: buildStacWidgetTree('schemaSlider', binding, {
+        const rangeSliderProps = {
             min: safeMin,
             max: safeMax,
             step: safeStep,
@@ -15127,7 +15133,24 @@ if (!function_exists('view_ui_icon')) {
             kickerFontSize: sliderVisual.kickerFontSize,
             kickerFontWeight: sliderVisual.kickerFontWeight,
             showTickMarks: sliderVisual.showTickMarks
-          }, sliderEvents)
+        };
+        if (variantConfig.variant === 'timer') {
+          Object.assign(rangeSliderProps, buildTimerSliderLabelStyleProps());
+        }
+        return {
+          events: sliderEvents,
+          accessory: buildStacWidgetTree('metaChip', binding, {
+            icon: metaIcon,
+            value: metaValue,
+            label: String((card && card.dataset && card.dataset.paramName) || ''),
+            text: String((card && card.dataset && card.dataset.paramName) || ''),
+            title: String((card && card.dataset && card.dataset.paramName) || ''),
+            backgroundColor: override.statusColor || 'rgba(37,99,235,0.12)',
+            textColor: colors.accentColor,
+            iconColor: colors.accentColor,
+            readOnly: true
+          }, []),
+          rangeRow: buildStacWidgetTree('schemaSlider', binding, rangeSliderProps, sliderEvents)
         };
       }
 
@@ -15624,6 +15647,9 @@ if (!function_exists('view_ui_icon')) {
           activeColor: getEffectiveComponentColors(override).accentColor || currentTheme.accentColor,
           inactiveColor: '#D9DEEB'
         };
+        if (variantConfig.variant === 'timer') {
+          Object.assign(sliderProps, buildTimerSliderLabelStyleProps());
+        }
         return Object.assign(base, {
           flutterWidget: 'schemaSlider',
           initialValue: initialValue,
@@ -16452,6 +16478,9 @@ if (!function_exists('view_ui_icon')) {
               controlRecord.component.props.min = sliderConstraints.minimum;
               controlRecord.component.props.max = sliderConstraints.maximum;
               controlRecord.component.props.step = sliderConstraints.step;
+              if (variantConfig.variant === 'timer' || sliderCatalogType === 'autoTriggerTimer') {
+                Object.assign(controlRecord.component.props, buildTimerSliderLabelStyleProps());
+              }
               // Drop switch-like leftovers that survived a prior Get Status projection.
               delete controlRecord.component.props.activeTrackColor;
               delete controlRecord.component.props.inactiveTrackColor;
@@ -22941,7 +22970,10 @@ if (!function_exists('view_ui_icon')) {
         if (type.indexOf('timer') !== -1) {
           control.props.activeColor = '#10B981';
           control.props.inactiveColor = '#D1FAE5';
-          control.props.kickerColor = '#10B981';
+          Object.assign(control.props, buildTimerSliderLabelStyleProps());
+          if (control.component && control.component.props && typeof control.component.props === 'object') {
+            Object.assign(control.component.props, buildTimerSliderLabelStyleProps());
+          }
         }
         Object.keys(componentProps).forEach(function(key) {
           if (control.props[key] == null) control.props[key] = componentProps[key];
@@ -22976,7 +23008,7 @@ if (!function_exists('view_ui_icon')) {
           if (isTimer) {
             props.activeColor = '#10B981';
             props.inactiveColor = '#D1FAE5';
-            props.kickerColor = '#10B981';
+            Object.assign(props, buildTimerSliderLabelStyleProps());
           }
           if (isSwitch) Object.assign(props, switchColors);
           if (isGauge) {

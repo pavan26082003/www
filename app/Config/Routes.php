@@ -191,9 +191,9 @@ $routes->post('items/update_page_data', 'Items::update_page_data');*/
 
 $routes->get('items/view_page_ui/(:num)', 'View_page_controller::view_page_ui/$1');
 $routes->post('items/save_view_page_ui_theme', 'View_page_controller::save_view_page_ui_theme');
-$routes->get('items/api_page_linking/(:num)', 'View_page_controller::api_page_linking/$1');
-$routes->post('items/submit_page_params', 'View_page_controller::submit_page_params');
-$routes->post('items/save_page_linking_row', 'View_page_controller::save_page_linking_row');
+$routes->get('items/api_page_linking/(:num)', 'Modal_api_page_linking_controller::api_page_linking/$1');
+$routes->post('items/submit_page_params', 'Modal_api_page_linking_controller::submit_page_params');
+$routes->post('items/save_page_linking_row', 'Modal_api_page_linking_controller::save_page_linking_row');
 
 
 $routes->group('items', static function ($routes) {
@@ -462,6 +462,14 @@ $routes->get('sd-dashboard', 'SdAuth::dashboard');*/
 $routes->get('welcome', 'SdAuth::index');
 $routes->get('sd-auth', 'SdAuth::index');
 $routes->match(['get', 'post'], 'sd-signup', 'SdAuth::signup');
+$routes->post('sd-signup/otp', 'SdAuth::sendOtp');
+$routes->post('sd-signup/verify', 'SdAuth::verifyOtp');
+$routes->post('sd-signup/complete', 'SdAuth::completeSignup');
+$routes->post('sd-signup/register', 'SdAuth::registerRemote');
+$routes->post('sd-signup/verify-remote', 'SdAuth::verifyRemote');
+$routes->post('sd-signup/login-remote', 'SdAuth::loginRemote');
+$routes->post('sd-signup/session', 'SdAuth::webSession');
+$routes->get('sd-social/(:segment)', 'SdAuth::social/$1');
 $routes->match(['get', 'post'], 'sd-login', 'SdAuth::login');
 $routes->match(['get', 'post'], 'sd-forgot-password', 'SdAuth::forgotPassword');
 $routes->post('sd-logout', 'SdAuth::logout');
@@ -871,7 +879,7 @@ $routes->match(['get', 'post'], 'iot-dashboard/api/(:segment)', 'IotDashboard::a
 $routes->get('grid-dashboard', 'GridDashboard::index');
 $routes->match(['get', 'post'], 'grid-dashboard/api/(:segment)', 'GridDashboard::api/$1');
 
-$routes->get('items/vendor', 'Items::vendor');
+$routes->get('items/vendor', 'vendor_controller::vendor');
 $routes->get('items/index', 'Items::index');
 $routes->get('items', 'Items::index');
 
@@ -958,9 +966,7 @@ $routes->match(['get', 'post'], 'items/delete_api_config/(:num)', 'Viewapis_cont
 $routes->match(['get', 'post'], 'items/delete_api_config', 'Viewapis_controller::delete_api_config');
 
 //-----------------------------------------------------------------------------
-// Vendor main page
-$routes->get('items/vendor', 'vendor_controller::vendor');
-
+// Vendor main page route is registered above as vendor_controller::vendor.
 // Add Model modal
 $routes->match(
     ['get', 'post'],
@@ -993,6 +999,13 @@ if (is_file($gridRoutesFile)) {
     require $gridRoutesFile;
 }
 
+
+// Mobile push contract. Session cookie or Bearer token, no CSRF.
+$routes->post('api/register_device_token', 'DevicePushController::registerDeviceToken');
+$routes->post('api/call_action', 'DevicePushController::callAction');
+$routes->post('api/call/decline', 'DevicePushController::declineCall');
+$routes->post('grid-chat/api/call/decline', 'DevicePushController::declineCall');
+$routes->post('grid_chat/api/call/decline', 'DevicePushController::declineCall');
 
 // -----------------------------------------------------------------------------
 // GRID CHAT Module (Config: Config/GRID_CHAT_CONFIG/Routes.php | Controller: Controllers/GRID_CHAT_CONTROLLERS)

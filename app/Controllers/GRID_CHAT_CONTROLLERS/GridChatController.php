@@ -53,6 +53,7 @@ class GridChatController extends Security_Controller
 
         return $this->response
             ->setHeader('X-Frame-Options', 'SAMEORIGIN')
+            ->setHeader('Cache-Control', 'private, no-cache')
             ->setBody(view('GRID_CHAT/index', $view_data));
     }
 
@@ -89,7 +90,7 @@ class GridChatController extends Security_Controller
 
         return $this->response
             ->setHeader('Content-Type', $contentType)
-            ->setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->setHeader('Cache-Control', 'private, no-cache')
             ->setBody(file_get_contents($filePath));
     }
 

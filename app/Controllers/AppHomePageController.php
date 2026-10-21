@@ -18,7 +18,9 @@ class AppHomePageController extends Security_Controller
 
     public function __construct()
     {
-        parent::__construct();
+        $uri = strtolower((string) ($_SERVER['REQUEST_URI'] ?? ''));
+        $isApi = strpos($uri, 'app-home-page/api') !== false;
+        parent::__construct(! $isApi);
         $this->appHomePageModel = new AppHomePageModel();
     }
 
@@ -78,6 +80,10 @@ class AppHomePageController extends Security_Controller
 
     public function api(string $action = ''): ResponseInterface
     {
+        if ((int) ($this->login_user->id ?? 0) <= 0) {
+            return $this->jsonResponse(array('success' => false, 'message' => 'Unauthorized'), 401);
+        }
+
         switch ($action) {
             case 'layout':
                 if ($this->request->getMethod() === 'get') {

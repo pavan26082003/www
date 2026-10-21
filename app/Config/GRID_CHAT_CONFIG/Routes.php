@@ -38,6 +38,7 @@ $routes->group('', ['namespace' => 'App\Controllers\GRID_CHAT_CONTROLLERS'], sta
         $routes->get("{$base}/api/chat/contacts", 'ChatController::contacts');
         $routes->post("{$base}/api/chat/open_direct", 'ChatController::open_direct');
         $routes->post("{$base}/api/chat/send", 'ChatController::send');
+        $routes->post("{$base}/api/chat/call_invite", 'ChatController::call_invite');
         $routes->post("{$base}/api/chat/read", 'ChatController::read');
         $routes->post("{$base}/api/chat/favourite", 'ChatController::favourite');
         $routes->post("{$base}/api/chat/mute", 'ChatController::mute');

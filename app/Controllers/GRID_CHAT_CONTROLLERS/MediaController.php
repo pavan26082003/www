@@ -243,6 +243,7 @@ class MediaController extends GridChatBaseController
             }
 
             $message = $this->messageModel->findById($messageId);
+            $this->notifyMediaRecipients($me, $conversationId, $type, (string) $input['body']);
             return $this->respondSuccess(['message' => $this->formatMessages([$message], $me)[0]], 201);
         });
     }
@@ -275,6 +276,32 @@ class MediaController extends GridChatBaseController
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    private function notifyMediaRecipients(int $senderId, int $conversationId, string $type, string $body): void
+    {
+        $labels = [
+            'image' => 'Photo',
+            'video' => 'Video',
+            'audio' => 'Audio',
+            'voice' => 'Voice message',
+            'file' => 'File',
+        ];
+        $preview = trim($body) !== '' ? $body : ($labels[$type] ?? 'New message');
+        try {
+            $recipients = [];
+            foreach ($this->memberModel->activeMembers($conversationId) as $member) {
+                $memberId = (int) ($member['user_id'] ?? 0);
+                if ($memberId > 0 && $memberId !== $senderId) {
+                    $recipients[] = $memberId;
+                }
+            }
+            if ($recipients) {
+                (new \App\Libraries\DevicePushService())->sendChatMessage($senderId, $recipients, $preview);
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Media push: ' . $e->getMessage());
+        }
+    }
 
     private function resolveExtension(string $type, string $mimeType, string $clientName): ?string
     {

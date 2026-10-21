@@ -1433,7 +1433,7 @@ $(document).ready(function () {
         const original = allData.find(item => item.id == currentEditId) || {};
         const updatedData = {
             id: currentEditId,
-            // These names must match Items::savevendorproduct().
+            // These names must match vendor_controller::savevendorproduct().
             brand: $('#edit-brand-name').val().trim(),
             category: $('#edit-product-name').val().trim(),
             modelname: $('#edit-model-name').val().trim(),

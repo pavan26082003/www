@@ -530,7 +530,7 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
                         <div class="ahp-tool-title">Home Templates</div>
                         <p class="ahp-tool-hint">Choose an Efactor home layout. Preview updates instantly — click <strong>Save</strong> to publish schema for the app.</p>
                         <div class="ahp-home-templates" id="ahpHomeTemplates" aria-label="Home page templates"></div>
-                        <p class="ahp-tool-hint ahp-template-note">Templates replace home cards, colors, and bottom navigation. Bottom nav stays fixed on every page.</p>
+                        <p class="ahp-tool-hint ahp-template-note">Switching templates keeps the cards and edits you already made on each layout. The first open uses that template’s starting layout. Save publishes the layout you are viewing. Bottom nav stays fixed on every page.</p>
                     </div>
 
                     <div class="ahp-tool-section" data-tool="ui-templates">
@@ -543,7 +543,7 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
 
                     <div class="ahp-tool-section" data-tool="profile">
                         <div class="ahp-tool-title">Profile Page</div>
-                        <p class="ahp-tool-hint">Name, email, phone, and member ID are loaded from your account. Language and notifications can be customized here.</p>
+                        <p class="ahp-tool-hint">Name, email, phone, and member ID are loaded from your account. Notifications can be customized here.</p>
                         <div class="ahp-field">
                             <label for="toolProfileName">Display name</label>
                             <input type="text" id="toolProfileName" class="ahp-readonly-field" value="<?= ahp_h($loginUserProfile['name'] ?? ($layout['profilePage']['name'] ?? 'Profile')) ?>" readonly>
@@ -559,18 +559,6 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
                         <div class="ahp-field">
                             <label for="toolProfileMemberId">Member ID</label>
                             <input type="text" id="toolProfileMemberId" class="ahp-readonly-field" value="<?= ahp_h($loginUserProfile['memberId'] ?? ($layout['profilePage']['memberId'] ?? ('EF-' . (int) $userId))) ?>" readonly>
-                        </div>
-                        <div class="ahp-field">
-                            <label for="toolProfileLanguage">Language</label>
-                            <select id="toolProfileLanguage">
-                                <?php
-                                $profileLang = $layout['profilePage']['language'] ?? 'English (India)';
-                                $languages = array('English (India)', 'English (US)', 'Hindi', 'Arabic', 'French', 'Spanish');
-                                foreach ($languages as $langOption):
-                                ?>
-                                <option value="<?= ahp_h($langOption) ?>" <?= $profileLang === $langOption ? 'selected' : '' ?>><?= ahp_h($langOption) ?></option>
-                                <?php endforeach; ?>
-                            </select>
                         </div>
                         <div class="ahp-field">
                             <label class="ahp-check-label">

@@ -2629,13 +2629,74 @@ public function getDeviceUiSaveError()
 private function prepareDeviceUiSave()
 {
     $this->deviceUiSaveError = '';
+    // max_allowed_packet is read-only at session scope on MySQL 8 / MariaDB.
+    // Never SET GLOBAL here: MySQL implicitly commits the open transaction.
+}
+
+private function deviceUiDbLost($message)
+{
+    $message = strtolower((string) $message);
+    return strpos($message, 'gone away') !== false
+        || strpos($message, 'lost connection') !== false
+        || strpos($message, 'server shutdown') !== false
+        || strpos($message, 'error 2006') !== false
+        || strpos($message, 'error 2013') !== false;
+}
+
+private function reconnectDeviceUiDatabase()
+{
     try {
-        $this->db->query('SET SESSION max_allowed_packet = 67108864');
+        $this->db->reconnect();
+        return;
     } catch (\Throwable $exception) {
-        // Session packet size is best-effort on shared/AMPPS MySQL.
+        log_message('error', 'Device UI DB reconnect failed: ' . $exception->getMessage());
     }
-    // Never SET GLOBAL here: MySQL implicitly commits the open transaction,
-    // which breaks model-create/copy flows that wrap schema writes in transBegin.
+
+    try {
+        $this->db->close();
+    } catch (\Throwable $exception) {
+        // The socket is already dead.
+    }
+    try {
+        $this->db->initialize();
+    } catch (\Throwable $exception) {
+        log_message('error', 'Device UI DB initialize failed: ' . $exception->getMessage());
+    }
+}
+
+/**
+ * Packaging a large schema can sit idle longer than MySQL's net_read_timeout.
+ * Ping, and open a new connection when the server has already dropped this one.
+ */
+private function ensureDeviceUiConnection()
+{
+    for ($attempt = 1; $attempt <= 2; $attempt++) {
+        try {
+            $result = $this->db->query('SELECT 1');
+            if ($result === false) {
+                $error = $this->db->error();
+                $message = trim((string) ($error['message'] ?? ''));
+                if ($attempt === 1 && $this->deviceUiDbLost($message)) {
+                    $this->reconnectDeviceUiDatabase();
+                    continue;
+                }
+                if ($message !== '') {
+                    $this->deviceUiSaveError = $message;
+                }
+                return $result !== false;
+            }
+            return true;
+        } catch (\Throwable $exception) {
+            if ($attempt === 1 && $this->deviceUiDbLost($exception->getMessage())) {
+                $this->reconnectDeviceUiDatabase();
+                continue;
+            }
+            $this->deviceUiSaveError = $exception->getMessage();
+            return false;
+        }
+    }
+
+    return false;
 }
 
 private function writeDeviceUiTableRow($table, array $data, $modelno, $isUpdate)
@@ -2709,7 +2770,6 @@ public function saveDeviceUiSchema($modelno, array $schema)
     $this->prepareDeviceUiSave();
     $this->ensureDeviceUiSchemasTable();
 
-    $builder = $this->db->table('device_ui_schemas');
     $app = [];
     if (isset($schema['app']) && is_array($schema['app'])) {
         $app = $schema['app'];
@@ -2757,8 +2817,19 @@ public function saveDeviceUiSchema($modelno, array $schema)
     $now = $istNow->format('Y-m-d H:i:s');
 
     $schemaJson = DeviceUiSchemaGenerator::package((string) $modelno, (string) $nodeId, $schema);
-    if ($schemaJson === '' || $schemaJson === false) {
-        $this->deviceUiSaveError = 'Schema JSON could not be encoded.';
+    if (!is_string($schemaJson) || $schemaJson === '' || strlen($schemaJson) > DeviceUiSchemaGenerator::INLINE_LIMIT) {
+        $detail = trim(DeviceUiSchemaGenerator::lastError());
+        $this->deviceUiSaveError = $detail !== ''
+            ? $detail
+            : 'Schema JSON could not be encoded into a MySQL-sized value.';
+        log_message('error', 'Device UI schema package failed for ' . $modelno . ': ' . $this->deviceUiSaveError);
+        return false;
+    }
+
+    if (!$this->ensureDeviceUiConnection()) {
+        if ($this->deviceUiSaveError === '') {
+            $this->deviceUiSaveError = 'MySQL connection was lost before the schema could be saved.';
+        }
         return false;
     }
 
@@ -2771,24 +2842,26 @@ public function saveDeviceUiSchema($modelno, array $schema)
     'updated_at' => $now,
     ];
 
-    $existing = null;
-    if ($nodeId !== '') {
-        $existing = $this->db->table('device_ui_schemas')
-            ->where('model_name', $modelno)
-            ->where('node_id', $nodeId)
-            ->get()
-            ->getRowArray();
+    $existing = $this->findDeviceUiSchemaRowMeta($modelno, $nodeId);
+    if ($existing === false) {
+        return false;
     }
-    if (!$existing) {
-        $existing = $builder->where('model_name', $modelno)->get()->getRowArray();
-    }
-
     if ($existing) {
         unset($data['model_name']);
         $saved = $this->writeDeviceUiTableRow('device_ui_schemas', $data, $modelno, true);
     } else {
         $data['created_at'] = $now;
         $saved = $this->writeDeviceUiTableRow('device_ui_schemas', $data, $modelno, false);
+    }
+
+    if (!$saved && $this->deviceUiDbLost($this->deviceUiSaveError)) {
+        $this->reconnectDeviceUiDatabase();
+        $this->deviceUiSaveError = '';
+        if ($existing) {
+            $saved = $this->writeDeviceUiTableRow('device_ui_schemas', $data, $modelno, true);
+        } else {
+            $saved = $this->writeDeviceUiTableRow('device_ui_schemas', $data, $modelno, false);
+        }
     }
 
     if ($saved) {
@@ -3217,6 +3290,58 @@ private function rebuildDeviceUiSchemaPreservingCustomizations($modelno, $nodeId
     $fresh['meta']['autoRebuiltFromBuildVersion'] = true;
 
     return $this->syncDeviceUiSchemaControlReferences($fresh);
+}
+
+/**
+ * Existence check that does not pull schema_json. A legacy inline document
+ * can be larger than max_allowed_packet and that SELECT is what drops MySQL.
+ * false means the lookup failed; null means there is no row.
+ */
+private function findDeviceUiSchemaRowMeta($modelno, $nodeId)
+{
+    $select = 'id, model_name, node_id';
+    $nodeId = trim((string) $nodeId);
+
+    for ($attempt = 1; $attempt <= 2; $attempt++) {
+        try {
+            $row = null;
+            if ($nodeId !== '') {
+                $result = $this->db->table('device_ui_schemas')
+                    ->select($select)
+                    ->where('model_name', $modelno)
+                    ->where('node_id', $nodeId)
+                    ->orderBy('id', 'DESC')
+                    ->get();
+                if ($result === false) {
+                    throw new \RuntimeException(trim((string) (($this->db->error()['message'] ?? '') ?: 'Could not read the device UI schema row.')));
+                }
+                $row = $result->getRowArray();
+            }
+            if (!$row) {
+                $result = $this->db->table('device_ui_schemas')
+                    ->select($select)
+                    ->where('model_name', $modelno)
+                    ->orderBy('id', 'DESC')
+                    ->get();
+                if ($result === false) {
+                    throw new \RuntimeException(trim((string) (($this->db->error()['message'] ?? '') ?: 'Could not read the device UI schema row.')));
+                }
+                $row = $result->getRowArray();
+            }
+
+            return $row ?: null;
+        } catch (\Throwable $exception) {
+            if ($attempt === 1 && $this->deviceUiDbLost($exception->getMessage())) {
+                $this->reconnectDeviceUiDatabase();
+                continue;
+            }
+            $this->deviceUiSaveError = $exception->getMessage();
+            log_message('error', 'Device UI schema lookup failed: ' . $exception->getMessage());
+            return false;
+        }
+    }
+
+    return false;
 }
 
 private function findDeviceUiSchemaRecord($modelno, $nodeId = '')
@@ -6514,7 +6639,7 @@ private function ensureDeviceUiCatalogTimerAndChip(array $schema)
         'type' => 'schemaSlider',
         'properties' => [
             'binding' => '{{binding}}',
-            'props' => [
+            'props' => array_merge([
                 'min' => 0,
                 'max' => 255,
                 'step' => 1,
@@ -6523,7 +6648,7 @@ private function ensureDeviceUiCatalogTimerAndChip(array $schema)
                 'kicker' => 'TIMER',
                 'useLiveBinding' => true,
                 'showMinMaxLabels' => true,
-            ],
+            ], $this->deviceUiTimerSliderStyleDefaults()),
             'events' => [
                 ['event' => 'onChanged', 'action' => ['type' => 'update', 'binding' => '{{binding}}']],
             ],
@@ -6687,6 +6812,10 @@ private function ensureDeviceUiControlWidgetTrees(array $schema)
                 $control['component']['props']['variant'] = 'timer';
                 $control['component']['props']['valueSuffix'] = 's';
                 $control['component']['props']['kicker'] = 'TIMER';
+                $this->deviceUiApplyTimerSliderStyleProps($control['component']['props']);
+                if (isset($control['props']) && is_array($control['props'])) {
+                    $this->deviceUiApplyTimerSliderStyleProps($control['props']);
+                }
                 if (!empty($control['component']['widgetTree']) && is_array($control['component']['widgetTree'])) {
                     $this->deviceUiEnsureTimerPropsOnWidgetTree($control['component']['widgetTree']);
                 }
@@ -6774,6 +6903,76 @@ private function deviceUiEnsureSendButtonOnWidgetTree(&$node, $binding = '', $ac
     });
 }
 
+/**
+ * Typography and color fields the Flutter slider validator requires on a timer.
+ * Existing keys are left unchanged; only a missing or invalid value is filled.
+ */
+private function deviceUiTimerSliderStyleDefaults()
+{
+    return [
+        'trackHeight' => 8,
+        'thumbRadius' => 9,
+        'thumbBorderColor' => '#FFFFFF',
+        'thumbBorderWidth' => 2,
+        'labelColor' => '#64748B',
+        'valueColor' => '#1E293B',
+        'rangeFontSize' => 12,
+        'rangeFontWeight' => 600,
+        'currentValueFontSize' => 14,
+        'currentValueFontWeight' => 600,
+        'kickerColor' => '#64748B',
+        'kickerFontSize' => 12,
+        'kickerFontWeight' => 800,
+        'showTickMarks' => false,
+    ];
+}
+
+private function deviceUiApplyTimerSliderStyleProps(array &$props)
+{
+    $contract = [
+        'labelColor' => true,
+        'valueColor' => true,
+        'rangeFontSize' => true,
+        'currentValueFontSize' => true,
+        'kickerColor' => true,
+        'kickerFontSize' => true,
+    ];
+    foreach ($this->deviceUiTimerSliderStyleDefaults() as $key => $value) {
+        $force = isset($contract[$key]);
+        if (!$force && !$this->deviceUiTimerStylePropMissing($key, array_key_exists($key, $props) ? $props[$key] : null)) {
+            continue;
+        }
+        $props[$key] = $value;
+    }
+}
+
+private function deviceUiTimerStylePropMissing($key, $value)
+{
+    $colorKeys = ['labelColor', 'valueColor', 'kickerColor', 'thumbBorderColor'];
+    $numberKeys = [
+        'trackHeight',
+        'thumbRadius',
+        'thumbBorderWidth',
+        'rangeFontSize',
+        'rangeFontWeight',
+        'currentValueFontSize',
+        'currentValueFontWeight',
+        'kickerFontSize',
+        'kickerFontWeight',
+    ];
+    if (in_array($key, $colorKeys, true)) {
+        return !$this->deviceUiIsCssColor($value);
+    }
+    if (in_array($key, $numberKeys, true)) {
+        return !is_numeric($value);
+    }
+    if ($key === 'showTickMarks') {
+        return !is_bool($value);
+    }
+
+    return $value === null || $value === '';
+}
+
 private function deviceUiEnsureTimerPropsOnWidgetTree(&$node)
 {
     $this->deviceUiPatchNestedWidgetTree($node, function (&$target) {
@@ -6807,6 +7006,7 @@ private function deviceUiEnsureTimerPropsOnWidgetTree(&$node)
             if (!isset($bag['max']) || (float) $bag['max'] <= 1) {
                 $bag['max'] = 255;
             }
+            $this->deviceUiApplyTimerSliderStyleProps($bag);
         }
         unset($bag);
     });
@@ -6848,6 +7048,9 @@ private function deviceUiSynthesizeControlWidgetTree(array $control)
             $props['variant'] = 'timer';
             $props['valueSuffix'] = 's';
             $props['kicker'] = 'TIMER';
+            $props['useLiveBinding'] = true;
+            $props['showMinMaxLabels'] = true;
+            $props = array_merge($props, $this->deviceUiTimerSliderStyleDefaults());
         }
     } elseif ($type === 'textfield') {
         $accessoryType = 'TextField';

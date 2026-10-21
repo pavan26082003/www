@@ -153,6 +153,72 @@ public function get_brand_products($user_id) {
     );
 }
 
+// --------------------vendor product for logo start---------------------
+
+public function getVendorProductForLogo($id, $userId)
+{
+    return $this->db->table('vendorproducts')
+        ->where('id', (int) $id)
+        ->where('user_id', (int) $userId)
+        ->get()->getRowArray();
+}
+
+
+public function saveVendorProductWithModelLogo(array $input, $userId, $id = 0)
+{
+    $userId = (int) $userId;
+    $id = (int) $id;
+    if (!$userId) return ['success' => false, 'message' => 'Session expired.'];
+
+    $db = $this->db;
+    $fields = $db->getFieldNames('vendorproducts');
+    $map = [];
+    foreach ($fields as $field) $map[strtolower($field)] = $field;
+    if (!isset($map['model_logo'], $map['user_id'], $map['modelname'], $map['modelno'])) {
+        return ['success' => false, 'message' => 'vendorproducts table needs model_logo, user_id, modelname and modelno columns.'];
+    }
+
+    $data = [
+        $map['modelname'] => $input['modelname'],
+        $map['modelno'] => $input['modelno'],
+        $map['model_logo'] => $input['model_logo'],
+    ];
+    $possible = [
+        'brand' => $input['brand'],
+        'brand_name' => $input['brand'],
+        'category' => $input['category'],
+        'product_type' => $input['category'],
+        'product_name' => $input['category'],
+        'model_version' => $input['version'],
+        'version' => $input['version'],
+        'batch' => $input['batch'],
+        'description' => $input['description'],
+        'product_description' => $input['description'],
+    ];
+    foreach ($possible as $candidate => $value) {
+        if (isset($map[$candidate])) $data[$map[$candidate]] = $value;
+    }
+
+    if ($id > 0) {
+        // Important: scoped UPDATE. Never let a user update another user's model.
+        $existing = $this->getVendorProductForLogo($id, $userId);
+        if (!$existing) return ['success' => false, 'message' => 'Model not found.'];
+        $ok = $db->table('vendorproducts')->where('id', $id)->where('user_id', $userId)->update($data);
+        if (!$ok) {
+            $error = $db->error();
+            return ['success' => false, 'message' => $error['message'] ?? 'Could not update model.'];
+        }
+        return ['success' => true, 'id' => $id];
+    }
+
+    $data[$map['user_id']] = $userId;
+    $ok = $db->table('vendorproducts')->insert($data);
+    if (!$ok) {
+        $error = $db->error();
+        return ['success' => false, 'message' => $error['message'] ?? 'Could not create model.'];
+    }
+    return ['success' => true, 'id' => (int) $db->insertID()];
+}
 /************************************************/
 
 function default_form_values($itemid, $user_id = null) {

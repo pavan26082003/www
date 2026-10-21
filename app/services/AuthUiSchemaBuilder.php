@@ -22,7 +22,7 @@ class AuthUiSchemaBuilder
 
             // Fix #6: monotonic revision — incremented on every schema commit.
             // Clients compare this to their cached revision to detect staleness.
-            'revision' => 2,
+            'revision' => 3,
 
             // Fix #7: SHA-256 of the canonical schema JSON (computed at store time by api_auth_schema.php).
             // Placeholder here — api_auth_schema.php overwrites this before storing.
@@ -297,10 +297,13 @@ class AuthUiSchemaBuilder
                 'openDocumentation' => ['type'=>'url','url'=>'https://efactor.tech/index.php/knowledge_base','presentation'=>'externalBrowser'],
                 'openPrivacyPolicy' => ['type'=>'url','url'=>'https://efactor.tech/privacy_policy.html','presentation'=>'externalBrowser'],
                 'openTerms' => ['type'=>'url','url'=>'https://efactor.tech/user_agreement.html','presentation'=>'externalBrowser'],
+                'openSocialGoogle' => ['type'=>'url','url'=>site_url('sd-social/google'),'presentation'=>'externalBrowser'],
+                'openSocialApple' => ['type'=>'url','url'=>site_url('sd-social/apple'),'presentation'=>'externalBrowser'],
+                'openSocialFacebook' => ['type'=>'url','url'=>site_url('sd-social/facebook'),'presentation'=>'externalBrowser'],
                 'sendSignupOtp' => [
                     'type'=>'http',
                     'method'=>'POST',
-                    'url'=>$this->mobileAuthUrl('user'),
+                    'url'=>site_url('sd-signup/otp'),
                     'contentType'=>'application/json',
                     'csrf'=>false,
                     'payload'=>[
@@ -327,7 +330,7 @@ class AuthUiSchemaBuilder
                 'verifySignupOtp' => [
                     'type'=>'http',
                     'method'=>'POST',
-                    'url'=>$this->mobileAuthUrl('userverify'),
+                    'url'=>site_url('sd-signup/verify'),
                     'contentType'=>'application/json',
                     'csrf'=>false,
                     'payload'=>[
@@ -393,13 +396,14 @@ class AuthUiSchemaBuilder
                 'submitSignup' => [
                     'type'=>'http',
                     'method'=>'POST',
-                    'url'=>$this->mobileAuthUrl('userlogin'),
+                    'url'=>site_url('sd-signup/complete'),
                     'contentType'=>'application/json',
                     'csrf'=>false,
                     'payload'=>[
-                        'username'=>'$state.signupForm.phone',
+                        'email'=>'$state.signupForm.email',
+                        'phone'=>'$state.signupForm.phone',
+                        'verification_code'=>'$state.signupForm.otp',
                         'password'=>'$state.signupForm.password',
-                        'user_type'=>'$state.signupForm.user_type',
                     ],
                     'validationGroup'=>'signup',
                     'loadingStateKey'=>'auth.isLoading',
@@ -532,7 +536,7 @@ class AuthUiSchemaBuilder
             'focusOrder' => [
                 'welcome' => ['welcome_logo', 'welcome_heading', 'welcome_description', 'welcome_signin', 'welcome_create_account', 'welcome_legal_links'],
                 'login' => ['login_back', 'login_identity', 'login_password', 'login_remember', 'login_forgot', 'login_submit', 'login_footer'],
-                'signup' => ['signup_back', 'signup_email', 'signup_phone', 'signup_password', 'signup_send_otp', 'signup_otp_boxes', 'signup_verify_otp', 'signup_confirm_password', 'signup_terms', 'signup_submit', 'signup_footer'],
+                'signup' => ['signup_back', 'signup_email', 'signup_phone', 'signup_password', 'signup_confirm_password', 'signup_send_otp', 'signup_otp_boxes', 'signup_verify_otp', 'signup_terms', 'signup_submit', 'signup_footer'],
                 'forgotPassword' => ['forgot_back', 'forgot_phone', 'forgot_send_otp', 'forgot_otp_boxes', 'forgot_password', 'forgot_confirm_password', 'forgot_submit', 'forgot_footer'],
             ],
         ];
@@ -687,6 +691,10 @@ class AuthUiSchemaBuilder
                 'email' => $signupEmail,
                 'phone' => $signupPhone,
                 'password' => $signupPassword,
+                'confirm_password' => [
+                    'form' => ['name'=>'confirm_password','stateKey'=>'signupForm.confirm_password','type'=>'password','required'=>true,'matchesStateKey'=>'signupForm.password','autocomplete'=>'new-password'],
+                    'validation' => ['required'=>true,'matchesStateKey'=>'signupForm.password','stateKey'=>'signupForm.confirm_password'],
+                ],
             ],
             'signupOtpVerification' => [
                 'phone' => $signupPhone,
@@ -849,10 +857,10 @@ class AuthUiSchemaBuilder
     {
         return [
             'id'=>'login','route'=>'/sd-login','type'=>'screen','title'=>'Sign In','analyticsName'=>'auth_login',
-            // Keep the login screen fixed when the keypad opens. Resizing or scrolling
-            // the page recenters the glass card, covers the logo, and drops taps.
-            'scrollable'=>false,'safeArea'=>true,'keyboardAvoidance'=>false,
-            'verticalOverflow'=>'hidden',
+            // Keep the login screen fixed when the keypad opens. The glass card
+            // stays put and scrolls inside, the same way signup does.
+            'scrollable'=>true,'safeArea'=>true,'keyboardAvoidance'=>false,
+            'verticalOverflow'=>'scroll',
             'sourcePage'=>$this->sourcePageMeta('login'),
             'pageLayout'=>$this->pageLayoutSpec('login'),
             'presentation'=>'phoneFrameGlassmorphism',
@@ -860,14 +868,14 @@ class AuthUiSchemaBuilder
             // Phone breakpoints explicitly keep keyboard avoidance off so the app-level
             // true value cannot push this screen up.
             'responsiveLayout' => [
-                'narrow'   => ['scrollable' => false, 'keyboardAvoidance' => false, 'glassPanel' => ['maxWidth' => 'fill', 'padding' => ['left' => 16, 'right' => 16]]],
-                'compact'  => ['scrollable' => false, 'keyboardAvoidance' => false, 'glassPanel' => ['maxWidth' => 'fill', 'padding' => ['left' => 24, 'right' => 24]]],
-                'medium'   => ['scrollable' => false, 'keyboardAvoidance' => false, 'glassPanel' => ['maxWidth' => 480, 'padding' => ['left' => 32, 'right' => 32]], 'maxContentWidth' => 560],
-                'expanded' => ['scrollable' => false, 'keyboardAvoidance' => false, 'glassPanel' => ['maxWidth' => 520, 'padding' => ['left' => 40, 'right' => 40]], 'maxContentWidth' => 600],
+                'narrow'   => ['scrollable' => true, 'keyboardAvoidance' => false, 'glassPanel' => ['maxWidth' => 'fill', 'padding' => ['left' => 16, 'right' => 16]]],
+                'compact'  => ['scrollable' => true, 'keyboardAvoidance' => false, 'glassPanel' => ['maxWidth' => 'fill', 'padding' => ['left' => 24, 'right' => 24]]],
+                'medium'   => ['scrollable' => true, 'keyboardAvoidance' => false, 'glassPanel' => ['maxWidth' => 480, 'padding' => ['left' => 32, 'right' => 32]], 'maxContentWidth' => 560],
+                'expanded' => ['scrollable' => true, 'keyboardAvoidance' => false, 'glassPanel' => ['maxWidth' => 520, 'padding' => ['left' => 40, 'right' => 40]], 'maxContentWidth' => 600],
                 'all' => [
                     'landscape' => [
-                        'scrollable'        => false,
-                        'verticalOverflow'  => 'hidden',
+                        'scrollable'        => true,
+                        'verticalOverflow'  => 'scroll',
                         'keyboardAvoidance' => false,
                         'glassPanel'        => ['maxWidth' => 460],
                     ],
@@ -893,8 +901,9 @@ class AuthUiSchemaBuilder
                 ['id'=>'login_logo','type'=>'image','asset'=>'logo','position'=>['top'=>34,'right'=>24],'size'=>['width'=>108,'height'=>38]],
                 [
                     'id'=>'login_glass_panel','type'=>'glassPanel','className'=>'ef-card','sourceClass'=>'ef-card',
-                    'position'=>['left'=>24,'right'=>24,'verticalCenter'=>true],
-                    'style'=>$this->glassPanelStyle(),
+                    'position'=>['left'=>24,'right'=>24,'top'=>88],
+                    'mainAxisSize'=>'min',
+                    'style'=>array_merge($this->glassPanelStyle(), ['height'=>'wrap','mainAxisSize'=>'min']),
                     'children'=>[
                         ['id'=>'login_title','type'=>'text','text'=>'Welcome Back','style'=>$this->glassTitleStyle()],
                         ['id'=>'login_subtitle','type'=>'text','text'=>'Login to your account','style'=>$this->glassSubtitleStyle(),'margin'=>['top'=>8,'bottom'=>22]],
@@ -908,14 +917,10 @@ class AuthUiSchemaBuilder
                             ],
                         ],
                         ['id'=>'login_submit','type'=>'button','text'=>'Login','loadingText'=>'Signing in...','variant'=>'primary','size'=>['height'=>50,'width'=>'fill'],'style'=>$this->glassPrimaryButtonStyle(),'validationGroup'=>'login','actionRef'=>'submitLogin'],
-                    ],
-                ],
-                [
-                    'id'=>'login_footer','type'=>'inlineText','alignment'=>'center',
-                    'position'=>['left'=>24,'right'=>24,'bottom'=>'calc(30px + safeAreaBottom)'],
-                    'spans'=>[
-                        ['text'=>"Don't have an account? ",'style'=>['color'=>'rgba(248,250,252,0.72)','fontSize'=>11,'letterSpacing'=>0]],
-                        ['text'=>'Sign up','style'=>['color'=>'#FFFFFF','fontSize'=>11,'fontWeight'=>800,'letterSpacing'=>0],'actionRef'=>'goSignup'],
+                        ['id'=>'login_footer','type'=>'inlineText','alignment'=>'center','margin'=>['top'=>16],'spans'=>[
+                            ['text'=>"Don't have an account? ",'style'=>['color'=>'rgba(248,250,252,0.72)','fontSize'=>11,'letterSpacing'=>0]],
+                            ['text'=>'Sign up','style'=>['color'=>'#FFFFFF','fontSize'=>11,'fontWeight'=>800,'letterSpacing'=>0],'actionRef'=>'goSignup'],
+                        ]],
                     ],
                 ],
             ],
@@ -949,52 +954,66 @@ class AuthUiSchemaBuilder
                 'overlay'=>['type'=>'layered','colors'=>['rgba(32,41,64,0.78)','rgba(31,21,12,0.72)','rgba(0,0,0,0.36)']],
             ],
             'components'=>[
-                ['id'=>'signup_back','type'=>'iconButton','icon'=>'arrow-left','iconRef'=>'arrow-left','iconAsset'=>$this->svgIcon('arrow-left'),'position'=>['top'=>22,'left'=>22],'size'=>['width'=>42,'height'=>42],'style'=>$this->glassIconButtonStyle(),'actionRef'=>'goWelcome'],
-                ['id'=>'signup_logo','type'=>'image','asset'=>'logo','position'=>['top'=>30,'right'=>24],'size'=>['width'=>108,'height'=>38]],
+                ['id'=>'signup_back','type'=>'iconButton','icon'=>'arrow-left','iconRef'=>'arrow-left','iconAsset'=>$this->svgIcon('arrow-left'),'position'=>['top'=>18,'left'=>16],'size'=>['width'=>42,'height'=>42],'style'=>$this->glassIconButtonStyle(),'actionRef'=>'goWelcome'],
                 [
                     'id'=>'signup_glass_panel','type'=>'glassPanel','className'=>'ef-card','sourceClass'=>'ef-card',
-                    'position'=>['left'=>24,'right'=>24,'verticalCenter'=>true],
+                    'position'=>['left'=>16,'right'=>16,'top'=>72,'bottom'=>16],
                     'scrollInside'=>true,
                     'hideScrollbar'=>true,
-                    'style'=>$this->glassPanelStyle(),
+                    'style'=>array_merge($this->glassPanelStyle(), ['padding'=>['top'=>20,'right'=>18,'bottom'=>18,'left'=>18],'borderRadius'=>26]),
                     'children'=>[
-                        ['id'=>'signup_title','type'=>'text','text'=>'Get Started','style'=>$this->glassTitleStyle()],
-                        ['id'=>'signup_subtitle','type'=>'text','text'=>'Create your secure Efactor account','style'=>$this->glassSubtitleStyle(),'margin'=>['top'=>8,'bottom'=>18]],
-                        $this->input('signup_email','textInput','email','signupForm.email','Email address','mail_outline','signup.email',['inputType'=>'email','autocomplete'=>'email','maxLength'=>191]),
-                        $this->input('signup_phone','textInput','phone','signupForm.phone','10-digit mobile number','phone_android','signup.phone',['inputType'=>'phone','keyboardType'=>'number','autocomplete'=>'tel','minLength'=>10,'maxLength'=>10]),
-                        $this->input('signup_password','passwordInput','password','signupForm.password','Password','lock_outline','signup.password',['autocomplete'=>'new-password','maxLength'=>72,'trailingAction'=>'togglePasswordVisibility']),
+                        ['id'=>'signup_logo','type'=>'image','asset'=>'logo','margin'=>['bottom'=>14],'size'=>['width'=>148,'height'=>48],'style'=>['fit'=>'contain','backgroundColor'=>'#FFFFFF','borderRadius'=>10,'alignment'=>'centerLeft']],
+                        ['id'=>'signup_title','type'=>'text','text'=>'Get Started','style'=>array_merge($this->glassTitleStyle(), ['fontSize'=>28])],
+                        ['id'=>'signup_subtitle','type'=>'text','text'=>'Create your secure Efactor account','style'=>$this->glassSubtitleStyle(),'margin'=>['top'=>6,'bottom'=>16]],
+                        $this->input('signup_email','textInput','email','signupForm.email','Email address','mail_outline','signup.email',['inputType'=>'email','autocomplete'=>'email','maxLength'=>191,'style'=>$this->glassInputStyle()]),
+                        $this->input('signup_phone','textInput','phone','signupForm.phone','Enter phone number','phone_android','signup.phone',[
+                            'style'=>$this->glassInputStyle(),
+                            'inputType'=>'phone',
+                            'keyboardType'=>'number',
+                            'autocomplete'=>'tel',
+                            'minLength'=>10,
+                            'maxLength'=>10,
+                        ]),
+                        $this->input('signup_password','passwordInput','password','signupForm.password','Password','lock_outline','signup.password',['style'=>$this->glassInputStyle(),'autocomplete'=>'new-password','maxLength'=>72,'trailingAction'=>'togglePasswordVisibility']),
                         [
                             'id'=>'signup_password_strength','type'=>'passwordStrength','sourceStateKey'=>'signupForm.password',
                             'rules'=>['minLength8','uppercase','lowercase','number','special'],
+                            'caption'=>'Upper / lower / number / special',
                             'labels'=>['Password strength','Very weak','Weak','Fair','Strong','Excellent'],
                             'levels'=>[
-                                ['score'=>0,'label'=>'Very weak','color'=>'#EF4444','minPassedRules'=>0],
-                                ['score'=>1,'label'=>'Weak','color'=>'#F97316','minPassedRules'=>1],
-                                ['score'=>2,'label'=>'Fair','color'=>'#F59E0B','minPassedRules'=>2],
-                                ['score'=>3,'label'=>'Strong','color'=>'#22C55E','minPassedRules'=>4],
-                                ['score'=>4,'label'=>'Excellent','color'=>'#16A34A','minPassedRules'=>5],
+                                ['score'=>0,'label'=>'Password strength','color'=>'rgba(255,255,255,0.18)','minPassedRules'=>0],
+                                ['score'=>1,'label'=>'Very weak','color'=>'#EF4444','minPassedRules'=>1],
+                                ['score'=>2,'label'=>'Weak','color'=>'#F97316','minPassedRules'=>2],
+                                ['score'=>3,'label'=>'Fair','color'=>'#F59E0B','minPassedRules'=>3],
+                                ['score'=>4,'label'=>'Strong','color'=>'#22C55E','minPassedRules'=>4],
+                                ['score'=>5,'label'=>'Excellent','color'=>'#16A34A','minPassedRules'=>5],
                             ],
-                            'style'=>['height'=>4,'trackColor'=>'rgba(255,255,255,0.16)','borderRadius'=>999,'marginTop'=>5,'labelColor'=>'rgba(248,250,252,0.72)','labelFontSize'=>10,'gap'=>9],
+                            'style'=>['height'=>4,'trackColor'=>'rgba(255,255,255,0.16)','borderRadius'=>999,'marginTop'=>5,'labelColor'=>'rgba(248,250,252,0.72)','labelFontSize'=>9,'captionColor'=>'rgba(248,250,252,0.72)','captionFontSize'=>9,'gap'=>9],
                         ],
-                        ['id'=>'signup_send_otp','type'=>'textButton','text'=>'Send OTP','resendText'=>'Resend OTP','style'=>['color'=>'#FFFFFF','fontSize'=>11,'fontWeight'=>850,'letterSpacing'=>0,'alignment'=>'right'],'actionRef'=>'sendSignupOtp','validationGroup'=>'signupOtpRequest','enabledWhen'=>['validationGroup'=>'signupOtpRequest']],
+                        $this->input('signup_confirm_password','passwordInput','confirm_password','signupForm.confirm_password','Confirm password','verified_user_outlined','signup.confirm_password',['style'=>$this->glassInputStyle(),'autocomplete'=>'new-password','maxLength'=>72,'trailingAction'=>'togglePasswordVisibility']),
+                        ['id'=>'signup_send_otp','type'=>'button','text'=>'Send OTP','resendText'=>'Resend OTP','loadingText'=>'Sending OTP...','variant'=>'primary','cooldownSeconds'=>30,'size'=>['height'=>50,'width'=>'fill'],'style'=>array_merge($this->glassPrimaryButtonStyle(), ['backgroundColor'=>'#243044','borderRadius'=>14,'disabledOpacity'=>1]),'actionRef'=>'sendSignupOtp','validationGroup'=>'signupOtpRequest','margin'=>['top'=>8,'bottom'=>12]],
                         [
                             'id'=>'signup_otp_boxes','type'=>'otpInput','name'=>'otp','stateKey'=>'signupForm.otp',
+                            'label'=>'Enter OTP',
                             'digitCount'=>6,'boxIds'=>['signup_otp_digit_1','signup_otp_digit_2','signup_otp_digit_3','signup_otp_digit_4','signup_otp_digit_5','signup_otp_digit_6'],
-                            'inputMode'=>'numeric','visibleStateKey'=>'signupForm.otpVisible','visibility'=>['dependsOn'=>'signupForm.otpVisible','condition'=>'equals','value'=>true],
+                            'inputMode'=>'numeric','visibleStateKey'=>'signupForm.otpVisible','visibility'=>['dependsOn'=>'signupForm.otpVisible','condition'=>'equals','value'=>true],'visibleWhen'=>['stateKey'=>'signupForm.otpVisible','condition'=>'equals','value'=>true],
                             'hiddenByDefault'=>true,'validationRef'=>'signup.otp',
-                            'style'=>['boxSize'=>42,'gap'=>7,'borderRadius'=>9,'backgroundColor'=>'rgba(255,255,255,0.12)','borderColor'=>'rgba(255,255,255,0.22)','focusBorderColor'=>'rgba(232,237,242,0.68)','textColor'=>'#FFFFFF','fontSize'=>16,'fontWeight'=>850,'letterSpacing'=>0],
+                            'labelStyle'=>['color'=>'rgba(248,250,252,0.72)','fontSize'=>10,'fontWeight'=>800,'letterSpacing'=>0],
+                            'style'=>['boxSize'=>40,'boxHeight'=>46,'gap'=>8,'borderRadius'=>10,'backgroundColor'=>'rgba(255,255,255,0.12)','borderColor'=>'rgba(255,255,255,0.22)','focusBorderColor'=>'rgba(232,237,242,0.68)','textColor'=>'#FFFFFF','fontSize'=>18,'fontWeight'=>700,'letterSpacing'=>0],
                         ],
-                        ['id'=>'signup_verify_otp','type'=>'button','text'=>'Verify','verifiedText'=>'Verified','variant'=>'glassPill','size'=>['height'=>30,'width'=>'content'],'visibleWhen'=>['stateKey'=>'signupForm.otp','condition'=>'lengthEquals','value'=>6],'style'=>['backgroundColor'=>'rgba(255,255,255,0.12)','verifiedBackgroundColor'=>'rgba(22,101,52,0.25)','borderColor'=>'rgba(255,255,255,0.22)','verifiedBorderColor'=>'rgba(134,239,172,0.45)','textColor'=>'#FFFFFF','verifiedTextColor'=>'#DCFCE7','borderRadius'=>999,'fontSize'=>10,'fontWeight'=>850,'letterSpacing'=>0],'actionRef'=>'verifySignupOtp','validationGroup'=>'signupOtpVerification'],
-                        $this->input('signup_confirm_password','passwordInput','confirm_password','signupForm.confirm_password','Confirm password','verified_user_outlined','signup.confirm_password',['autocomplete'=>'new-password','maxLength'=>72,'trailingAction'=>'togglePasswordVisibility']),
-                        ['id'=>'signup_terms','type'=>'checkboxWithInlineLink','name'=>'terms','stateKey'=>'signupForm.terms','valueWhenChecked'=>true,'text'=>'I agree to the ','linkText'=>'Terms & Conditions','validationRef'=>'signup.terms','linkActionRef'=>'openTerms','style'=>['activeColor'=>'#E8EDF2','textColor'=>'rgba(248,250,252,0.72)','linkColor'=>'#FFFFFF','fontSize'=>11,'letterSpacing'=>0]],
-                        ['id'=>'signup_submit','type'=>'button','text'=>'Create account','loadingText'=>'Creating account...','size'=>['height'=>49,'width'=>'fill'],'style'=>$this->glassPrimaryButtonStyle(),'validationGroup'=>'signup','actionRef'=>'submitSignup'],
-                        ['id'=>'signup_divider','type'=>'dividerLabel','text'=>'Or continue with','style'=>['lineColor'=>'rgba(255,255,255,0.18)','textColor'=>'rgba(248,250,252,0.72)','fontSize'=>10,'gap'=>10]],
-                        ['id'=>'signup_social_row','type'=>'row','mainAxisAlignment'=>'center','gap'=>14,'children'=>[
-                            ['id'=>'social_google','type'=>'socialButton','provider'=>'google','iconRef'=>'google','iconAsset'=>$this->svgIcon('google'),'enabled'=>false,'size'=>['width'=>40,'height'=>40],'iconSize'=>18,'style'=>['borderColor'=>'rgba(255,255,255,0.18)','backgroundColor'=>'rgba(255,255,255,0.10)']],
-                            ['id'=>'social_apple','type'=>'socialButton','provider'=>'apple','iconRef'=>'apple','iconAsset'=>$this->svgIcon('apple'),'enabled'=>false,'size'=>['width'=>40,'height'=>40],'iconSize'=>18,'style'=>['borderColor'=>'rgba(255,255,255,0.18)','iconColor'=>'#FFFFFF','backgroundColor'=>'rgba(255,255,255,0.10)']],
-                            ['id'=>'social_facebook','type'=>'socialButton','provider'=>'facebook','iconRef'=>'facebook','iconAsset'=>$this->svgIcon('facebook'),'enabled'=>false,'size'=>['width'=>40,'height'=>40],'iconSize'=>18,'style'=>['borderColor'=>'rgba(255,255,255,0.18)','iconColor'=>'#FFFFFF','backgroundColor'=>'rgba(255,255,255,0.10)']],
-                        ]],
-                        ['id'=>'signup_footer','type'=>'inlineText','alignment'=>'center','spans'=>[
+                        [
+                            'id'=>'signup_otp_actions','type'=>'row','mainAxisAlignment'=>'center','gap'=>8,
+                            'visibility'=>['dependsOn'=>'signupForm.otpVisible','condition'=>'equals','value'=>true],
+                            'visibleWhen'=>['stateKey'=>'signupForm.otpVisible','condition'=>'equals','value'=>true],
+                            'hiddenByDefault'=>true,
+                            'margin'=>['top'=>10],
+                            'children'=>[
+                                ['id'=>'signup_verify_otp','type'=>'button','text'=>'Verify','verifiedText'=>'Verified','variant'=>'glassPill','size'=>['height'=>44,'width'=>'fill'],'verifiedStateKey'=>'signupForm.otpVerified','enabledWhen'=>['validationGroup'=>'signupOtpVerification'],'visibility'=>['dependsOn'=>'signupForm.otpVisible','condition'=>'equals','value'=>true],'visibleWhen'=>['stateKey'=>'signupForm.otpVisible','condition'=>'equals','value'=>true],'hiddenByDefault'=>true,'style'=>['backgroundColor'=>'rgba(255,255,255,0.18)','verifiedBackgroundColor'=>'rgba(22,101,52,0.25)','borderColor'=>'rgba(255,255,255,0.55)','verifiedBorderColor'=>'rgba(134,239,172,0.45)','textColor'=>'#FFFFFF','verifiedTextColor'=>'#DCFCE7','borderWidth'=>1,'borderRadius'=>14,'fontSize'=>13,'fontWeight'=>850,'letterSpacing'=>0],'actionRef'=>'verifySignupOtp','validationGroup'=>'signupOtpVerification'],
+                            ],
+                        ],
+                        ['id'=>'signup_terms','type'=>'checkboxWithInlineLink','name'=>'terms','stateKey'=>'signupForm.terms','valueWhenChecked'=>true,'text'=>'I agree to the ','linkText'=>'Terms & Conditions','validationRef'=>'signup.terms','linkActionRef'=>'openTerms','margin'=>['top'=>4,'bottom'=>12],'style'=>['activeColor'=>'#FFFFFF','textColor'=>'rgba(248,250,252,0.84)','linkColor'=>'#FFFFFF','fontSize'=>12,'letterSpacing'=>0]],
+                        ['id'=>'signup_submit','type'=>'button','text'=>'Create account','loadingText'=>'Creating account...','size'=>['height'=>50,'width'=>'fill'],'style'=>array_merge($this->glassPrimaryButtonStyle(), ['backgroundColor'=>'#243044','disabledOpacity'=>0.55,'borderRadius'=>14]),'validationGroup'=>'signup','enabledWhen'=>['validationGroup'=>'signup'],'actionRef'=>'submitSignup'],
+                        ['id'=>'signup_footer','type'=>'inlineText','alignment'=>'center','margin'=>['top'=>14],'spans'=>[
                             ['text'=>'Already have an account? ','style'=>['color'=>'rgba(248,250,252,0.72)','fontSize'=>11,'letterSpacing'=>0]],
                             ['text'=>'Login','style'=>['color'=>'#FFFFFF','fontSize'=>11,'fontWeight'=>800,'letterSpacing'=>0],'actionRef'=>'goLogin'],
                         ]],
@@ -1125,9 +1144,9 @@ class AuthUiSchemaBuilder
                     'height' => '100%',
                     'borderRadius' => 34,
                     'overflowX' => 'hidden',
-                    'overflowY' => $isWelcome ? 'hidden' : 'auto',
-                    'backgroundColor' => $isWelcome ? null : '#FFFFFF',
-                    'backgroundAsset' => $isWelcome ? 'welcomeBackground' : null,
+                    'overflowY' => ($isWelcome || $pageId === 'signup' || $pageId === 'login') ? 'hidden' : 'auto',
+                    'backgroundColor' => ($isWelcome || $pageId === 'signup') ? null : '#FFFFFF',
+                    'backgroundAsset' => $isWelcome ? 'welcomeBackground' : ($pageId === 'signup' ? 'authHeroBackground' : null),
                 ],
             ],
             'mobileViewport' => [
@@ -1145,7 +1164,7 @@ class AuthUiSchemaBuilder
                     'notch' => ['visible' => false],
                 ],
                 'screen' => ['borderRadius' => 0],
-                'hero' => $isWelcome ? null : ['minHeight' => $mobileHeroHeight],
+                'hero' => $isWelcome ? null : ['minHeight' => $pageId === 'signup' ? 0 : $mobileHeroHeight],
             ],
             // Responsive breakpoint overrides for the page layout container.
             // Flutter deep-merges the selected entry into mobileViewport above.
@@ -1197,19 +1216,19 @@ class AuthUiSchemaBuilder
         $isSignup = $pageId === 'signup';
 
         return [
-            'backButton' => ['position' => 'absolute', 'top' => 29, 'left' => 19, 'width' => 36, 'height' => 36, 'zIndex' => 25],
+            'backButton' => ['position' => 'absolute', 'top' => $isSignup ? 30 : 29, 'left' => $isSignup ? 22 : 19, 'width' => $isSignup ? 42 : 36, 'height' => $isSignup ? 42 : 36, 'zIndex' => 25],
             'hero' => [
                 'position' => 'relative',
-                'minHeight' => $heroHeight,
+                'minHeight' => $isSignup ? 0 : $heroHeight,
                 'backgroundAsset' => 'authHeroBackground',
-                'backgroundPosition' => $isSignup ? 'center 28%' : 'center 32%',
-                'curve' => ['bottom' => -78, 'height' => $isSignup ? 132 : 136, 'color' => '#FFFFFF'],
+                'backgroundPosition' => $isSignup ? 'center bottom' : 'center 32%',
+                'curve' => ['bottom' => $isSignup ? 0 : -78, 'height' => $isSignup ? 0 : 136, 'color' => $isSignup ? 'transparent' : '#FFFFFF'],
             ],
-            'brand' => ['position' => 'absolute', 'top' => 35, 'right' => 24, 'zIndex' => $pageId === 'login' ? 20 : 4, 'logoSize' => ['maxWidth' => $isSignup ? 102 : 104, 'maxHeight' => $isSignup ? 36 : 38]],
-            'card' => ['position' => 'relative', 'zIndex' => 7, 'marginTop' => $isSignup ? -58 : -61, 'padding' => ['top' => 0, 'right' => 28, 'bottom' => $isSignup ? 18 : 27, 'left' => 28], 'backgroundColor' => '#FFFFFF'],
-            'heading' => ['textAlign' => 'center', 'marginBottom' => $isSignup ? 17 : 21],
-            'form' => ['fieldGap' => $isSignup ? 10 : 12, 'inputHeight' => $isSignup ? 49 : 50, 'inputRadius' => 14],
-            'footer' => ['padding' => ['top' => 4, 'right' => 24, 'bottom' => $isSignup ? 24 : 25, 'left' => 24], 'backgroundColor' => '#FFFFFF'],
+            'brand' => ['position' => 'absolute', 'top' => $isSignup ? 34 : 35, 'right' => 24, 'zIndex' => $pageId === 'login' ? 20 : 4, 'logoSize' => ['maxWidth' => $isSignup ? 108 : 104, 'maxHeight' => 38]],
+            'card' => ['position' => 'relative', 'zIndex' => 7, 'marginTop' => $isSignup ? 0 : -61, 'padding' => $isSignup ? ['top' => 24, 'right' => 22, 'bottom' => 21, 'left' => 22] : ['top' => 0, 'right' => 28, 'bottom' => 27, 'left' => 28], 'backgroundColor' => $isSignup ? 'rgba(18,24,38,0.58)' : '#FFFFFF'],
+            'heading' => ['textAlign' => $isSignup ? 'left' : 'center', 'marginBottom' => $isSignup ? 18 : 21],
+            'form' => ['fieldGap' => $isSignup ? 10 : 12, 'inputHeight' => $isSignup ? 46 : 50, 'inputRadius' => $isSignup ? 12 : 14],
+            'footer' => ['padding' => ['top' => 4, 'right' => 24, 'bottom' => $isSignup ? 24 : 25, 'left' => 24], 'backgroundColor' => $isSignup ? 'transparent' : '#FFFFFF'],
         ];
     }
 
@@ -1602,6 +1621,29 @@ class AuthUiSchemaBuilder
         return [
             'persist' => '$state.signupForm.persistSession',
             'fields' => $this->sessionFields(),
+        ];
+    }
+
+    private function glassInputStyle(): array
+    {
+        return [
+            'height'=>46,
+            'backgroundColor'=>'rgba(255,255,255,0.10)',
+            'borderRadius'=>12,
+            'borderWidth'=>1,
+            'borderColor'=>'rgba(255,255,255,0.16)',
+            'focusBorderColor'=>'rgba(232,237,242,0.56)',
+            'focusRingColor'=>'rgba(232,237,242,0.10)',
+            'textColor'=>'#FFFFFF',
+            'placeholderColor'=>'rgba(248,250,252,0.62)',
+            'iconColor'=>'#E8EDF2',
+            'fontSize'=>13,
+            'horizontalPadding'=>13,
+            'leadingIconSize'=>18,
+            'trailingIconSize'=>17,
+            'margin'=>['bottom'=>10],
+            'errorBorderColor'=>'rgba(252,165,165,0.70)',
+            'errorBackgroundColor'=>'rgba(127,29,29,0.20)',
         ];
     }
 

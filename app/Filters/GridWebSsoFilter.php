@@ -25,10 +25,34 @@ class GridWebSsoFilter implements FilterInterface
             return null;
         }
 
-        // Stay on this request. A redirect drops the new session cookie in the
-        // app webview, and the next hit is the efactor.tech login page.
+        // Stay on this request when it is already the right screen.
+        // A 302 drops the new session cookie in the app webview.
         GridWebSso::establishSession($userId);
-        return null;
+
+        $path = (string) $request->getUri()->getPath();
+        if (stripos($path, '/api/') !== false) {
+            return null;
+        }
+
+        $query = $request->getGet();
+        $wanted = GridWebSso::requestedModule(is_array($query) ? $query : array());
+        $current = GridWebSso::moduleKeyFromPath($path);
+        if ($wanted === '' || $current === '' || $wanted === $current) {
+            return null;
+        }
+
+        $dest = GridWebSso::appendToken(GridWebSso::requestedDestinationUrl(), $token);
+        if ($dest === '') {
+            return null;
+        }
+
+        return service('response')
+            ->setStatusCode(200)
+            ->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+            ->setHeader('Pragma', 'no-cache')
+            ->setHeader('X-Robots-Tag', 'noindex')
+            ->setContentType('text/html')
+            ->setBody(GridWebSso::handoffPage($dest));
     }
 
     public function after(RequestInterface $request, ResponseInterface $response, $arguments = null)

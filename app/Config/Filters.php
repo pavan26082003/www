@@ -19,6 +19,8 @@ class Filters extends BaseConfig
         'csrf'     => CSRF::class,
         'toolbar'  => DebugToolbar::class,
         'honeypot' => Honeypot::class,
+        'mobilepush' => \App\Filters\MobilePushRequestFilter::class,
+        'gridwebsso' => \App\Filters\GridWebSsoFilter::class,
     ];
 
     /**
@@ -47,6 +49,20 @@ public $globals = [
                 'grid/*',
                 'grid-chat',
                 'grid-chat/*',
+                'api/register_device_token',
+                'api/call_action',
+                'api/call/decline',
+                'grid_chat/api/call/decline',
+                'sd-signup/otp',
+                'sd-signup/verify',
+                'sd-signup/complete',
+                'sd-signup/register',
+                'sd-signup/verify-remote',
+                'sd-signup/login-remote',
+                'sd-signup/session',
+                'app-home-page/api',
+                'app-home-page/api/*',
+                'app-web-entry/open',
                 
             ]
         ],
@@ -77,5 +93,31 @@ public $globals = [
      *
      * @var array
      */
-    public $filters = [];
+    public $filters = [
+        'gridwebsso' => [
+            'before' => [
+                'grid',
+                'grid/*',
+                'grid-chat',
+                'grid-chat/*',
+                'grid_chat',
+                'grid_chat/*',
+                'app-web-entry/open',
+            ],
+        ],
+        'mobilepush' => [
+            'before' => [
+                'api/register_device_token',
+                'api/call_action',
+                'grid-chat/api/chat/send',
+                'grid-chat/api/chat/read',
+                'grid-chat/api/chat/call_invite',
+                'grid_chat/api/chat/send',
+                'grid_chat/api/chat/read',
+                'grid_chat/api/chat/call_invite',
+                'app-home-page/api',
+                'app-home-page/api/*',
+            ],
+        ],
+    ];
 }

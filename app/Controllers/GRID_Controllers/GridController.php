@@ -36,7 +36,8 @@ class GridController extends \App\Controllers\Security_Controller
         }
 
         // Professional Space shell (GRID/index) — do not change schema/SDUI structure.
-        return $this->gridView('GRID/index');
+        // private, no-cache lets the device keep a copy for offline without marking it public.
+        return $this->gridView('GRID/index')->setHeader('Cache-Control', 'private, no-cache');
     }
 
     public function profile()

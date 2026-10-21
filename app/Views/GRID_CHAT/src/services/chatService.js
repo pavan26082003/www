@@ -122,6 +122,14 @@ export const fetchConversations = () => getJson('chat/conversations');
 export const fetchConversationMessages = (conversationId, beforeId) =>
   getJson('chat/messages', { conversation_id: conversationId, before_id: beforeId });
 
+export const inviteCall = ({ callId, calleeUserId, conversationId, callType }) =>
+  postForm('chat/call_invite', toFormData({
+    call_id: callId,
+    callee_user_id: calleeUserId || '',
+    conversation_id: conversationId || '',
+    call_type: callType,
+  }));
+
 export const sendConversationMessage = ({ conversationId, clientId, messageType, body, metadata, replyToMessageId }) =>
   postForm('chat/send', toFormData({
     conversation_id: conversationId,

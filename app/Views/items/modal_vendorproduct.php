@@ -1,2534 +1,904 @@
-<?php echo form_open(get_uri("items/savevendorproduct"), array("id" => "item-form", "class" => "general-form", "role" => "form", "novalidate" => "novalidate", "enctype" => "multipart/form-data")); ?>
-<div id="items-dropzone" class="post-dropzone vendor-product-modal-ui">
-    <div class="modal-body clearfix">
-        <div class="container-fluid">
-            <input type="hidden" name="id" value="<?php echo $model_info->id ?? ""; ?>" />
-
-            <div class="vp-modal-hero">
-                <div class="vp-modal-title">
-                    <span class="vp-kicker">Product setup</span>
-                    <div class="vp-title-row">
-                        <h4><i class="fa fa-plus-circle"></i> ADD modal</h4>
-                        <div class="vp-title-actions">
-                            <button type="button" class="vp-hero-demo-btn" onclick="openVendorProductDemoVideo(event)" aria-label="Demo Video">
-                                <i class="fa fa-play-circle"></i>
-                                <span>Demo Video</span>
-                            </button>
-                            <button type="button" class="vp-hero-back-btn" data-bs-dismiss="modal" data-dismiss="modal" onclick="vendorProductGoBack(event)" aria-label="Back">
-                                <i class="fa fa-arrow-left"></i>
-                                <span>Back</span>
-                            </button>
-                        </div>
-                    </div>
-                    <p>Create a clean vendor product profile with brand, model, batch and preview details.</p>
-                </div>
-            </div>
-
-            <?php if ("177") { ?>
-                <div class="form-group">
-                    <div class="row">
-                        <div class="col-md-12 text-off"><!--?php echo app_lang('item_edit_instruction'); ?--></div>
-                    </div>
-                </div>
-            <?php } ?>
-
-            <!-- Brand & Product Row -->
-            <div class="row mb-4 vp-picker-row">
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label for="brand_id" class="control-label">
-                            Brand <span class="text-danger">*</span>
-                        </label>
-                        <select class="form-control select2" id="email2" name="brand" required style="width: 100%;">
-                            <option value="">&mdash; Select Brand &mdash;</option>
-                            <?php
-                            $rendered_brands = array();
-                            foreach ($brand_dropdown as $value) {
-                                $brand_name = trim($value->name);
-                                $brand_key = strtolower($brand_name);
-                                if ($brand_name === "" || isset($rendered_brands[$brand_key])) {
-                                    continue;
-                                }
-                                $rendered_brands[$brand_key] = $brand_name;
-                                ?>
-                                <option value="<?php echo htmlspecialchars($brand_name, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($brand_name, ENT_QUOTES, 'UTF-8'); ?></option>
-                            <?php } ?>
-                        </select>
-                        <div class="vp-custom-select" data-select-id="email2">
-                            <button type="button" class="vp-custom-select-btn" aria-haspopup="listbox" aria-expanded="false">&mdash; Select Brand &mdash;</button>
-                            <div class="vp-custom-options" role="listbox">
-                                <button type="button" class="vp-custom-option is-placeholder is-selected" data-value="" role="option">&mdash; Select Brand &mdash;</button>
-                                <?php
-                                foreach ($rendered_brands as $brand_name) {
-                                    ?>
-                                    <button type="button" class="vp-custom-option" data-value="<?php echo htmlspecialchars($brand_name, ENT_QUOTES, 'UTF-8'); ?>" role="option"><?php echo htmlspecialchars($brand_name, ENT_QUOTES, 'UTF-8'); ?></button>
-                                <?php } ?>
-                            </div>
-                        </div>
-                        <div class="invalid-feedback">Please select a brand.</div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label for="category_id" class="control-label">
-                            Product <span class="text-danger">*</span>
-                        </label>
-                        <select class="form-control select2" id="email" name="category" required style="width: 100%;">
-                            <option value="">&mdash; Select Product &mdash;</option>
-                            <?php foreach ($categories_dropdown as $value) { ?>
-                                <option value="<?php echo htmlspecialchars($value->name, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($value->name, ENT_QUOTES, 'UTF-8'); ?></option>
-                            <?php } ?>
-                        </select>
-                        <div class="vp-custom-select" data-select-id="email">
-                            <button type="button" class="vp-custom-select-btn" aria-haspopup="listbox" aria-expanded="false">&mdash; Select Product &mdash;</button>
-                            <div class="vp-custom-options" role="listbox">
-                                <button type="button" class="vp-custom-option is-placeholder is-selected" data-value="" role="option">&mdash; Select Product &mdash;</button>
-                                <?php foreach ($categories_dropdown as $value) { ?>
-                                    <button type="button" class="vp-custom-option" data-value="<?php echo htmlspecialchars($value->name, ENT_QUOTES, 'UTF-8'); ?>" role="option"><?php echo htmlspecialchars($value->name, ENT_QUOTES, 'UTF-8'); ?></button>
-                                <?php } ?>
-                            </div>
-                        </div>
-                        <div class="invalid-feedback">Please select a product.</div>
-                    </div>
-                </div>
-            </div>
-            
-
-            <!-- Model Information Card -->
-            <div class="card mb-4 vp-section-card">
-                <div class="card-header bg-light">
-                    <h5 class="card-title mb-0">
-                        <i class="fa fa-cube me-2"></i>Model Information
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <!-- Model Name -->
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="model_name" class="control-label">
-                                    Model Name <span class="text-danger">*</span>
-                                </label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light border-end-0">
-                                        <i class="fa fa-tag"></i>
-                                    </span>
-                                    <input 
-                                        type="text" 
-                                        class="form-control border-start-0 ps-0" 
-                                        id="model_name" 
-                                        name="modelname" 
-                                        placeholder="e.g., EF-002 FMN-02"
-                                        oninput="syncVendorProductModelNo(this.value)"
-                                        onkeyup="syncVendorProductModelNo(this.value)"
-                                        onchange="syncVendorProductModelNo(this.value)"
-                                        pattern="^[a-zA-Z0-9_ -]+$" 
-                                        title="Only alphanumeric characters, hyphens (-), underscores (_) and spaces are allowed."
-                                        required>
-                                </div>
-                                <small class="form-text text-muted d-block mt-1">
-                                    <i class="fa fa-info-circle"></i> Alphanumeric with - _ space
-                                </small>
-                                <div class="invalid-feedback">Model name is required.</div>
-                            </div>
-                        </div>
-                        
-                        <!-- Version -->
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="version" class="control-label">
-                                    Version <span class="text-danger">*</span>
-                                </label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light border-end-0">
-                                        <i class="fa fa-code-fork"></i>
-                                    </span>
-                                    <input 
-                                        type="text" 
-                                        class="form-control border-start-0 ps-0" 
-                                        id="version" 
-                                        name="version" 
-                                        placeholder="e.g., v1.0, 2.1, A.5"
-                                        pattern="^[a-zA-Z0-9_.-]+$"
-                                        title="Only alphanumeric characters, dots (.), hyphens (-) and underscores (_) are allowed."
-                                        required>
-                                </div>
-                                <small class="form-text text-muted d-block mt-1">
-                                    <i class="fa fa-info-circle"></i> e.g., v1.0, 2.1, A.5
-                                </small>
-                                <div class="invalid-feedback">Version is required.</div>
-                            </div>
-                        </div>
-                        
-                        <!-- Batch/Lot No. -->
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="batch" class="control-label">
-                                    Batch/Lot No. <span class="text-danger">*</span>
-                                </label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light border-end-0">
-                                        <i class="fa fa-cubes"></i>
-                                    </span>
-                                    <input 
-                                        type="text" 
-                                        class="form-control border-start-0 ps-0" 
-                                        id="batch" 
-                                        name="batch" 
-                                        placeholder="e.g., BATCH001, LOT-2024"
-                                        pattern="^[a-zA-Z0-9_-]+$"
-                                        title="Only alphanumeric characters, hyphens (-) and underscores (_) are allowed."
-                                        required>
-                                </div>
-                                <small class="form-text text-muted d-block mt-1">
-                                    <i class="fa fa-info-circle"></i> Alphanumeric with - _
-                                </small>
-                                <div class="invalid-feedback">Batch/Lot number is required.</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Generated Model No. & Description Card -->
-            <div class="card mb-4 vp-section-card">
-                <div class="card-header bg-light">
-                    <h5 class="card-title mb-0">
-                        <i class="fa fa-barcode me-2"></i>Product Details
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <!-- Model No. (Auto-generated from Model Name) -->
-                        <div class="col-md-6">
-                            <div class="form-group">
-                                <label for="model_no" class="control-label">
-                                    Model No. <span class="text-muted">(Same as Model Name)</span>
-                                </label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light border-end-0">
-                                        <i class="fa fa-barcode"></i>
-                                    </span>
-                                    <input 
-                                        type="text" 
-                                        class="form-control border-start-0 ps-0 bg-light" 
-                                        id="model_no" 
-                                        name="modelno" 
-                                        readonly 
-                                        placeholder="Same as Model Name"
-                                        style="background-color: #F1F3E0;">
-                                </div>
-                                <small class="form-text text-muted d-block mt-1">
-                                    <i class="fa fa-magic"></i> Automatically matches Model Name
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row mt-3">
-                        <!-- Product Description (Optional) -->
-                        <div class="col-md-12">
-                            <div class="form-group">
-                                <label for="description" class="control-label">
-                                    Product Description <span class="text-muted">(Optional)</span>
-                                </label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light border-end-0">
-                                        <i class="fa fa-file-text"></i>
-                                    </span>
-                                    <input 
-                                        type="text" 
-                                        class="form-control border-start-0 ps-0" 
-                                        id="description" 
-                                        name="description" 
-                                        placeholder="Enter product description (optional)">
-                                </div>
-                                <small class="form-text text-muted d-block mt-1">
-                                    <i class="fa fa-info-circle"></i> Additional product details
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Model Logo: functional generate/upload buttons and image preview. -->
-            <div class="card mb-4 vp-section-card vp-logo-card">
-                <div class="card-header bg-light">
-                    <h5 class="card-title mb-0"><i class="fa fa-picture-o me-2"></i>Model Logo</h5>
-                </div>
-                <div class="card-body vp-logo-layout">
-                    <div class="vp-logo-fields">
-                        <label class="control-label">Model Logo <span class="text-danger">*</span></label>
-                        <input type="hidden" id="vp-model-logo-mode" name="model_logo_mode"
-                            value="<?php echo !empty($model_info->model_logo) ? 'keep' : 'generate'; ?>">
-                        <div class="vp-logo-buttons" role="group" aria-label="Model logo source">
-                            <?php if (!empty($model_info->model_logo)): ?>
-                                <button type="button" class="vp-logo-action is-active" data-mode="keep"
-                                    aria-pressed="true" onclick="vpChooseLogo('keep')">
-                                    <i class="fa fa-check-circle"></i> Keep Current
-                                </button>
-                            <?php endif; ?>
-                            <button type="button" class="vp-logo-action <?php echo empty($model_info->model_logo) ? 'is-active' : ''; ?>"
-                                data-mode="generate" aria-pressed="<?php echo empty($model_info->model_logo) ? 'true' : 'false'; ?>"
-                                onclick="vpChooseLogo('generate')">
-                                <i class="fa fa-magic"></i> Create from Model Name
-                            </button>
-                            <button type="button" class="vp-logo-action" data-mode="upload" aria-pressed="false"
-                                onclick="vpChooseLogo('upload', true)">
-                                <i class="fa fa-upload"></i> Upload Image
-                            </button>
-                        </div>
-                        <div id="vp-logo-upload-details" hidden>
-                            <div class="vp-logo-upload-row">
-                                <label for="vp-model-logo-file" class="control-label">Selected Logo</label>
-                                <div class="vp-logo-file-row">
-                                    <input type="file" id="vp-model-logo-file" name="model_logo_file"
-                                        accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
-                                        class="form-control" onchange="vpModelLogoFileChanged()">
-                                </div>
-                            </div>
-                            <p id="vp-logo-filename" class="vp-logo-hint">Choose a PNG, JPG, or WEBP image (max. 2 MB).</p>
-                        </div>
-                        <div id="vp-logo-error" class="vp-logo-error" role="alert" aria-live="polite"></div>
-                        <p class="vp-logo-hint">Create a logo from the model name or upload your own. The logo will be saved with the model.</p>
-                    </div>
-                    <div class="vp-logo-preview">
-                        <div class="vp-logo-preview-box" aria-label="Live model logo preview">
-                            <span id="vp-logo-letters">M</span>
-                            <img id="vp-logo-image" alt="Model logo" hidden
-                                data-current-url="<?php echo !empty($model_info->model_logo) ? esc(base_url('files/model_logo/' . rawurlencode(basename($model_info->model_logo))), 'attr') : ''; ?>">
-                        </div>
-                        <span>Live Logo Preview</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Preview Card -->
-            <div class="card mb-3 border-primary vp-section-card vp-preview-card">
-                <div class="card-header bg-primary">
-                    <h5 class="card-title mb-0">
-                        <i class="fa fa-eye me-2"></i>Preview
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-12">
-                            <div class="p-3 bg-light rounded vp-preview-panel">
-                                <div class="row vp-preview-grid">
-                                    <div class="col-md-3 vp-preview-item">
-                                        <strong>Brand:</strong>
-                                        <span id="preview-brand" class="ms-2">&mdash;</span>
-                                    </div>
-                                    <div class="col-md-3 vp-preview-item">
-                                        <strong>Product:</strong>
-                                        <span id="preview-product" class="ms-2">&mdash;</span>
-                                    </div>
-                                    <div class="col-md-3 vp-preview-item">
-                                        <strong>Model Name:</strong>
-                                        <span id="preview-model" class="ms-2">&mdash;</span>
-                                    </div>
-                                    <div class="col-md-3 vp-preview-item">
-                                        <strong>Model Number:</strong>
-                                        <span id="preview-modelno" class="ms-2">&mdash;</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
+<?php
+$vp_edit = !empty($model_info->id);
+// The demo is an embedded, read-only model showcase. No external URL required.
+$vp_escape = static function ($value) { return htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8'); };
+?>
+<?php echo form_open(get_uri('items/savevendorproduct'), ['id'=>'item-form','class'=>'general-form','role'=>'form','novalidate'=>'novalidate','enctype'=>'multipart/form-data']); ?>
+<div id="items-dropzone" class="vp-form">
+  <div class="modal-body">
+    <input type="hidden" name="id" value="<?php echo $vp_escape($model_info->id ?? ''); ?>">
+    <header class="vp-heading">
+      <div class="vp-heading-icon"><svg class="vp-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg></div>
+      <div class="vp-heading-copy"><div class="vp-eyebrow">PRODUCT CATALOG / MODEL MANAGEMENT</div><h3><?php echo $vp_edit ? 'Edit model' : 'Add new model'; ?></h3><p>Enter the product details below. Fields marked * are required.</p></div>
+      <div class="vp-heading-actions">
+        <?php if (!$vp_edit): ?>
+        <button type="button" class="vp-header-btn vp-demo-btn" id="vp-demo-btn" title="View built-in model demo">
+          <svg class="vp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/><path d="M4 5v14"/></svg>
+          Demo
+        </button>
+        <?php endif; ?>
+        <button type="button" class="vp-header-btn vp-header-back" id="vp-header-back" title="Return to previous page">
+          <svg class="vp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 18-6-6 6-6"/><path d="M20 12H8"/></svg>
+          Back
+        </button>
+      </div>
+    </header>
+    <!-- Self-contained model showcase: no upload, route, external library or database save. -->
+    <section class="vp-integrated-demo" id="vp-integrated-demo" hidden aria-label="Sample model demonstration">
+      <div class="vp-demo-topline"><span class="vp-demo-pill">INTERACTIVE EXAMPLE</span><button type="button" id="vp-demo-close" class="vp-demo-return">← Return to Add Model</button></div>
+      <div class="vp-demo-intro"><div><span class="vp-demo-eyebrow">MODEL CATALOG / SAMPLE RECORD</span><h3>Explore a finished model</h3><p>This is an example of how a completed model looks. It does not modify your form or save any data.</p></div><span class="vp-demo-status"><span></span> Demo only</span></div>
+      <div class="vp-video-card" aria-label="Add Model feature walkthrough">
+  <div class="vp-video-title"><span><strong>Quick model walkthrough</strong><small>13 seconds · 6 highlights · No uploads required</small></span><span class="vp-video-label">GUIDED DEMO</span></div>
+  <div class="vp-video-frame">
+    <video id="vp-tour-video" preload="metadata" playsinline muted aria-label="Video tour of the Add Model workflow" poster="" controls><source src="data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAqmbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAM8IAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAACdF0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAM8IAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAoAAAAFoAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAADPCAAAIAAABAAAAAAlJbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAAAwAAACfABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAAI9G1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAACLRzdGJsAAAAwHN0c2QAAAAAAAAAAQAAALBhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAoABaABIAAAASAAAAAAAAAABFUxhdmM2MS4xOS4xMDEgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAANmF2Y0MBZAAW/+EAGmdkABas2UCgL/lwEQAAAwABAAADABgPFi2WAQAFaO+GcsD9+PgAAAAAEHBhc3AAAAABAAAAAQAAABRidHJ0AAAAAAAAVCAAAAAAAAAAGHN0dHMAAAAAAAAAAQAAAJ8AAAQAAAAAFHN0c3MAAAAAAAAAAQAAAAEAAAUAY3R0cwAAAAAAAACeAAAAAQAACAAAAAABAAAUAAAAAAEAAAgAAAAAAQAAAAAAAAABAAAEAAAAAAEAABQAAAAAAQAACAAAAAABAAAAAAAAAAEAAAQAAAAAAQAAFAAAAAABAAAIAAAAAAEAAAAAAAAAAQAABAAAAAABAAAUAAAAAAEAAAgAAAAAAQAAAAAAAAABAAAEAAAAAAEAABQAAAAAAQAACAAAAAABAAAAAAAAAAEAAAQAAAAAAQAAFAAAAAABAAAIAAAAAAEAAAAAAAAAAQAABAAAAAABAAAUAAAAAAEAAAgAAAAAAQAAAAAAAAABAAAEAAAAAAEAAAwAAAAAAQAABAAAAAABAAAUAAAAAAEAAAgAAAAAAQAAAAAAAAABAAAEAAAAAAEAABQAAAAAAQAACAAAAAABAAAAAAAAAAEAAAQAAAAAAQAAFAAAAAABAAAIAAAAAAEAAAAAAAAAAQAABAAAAAABAAAUAAAAAAEAAAgAAAAAAQAAAAAAAAABAAAEAAAAAAEAABQAAAAAAQAACAAAAAABAAAAAAAAAAEAAAQAAAAAAQAAFAAAAAABAAAIAAAAAAEAAAAAAAAAAQAABAAAAAABAAAMAAAAAAEAAAQAAAAAAQAAFAAAAAABAAAIAAAAAAEAAAAAAAAAAQAABAAAAAABAAAUAAAAAAEAAAgAAAAAAQAAAAAAAAABAAAEAAAAAAEAABQAAAAAAQAACAAAAAABAAAAAAAAAAEAAAQAAAAAAQAAFAAAAAABAAAIAAAAAAEAAAAAAAAAAQAABAAAAAABAAAUAAAAAAEAAAgAAAAAAQAAAAAAAAABAAAEAAAAAAEAABQAAAAAAQAACAAAAAABAAAAAAAAAAEAAAQAAAAAAQAAFAAAAAABAAAIAAAAAAEAAAAAAAAAAQAABAAAAAABAAAUAAAAAAEAAAgAAAAAAQAAAAAAAAABAAAEAAAAAAEAABQAAAAAAQAACAAAAAABAAAAAAAAAAEAAAQAAAAAAQAAFAAAAAABAAAIAAAAAAEAAAAAAAAAAQAABAAAAAABAAAUAAAAAAEAAAgAAAAAAQAAAAAAAAABAAAEAAAAAAEAABQAAAAAAQAACAAAAAABAAAAAAAAAAEAAAQAAAAAAQAAEAAAAAACAAAEAAAAAAEAABQAAAAAAQAACAAAAAABAAAAAAAAAAEAAAQAAAAAAQAAFAAAAAABAAAIAAAAAAEAAAAAAAAAAQAABAAAAAABAAAUAAAAAAEAAAgAAAAAAQAAAAAAAAABAAAEAAAAAAEAABQAAAAAAQAACAAAAAABAAAAAAAAAAEAAAQAAAAAAQAAFAAAAAABAAAIAAAAAAEAAAAAAAAAAQAABAAAAAABAAAUAAAAAAEAAAgAAAAAAQAAAAAAAAABAAAEAAAAAAEAAAwAAAAAAQAABAAAAAABAAAUAAAAAAEAAAgAAAAAAQAAAAAAAAABAAAEAAAAAAEAABQAAAAA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" type="video/mp4">Your browser cannot play this demo video.</video>
+  </div>
+  <div class="vp-video-chapters" aria-label="Jump to a demo chapter">
+    <button type="button" class="vp-video-chapter" data-vp-seek="0">Introduction</button>
+    <button type="button" class="vp-video-chapter" data-vp-seek="2.2">Product</button>
+    <button type="button" class="vp-video-chapter" data-vp-seek="4.4">Details</button>
+    <button type="button" class="vp-video-chapter" data-vp-seek="6.6">Media</button>
+    <button type="button" class="vp-video-chapter" data-vp-seek="8.8">Preview</button>
+    <button type="button" class="vp-video-chapter" data-vp-seek="11">Save</button>
+  </div>
+</div>
+      <div class="vp-demo-layout">
+        <div class="vp-demo-product-art" aria-label="Stylized example model image">
+          <svg viewBox="0 0 350 260" role="img" aria-label="Illustration of a smart-control model" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="vp-sample-bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#264b63"/><stop offset="1" stop-color="#102a40"/></linearGradient><linearGradient id="vp-sample-device" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#edf7fa"/><stop offset="1" stop-color="#bdced8"/></linearGradient></defs><rect width="350" height="260" rx="15" fill="url(#vp-sample-bg)"/><circle cx="275" cy="40" r="105" fill="#20b9c0" opacity=".11"/><circle cx="65" cy="250" r="110" fill="#20b9c0" opacity=".08"/><rect x="107" y="30" width="138" height="193" rx="23" fill="#071c29" opacity=".3"/><rect x="99" y="23" width="138" height="193" rx="23" fill="url(#vp-sample-device)" stroke="#fff" stroke-opacity=".6" stroke-width="2"/><rect x="112" y="38" width="112" height="164" rx="14" fill="#152f44"/><circle cx="168" cy="104" r="32" fill="none" stroke="#35c4ca" stroke-width="5"/><path d="M168 83v23" stroke="#e6fbfd" stroke-width="6" stroke-linecap="round"/><circle cx="168" cy="104" r="6" fill="#e6fbfd"/><rect x="137" y="151" width="62" height="7" rx="3.5" fill="#4c7284"/><rect x="148" y="166" width="40" height="5" rx="2.5" fill="#4c7284"/><text x="168" y="191" fill="#c7e6ef" font-family="system-ui, sans-serif" font-size="10" text-anchor="middle">EFACTOR</text><text x="175" y="241" fill="#cae4ed" font-family="system-ui, sans-serif" font-size="10" letter-spacing="2" text-anchor="middle">SAMPLE PRODUCT IMAGE</text></svg>
         </div>
-    </div>
-
-    <div class="modal-footer">
-        <button type="button" class="btn btn-secondary vp-back-btn" id="back-btn" data-bs-dismiss="modal" data-dismiss="modal" onclick="vendorProductGoBack(event)">
-            <i class="fa fa-arrow-left me-1"></i>Back
-        </button>
-        <button type="submit" class="btn btn-primary" id="submit-btn">
-            <i class="fa fa-save me-1"></i><?php echo app_lang('save'); ?>
-        </button>
-    </div>
+        <div class="vp-demo-details">
+          <div class="vp-demo-brandline"><span class="vp-demo-brand-mark">E</span><div><strong>EFACTOR</strong><small>Smart Devices / Example</small></div></div>
+          <h4>EF-SMART-01</h4><p class="vp-demo-description">Smart-control module · Example product record used to demonstrate the model setup flow.</p>
+          <div class="vp-demo-facts"><div><span>Model number</span><strong>EF-SMART-01</strong></div><div><span>Version</span><strong>v1.0</strong></div><div><span>Batch / Lot</span><strong>LOT-2026</strong></div><div><span>Product</span><strong>Smart Controller</strong></div></div>
+        </div>
+      </div>
+      <div class="vp-demo-bottom"><div><strong>Image + editable logo</strong><p>Your actual model page supports a custom product image and a configurable logo, both in the Model Media section.</p></div><button type="button" class="vp-demo-return vp-demo-primary" id="vp-demo-use-form">Create your model →</button></div>
+    </section>
+    <section class="vp-section" aria-labelledby="vp-product-title">
+      <div class="vp-section-heading"><span class="vp-step"><svg class="vp-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><div><h4 id="vp-product-title">Product selection</h4><p>Choose the brand and product category.</p></div></div>
+      <div class="vp-grid vp-two">
+        <div class="vp-field"><label for="vp-brand"><svg class="vp-icon vp-label-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4h8l10 10-7 7z"/><circle cx="8" cy="8" r="1"/></svg> Brand <span>*</span></label><select id="vp-brand" name="brand" required><option value="">Select a brand</option>
+          <?php $vp_seen = []; foreach (($brand_dropdown ?? []) as $brand): $name = trim((string)($brand->name ?? '')); $key = strtolower($name); if (!$name || isset($vp_seen[$key])) continue; $vp_seen[$key] = true; ?>
+            <option value="<?php echo $vp_escape($name); ?>" <?php echo (($model_info->brand ?? '') === $name) ? 'selected' : ''; ?>><?php echo $vp_escape($name); ?></option>
+          <?php endforeach; ?>
+        </select><small class="vp-error">Please select a brand.</small></div>
+        <div class="vp-field"><label for="vp-product"><svg class="vp-icon vp-label-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/></svg> Product <span>*</span></label><select id="vp-product" name="category" required><option value="">Select a product</option>
+          <?php foreach (($categories_dropdown ?? []) as $category): $name = (string)($category->name ?? ''); ?>
+            <option value="<?php echo $vp_escape($name); ?>" <?php echo (($model_info->category ?? '') === $name) ? 'selected' : ''; ?>><?php echo $vp_escape($name); ?></option>
+          <?php endforeach; ?>
+        </select><small class="vp-error">Please select a product.</small></div>
+      </div>
+    </section>
+    <section class="vp-section" aria-labelledby="vp-model-title">
+      <div class="vp-section-heading"><span class="vp-step"><svg class="vp-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></span><div><h4 id="vp-model-title">Model information</h4><p>Identify this model and its production batch.</p></div></div>
+      <div class="vp-grid vp-three">
+        <div class="vp-field"><label for="model_name"><svg class="vp-icon vp-label-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 2 9 5-9 5-9-5 9-5ZM3 7v10l9 5 9-5V7M12 12v10"/></svg> Model name <span>*</span></label><input id="model_name" name="modelname" type="text" maxlength="120" required pattern="[A-Za-z0-9_ -]+" placeholder="e.g. EF-002 FMN-02" value="<?php echo $vp_escape($model_info->modelname ?? ''); ?>"><small class="vp-error">Enter a valid model name (letters, numbers, spaces, - or _).</small></div>
+        <div class="vp-field"><label for="version"><svg class="vp-icon vp-label-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="4" r="2"/><circle cx="6" cy="20" r="2"/><circle cx="18" cy="6" r="2"/><path d="M6 6v12M6 12c0-4 12-1 12-4"/></svg> Version <span>*</span></label><input id="version" name="version" type="text" maxlength="60" required pattern="[A-Za-z0-9_.-]+" placeholder="e.g. v1.0" value="<?php echo $vp_escape($model_info->version ?? ''); ?>"><small class="vp-error">Enter a valid version (letters, numbers, ., - or _).</small></div>
+        <div class="vp-field"><label for="batch"><svg class="vp-icon vp-label-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg> Batch / Lot number <span>*</span></label><input id="batch" name="batch" type="text" maxlength="100" required pattern="[A-Za-z0-9_-]+" placeholder="e.g. LOT-2026" value="<?php echo $vp_escape($model_info->batch ?? ''); ?>"><small class="vp-error">Enter a valid batch (letters, numbers, - or _).</small></div>
+      </div>
+    </section>
+    <section class="vp-section" aria-labelledby="vp-details-title">
+      <div class="vp-section-heading"><span class="vp-step"><svg class="vp-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h10M8 13h10M8 17h7"/></svg></span><div><h4 id="vp-details-title">Additional details</h4><p>Model number is synchronized automatically.</p></div></div>
+      <div class="vp-grid vp-two">
+        <div class="vp-field"><label for="model_no"><svg class="vp-icon vp-label-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4v16M6 4v16M10 4v16M13 4v16M17 4v16M21 4v16"/></svg> Model number <span class="vp-optional">Auto-filled</span></label><div class="vp-readonly"><input id="model_no" name="modelno" type="text" readonly placeholder="Filled from model name" value="<?php echo $vp_escape($model_info->modelname ?? ''); ?>"><svg class="vp-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div></div>
+        <div class="vp-field"><label for="description"><svg class="vp-icon vp-label-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2h8l5 5v15H6zM14 2v6h5M9 12h7M9 16h7"/></svg> Description <span class="vp-optional">Optional</span></label><textarea id="description" name="description" rows="2" maxlength="1000" placeholder="Briefly describe this model"><?php echo $vp_escape($model_info->description ?? ''); ?></textarea></div>
+      </div>
+    </section>
+    <section class="vp-section vp-media-section" aria-labelledby="vp-media-title">
+      <div class="vp-section-heading"><span class="vp-step"><svg class="vp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.7"/><path d="m3 17 5-5 4 4 3-3 6 6"/></svg></span><div><h4 id="vp-media-title">Model media</h4><p>Add a product image or customize the model logo, only when needed.</p></div></div>
+      <div class="vp-media-switch" role="group" aria-label="Choose media editor">
+        <button type="button" class="vp-media-tab" data-media="image" aria-expanded="false" aria-controls="vp-media-image"><svg class="vp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.7"/><path d="m3 17 5-5 4 4 3-3 6 6"/></svg> <span>Model image</span><span class="vp-media-chevron">⌄</span></button>
+        <button type="button" class="vp-media-tab" data-media="logo" aria-expanded="false" aria-controls="vp-media-logo"><svg class="vp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5ZM3 8v8l9 5 9-5V8"/></svg> <span>Model logo</span><span class="vp-media-chevron">⌄</span></button>
+      </div>
+      <div class="vp-media-panel" id="vp-media-image" hidden>
+      <div class="vp-image-layout">
+        <div class="vp-image-display" id="vp-image-display" aria-label="Model image preview">
+          <img id="vp-image-preview" alt="Selected model image" hidden>
+          <div class="vp-image-empty" id="vp-image-empty"><svg class="vp-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="2"/><path d="m3 17 5-5 4 4 3-3 6 6"/></svg><span>Image preview</span><small>No image selected</small></div>
+        </div>
+        <div class="vp-image-actions">
+          <label for="vp-model-image" class="vp-image-action-title"><svg class="vp-icon vp-label-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a5 5 0 0 1-1-10 7 7 0 0 1 13 2 4 4 0 0 1-1 8"/><path d="M12 21V11m-4 4 4-4 4 4"/></svg> Upload model image <span class="vp-optional">Optional</span></label>
+          <p>Choose a clear image of the actual model. You can replace it before saving.</p>
+          <input id="vp-model-image" class="vp-native-image-picker" type="file" name="model_image" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" aria-describedby="vp-image-help vp-image-error">
+          <div class="vp-image-controls"><button type="button" class="btn vp-image-remove" id="vp-image-remove" disabled><svg class="vp-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v7M14 11v7"/></svg> Remove</button></div>
+          <small id="vp-image-filename" class="vp-image-filename" role="status" aria-live="polite">No image selected</small>
+          <small id="vp-image-help" class="vp-image-hint"><svg class="vp-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg> Supported: JPG, PNG, WebP · Maximum 5 MB</small>
+          <small id="vp-image-error" class="vp-image-error" role="alert" hidden></small>
+        </div>
+      </div>
+      </div>
+      <div class="vp-media-panel vp-logo-section" id="vp-media-logo" hidden>
+      <div class="vp-logo-layout">
+        <div class="vp-logo-stage">
+          <div class="vp-logo-stage-top"><span>LIVE LOGO PREVIEW</span><span>512 × 512 PNG</span></div>
+          <canvas id="vp-logo-canvas" width="512" height="512" role="img" aria-label="Generated model logo preview"></canvas>
+          <div class="vp-logo-caption">Preview updates as you edit · Download your design anytime</div>
+        </div>
+        <div class="vp-logo-editor">
+          <div class="vp-logo-editor-heading"><strong>Customize your logo</strong><span>Optional</span></div>
+          <div class="vp-grid vp-two">
+            <div class="vp-field"><label for="vp-logo-title-input">Logo text</label><input id="vp-logo-title-input" type="text" maxlength="16" value="EFACTOR" placeholder="e.g. EFACTOR"></div>
+            <div class="vp-field"><label for="vp-logo-subtitle">Subtitle</label><input id="vp-logo-subtitle" type="text" maxlength="25" value="MODEL SERIES" placeholder="e.g. MODEL SERIES"></div>
+            <div class="vp-field"><label for="vp-logo-symbol">Logo symbol</label><select id="vp-logo-symbol"><option value="cube">3D cube</option><option value="layers">Stacked layers</option><option value="chip">Microchip</option><option value="monogram">Initials</option></select></div>
+            <div class="vp-field"><label for="vp-logo-theme">Logo style</label><select id="vp-logo-theme"><option value="dark">Dark premium</option><option value="light">Soft sage</option><option value="minimal">Minimal white</option></select></div>
+          </div>
+          <div class="vp-logo-colors"><label>Accent color <input id="vp-logo-accent" type="color" value="#A1BC98" aria-label="Logo accent color"></label><label>Text color <input id="vp-logo-textcolor" type="color" value="#FFFFFF" aria-label="Logo text color"></label></div>
+          <div class="vp-logo-actions"><button type="button" class="btn vp-logo-reset" id="vp-logo-reset">Reset default</button><button type="button" class="btn vp-logo-download" id="vp-logo-download">Download PNG</button></div>
+          <small class="vp-logo-note">The logo is independent of the model image. A generated PNG is included in the form as <code>model_logo_data</code>; the save controller must explicitly store it.</small>
+          <input type="hidden" id="vp-logo-data" name="model_logo_data" value="">
+          <input type="hidden" id="vp-logo-config" name="model_logo_config" value="">
+        </div>
+      </div>
+      </div>
+    </section>
+    <section class="vp-preview" aria-label="Live model preview"><div class="vp-preview-title"><svg class="vp-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg> Live preview <span>Updates as you type</span></div><div class="vp-preview-grid">
+      <div><small>BRAND</small><strong id="preview-brand">—</strong></div><div><small>PRODUCT</small><strong id="preview-product">—</strong></div><div><small>MODEL</small><strong id="preview-model">—</strong></div><div><small>MODEL NO.</small><strong id="preview-modelno">—</strong></div><div><small>VERSION</small><strong id="preview-version">—</strong></div><div><small>BATCH</small><strong id="preview-batch">—</strong></div>
+    </div></section>
+  </div>
+  <div class="modal-footer vp-footer"><button type="button" class="btn vp-cancel" id="vp-refresh-btn" title="Clear all entered model details"><svg class="vp-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2 5.3"/><path d="M20 4v7h-7"/></svg> Refresh</button><button type="submit" class="btn vp-save" id="submit-btn"><svg class="vp-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3h14l3 3v15H3V3zM7 3v7h10V3M7 21v-8h10v8"/></svg> <?php echo $vp_edit ? 'Save changes' : 'Save model'; ?></button></div>
 </div>
 <?php echo form_close(); ?>
-
-<!-- Demo Video Popup -->
-<div id="vpDemoVideoOverlay" class="vp-demo-video-overlay" aria-hidden="true">
-    <div class="vp-demo-video-dialog" role="dialog" aria-modal="true" aria-labelledby="vpDemoVideoTitle">
-        <div class="vp-demo-video-header">
-            <div class="vp-demo-video-heading">
-                <i class="fa fa-play-circle"></i>
-                <span id="vpDemoVideoTitle">Demo Video</span>
-            </div>
-            <button type="button" class="vp-demo-video-close" onclick="closeVendorProductDemoVideo()" aria-label="Close demo video">
-                <i class="fa fa-times"></i>
-            </button>
-        </div>
-        <div class="vp-demo-video-body">
-            <video id="vpDemoVideoPlayer" controls playsinline preload="metadata">
-                <source src="<?php echo htmlspecialchars(base_url('assets/Demo_Videos/modal_demo.mp4') . '?v=' . filemtime(FCPATH . 'assets/Demo_Videos/modal_demo.mp4') . '-' . filesize(FCPATH . 'assets/Demo_Videos/modal_demo.mp4'), ENT_QUOTES, 'UTF-8'); ?>" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
-        </div>
-    </div>
-</div>
-
-<style>
-.vendor-product-modal-ui {
-    /* Match copy_api.php palette */
-    --vp-black: #161716;
-    --vp-ink: #283028;
-    --vp-olive: #778873;
-    --vp-sage: #A1BC98;
-    --vp-p1: #F1F3E0;
-    --vp-p2: #D2DCB6;
-    --vp-white: #ffffff;
-    --vp-gold: #d7a441;
-    --vp-danger: #c0392b;
-    --vp-muted: #667064;
-    --vp-border: rgba(119, 136, 115, .28);
-    --vp-text: var(--vp-black);
-    --vp-icon: var(--vp-olive);
-    --vp-danger-soft: rgba(192, 57, 43, .12);
-    --vp-shadow: 0 24px 70px rgba(22, 23, 22, .16);
-    --vp-focus-ring: 0 0 0 4px rgba(161, 188, 152, .24);
-    --vp-icon-glow: none;
-    --vp-icon-glow-soft: none;
-
-    background: linear-gradient(135deg, rgba(241, 243, 224, .96), rgba(210, 220, 182, .82));
-    border-radius: 8px;
-    color: var(--vp-ink);
-    overflow: hidden;
-}
-
-.vendor-product-modal-ui .fa {
-    display: inline-block;
-    font-family: FontAwesome;
-    font-style: normal;
-    font-weight: normal;
-    line-height: 1;
-    text-rendering: auto;
-    -webkit-font-smoothing: antialiased;
-}
-
-.vendor-product-modal-ui .me-1 {
-    margin-right: .25rem;
-}
-
-.vendor-product-modal-ui .me-2 {
-    margin-right: .5rem;
-}
-
-.vendor-product-modal-ui,
-.vendor-product-modal-ui * {
-    box-sizing: border-box;
-}
-
-.vendor-product-modal-ui .modal-body {
-    padding: clamp(16px, 2vw, 26px);
-    background:
-        radial-gradient(circle at top left, rgba(161, 188, 152, .36), transparent 31%),
-        linear-gradient(180deg, #ffffff 0%, var(--vp-p1) 100%);
-    animation: vpFadeIn .28s ease;
-}
-
-.vendor-product-modal-ui .container-fluid {
-    max-width: 1180px;
-    padding-left: clamp(8px, 1.3vw, 16px);
-    padding-right: clamp(8px, 1.3vw, 16px);
-}
-
-.vp-modal-hero {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: center;
-    gap: 18px;
-    padding: clamp(18px, 2.5vw, 28px);
-    margin-bottom: 22px;
-    border: 1px solid rgba(210, 220, 182, .42);
-    border-radius: 8px;
-    background:
-        linear-gradient(135deg, rgba(22, 23, 22, .96), rgba(119, 136, 115, .92)),
-        var(--vp-black);
-    color: var(--vp-white);
-    box-shadow: var(--vp-shadow);
-}
-
-.vp-title-actions {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 10px;
-    flex: 0 0 auto;
-}
-
-.vp-hero-demo-btn {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 8px;
-    min-height: 36px;
-    padding: 8px 12px;
-    border: 1px solid rgba(210, 220, 182, .58);
-    border-radius: 8px;
-    background: var(--vp-p2);
-    color: var(--vp-black);
-    font-size: 13px;
-    font-weight: 850;
-    line-height: 1;
-    cursor: pointer;
-    transition: background .16s ease, color .16s ease, transform .16s ease, border-color .16s ease;
-}
-
-.vp-hero-demo-btn .fa {
-    color: var(--vp-black);
-}
-
-.vp-hero-demo-btn:hover,
-.vp-hero-demo-btn:focus {
-    transform: translateY(-1px);
-    border-color: var(--vp-white);
-    background: var(--vp-white);
-    color: var(--vp-black);
-    outline: none;
-}
-
-.vp-hero-back-btn {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 8px;
-    min-height: 36px;
-    padding: 8px 12px;
-    border: 1px solid rgba(210, 220, 182, .58);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, .08);
-    color: var(--vp-white);
-    font-size: 13px;
-    font-weight: 850;
-    line-height: 1;
-    transition: background .16s ease, color .16s ease, transform .16s ease, border-color .16s ease;
-}
-
-.vp-hero-back-btn .fa {
-    color: var(--vp-p2);
-}
-
-.vp-hero-back-btn:hover,
-.vp-hero-back-btn:focus {
-    transform: translateY(-1px);
-    border-color: var(--vp-p2);
-    background: var(--vp-p2);
-    color: var(--vp-black);
-    outline: none;
-}
-
-.vp-hero-back-btn:hover .fa,
-.vp-hero-back-btn:focus .fa {
-    color: var(--vp-black);
-}
-
-.vp-kicker {
-    display: inline-flex;
-    align-items: center;
-    min-height: 26px;
-    padding: 5px 10px;
-    margin-bottom: 10px;
-    border: 1px solid rgba(241, 243, 224, .3);
-    border-radius: 999px;
-    background: rgba(241, 243, 224, .12);
-    color: var(--vp-p2);
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-}
-
-.vp-title-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-}
-
-@media (max-width: 680px) {
-    .vp-title-row {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
-    .vp-title-actions {
-        width: 100%;
-        justify-content: flex-start;
-        flex-wrap: wrap;
-    }
-}
-
-.vp-modal-title h4 {
-    min-width: 0;
-    margin: 0;
-    color: var(--vp-white);
-    font-size: clamp(22px, 2.6vw, 34px);
-    font-weight: 900;
-    line-height: 1.12;
-    letter-spacing: 0;
-}
-
-.vp-modal-title h4 .fa {
-    color: var(--vp-p2);
-    margin-right: 10px;
-}
-
-.vp-modal-title p {
-    max-width: 680px;
-    margin: 9px 0 0;
-    color: rgba(255, 255, 255, .82);
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-.vendor-product-modal-ui .vp-picker-row {
-    padding: 18px 10px 2px;
-    margin-left: 0;
-    margin-right: 0;
-    border: 1px solid var(--vp-border);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, .9);
-    box-shadow: 0 12px 32px rgba(22, 23, 22, .08);
-}
-
-.vendor-product-modal-ui .vp-section-card {
-    overflow: hidden;
-    border: 1px solid rgba(22, 23, 22, .12);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, .9);
-    box-shadow: 0 16px 38px rgba(22, 23, 22, .08);
-    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-}
-
-.vendor-product-modal-ui .vp-section-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(119, 136, 115, .42);
-    box-shadow: 0 10px 24px rgba(119, 136, 115, .12);
-}
-
-.vendor-product-modal-ui .card-header {
-    padding: 15px 18px;
-    border-bottom: 1px solid rgba(119, 136, 115, .18);
-    background: linear-gradient(135deg, rgba(241, 243, 224, .98), rgba(210, 220, 182, .72)) !important;
-}
-
-.vendor-product-modal-ui .card-header.bg-primary {
-    background: linear-gradient(135deg, rgba(241, 243, 224, .98), rgba(210, 220, 182, .72)) !important;
-    border-bottom: 1px solid rgba(119, 136, 115, .18);
-}
-
-.vendor-product-modal-ui .card-header.bg-primary .card-title {
-    color: var(--vp-black);
-}
-
-.vendor-product-modal-ui .card-title {
-    color: var(--vp-black);
-    font-size: 15px;
-    font-weight: 900;
-    letter-spacing: 0;
-}
-.vendor-product-modal-ui .card-title .fa {
-    color: var(--vp-olive);
-    margin-right: 8px;
-}
-
-.vendor-product-modal-ui .card-body {
-    padding: clamp(16px, 2vw, 22px);
-}
-
-.vendor-product-modal-ui .form-group {
-    margin-bottom: 18px;
-}
-
-.vendor-product-modal-ui .control-label {
-    display: block;
-    margin-bottom: 8px;
-    color: var(--vp-black);
-    font-size: 13px;
-    font-weight: 850;
-}
-
-.vendor-product-modal-ui .text-danger {
-    color: var(--vp-danger) !important;
-    font-weight: 900;
-}
-
-.vendor-product-modal-ui .form-control,
-.vendor-product-modal-ui .select2-container--default .select2-selection--single {
-    width: 100%;
-    min-height: 46px;
-    border: 1px solid var(--vp-border) !important;
-    border-radius: 8px !important;
-    background: var(--vp-white);
-    color: var(--vp-text);
-    font-size: 14px;
-    font-weight: 650;
-    transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
-}
-
-.vendor-product-modal-ui .form-control {
-    padding: 11px 13px;
-}
-
-.vendor-product-modal-ui .form-control::placeholder {
-    color: var(--vp-muted);
-    font-weight: 650;
-    opacity: .85;
-}
-
-.vendor-product-modal-ui .form-control:focus,
-.vendor-product-modal-ui .select2-container--default.select2-container--focus .select2-selection--single {
-    border-color: var(--vp-olive) !important;
-    box-shadow: var(--vp-focus-ring);
-    outline: none;
-}
-
-.vendor-product-modal-ui .input-group {
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: stretch;
-}
-
-.vendor-product-modal-ui .input-group-text {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 64px;
-    min-width: 64px;
-    padding: 0;
-    border: 1px solid rgba(119, 136, 115, .32);
-    border-right: 0;
-    border-radius: 8px 0 0 8px;
-    background: var(--vp-white) !important;
-    color: var(--vp-olive);
-}
-
-.vendor-product-modal-ui .input-group-text .fa {
-    margin: 0;
-    font-size: 17px;
-    color: var(--vp-olive);
-}
-
-.vendor-product-modal-ui .input-group .form-control {
-    min-width: 0;
-    padding-left: 18px !important;
-    padding-right: 16px !important;
-    border-left: 0 !important;
-    border-radius: 0 8px 8px 0 !important;
-}
-
-.vendor-product-modal-ui .form-text {
-    display: block;
-    margin-top: 7px;
-    color: var(--vp-muted) !important;
-    font-size: 12px;
-    line-height: 1.35;
-}
-
-.vendor-product-modal-ui .form-text .fa {
-    color: var(--vp-olive);
-    margin-right: 5px;
-}
-
-.vendor-product-modal-ui .invalid-feedback {
-    display: none;
-    margin-top: 6px;
-    color: var(--vp-danger);
-    font-size: 12px;
-    font-weight: 700;
-}
-
-.vendor-product-modal-ui .form-group.vp-has-error .invalid-feedback {
-    display: block !important;
-}
-
-.vendor-product-modal-ui .form-group.vp-has-error .control-label {
-    color: var(--vp-danger);
-}
-
-.vendor-product-modal-ui .form-control.is-invalid {
-    border-color: var(--vp-danger) !important;
-    background-image: none;
-    box-shadow: 0 0 0 4px var(--vp-danger-soft);
-}
-
-.vendor-product-modal-ui .input-group.vp-is-invalid .input-group-text {
-    border-color: var(--vp-danger);
-    background: linear-gradient(135deg, #7a1f18, var(--vp-danger));
-    color: var(--vp-white);
-}
-
-.vendor-product-modal-ui .input-group.vp-is-invalid .form-control {
-    border-color: var(--vp-danger) !important;
-}
-
-.vendor-product-modal-ui .select2-container--default .select2-selection--single {
-    display: flex;
-    align-items: center;
-    padding: 0 42px 0 18px !important;
-}
-
-.vendor-product-modal-ui .select2-container--default .select2-selection--single .select2-selection__rendered {
-    width: 100%;
-    padding: 0;
-    color: var(--vp-text);
-    line-height: 44px;
-    font-weight: 650;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.vendor-product-modal-ui .select2-container--default .select2-selection--single .select2-selection__placeholder {
-    color: var(--vp-muted);
-    opacity: .85;
-}
-
-.vendor-product-modal-ui .select2-container--default .select2-selection--single .select2-selection__arrow {
-    height: 44px !important;
-    right: 10px !important;
-}
-
-.vendor-product-modal-ui select.form-control {
-    appearance: none;
-    background-image:
-        linear-gradient(45deg, transparent 50%, var(--vp-olive) 50%),
-        linear-gradient(135deg, var(--vp-olive) 50%, transparent 50%);
-    background-position:
-        calc(100% - 20px) 21px,
-        calc(100% - 14px) 21px;
-    background-size: 6px 6px, 6px 6px;
-    background-repeat: no-repeat;
-    padding-left: 18px;
-    padding-right: 44px;
-}
-
-.vendor-product-modal-ui select.form-control option {
-    color: var(--vp-text);
-    background: var(--vp-white);
-    font-weight: 700;
-}
-
-.vendor-product-modal-ui #model_no[readonly] {
-    background: linear-gradient(135deg, var(--vp-p1), var(--vp-p2)) !important;
-    color: var(--vp-text);
-}
-
-.vendor-product-modal-ui .vp-preview-panel {
-    border: 1px solid rgba(119, 136, 115, .38);
-    border-radius: 8px !important;
-    background:
-        linear-gradient(135deg, rgba(255, 255, 255, .94), rgba(241, 243, 224, .86)),
-        var(--vp-white) !important;
-}
-
-.vendor-product-modal-ui .vp-preview-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-    margin: 0;
-}
-
-.vendor-product-modal-ui .vp-preview-item {
-    width: auto;
-    max-width: none;
-    padding: 13px 14px;
-    border: 1px solid rgba(119, 136, 115, .18);
-    border-radius: 8px;
-    background: linear-gradient(135deg, rgba(255, 255, 255, .94), rgba(241, 243, 224, .86));
-    min-width: 0;
-}
-
-.vendor-product-modal-ui .vp-preview-item strong {
-    display: block;
-    margin-bottom: 5px;
-    color: var(--vp-muted);
-    font-size: 11px;
-    font-weight: 900;
-    text-transform: uppercase;
-}
-
-.vendor-product-modal-ui #preview-brand,
-.vendor-product-modal-ui #preview-product,
-.vendor-product-modal-ui #preview-model,
-.vendor-product-modal-ui #preview-modelno {
-    display: block;
-    margin-left: 0 !important;
-    color: var(--vp-text);
-    font-size: 14px;
-    font-weight: 900;
-    overflow-wrap: anywhere;
-}
-
-.vendor-product-modal-ui .modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    padding: 16px clamp(18px, 2.5vw, 30px);
-    border-top: 1px solid rgba(119, 136, 115, .22);
-    background: linear-gradient(135deg, #ffffff, var(--vp-p1));
-}
-
-.vendor-product-modal-ui .btn {
-    min-height: 44px;
-    padding: 10px 22px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 900;
-    transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
-}
-
-.vendor-product-modal-ui .btn-primary {
-    border: 1px solid var(--vp-black);
-    background: var(--vp-black);
-    color: var(--vp-p1);
-    box-shadow: 0 12px 28px rgba(22, 23, 22, .18);
-}
-
-.vendor-product-modal-ui .btn .fa {
-    text-shadow: none;
-}
-
-.vendor-product-modal-ui .btn-primary .fa {
-    color: var(--vp-p1);
-}
-
-.vendor-product-modal-ui .btn-primary:hover,
-.vendor-product-modal-ui .btn-primary:focus {
-    transform: translateY(-1px);
-    background: var(--vp-olive);
-    border-color: var(--vp-olive);
-    color: var(--vp-white);
-    box-shadow: 0 12px 28px rgba(119, 136, 115, .22);
-}
-
-.vendor-product-modal-ui .btn-primary:hover .fa,
-.vendor-product-modal-ui .btn-primary:focus .fa {
-    color: var(--vp-white);
-}
-
-.vendor-product-modal-ui .vp-back-btn {
-    border: 1px solid rgba(119, 136, 115, .34);
-    background: var(--vp-white);
-    color: var(--vp-black);
-    box-shadow: 0 10px 22px rgba(22, 23, 22, .08);
-}
-
-.vendor-product-modal-ui .vp-back-btn .fa {
-    color: var(--vp-olive);
-}
-
-.vendor-product-modal-ui .vp-back-btn:hover .fa,
-.vendor-product-modal-ui .vp-back-btn:focus .fa {
-    color: var(--vp-black);
-}
-
-.vendor-product-modal-ui .vp-back-btn:hover,
-.vendor-product-modal-ui .vp-back-btn:focus {
-    transform: translateY(-1px);
-    border-color: rgba(119, 136, 115, .34);
-    background: var(--vp-p2);
-    color: var(--vp-black);
-    box-shadow: 0 10px 24px rgba(119, 136, 115, .12);
-}
-
-.vp-swal-popup {
-    border-radius: 8px !important;
-    border: 1px solid var(--vp-border) !important;
-    box-shadow: 0 28px 70px rgba(22, 23, 22, .16) !important;
-}
-
-.vp-swal-title {
-    color: var(--vp-text) !important;
-    font-weight: 900 !important;
-}
-
-.vp-swal-confirm {
-    color: var(--vp-p1) !important;
-    font-weight: 900 !important;
-    border-radius: 8px !important;
-    background: var(--vp-black) !important;
-    box-shadow: 0 12px 28px rgba(22, 23, 22, .18) !important;
-}
-
-.vp-save-toast {
-    position: fixed;
-    top: 22px;
-    right: 22px;
-    z-index: 99999;
-    display: grid;
-    grid-template-columns: 42px minmax(0, 1fr);
-    gap: 12px;
-    align-items: center;
-    width: min(360px, calc(100vw - 32px));
-    padding: 14px 16px;
-    border: 1px solid var(--vp-border);
-    border-radius: 8px;
-    background: var(--vp-white);
-    color: var(--vp-text);
-    box-shadow: 0 24px 60px rgba(22, 23, 22, .16);
-    transform: translateY(-12px);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity .18s ease, transform .18s ease;
-}
-
-.vp-save-toast.is-visible {
-    transform: translateY(0);
-    opacity: 1;
-}
-
-.vp-save-toast-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 42px;
-    height: 42px;
-    border-radius: 8px;
-    background: var(--vp-black);
-    color: var(--vp-p1);
-    font-size: 18px;
-}
-
-.vp-save-toast-title {
-    margin: 0 0 3px;
-    color: var(--vp-text);
-    font-size: 15px;
-    font-weight: 900;
-    line-height: 1.2;
-}
-
-.vp-save-toast-text {
-    margin: 0;
-    color: var(--vp-muted);
-    font-size: 13px;
-    font-weight: 650;
-    line-height: 1.35;
-}
-
-.vp-select2-dropdown,
-.select2-dropdown {
-    overflow: hidden;
-    border: 1px solid var(--vp-border) !important;
-    border-radius: 8px !important;
-    background: var(--vp-white);
-    box-shadow: 0 24px 54px rgba(22, 23, 22, .16);
-}
-
-.vp-select2-dropdown .select2-results {
-    background: linear-gradient(180deg, var(--vp-white) 0%, #fffffb 100%);
-}
-
-.vp-select2-dropdown .select2-results__options {
-    max-height: min(330px, 46vh);
-    padding: 8px;
-}
-
-.vp-select2-dropdown .select2-results__option {
-    margin: 3px 0;
-    padding: 11px 14px;
-    border-radius: 8px;
-    color: var(--vp-text);
-    font-size: 14px;
-    font-weight: 750;
-    line-height: 1.25;
-    transition: background .14s ease, color .14s ease, transform .14s ease;
-}
-
-.vp-select2-dropdown .select2-results__option--highlighted,
-.select2-results__option--highlighted {
-    background: linear-gradient(135deg, var(--vp-p1), var(--vp-p2)) !important;
-    color: var(--vp-text) !important;
-    transform: translateX(2px);
-}
-
-.vp-select2-dropdown .select2-results__option[aria-selected=true] {
-    background: var(--vp-p1);
-    color: var(--vp-text);
-}
-
-.vp-select2-dropdown .select2-results__option:first-child {
-    color: var(--vp-muted);
-    font-style: italic;
-    font-weight: 700;
-}
-
-.vendor-product-modal-ui select.select2,
-.vendor-product-modal-ui select.vp-customized-select {
-    position: absolute !important;
-    width: 1px !important;
-    height: 1px !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-}
-
-.vendor-product-modal-ui .select2-container {
-    display: none !important;
-}
-
-.vp-custom-select {
-    position: relative;
-    width: 100%;
-}
-
-.vp-custom-select-btn {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    width: 100%;
-    min-height: 64px;
-    padding: 14px 20px;
-    border: 1px solid rgba(119, 136, 115, .32);
-    border-radius: 8px;
-    background: #fffffb;
-    color: var(--vp-text);
-    font-size: 16px;
-    font-weight: 850;
-    line-height: 1.2;
-    text-align: left;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.86);
-    transition: border-color .16s ease, box-shadow .16s ease;
-}
-
-.vp-custom-select-btn::after {
-    content: "";
-    width: 0;
-    height: 0;
-    border-left: 9px solid transparent;
-    border-right: 9px solid transparent;
-    border-top: 9px solid var(--vp-olive);
-    flex: 0 0 auto;
-}
-
-.vp-custom-select.is-open .vp-custom-select-btn {
-    border-color: var(--vp-sage);
-    background: #fbfcf4;
-    box-shadow: var(--vp-focus-ring);
-}
-
-.vp-custom-select.is-invalid .vp-custom-select-btn {
-    border-color: var(--vp-danger) !important;
-    background: linear-gradient(180deg, #fffafa 0%, #fff5f3 100%);
-    box-shadow: 0 0 0 5px var(--vp-danger-soft) !important;
-}
-
-.vp-custom-select.is-invalid .vp-custom-select-btn::after {
-    border-top-color: var(--vp-danger);
-}
-
-.vp-custom-select.is-open .vp-custom-select-btn::after {
-    border-top: 0;
-    border-bottom: 9px solid var(--vp-olive);
-}
-
-.vp-custom-options {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: calc(100% + 8px);
-    z-index: 10050;
-    display: none;
-    max-height: min(340px, 48vh);
-    overflow-y: auto;
-    padding: 8px;
-    border: 1px solid var(--vp-border);
-    border-radius: 8px;
-    background: #fffffb;
-    box-shadow: 0 18px 42px rgba(22, 23, 22, .16);
-}
-
-.vp-custom-select.is-open .vp-custom-options {
-    display: block;
-}
-
-.vp-custom-option {
-    display: flex;
-    align-items: center;
-    min-height: 44px;
-    padding: 11px 14px;
-    margin: 3px 0;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--vp-text);
-    font-size: 14px;
-    font-weight: 800;
-    line-height: 1.3;
-    text-align: left;
-    width: 100%;
-    transition: background .14s ease, color .14s ease, transform .14s ease;
-}
-
-.vp-custom-option:hover,
-.vp-custom-option:focus {
-    background: var(--vp-p1);
-    color: var(--vp-black);
-    outline: none;
-    transform: translateX(2px);
-}
-
-.vp-custom-option.is-selected {
-    background: var(--vp-p1);
-    color: var(--vp-black);
-}
-
-.vp-custom-option.is-placeholder {
-    color: var(--vp-muted);
-    font-style: italic;
-}
-
-
-/* Demo video popup */
-.vp-demo-video-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 100000;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    background: rgba(22, 23, 22, .72);
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
-}
-
-.vp-demo-video-overlay.is-open {
-    display: flex;
-}
-
-.vp-demo-video-dialog {
-    width: min(900px, 96vw);
-    max-height: 92vh;
-    overflow: hidden;
-    border: 1px solid rgba(210, 220, 182, .45);
-    border-radius: 12px;
-    background: #ffffff;
-    box-shadow: 0 30px 90px rgba(0, 0, 0, .36);
-}
-
-.vp-demo-video-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    padding: 14px 18px;
-    background: linear-gradient(135deg, #161716, #778873);
-    color: #ffffff;
-}
-
-.vp-demo-video-heading {
-    display: inline-flex;
-    align-items: center;
-    gap: 9px;
-    font-size: 15px;
-    font-weight: 900;
-}
-
-.vp-demo-video-heading .fa {
-    color: #D2DCB6;
-}
-
-.vp-demo-video-close {
-    width: 36px;
-    height: 36px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(255, 255, 255, .25);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, .08);
-    color: #ffffff;
-    cursor: pointer;
-    transition: background .16s ease, transform .16s ease;
-}
-
-.vp-demo-video-close:hover,
-.vp-demo-video-close:focus {
-    background: rgba(255, 255, 255, .18);
-    transform: translateY(-1px);
-    outline: none;
-}
-
-.vp-demo-video-body {
-    padding: 12px;
-    background: #101110;
-}
-
-#vpDemoVideoPlayer {
-    display: block;
-    width: 100%;
-    max-height: calc(92vh - 78px);
-    border-radius: 8px;
-    background: #000;
-}
-
-body.vp-demo-video-open {
-    overflow: hidden;
-}
-
-@keyframes vpFadeIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-@media (max-width: 991.98px) {
-    .vendor-product-modal-ui .vp-preview-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-@media (max-width: 767.98px) {
-    .vp-modal-hero {
-        grid-template-columns: 1fr;
-        align-items: start;
-    }
-
-    .vendor-product-modal-ui .card-body .row > div,
-    .vendor-product-modal-ui .vp-picker-row > div {
-        margin-bottom: 12px;
-    }
-
-    .vendor-product-modal-ui .modal-footer {
-        padding: 14px 16px;
-    }
-
-    .vendor-product-modal-ui .modal-footer .btn {
-        width: 100%;
-    }
-}
-
-@media (max-width: 575.98px) {
-    .vendor-product-modal-ui .modal-body {
-        padding: 12px;
-    }
-
-    .vendor-product-modal-ui .container-fluid {
-        padding-left: 0;
-        padding-right: 0;
-    }
-
-    .vp-modal-hero {
-        padding: 16px;
-    }
-
-    .vendor-product-modal-ui .vp-preview-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .vendor-product-modal-ui .card-header,
-    .vendor-product-modal-ui .card-body {
-        padding: 14px;
-    }
-}
-
-/* Responsive layout overrides: use the modal width, not Bootstrap's page grid. */
-.vendor-product-modal-ui {
-    width: 100%;
-    max-width: min(1180px, 100%);
-    margin: 0 auto;
-    container-type: inline-size;
-}
-
-.vendor-product-modal-ui .container-fluid {
-    width: 100%;
-    max-width: 1180px;
-}
-
-.vendor-product-modal-ui .vp-picker-row {
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
-    align-items: start;
-    padding: 18px;
-}
-
-.vendor-product-modal-ui .vp-picker-row::before,
-.vendor-product-modal-ui .vp-picker-row::after,
-.vendor-product-modal-ui .card-body > .row::before,
-.vendor-product-modal-ui .card-body > .row::after,
-.vendor-product-modal-ui .vp-preview-grid::before,
-.vendor-product-modal-ui .vp-preview-grid::after {
-    display: none !important;
-    content: none !important;
-}
-
-.vendor-product-modal-ui .vp-picker-row > [class*="col-"],
-.vendor-product-modal-ui .card-body > .row > [class*="col-"],
-.vendor-product-modal-ui .vp-preview-grid > [class*="col-"] {
-    float: none !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0;
-    padding-left: 0;
-    padding-right: 0;
-}
-
-.vendor-product-modal-ui .vp-picker-row .form-group,
-.vendor-product-modal-ui .card-body > .row > [class*="col-"] .form-group {
-    margin-bottom: 0;
-}
-
-.vendor-product-modal-ui .vp-section-card .card-body > .row {
-    display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 18px 24px;
-    align-items: start;
-    margin-left: 0;
-    margin-right: 0;
-}
-
-.vendor-product-modal-ui .vp-section-card .card-body > .row.mt-3 {
-    margin-top: 20px !important;
-}
-
-.vendor-product-modal-ui .vp-section-card .card-body > .row > .col-md-12 {
-    grid-column: 1 / -1;
-}
-
-.vendor-product-modal-ui .vp-section-card .card-body > .row > .col-md-6 {
-    grid-column: span 2;
-}
-
-.vendor-product-modal-ui .vp-preview-grid {
-    display: grid !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-    margin: 0;
-}
-
-.vendor-product-modal-ui.vp-layout-md .vp-section-card .card-body > .row {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-}
-
-.vendor-product-modal-ui.vp-layout-md .vp-preview-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-}
-
-.vendor-product-modal-ui.vp-layout-sm .vp-picker-row,
-.vendor-product-modal-ui.vp-layout-sm .vp-section-card .card-body > .row,
-.vendor-product-modal-ui.vp-layout-sm .vp-preview-grid {
-    grid-template-columns: 1fr !important;
-    gap: 14px !important;
-}
-
-.vendor-product-modal-ui.vp-layout-sm .vp-section-card .card-body > .row > .col-md-6,
-.vendor-product-modal-ui.vp-layout-sm .vp-section-card .card-body > .row > .col-md-12 {
-    grid-column: 1 / -1 !important;
-}
-
-.vendor-product-modal-ui.vp-layout-sm .modal-body {
-    padding: 14px !important;
-}
-
-.vendor-product-modal-ui.vp-layout-sm .container-fluid {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-}
-
-.vendor-product-modal-ui.vp-layout-sm .vp-modal-hero {
-    padding: 14px !important;
-    margin-bottom: 14px !important;
-}
-
-.vendor-product-modal-ui.vp-layout-sm .vp-picker-row {
-    padding: 14px !important;
-}
-
-.vendor-product-modal-ui.vp-layout-sm .card-header,
-.vendor-product-modal-ui.vp-layout-sm .card-body {
-    padding: 14px !important;
-}
-
-.vendor-product-modal-ui.vp-layout-sm .vp-custom-select-btn,
-.vendor-product-modal-ui.vp-layout-sm .form-control,
-.vendor-product-modal-ui.vp-layout-sm .select2-container--default .select2-selection--single {
-    min-height: 52px !important;
-    font-size: 14px !important;
-}
-
-.vendor-product-modal-ui.vp-layout-sm .input-group-text {
-    width: 54px !important;
-    min-width: 54px !important;
-}
-
-.vendor-product-modal-ui.vp-layout-sm .modal-footer {
-    flex-direction: column-reverse !important;
-    align-items: stretch !important;
-    padding: 14px !important;
-}
-
-.vendor-product-modal-ui.vp-layout-sm .modal-footer .btn {
-    width: 100% !important;
-}
-
-@container (max-width: 980px) {
-    .vendor-product-modal-ui .vp-section-card .card-body > .row {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .vendor-product-modal-ui .vp-preview-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-@container (max-width: 680px) {
-    .vendor-product-modal-ui .modal-body {
-        padding: 14px;
-    }
-
-    .vendor-product-modal-ui .container-fluid {
-        padding-left: 0;
-        padding-right: 0;
-    }
-
-    .vendor-product-modal-ui .vp-modal-hero {
-        padding: 14px;
-        margin-bottom: 14px;
-    }
-
-    .vendor-product-modal-ui .vp-title-row {
-        flex-wrap: wrap;
-    }
-
-    .vendor-product-modal-ui .vp-modal-title h4 {
-        font-size: 24px;
-    }
-
-    .vendor-product-modal-ui .vp-modal-title p {
-        font-size: 13px;
-    }
-
-    .vendor-product-modal-ui .vp-picker-row,
-    .vendor-product-modal-ui .vp-section-card .card-body > .row,
-    .vendor-product-modal-ui .vp-preview-grid {
-        grid-template-columns: 1fr !important;
-        gap: 14px;
-    }
-
-    .vendor-product-modal-ui .vp-section-card .card-body > .row > .col-md-6,
-    .vendor-product-modal-ui .vp-section-card .card-body > .row > .col-md-12 {
-        grid-column: 1 / -1;
-    }
-
-    .vendor-product-modal-ui .vp-picker-row {
-        padding: 14px;
-    }
-
-    .vendor-product-modal-ui .vp-section-card {
-        margin-bottom: 14px !important;
-    }
-
-    .vendor-product-modal-ui .card-header {
-        padding: 13px 14px;
-    }
-
-    .vendor-product-modal-ui .card-body {
-        padding: 14px;
-    }
-
-    .vendor-product-modal-ui .vp-custom-select-btn,
-    .vendor-product-modal-ui .form-control,
-    .vendor-product-modal-ui .select2-container--default .select2-selection--single {
-        min-height: 52px;
-        font-size: 14px;
-    }
-
-    .vendor-product-modal-ui .input-group-text {
-        width: 54px;
-        min-width: 54px;
-    }
-
-    .vendor-product-modal-ui .modal-footer {
-        flex-direction: column-reverse;
-        align-items: stretch;
-        padding: 14px;
-    }
-
-    .vendor-product-modal-ui .modal-footer .btn {
-        width: 100%;
-    }
-}
-
-@media (max-width: 980px) {
-    .vendor-product-modal-ui .vp-section-card .card-body > .row {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .vendor-product-modal-ui .vp-preview-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-@media (max-width: 680px) {
-    .vendor-product-modal-ui .modal-body {
-        padding: 14px;
-    }
-
-    .vendor-product-modal-ui .container-fluid {
-        padding-left: 0;
-        padding-right: 0;
-    }
-
-    .vendor-product-modal-ui .vp-picker-row,
-    .vendor-product-modal-ui .vp-section-card .card-body > .row,
-    .vendor-product-modal-ui .vp-preview-grid {
-        grid-template-columns: 1fr !important;
-        gap: 14px;
-    }
-
-    .vendor-product-modal-ui .vp-section-card .card-body > .row > .col-md-6,
-    .vendor-product-modal-ui .vp-section-card .card-body > .row > .col-md-12 {
-        grid-column: 1 / -1;
-    }
-
-    .vendor-product-modal-ui .modal-footer {
-        flex-direction: column-reverse;
-        align-items: stretch;
-    }
-
-    .vendor-product-modal-ui .modal-footer .btn {
-        width: 100%;
-    }
-}
-
-/* Standalone functional Model Logo section */
-.vendor-product-modal-ui .vp-logo-layout {
-    display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 24px;
-    align-items: center; padding: 20px;
-}
-.vendor-product-modal-ui .vp-logo-buttons {
-    display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px;
-}
-.vendor-product-modal-ui .vp-logo-action {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 11px 13px; min-height: 42px; border-radius: 8px;
-    border: 1px solid #d2dabc; background: #fff; color: #283028;
-    font-size: 13px; font-weight: 750; cursor: pointer;
-    transition: background .16s, border-color .16s, box-shadow .16s;
-    position: relative; z-index: 1; pointer-events: auto;
-}
-.vendor-product-modal-ui .vp-logo-action:hover,
-.vendor-product-modal-ui .vp-logo-action:focus-visible {
-    border-color: #778873; background: #f1f3e0;
-    outline: 2px solid transparent; box-shadow: 0 0 0 3px rgba(119,136,115,.23);
-}
-.vendor-product-modal-ui .vp-logo-action.is-active {
-    border-color: #778873; background: #f1f3e0;
-    box-shadow: 0 0 0 3px rgba(119,136,115,.18);
-}
-.vendor-product-modal-ui .vp-logo-action .fa { color: #546b41; }
-.vendor-product-modal-ui .vp-logo-preview { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #546b41; font-size: 12px; font-weight: 750; }
-.vendor-product-modal-ui .vp-logo-preview-box {
-    width: 112px; height: 112px; display: flex; align-items: center; justify-content: center;
-    border-radius: 17px; overflow: hidden;
-    background: linear-gradient(135deg, #283028, #778873); color: white;
-    border: 1px solid #d2dabc; box-shadow: 0 12px 25px rgba(40,48,40,.16);
-    font-weight: 850; font-size: 42px;
-}
-.vendor-product-modal-ui .vp-logo-preview-box img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
-.vendor-product-modal-ui .vp-logo-preview-box img[hidden] { display: none !important; }
-.vendor-product-modal-ui .vp-logo-preview-box span[hidden] { display: none !important; }
-.vendor-product-modal-ui .vp-logo-file-row .form-control { max-width: 480px; padding: 9px; min-height: auto; }
-.vendor-product-modal-ui #vp-logo-upload-details { padding: 10px 0; }
-.vendor-product-modal-ui #vp-logo-upload-details[hidden] { display: none !important; }
-.vendor-product-modal-ui .vp-logo-hint { font-size: 12px; line-height: 1.5; color: #667064; margin: 8px 0 0; }
-.vendor-product-modal-ui .vp-logo-error { color: #c0392b; font-size: 12px; font-weight: 750; margin-top: 6px; }
-@media (max-width: 680px) {
-  .vendor-product-modal-ui .vp-logo-layout { grid-template-columns: 1fr; }
-  .vendor-product-modal-ui .vp-logo-preview { align-items: flex-start; }
-}
-
-</style>
-
-<script type="text/javascript">
-
-/* Logo picker + multipart Save; pure browser JavaScript so no dependency on jQuery/appForm. */
-(function () {
-    'use strict';
-    var fileObjectUrl = null;
-    var form = document.getElementById('item-form');
-    if (!form || form.dataset.logoUploadBound === '1') return;
-    form.dataset.logoUploadBound = '1';
-
-    var root = form.querySelector('.vendor-product-modal-ui');
-    var modeInput = form.querySelector('#vp-model-logo-mode');
-    var uploadInfo = form.querySelector('#vp-logo-upload-details');
-    var fileInput = form.querySelector('#vp-model-logo-file');
-    var image = form.querySelector('#vp-logo-image');
-    var letters = form.querySelector('#vp-logo-letters');
-    var error = form.querySelector('#vp-logo-error');
-    var fileLabel = form.querySelector('#vp-logo-filename');
-    var modelName = form.querySelector('#model_name');
-    var submitButton = form.querySelector('#submit-btn');
-
-    function setError(message) { error.textContent = message || ''; }
-    function makeInitials() {
-        var name = modelName ? modelName.value.trim() : '';
-        var chunks = name.split(/[\s_-]+/).filter(Boolean);
-        var val = chunks.length >= 2 ? chunks.slice(0, 2).map(function(t) { return t.charAt(0); }).join('') : name.slice(0, 2);
-        letters.textContent = (val || 'M').toUpperCase();
-    }
-    function clearObjectUrl() {
-        if (fileObjectUrl) { URL.revokeObjectURL(fileObjectUrl); fileObjectUrl = null; }
-    }
-    function preview(src) {
-        if (src) { image.src = src; image.hidden = false; letters.hidden = true; }
-        else { image.hidden = true; image.removeAttribute('src'); letters.hidden = false; makeInitials(); }
-    }
-    function validFile(showMessage) {
-        if (modeInput.value !== 'upload') return true;
-        var file = fileInput.files && fileInput.files[0];
-        if (!file) { if (showMessage) setError('Please select an image before saving.'); return false; }
-        if (['image/png','image/jpeg','image/webp'].indexOf(file.type) === -1) {
-            if (showMessage) setError('Only PNG, JPG, or WEBP images are allowed.'); return false;
-        }
-        if (file.size > 2 * 1024 * 1024) {
-            if (showMessage) setError('Logo image must be 2 MB or smaller.'); return false;
-        }
-        return true;
-    }
-    function refreshLogo() {
-        var mode = modeInput.value;
-        uploadInfo.hidden = mode !== 'upload';
-        fileInput.required = mode === 'upload';
-        root.querySelectorAll('.vp-logo-action').forEach(function(button) {
-            var on = button.dataset.mode === mode;
-            button.classList.toggle('is-active', on);
-            button.setAttribute('aria-pressed', on ? 'true' : 'false');
-        });
-        clearObjectUrl();
-        if (mode === 'keep' && image.dataset.currentUrl) preview(image.dataset.currentUrl);
-        else if (mode === 'upload' && validFile(false)) {
-            fileObjectUrl = URL.createObjectURL(fileInput.files[0]); preview(fileObjectUrl);
-        } else preview(null);
-        fileLabel.textContent = fileInput.files && fileInput.files[0]
-          ? 'Selected: ' + fileInput.files[0].name : 'Choose a PNG, JPG, or WEBP image (max. 2 MB).';
-        if (mode !== 'upload') setError('');
-    }
-
-    window.vpChooseLogo = function(mode, showPicker) {
-        if (['generate', 'upload', 'keep'].indexOf(mode) === -1) return false;
-        modeInput.value = mode;
-        setError('');
-        refreshLogo();
-        // Open the operating-system image chooser directly from the Upload button.
-        if (mode === 'upload' && showPicker) fileInput.click();
-        return false;
-    };
-    window.vpModelLogoFileChanged = function() {
-        setError('');
-        modeInput.value = 'upload';
-        refreshLogo();
-        validFile(true);
-    };
-    if (modelName) modelName.addEventListener('input', function() {
-        if (modeInput.value === 'generate') makeInitials();
+<script>
+/* Single native live-preview synchronizer: initializes immediately and handles changes
+   from typed inputs, dropdowns, Demo, and programmatic updates. */
+(function(){
+  var form=document.getElementById('item-form'); if(!form)return;
+  function get(id){return form.querySelector('#'+id);}
+  function show(id,value){var node=get(id);if(node)node.textContent=String(value||'').trim()||'—';}
+  function update(){
+    var model=get('model_name'), number=get('model_no');
+    var modelValue=model?model.value:'';
+    if(number)number.value=modelValue;
+    show('preview-brand',get('vp-brand')&&get('vp-brand').value);
+    show('preview-product',get('vp-product')&&get('vp-product').value);
+    show('preview-model',modelValue);
+    show('preview-modelno',number&&number.value);
+    show('preview-version',get('version')&&get('version').value);
+    show('preview-batch',get('batch')&&get('batch').value);
+  }
+  form.addEventListener('input',update);
+  form.addEventListener('change',update);
+  form.addEventListener('reset',function(){setTimeout(update,0);});
+  window.vpUpdateModelPreview=update;
+  update();
+  var tabs=Array.from(form.querySelectorAll('.vp-media-tab'));
+  function activate(which){
+    tabs.forEach(function(tab){
+      var on=tab.dataset.media===which;
+      tab.classList.toggle('vp-media-active',on);
+      tab.setAttribute('aria-expanded',String(on));
+      var panel=get('vp-media-'+tab.dataset.media);
+      if(panel)panel.hidden=!on;
     });
-    refreshLogo();
+  }
+  tabs.forEach(function(tab){tab.addEventListener('click',function(){activate(tab.getAttribute('aria-expanded')==='true'?null:tab.dataset.media);});});
+  activate(null);
+})();
+</script>
+<style>
+/* Fresh Add Model stylesheet — replaces all previous styles. */
+.vp-form {
+  --vp-primary:#126d88; --vp-primary-dark:#0d5269; --vp-accent:#19a5ae;
+  --vp-ink:#223546; --vp-muted:#687b88; --vp-border:#dce5ec;
+  --vp-soft:#f4f8fb; --vp-card:#fff; --vp-error-color:#c7394b;
+  --vp-font:var(--bs-body-font-family, system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif);
+  font-family:var(--vp-font);font-size:var(--bs-body-font-size,1rem);
+  font-weight:var(--bs-body-font-weight,400);line-height:var(--bs-body-line-height,1.5);
+  color:var(--bs-body-color,#212529);text-align:var(--bs-body-text-align,left);
+  background-color:var(--bs-body-bg,#fff);
+  -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;
+  width:100%;min-width:0;max-width:100%;overflow:visible;border-radius:8px;
+}
+.vp-form,.vp-form *, .vp-form *::before,.vp-form *::after{box-sizing:border-box;font-family:var(--vp-font)}
+.vp-form [hidden]{display:none!important}
+.vp-form .vp-icon{width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0;stroke:currentColor}
+.vp-form .modal-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,28%);align-items:start;gap:16px;padding:20px;background:var(--vp-soft);height:auto;max-height:none;overflow:visible;min-width:0}
+.vp-form .vp-heading{grid-column:1/-1;display:flex;align-items:center;gap:14px;min-width:0;padding:20px;border-radius:10px;background:#172d41;color:#fff}
+.vp-form .vp-heading-icon{display:grid;place-items:center;width:44px;height:44px;flex-shrink:0;border-radius:9px;background:#285268;color:#9ee1e3}
+.vp-form .vp-heading-icon .vp-icon{width:24px;height:24px}
+.vp-form .vp-heading-copy{flex:1;min-width:0}
+.vp-form .vp-eyebrow{font-size:11px;font-weight:800;letter-spacing:.065em;color:#a9d7e4}
+.vp-form .vp-heading h3{margin:3px 0 4px;font-size:clamp(22px,2vw,29px);line-height:1.25;font-weight:800;color:#fff}
+.vp-form .vp-heading p{margin:0;color:#c9dbe5;font-size:13px;font-weight:400}
+.vp-form .vp-heading-actions{display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0;margin-left:auto}
+.vp-form .vp-header-btn,.vp-form .btn{display:inline-flex;justify-content:center;align-items:center;gap:7px;padding:9px 14px;min-height:39px;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;line-height:1.4;text-decoration:none;transition:background .15s,border-color .15s}
+.vp-form .vp-demo-btn{background:#20b9c0;color:#082e3a;border:1px solid #20b9c0}
+.vp-form .vp-header-back{background:transparent;color:#fff;border:1px solid #718b9b}
+.vp-form .vp-demo-btn:hover{background:#7fe2e4}.vp-form .vp-header-back:hover{background:#365268;color:#fff}
+.vp-form .vp-section{grid-column:1;min-width:0;padding:18px;background:var(--vp-card);border:1px solid var(--vp-border);border-radius:9px}
+.vp-form .vp-section-heading{display:flex;align-items:center;gap:11px;border-bottom:1px solid #eaf0f3;margin:0 0 16px;padding:0 0 13px;min-width:0}
+.vp-form .vp-step{display:grid;place-items:center;width:35px;height:35px;flex-shrink:0;border-radius:8px;background:#e7f5f8;color:var(--vp-primary)}
+.vp-form .vp-step .vp-icon{width:19px;height:19px}
+.vp-form .vp-section-heading h4{font-size:16px;line-height:1.35;font-weight:800;margin:0 0 2px;color:var(--vp-ink)}
+.vp-form .vp-section-heading p{font-size:12px;line-height:1.45;color:var(--vp-muted);margin:0}
+.vp-form .vp-grid{display:grid;gap:14px;min-width:0}
+.vp-form .vp-two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.vp-form .vp-three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.vp-form .vp-field{min-width:0}
+.vp-form .vp-field label,.vp-form .vp-image-action-title{display:block;font-size:13px;font-weight:700;color:var(--vp-ink);margin:0 0 7px}
+.vp-form .vp-label-icon{width:15px;height:15px;margin-right:5px;color:var(--vp-primary)}
+.vp-form .vp-field label>span:not(.vp-optional){color:var(--vp-error-color)}
+.vp-form .vp-optional{font-weight:400;color:var(--vp-muted);font-size:12px;margin-left:4px}
+.vp-form .vp-field input,.vp-form .vp-field textarea,.vp-form .vp-field select,.vp-form .vp-select-trigger,.vp-form .vp-select-search{width:100%;max-width:100%;min-width:0;min-height:42px;padding:9px 11px;background:#fff;border:1px solid #ccdbe5;border-radius:7px;color:var(--vp-ink);font-size:14px;font-weight:600;line-height:1.5;box-shadow:none;outline:none}
+.vp-form .vp-field textarea{resize:vertical;min-height:74px}
+.vp-form .vp-field input::placeholder,.vp-form .vp-field textarea::placeholder{color:#98a7b2;opacity:1}
+.vp-form :is(input,textarea,select,button):focus-visible,.vp-form .vp-select-trigger:focus-visible{outline:2px solid var(--vp-accent);outline-offset:2px}
+.vp-form .vp-readonly{position:relative}.vp-form .vp-readonly input{background:#f3f6f8;padding-right:37px}
+.vp-form .vp-readonly>.vp-icon{position:absolute;right:12px;top:12px;color:#8798a4}
+.vp-form .vp-error{display:none;font-size:12px;color:var(--vp-error-color);margin-top:5px}
+.vp-form .vp-field.vp-invalid .vp-error{display:block}
+.vp-form .vp-field.vp-invalid input,.vp-form .vp-field.vp-invalid select,.vp-form .vp-field.vp-invalid .vp-select-trigger{border-color:var(--vp-error-color)}
+.vp-form .vp-preview{grid-column:2;grid-row:2/span 5;min-width:0;position:sticky;top:12px;padding:17px;border:1px solid #cee3e8;background:#eaf3f6;border-radius:9px}
+.vp-form .vp-preview::before{content:'MODEL SUMMARY';display:block;font-size:11px;font-weight:600;letter-spacing:.06em;color:#537d8f;margin-bottom:10px}
+.vp-form .vp-preview-title{display:flex;align-items:center;flex-wrap:wrap;gap:7px;color:#203e4f;font-weight:800;font-size:15px;margin-bottom:12px}
+.vp-form .vp-preview-title span{flex-basis:100%;font-size:12px;font-weight:400;color:#738d9b}
+.vp-form .vp-preview-grid{display:grid;grid-template-columns:1fr;gap:8px}
+.vp-form .vp-preview-grid>div{min-width:0;padding:10px 12px;border:1px solid #e0e9ee;border-radius:7px;background:#fff}
+.vp-form .vp-preview-grid small{display:block;font-size:11px;color:var(--vp-muted);margin-bottom:2px}
+.vp-form .vp-preview-grid strong{display:block;font-size:14px;font-weight:700;color:var(--vp-ink);overflow-wrap:anywhere}
+.vp-form .vp-image-layout{display:grid;grid-template-columns:150px minmax(0,1fr);gap:16px;align-items:center}
+.vp-form .vp-image-display{height:145px;min-width:0;display:grid;place-items:center;overflow:hidden;background:#f3fafc;border:1px dashed #b7d3df;border-radius:8px}
+.vp-form #vp-image-preview{width:100%;height:100%;object-fit:contain}
+.vp-form .vp-image-empty{display:flex;flex-direction:column;gap:5px;align-items:center;text-align:center;color:#77919d;font-size:12px;padding:7px}
+.vp-form .vp-image-empty .vp-icon{width:30px;height:30px}
+.vp-form .vp-image-empty small{font-size:11px;color:#94a7af}
+.vp-form .vp-image-actions{min-width:0}
+.vp-form #vp-model-image.vp-native-image-picker{display:block;position:static;width:100%;max-width:420px;opacity:1;clip-path:none;pointer-events:auto;min-height:42px;border:1px solid #ccdbe5;border-radius:7px;background:#fff;color:var(--vp-ink);padding:5px;font-size:13px;margin:8px 0}
+.vp-form #vp-model-image::file-selector-button{padding:8px 12px;margin-right:9px;border:0;border-radius:5px;background:var(--vp-primary);color:white;font-size:13px;cursor:pointer}
+.vp-form .vp-image-controls,.vp-form .vp-logo-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.vp-form .vp-image-remove,.vp-form .vp-logo-reset{border:1px solid #cfdfe6;background:#fff;color:#405e6d}
+.vp-form .vp-image-remove:disabled{opacity:.5;cursor:not-allowed}
+.vp-form .vp-image-filename{display:block;color:var(--vp-primary);font-size:12px;overflow-wrap:anywhere;margin-top:6px}
+.vp-form .vp-image-hint,.vp-form .vp-logo-note{display:block;color:var(--vp-muted);font-size:12px;margin-top:8px;line-height:1.5}
+.vp-form .vp-image-error{display:block;font-size:12px;color:var(--vp-error-color);margin-top:6px}
+.vp-form .vp-logo-tag{margin-left:auto;color:var(--vp-primary);background:#e8f7f8;border-radius:6px;padding:5px 8px;font-size:11px;white-space:nowrap}
+.vp-form .vp-logo-layout{display:grid;grid-template-columns:150px minmax(0,1fr);gap:16px;align-items:start;min-width:0}
+.vp-form .vp-logo-stage{width:100%;max-width:150px;background:#18374b;border-radius:8px;padding:9px}
+.vp-form .vp-logo-stage-top{display:flex;justify-content:space-between;gap:4px;flex-wrap:wrap;color:#bfd3de;font-size:9px;margin-bottom:6px}
+.vp-form #vp-logo-canvas{display:block;width:100%;height:auto;aspect-ratio:1;border-radius:5px}
+.vp-form .vp-logo-caption{color:#b3c9d5;font-size:10px;line-height:1.4;text-align:center;margin-top:7px}
+.vp-form .vp-logo-editor{min-width:0}
+.vp-form .vp-logo-editor-heading{display:flex;justify-content:space-between;gap:10px;margin-bottom:10px;color:var(--vp-ink);font-size:13px}
+.vp-form .vp-logo-editor-heading strong{font-weight:750}
+.vp-form .vp-logo-editor-heading span{font-size:12px;color:var(--vp-muted)}
+.vp-form .vp-logo-editor .vp-grid{gap:10px}
+.vp-form .vp-logo-colors{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
+.vp-form .vp-logo-colors label{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--vp-ink)}
+.vp-form .vp-logo-colors input{width:33px;height:30px;padding:2px;border:1px solid var(--vp-border);border-radius:5px;background:#fff}
+.vp-form .vp-logo-actions .btn{min-height:34px;padding:7px 11px;font-size:12px}
+.vp-form .vp-logo-download{background:var(--vp-primary);color:#fff;border:1px solid var(--vp-primary)}
+.vp-form .vp-logo-note code{font-size:11px}
+.vp-form .modal-footer.vp-footer{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap;padding:14px 20px;background:#fff;border-top:1px solid var(--vp-border)}
+.vp-form .vp-cancel{background:#fff;border:1px solid #cbdbe4;color:var(--vp-ink)}
+.vp-form .vp-save{background:var(--vp-primary);border:1px solid var(--vp-primary);color:#fff}
+.vp-form .vp-save:hover,.vp-form .vp-logo-download:hover{background:var(--vp-primary-dark);color:#fff}
+.vp-form .vp-save:disabled{opacity:.6;cursor:wait}
+/* Select dropdown with searchable, styled options. */
+.vp-form .vp-select-wrap{position:relative;min-width:0}
+.vp-form .vp-select-wrap.vp-enhanced>select{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;clip-path:inset(50%);pointer-events:none}
+.vp-form .vp-select-trigger{display:flex;justify-content:space-between;align-items:center;gap:9px;text-align:left;cursor:pointer}
+.vp-form .vp-select-trigger .vp-trigger-text{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.vp-form .vp-select-trigger.vp-placeholder{color:#8799a7}
+.vp-form .vp-select-trigger svg{width:16px;height:16px;color:var(--vp-primary);flex-shrink:0}
+.vp-form .vp-select-wrap.vp-open .vp-select-trigger{border-color:var(--vp-accent);box-shadow:0 0 0 3px rgba(25,165,174,.14)}
+.vp-form .vp-select-popover{display:none;position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:1055;min-width:0;background:#fff;border:1px solid var(--vp-border);border-radius:8px;padding:7px;box-shadow:0 12px 28px rgba(28,57,76,.18)}
+.vp-form .vp-select-wrap.vp-open .vp-select-popover{display:block}
+.vp-form .vp-select-search{margin-bottom:6px;min-height:37px;height:37px;font-size:13px}
+.vp-form .vp-select-options{max-height:225px;overflow-y:auto;overscroll-behavior:contain}
+.vp-form .vp-select-option{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;border:0;background:transparent;color:var(--vp-ink);border-radius:6px;padding:9px 10px;text-align:left;cursor:pointer;font-size:14px;font-weight:650}
+.vp-form .vp-select-option:hover,.vp-form .vp-select-option:focus-visible{background:#eaf5f8;color:var(--vp-primary)}
+.vp-form .vp-select-option[aria-selected=true]{background:#dff2f5;color:var(--vp-primary);font-weight:800}
+.vp-form .vp-select-option[aria-selected=true]::after{content:'✓'}
+.vp-form .vp-select-noresults{padding:12px;font-size:12px;color:var(--vp-muted)}
+/* Modal shell: constrain to the actual viewport, not dashboard defaults. */
+.modal:has(.vp-form) { overflow-y:auto; overflow-x:hidden; overscroll-behavior-y:contain; }
+.modal:has(.vp-form) .modal-dialog {
+    width: min(1100px, calc(100vw - 32px)) !important;
+    max-width: calc(100vw - 32px) !important;
+    margin: 16px auto !important;
+    padding:0 !important;
+}
+.modal:has(.vp-form) .modal-content {
+    width:100% !important; min-width:0 !important;
+    height:auto !important; max-height:none !important;
+    overflow:visible !important;
+}
+.modal:has(.vp-form) .modal-content > .modal-body { max-height:none !important; overflow:visible !important; }
+.vp-form { width:100% !important; min-width:0 !important; max-width:100% !important; container:vp-layout / inline-size; }
+.vp-form .modal-body { width:100%; max-width:100%; min-width:0; }
+.vp-form .vp-grid > *, .vp-form .vp-image-layout > *, .vp-form .vp-logo-layout > * {min-width:0; max-width:100%;}
+.vp-form input, .vp-form select, .vp-form textarea {max-width:100%;}
+/* Width-aware classes are fallback for browsers without container queries. */
+.vp-form.vp-size-medium .modal-body {grid-template-columns:minmax(0,1fr) 220px;}
+.vp-form.vp-size-medium .vp-three {grid-template-columns:repeat(2,minmax(0,1fr));}
+.vp-form.vp-size-small .modal-body, .vp-form.vp-size-tiny .modal-body {grid-template-columns:minmax(0,1fr);padding:14px;}
+.vp-form.vp-size-small .vp-preview, .vp-form.vp-size-tiny .vp-preview {grid-column:1;grid-row:auto;position:static;}
+.vp-form.vp-size-small .vp-heading, .vp-form.vp-size-tiny .vp-heading {flex-wrap:wrap;}
+.vp-form.vp-size-small .vp-heading-actions, .vp-form.vp-size-tiny .vp-heading-actions {width:100%;margin-left:0;}
+.vp-form.vp-size-small .vp-three {grid-template-columns:repeat(2,minmax(0,1fr));}
+.vp-form.vp-size-small .vp-preview-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+.vp-form.vp-size-tiny .vp-two, .vp-form.vp-size-tiny .vp-three,
+.vp-form.vp-size-tiny .vp-logo-layout, .vp-form.vp-size-tiny .vp-image-layout,
+.vp-form.vp-size-tiny .vp-preview-grid {grid-template-columns:minmax(0,1fr);}
+.vp-form.vp-size-tiny .vp-logo-stage {max-width:150px;}
+.vp-form.vp-size-tiny .vp-heading-icon {display:none;}
+.vp-form.vp-size-tiny .vp-heading-actions .vp-header-btn {flex:1;}
+/* Container breakpoints work in both narrow modals and full browser pages. */
+@container vp-layout (max-width:690px) {
+    .vp-form .modal-body {grid-template-columns:minmax(0,1fr);padding:14px;}
+    .vp-form .vp-preview {grid-column:1;grid-row:auto;position:static;}
+    .vp-form .vp-heading {flex-wrap:wrap;}
+    .vp-form .vp-heading-actions {width:100%;margin-left:0;}
+    .vp-form .vp-three {grid-template-columns:repeat(2,minmax(0,1fr));}
+    .vp-form .vp-preview-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@container vp-layout (max-width:540px) {
+    .vp-form .modal-body {display:flex;flex-direction:column;gap:12px;padding:12px;}
+    .vp-form .vp-heading,.vp-form .vp-section,.vp-form .vp-preview {width:100%;}
+    .vp-form .vp-two,.vp-form .vp-three,.vp-form .vp-image-layout,
+    .vp-form .vp-logo-layout,.vp-form .vp-preview-grid {grid-template-columns:minmax(0,1fr);}
+    .vp-form .vp-heading {padding:14px;gap:10px;}
+    .vp-form .vp-heading-icon {display:none;}
+    .vp-form .vp-section,.vp-form .vp-preview {padding:13px;}
+    .vp-form .vp-header-btn {flex:1;}
+}
+/* Viewport fallback also handles narrow layout before ResizeObserver fires. */
+@media (max-width:767.98px) {
+    .modal:has(.vp-form) .modal-dialog {width:calc(100vw - 16px) !important;max-width:calc(100vw - 16px) !important;margin:8px auto !important;}
+    .vp-form .modal-body {display:flex !important;flex-direction:column;gap:12px;padding:12px;}
+    .vp-form .vp-heading,.vp-form .vp-section,.vp-form .vp-preview {width:100%;grid-column:auto;grid-row:auto;position:static;}
+    .vp-form .vp-heading {flex-wrap:wrap;padding:14px;}
+    .vp-form .vp-heading-actions {width:100%;margin-left:0;}
+    .vp-form .vp-heading-actions .vp-header-btn {flex:1;}
+    .vp-form .vp-two,.vp-form .vp-three,.vp-form .vp-image-layout,
+    .vp-form .vp-logo-layout,.vp-form .vp-preview-grid {grid-template-columns:minmax(0,1fr) !important;}
+    .vp-form .vp-section,.vp-form .vp-preview {padding:13px;}
+    .vp-form .modal-footer.vp-footer {padding:12px;}
+    .vp-form .vp-footer .btn {flex:1;}
+    .vp-form .vp-heading h3 {font-size:22px;}
+}
+@media (max-width:390px) {
+    .vp-form .vp-eyebrow {font-size:10px;}
+    .vp-form .vp-section-heading {gap:8px;}
+    .vp-form .vp-logo-tag {white-space:normal;}
+    .vp-form .vp-image-display {height:130px;}
+}
+@media (prefers-reduced-motion:reduce) {.vp-form * {transition:none;}}
 
-    // Must register in capture phase before legacy form submit handlers.
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        if (form.dataset.logoSaving === '1') return;
-        if (typeof validateVendorProductForm === 'function' && !validateVendorProductForm(true)) return;
-        if (!validFile(true)) { fileInput.focus(); return; }
+/* Unified refined typography — consistently Bootstrap system font, no heavy weights. */
+.vp-form {
+  --vp-ink:#263747;--vp-muted:#728396;--vp-border:#e1e8ef;
+  --vp-soft:#f7f9fc;--vp-card:#fff;
+  --vp-font:var(--bs-body-font-family,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif);
+  font-family:var(--vp-font);font-size:var(--bs-body-font-size,14px);
+  font-weight:var(--bs-body-font-weight,400);line-height:var(--bs-body-line-height,1.5);
+  color:var(--bs-body-color,#263747);text-align:var(--bs-body-text-align,left);
+  background-color:var(--bs-body-bg,#fff);
+  -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;
+}
+.vp-form :is(h1,h2,h3,h4,h5,h6,p,label,span,strong,button,input,textarea,select,small) {font-family:var(--vp-font);letter-spacing:normal;}
+.vp-form .modal-body{gap:12px;padding:16px;background:var(--vp-soft);}
+.vp-form .vp-heading{padding:18px 20px;gap:12px;border-radius:8px;background:#1c3043;box-shadow:none;}
+.vp-form .vp-heading-icon{width:38px;height:38px;border-radius:7px;background:#29475a;}
+.vp-form .vp-eyebrow{font-size:10px;font-weight:500;letter-spacing:.055em;color:#afd4e2;}
+.vp-form .vp-heading h3{font-size:clamp(20px,2vw,24px);font-weight:600;letter-spacing:-.02em;line-height:1.28;margin:2px 0 3px;}
+.vp-form .vp-heading p{font-size:12.5px;font-weight:400;color:#cbd8e2;}
+.vp-form .vp-section{padding:16px 18px;border-color:var(--vp-border);border-radius:8px;box-shadow:none;}
+.vp-form .vp-section-heading{gap:10px;margin-bottom:14px;padding-bottom:11px;}
+.vp-form .vp-step{width:32px;height:32px;border-radius:7px;background:#edf6f9;}
+.vp-form .vp-step .vp-icon{width:17px;height:17px;}
+.vp-form .vp-section-heading h4{font-size:14px;line-height:1.35;font-weight:600;letter-spacing:-.01em;color:#293e50;margin:0 0 2px;}
+.vp-form .vp-section-heading p{font-size:11.5px;font-weight:400;color:#7e8e9d;}
+.vp-form .vp-grid{gap:12px;}
+.vp-form .vp-field label,.vp-form .vp-image-action-title{font-size:12.5px;font-weight:500;color:#405369;margin-bottom:6px;}
+.vp-form .vp-field input,.vp-form .vp-field textarea,.vp-form .vp-field select,.vp-form .vp-select-trigger,.vp-form .vp-select-search{
+ font-size:13px;font-weight:400;min-height:40px;line-height:1.45;border-radius:6px;border-color:#d8e1ea;padding:9px 11px;
+}
+.vp-form .vp-field input::placeholder,.vp-form .vp-field textarea::placeholder{color:#98a8b7;font-weight:400;}
+.vp-form .vp-header-btn,.vp-form .btn{font-size:12.5px;font-weight:500;min-height:36px;padding:8px 13px;}
+.vp-form .vp-preview{background:#fff;border:1px solid var(--vp-border);border-radius:8px;padding:16px;box-shadow:none;}
+.vp-form .vp-preview::before{font-size:10px;font-weight:500;color:#8394a2;letter-spacing:.05em;}
+.vp-form .vp-preview-title{font-size:14px;font-weight:600;color:#26394c;}
+.vp-form .vp-preview-title span{font-size:11.5px;font-weight:400;color:#8a9baa;}
+.vp-form .vp-preview-grid{gap:0;}
+.vp-form .vp-preview-grid>div{padding:11px 1px;background:transparent;border:0;border-bottom:1px solid #eaf0f4;border-radius:0;}
+.vp-form .vp-preview-grid>div:last-child{border-bottom:0;}
+.vp-form .vp-preview-grid small{font-size:10px;font-weight:500;letter-spacing:.03em;color:#8596a5;}
+.vp-form .vp-preview-grid strong{font-size:13px;font-weight:500;color:#34485b;}
+.vp-form .vp-select-option{font-size:13px;font-weight:400;}
+.vp-form .vp-select-option[aria-selected=true]{font-weight:500;}
+.vp-form .vp-logo-editor-heading strong{font-weight:500;}
+.vp-form .vp-logo-stage{max-width:130px;}
+.vp-form .vp-logo-layout{grid-template-columns:130px minmax(0,1fr);}
+.vp-form .vp-image-display{height:130px;}
+/* Responsive width is based on the *actual modal*, including narrow laptop dialogs. */
+.vp-form.vp-size-small .modal-body,.vp-form.vp-size-tiny .modal-body{display:flex;flex-direction:column;gap:12px;padding:12px;}
+.vp-form.vp-size-small :is(.vp-heading,.vp-section,.vp-preview),.vp-form.vp-size-tiny :is(.vp-heading,.vp-section,.vp-preview){width:100%;max-width:100%;grid-column:auto;grid-row:auto;position:static;}
+.vp-form.vp-size-small .vp-heading,.vp-form.vp-size-tiny .vp-heading{padding:15px;flex-wrap:wrap;}
+.vp-form.vp-size-small .vp-heading-actions,.vp-form.vp-size-tiny .vp-heading-actions{width:100%;margin-left:0;}
+.vp-form.vp-size-small .vp-preview-grid{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:16px;}
+.vp-form.vp-size-tiny :is(.vp-two,.vp-three,.vp-logo-layout,.vp-image-layout,.vp-preview-grid){grid-template-columns:minmax(0,1fr)!important;}
+@media(max-width:767.98px){
+ .vp-form .modal-body{display:flex;flex-direction:column;padding:12px;gap:12px;}
+ .vp-form :is(.vp-heading,.vp-section,.vp-preview){width:100%;max-width:100%;position:static;grid-column:auto;grid-row:auto;}
+ .vp-form .vp-heading{padding:15px;flex-wrap:wrap;}
+ .vp-form .vp-heading-actions{width:100%;margin-left:0;}
+ .vp-form .vp-section,.vp-form .vp-preview{padding:13px;}
+ .vp-form :is(.vp-two,.vp-three,.vp-logo-layout,.vp-image-layout){grid-template-columns:minmax(0,1fr)!important;}
+ .vp-form .vp-preview-grid{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:16px;}
+}
+@media(max-width:480px){
+ .vp-form .vp-preview-grid{grid-template-columns:minmax(0,1fr)!important;}
+ .vp-form .vp-heading h3{font-size:20px;}
+ .vp-form .vp-heading-actions .vp-header-btn{flex:1;}
+}
 
-        var data = new FormData(form);
-        var original = submitButton ? submitButton.innerHTML : '';
-        form.dataset.logoSaving = '1';
-        if (submitButton) {
-            submitButton.disabled = true;
-            submitButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving...';
+/* Reference screenshot typography and header dimensions — final authoritative rules. */
+.vp-form .vp-heading {
+  width:100%;min-width:0;min-height:150px;height:auto;
+  padding:24px 26px;gap:18px;align-items:center;
+  background:#172d41;
+  border:1px solid #243f55;border-radius:7px;
+}
+.vp-form .vp-heading-icon {width:36px;height:36px;border-radius:9px;background:#285268;color:#9ee1e3;}
+.vp-form .vp-heading-icon .vp-icon {width:25px;height:25px;stroke-width:2.5;}
+.vp-form .vp-heading-copy {flex:1 1 0;min-width:0;}
+.vp-form .vp-eyebrow {font-size:12px;font-weight:800;line-height:1.3;letter-spacing:.035em;color:#a9d7e4;}
+.vp-form .vp-heading h3 {
+  font-family:var(--bs-body-font-family,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif);
+  font-size:32px;font-weight:900;line-height:1.15;letter-spacing:-.025em;
+  margin:6px 0 7px;color:#fff;
+}
+.vp-form .vp-heading p {font-size:12px;font-weight:400;line-height:1.5;color:#fff;margin:0;}
+.vp-form .vp-heading-actions{display:flex;flex:0 0 auto;align-items:center;gap:8px;margin-left:auto;}
+.vp-form .vp-header-btn{font-size:12px;font-weight:800;line-height:1.2;min-height:34px;padding:8px 13px;border-radius:7px;white-space:nowrap;}
+.vp-form .vp-demo-btn{background:#20b9c0;border-color:#20b9c0;color:#082e3a;}
+.vp-form .vp-demo-btn:hover{background:#7fe2e4;border-color:#7fe2e4;color:#082e3a;}
+.vp-form .vp-header-back{background:transparent;border-color:#718b9b;color:#fff;}
+.vp-form .vp-header-back:hover{background:#365268;color:#fff;}
+/* Same strong but controlled text proportions as the screenshot. */
+.vp-form .vp-section-heading h4{font-size:15px;font-weight:800;line-height:1.35;}
+.vp-form .vp-field label,.vp-form .vp-image-action-title{font-size:12.5px;font-weight:750;}
+.vp-form .vp-field input,.vp-form .vp-field select,.vp-form .vp-field textarea,.vp-form .vp-select-trigger{font-size:13.5px;font-weight:600;}
+.vp-form .vp-field input::placeholder,.vp-form .vp-field textarea::placeholder{font-weight:600;}
+@media (max-width:767.98px){
+  .vp-form .vp-heading{min-height:0;padding:18px;gap:12px;align-items:flex-start;}
+  .vp-form .vp-heading h3{font-size:clamp(23px,5vw,28px);}
+  .vp-form .vp-heading-actions{width:100%;margin-left:0;}
+}
+@media (max-width:480px){
+  .vp-form .vp-heading{padding:15px;}
+  .vp-form .vp-heading h3{font-size:24px;}
+  .vp-form .vp-heading p{font-size:12px;}
+}
+/* Container-responsive versions override the fixed desktop-height header. */
+.vp-form.vp-size-small .vp-heading,.vp-form.vp-size-tiny .vp-heading{min-height:0;padding:16px;}
+.vp-form.vp-size-small .vp-heading h3,.vp-form.vp-size-tiny .vp-heading h3{font-size:24px;}
+.vp-form.vp-size-small .vp-heading-actions,.vp-form.vp-size-tiny .vp-heading-actions{width:100%;}
+
+
+/* Compact media editor - one shared section; only one panel opens at a time. */
+.vp-form .vp-media-section{min-width:0}
+.vp-form .vp-media-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.vp-form .vp-media-tab{min-width:0;display:flex;align-items:center;gap:9px;min-height:48px;padding:10px 13px;background:#f6fafc;border:1px solid #d9e5ed;border-radius:8px;color:#29465a;font:inherit;font-size:13px;font-weight:700;cursor:pointer;text-align:left}
+.vp-form .vp-media-tab>.vp-icon{color:#126d88;width:18px;height:18px}
+.vp-form .vp-media-chevron{margin-left:auto;font-size:20px;line-height:1;color:#6b8999;transition:transform .18s}
+.vp-form .vp-media-tab.vp-media-active{border-color:#19a5ae;background:#eaf7f8;color:#0d5269}
+.vp-form .vp-media-tab.vp-media-active .vp-media-chevron{transform:rotate(180deg)}
+.vp-form .vp-media-panel{margin-top:12px;padding:14px;border:1px solid #e0e9ee;border-radius:8px;background:#fff;min-width:0}
+.vp-form .vp-media-panel[hidden]{display:none!important}
+.vp-form .vp-logo-section{grid-column:auto!important}
+.vp-form #model_no[readonly]{opacity:1!important;visibility:visible!important;color:#223546!important;-webkit-text-fill-color:#223546!important;background:#f1f6f9!important}
+@media(max-width:480px){.vp-form .vp-media-switch{grid-template-columns:1fr}.vp-form .vp-media-panel{padding:10px}.vp-form .vp-logo-layout,.vp-form .vp-image-layout{grid-template-columns:minmax(0,1fr)!important}}
+
+/* Embedded showcase view: swaps only the form content, preserving original CSS and input values. */
+.vp-form.vp-show-integrated-demo .modal-body > .vp-section,
+.vp-form.vp-show-integrated-demo .modal-body > .vp-preview,
+.vp-form.vp-show-integrated-demo .vp-footer {display:none!important;}
+.vp-form .vp-integrated-demo{grid-column:1/-1;min-width:0;background:#fff;border:1px solid #e0e9f0;border-radius:9px;padding:22px;color:#263747;}
+.vp-form .vp-demo-topline,.vp-form .vp-demo-intro,.vp-form .vp-demo-brandline,.vp-form .vp-demo-bottom{display:flex;align-items:center;justify-content:space-between;gap:15px;}
+.vp-form .vp-demo-pill{font-size:10px;font-weight:700;letter-spacing:.06em;color:#168c9b;background:#e9f8f9;padding:6px 9px;border-radius:5px;}
+.vp-form .vp-demo-return{cursor:pointer;background:#fff;border:1px solid #d4e0e9;border-radius:7px;padding:9px 12px;color:#274355;font-family:var(--bs-body-font-family,system-ui,sans-serif);font-size:13px;font-weight:600;}
+.vp-form .vp-demo-return:hover{background:#e9f8f9;border-color:#20b9c0;}
+.vp-form .vp-demo-eyebrow{font-size:10px;font-weight:650;letter-spacing:.06em;color:#76909d;}
+.vp-form .vp-demo-intro{margin:18px 0 20px;align-items:flex-start;}
+.vp-form .vp-demo-intro h3{margin:5px 0;font-size:clamp(20px,2.6vw,26px);font-weight:650;color:#172d41;}
+.vp-form .vp-demo-intro p,.vp-form .vp-demo-bottom p{margin:0;font-size:13px;font-weight:400;color:#708391;}
+.vp-form .vp-demo-status{display:flex;align-items:center;gap:7px;flex-shrink:0;border:1px solid #cfeae4;border-radius:15px;padding:5px 10px;font-size:11px;font-weight:600;color:#24836d;}
+.vp-form .vp-demo-status span{height:7px;width:7px;border-radius:50%;background:#35ad8a;}
+.vp-form .vp-demo-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:stretch;}
+.vp-form .vp-demo-product-art{background:#172d41;border-radius:9px;overflow:hidden;min-width:0;display:grid;place-items:center;}
+.vp-form .vp-demo-product-art svg{display:block;width:100%;height:auto;max-height:300px;}
+.vp-form .vp-demo-details{border:1px solid #e1e9ee;border-radius:9px;padding:22px;min-width:0;}
+.vp-form .vp-demo-brandline{justify-content:flex-start;gap:10px;}
+.vp-form .vp-demo-brand-mark{display:grid;place-items:center;border-radius:8px;width:36px;height:36px;background:#172d41;color:#20b9c0;font-size:21px;font-weight:800;}
+.vp-form .vp-demo-brandline strong{font-size:13px;display:block;font-weight:750;color:#20394b;}.vp-form .vp-demo-brandline small{display:block;font-size:11px;color:#7a8f9d;}
+.vp-form .vp-demo-details h4{font-size:23px;font-weight:750;color:#172d41;margin:19px 0 4px;}
+.vp-form .vp-demo-description{font-size:12.5px;color:#708391;margin:0 0 16px;}
+.vp-form .vp-demo-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.vp-form .vp-demo-facts div{border-top:1px solid #e8eef2;padding-top:11px;min-width:0;}
+.vp-form .vp-demo-facts span{display:block;font-size:10px;font-weight:500;color:#8395a0;}.vp-form .vp-demo-facts strong{display:block;font-size:13px;font-weight:650;color:#233e50;overflow-wrap:anywhere;}
+.vp-form .vp-demo-bottom{margin-top:19px;border-top:1px solid #e8eef2;padding-top:17px;}
+.vp-form .vp-demo-bottom strong{font-size:13px;font-weight:650;color:#263747;}
+.vp-form .vp-demo-primary{background:#20b9c0;border-color:#20b9c0;color:#082e3a;white-space:nowrap;}
+@media(max-width:760px){.vp-form .vp-integrated-demo{padding:14px;}.vp-form .vp-demo-layout{grid-template-columns:minmax(0,1fr);}.vp-form .vp-demo-bottom,.vp-form .vp-demo-intro{align-items:flex-start;flex-wrap:wrap;}.vp-form .vp-demo-details{padding:15px;}}
+@media(max-width:420px){.vp-form .vp-demo-topline{align-items:stretch;flex-direction:column;}.vp-form .vp-demo-facts{grid-template-columns:minmax(0,1fr);}}
+
+/* Self-contained guided video - original studio colors unchanged */
+.vp-form .vp-video-card{border:1px solid #dce7ef;border-radius:9px;background:#f6fafc;padding:14px;margin:0 0 18px;min-width:0}
+.vp-form .vp-video-title{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}
+.vp-form .vp-video-title strong,.vp-form .vp-video-title small{display:block}
+.vp-form .vp-video-title strong{font-size:14px;font-weight:650;color:#20384b}
+.vp-form .vp-video-title small{font-size:11px;font-weight:400;color:#758b98;margin-top:2px}
+.vp-form .vp-video-label{font-size:10px;font-weight:650;color:#087d86;background:#dbf2f4;border-radius:5px;padding:5px 8px;white-space:nowrap}
+.vp-form .vp-video-frame{background:#142b40;border-radius:8px;overflow:hidden;aspect-ratio:16/9}
+.vp-form .vp-video-frame video{display:block;width:100%;height:100%;object-fit:contain;background:#142b40}
+.vp-form .vp-video-chapters{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.vp-form .vp-video-chapter{border:1px solid #d2e0e9;border-radius:6px;padding:7px 10px;background:#fff;color:#345368;font-size:12px;font-weight:500;cursor:pointer}
+.vp-form .vp-video-chapter:hover,.vp-form .vp-video-chapter[aria-current="true"]{border-color:#20b9c0;background:#e2f7f8;color:#105b65}
+@media(max-width:480px){.vp-form .vp-video-card{padding:9px}.vp-form .vp-video-title{align-items:flex-start}.vp-form .vp-video-chapter{flex:1;min-width:26%;padding:8px 5px}}
+</style>
+<script>
+(function(){
+  var form = document.getElementById('items-dropzone');
+  if (!form) return;
+  function updateLayout(){
+    var width = form.getBoundingClientRect().width || form.clientWidth || window.innerWidth;
+    form.classList.toggle('vp-size-medium', width > 690 && width <= 950);
+    form.classList.toggle('vp-size-small', width <= 690);
+    form.classList.toggle('vp-size-tiny', width <= 460);
+  }
+  updateLayout();
+  if (window.ResizeObserver) {
+    var observer = new ResizeObserver(updateLayout);
+    observer.observe(form);
+    var modal = form.closest('.modal');
+    if (modal) modal.addEventListener('shown.bs.modal', updateLayout);
+  }
+  window.addEventListener('resize', updateLayout, {passive:true});
+})();
+</script>
+<script>
+(function($){
+  var $form=$('#item-form');if(!$form.length)return;
+  var $save=$form.find('#submit-btn'),originalSave=$save.html();
+  function field(id){return $form.find('#'+id);}
+  function preview(){
+    var name=field('model_name').val()||'';field('model_no').val(name);
+    var values={'preview-brand':field('vp-brand').val(),'preview-product':field('vp-product').val(),'preview-model':name,'preview-modelno':name,'preview-version':field('version').val(),'preview-batch':field('batch').val()};
+    $.each(values,function(id,value){$form.find('#'+id).text(value||'—');});
+  }
+  // Image selection is handled by the native, delegated listener below.
+  // Avoid binding a second jQuery change handler: the view is loaded dynamically.
+  var imageInput=field('vp-model-image')[0], imageError=field('vp-image-error')[0];
+  function validate(){var first=null;$form.find('[required]').each(function(){var valid=this.checkValidity() && !!String($(this).val()||'').trim();$(this).closest('.vp-field').toggleClass('vp-invalid',!valid);if(!valid&&!first)first=this;});if(first){var button=first.closest('.vp-select-wrap')?.querySelector('.vp-select-trigger');(button||first).focus();return false;}return true;}
+  $form.on('input.vp change.vp','input,select,textarea',function(){preview();if($(this).is('[required]'))$(this).closest('.vp-field').toggleClass('vp-invalid',!this.checkValidity());});
+  // Multipart AJAX submission: sends the actual file rather than serializing only text fields.
+  // Do not initialize appForm/Dropzone on this form: they can intercept file submissions.
+  $form.off('submit.vp').on('submit.vp',function(e){
+    e.preventDefault(); e.stopImmediatePropagation(); preview();
+    if(!validate() || (imageError && !imageError.hidden))return false;
+    if($save.prop('disabled'))return false;
+    var data=new FormData(this);
+    if(imageInput && imageInput.files && imageInput.files.length && !data.has('model_image')) data.append('model_image',imageInput.files[0]);
+    if(imageInput && imageInput.files && imageInput.files.length && (!data.get('model_image') || !data.get('model_image').size)){alert('The selected image was not attached to the request. Please choose it again.');return false;}
+    $save.prop('disabled',true).text('Saving...');
+    $.ajax({
+      url:$form.attr('action'),type:'POST',data:data,processData:false,contentType:false,
+      dataType:'json',headers:{'X-Requested-With':'XMLHttpRequest'},
+      success:function(result){
+        if(!result || result.success===false || result.error || result.status==='error'){
+          var message=(result && (result.message||result.error)) || 'Unable to save this model.';
+          if(window.Swal)Swal.fire({icon:'error',text:String(message)});else alert(String(message));
+          return;
         }
-        fetch(form.action, {
-            method: 'POST',
-            body: data,
-            credentials: 'same-origin',
-            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
-        }).then(async function(response) {
-            var raw = await response.text();
-            var parsed;
-            try { parsed = JSON.parse(raw); }
-            catch (_) { throw new Error('Server returned an unexpected response (HTTP ' + response.status + '). Check controller and server logs.'); }
-            var ok = parsed && (parsed.success === true || parsed.success === 1 || parsed.success === '1');
-            if (!response.ok || !ok) throw new Error(parsed.message || 'Unable to save model.');
-            return parsed;
-        }).then(function(result) {
-            if (window.Swal && typeof Swal.fire === 'function') {
-                return Swal.fire({icon:'success', title:'Model saved', text:result.message || 'Model and logo saved successfully.', confirmButtonColor:'#546B41'});
-            }
-            alert(result.message || 'Model and logo saved successfully.');
-        }).then(function() {
-            window.location.reload();
-        }).catch(function(err) {
-            console.error('[Model Logo Save]', err);
-            if (window.Swal && typeof Swal.fire === 'function') {
-                Swal.fire({icon:'error',title:'Save failed',text:err.message,confirmButtonColor:'#546B41'});
-            } else { alert('Save failed: ' + err.message); }
-        }).finally(function() {
-            form.dataset.logoSaving = '0';
-            if (submitButton) { submitButton.disabled = false; submitButton.innerHTML = original; }
-        });
-    }, true);
+        if(window.Swal)Swal.fire({icon:'success',title:'Model saved',timer:1400,showConfirmButton:false});
+        if(window.refreshAfterUpdate){window.refreshAfterUpdate=false;setTimeout(function(){location.reload();},900);}
+        else if($.fn.appTable && $('#item-table').length && result.data){$('#item-table').appTable({newData:result.data,dataId:result.id});}
+        var $modal=$form.closest('.modal');
+        if($modal.length && $.fn.modal)$modal.modal('hide');
+      },
+      error:function(xhr){
+        var json=xhr.responseJSON||{};
+        var message=json.message||json.error||('Image/model save failed (HTTP '+xhr.status+').');
+        if(window.Swal)Swal.fire({icon:'error',text:String(message)});else alert(String(message));
+      },
+      complete:function(){$save.prop('disabled',false).html(originalSave);}
+    });
+    return false;
+  });
+  // Navigation/reset controls are handled by the native delegated listener below.
+  preview();
+})(jQuery);
+</script>
+
+<script>
+/* Standalone logo editor — no icon libraries, canvas dependencies or CDNs. */
+(function () {
+  var root=document.querySelector('#item-form .vp-logo-section');
+  if(!root)return;
+  var canvas=root.querySelector('#vp-logo-canvas'), ctx=canvas.getContext('2d');
+  var ids=['vp-logo-title-input','vp-logo-subtitle','vp-logo-symbol','vp-logo-theme','vp-logo-accent','vp-logo-textcolor'];
+  function el(id){return root.querySelector('#'+id);}
+  var defaults=['EFACTOR','MODEL SERIES','cube','dark','#A1BC98','#FFFFFF'];
+  function options(){var o={};ids.forEach(function(id,i){o[id]=el(id).value;});return o;}
+  function path(points,fill,stroke,width){ctx.beginPath();points.forEach(function(p,i){if(i===0)ctx.moveTo(p[0],p[1]);else ctx.lineTo(p[0],p[1]);});ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.lineWidth=width||5;ctx.strokeStyle=stroke;ctx.stroke();}}
+  function render(){
+    var o=options(), style=o['vp-logo-theme'], accent=o['vp-logo-accent'], text=o['vp-logo-textcolor'];
+    var bg=style==='dark'?'#212823':style==='light'?'#EDF2E5':'#FFFFFF';
+    ctx.clearRect(0,0,512,512);ctx.fillStyle=bg;ctx.fillRect(0,0,512,512);
+    if(style==='dark'){
+      var g=ctx.createLinearGradient(0,0,512,512);g.addColorStop(0,'#171D19');g.addColorStop(1,'#647563');ctx.fillStyle=g;ctx.fillRect(0,0,512,512);
+    }
+    var fg=style==='minimal'?'#283028':text;
+    ctx.strokeStyle=accent;ctx.lineWidth=4;ctx.strokeRect(31,31,450,450);
+    ctx.save();ctx.translate(256,180);ctx.lineJoin='round';ctx.lineCap='round';
+    if(o['vp-logo-symbol']==='cube'){
+      path([[0,-80],[80,-37],[0,9],[-80,-37]],null,accent,9);
+      path([[-80,-37],[-80,51],[0,96],[0,9]],null,accent,9);
+      path([[80,-37],[80,51],[0,96],[0,9]],null,accent,9);
+    } else if(o['vp-logo-symbol']==='layers'){
+      for(var k=0;k<3;k++)path([[0,-88+k*43],[88,-45+k*43],[0,-2+k*43],[-88,-45+k*43]],null,accent,8);
+    } else if(o['vp-logo-symbol']==='chip'){
+      ctx.strokeStyle=accent;ctx.lineWidth=9;ctx.strokeRect(-66,-66,132,132);
+      for(var i=-1;i<=1;i++){var v=i*37;ctx.beginPath();ctx.moveTo(v,-88);ctx.lineTo(v,-66);ctx.moveTo(v,66);ctx.lineTo(v,88);ctx.moveTo(-88,v);ctx.lineTo(-66,v);ctx.moveTo(66,v);ctx.lineTo(88,v);ctx.stroke();}
+      ctx.fillStyle=accent;ctx.fillRect(-25,-25,50,50);
+    } else {
+      var initial=(o['vp-logo-title-input'].trim()[0]||'E').toUpperCase();ctx.fillStyle=accent;ctx.font='bold 155px Arial,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(initial,0,1);
+    }
+    ctx.restore();ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=fg;
+    var label=(o['vp-logo-title-input']||'EFACTOR').trim();var size=48;ctx.font='800 '+size+'px Arial,sans-serif';while(ctx.measureText(label).width>415&&size>18){size--;ctx.font='800 '+size+'px Arial,sans-serif';}
+    ctx.fillText(label,256,345);ctx.fillStyle=accent;ctx.fillRect(185,377,142,4);
+    ctx.font='600 21px Arial,sans-serif';ctx.fillStyle=fg;ctx.fillText((o['vp-logo-subtitle']||'').trim(),256,415,425);
+    el('vp-logo-config').value=JSON.stringify(o);
+    try {el('vp-logo-data').value=canvas.toDataURL('image/png');}catch(e){el('vp-logo-data').value='';}
+  }
+  ids.forEach(function(id){el(id).addEventListener('input',render);el(id).addEventListener('change',render);});
+  el('vp-logo-reset').addEventListener('click',function(){ids.forEach(function(id,i){el(id).value=defaults[i];});render();});
+  el('vp-logo-download').addEventListener('click',function(){render();var a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='efactor-model-logo.png';document.body.appendChild(a);a.click();a.remove();});
+  render();
 })();
 </script>
 
-<script type="text/javascript">
-function ensureVendorProductViewport() {
-    var viewport = document.querySelector('meta[name="viewport"]');
-
-    if (!viewport) {
-        viewport = document.createElement('meta');
-        viewport.name = 'viewport';
-        document.head.appendChild(viewport);
-    }
-
-    viewport.setAttribute('content', 'width=device-width, initial-scale=1');
-}
-
-function applyVendorProductResponsiveLayout() {
-    var modalUi = document.querySelector('.vendor-product-modal-ui');
-
-    if (!modalUi) {
-        return;
-    }
-
-    var width = modalUi.getBoundingClientRect().width || modalUi.offsetWidth || window.innerWidth;
-
-    modalUi.classList.remove('vp-layout-sm', 'vp-layout-md', 'vp-layout-lg');
-
-    if (width <= 680) {
-        modalUi.classList.add('vp-layout-sm');
-    } else if (width <= 980) {
-        modalUi.classList.add('vp-layout-md');
-    } else {
-        modalUi.classList.add('vp-layout-lg');
-    }
-}
-
-ensureVendorProductViewport();
-applyVendorProductResponsiveLayout();
-window.addEventListener('resize', applyVendorProductResponsiveLayout);
-window.addEventListener('orientationchange', applyVendorProductResponsiveLayout);
-
-function syncVendorProductModelNo(value) {
-    var modelNoInput = document.getElementById('model_no');
-
-    if (modelNoInput) {
-        modelNoInput.value = value || '';
-    }
-
-    updateVendorProductPreview();
-}
-
-function vendorProductGoBack(event) {
-    if (event) {
-        event.preventDefault();
-    }
-
-    var modal = document.querySelector('.modal.show');
-
-    if (modal && window.jQuery && jQuery.fn.modal) {
-        jQuery(modal).modal('hide');
-        return false;
-    }
-
-    if (window.bootstrap && modal) {
-        var modalInstance = bootstrap.Modal.getInstance(modal) || new bootstrap.Modal(modal);
-        modalInstance.hide();
-        return false;
-    }
-
-    if (window.history.length > 1) {
-        window.history.back();
-        return false;
-    }
-
-    window.location.href = '<?php echo get_uri("items"); ?>';
-    return false;
-}
-
-function openVendorProductDemoVideo(event) {
-    if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-    }
-
-    var overlay = document.getElementById('vpDemoVideoOverlay');
-    var player = document.getElementById('vpDemoVideoPlayer');
-
-    if (!overlay || !player) {
-        return false;
-    }
-
-    overlay.classList.add('is-open');
-    overlay.setAttribute('aria-hidden', 'false');
-    document.body.classList.add('vp-demo-video-open');
-
-    try {
-        player.currentTime = 0;
-        var playPromise = player.play();
-        if (playPromise && typeof playPromise.catch === 'function') {
-            playPromise.catch(function () {
-                // Browser may require the user to press play manually.
-            });
-        }
-    } catch (e) {}
-
-    return false;
-}
-
-function closeVendorProductDemoVideo() {
-    var overlay = document.getElementById('vpDemoVideoOverlay');
-    var player = document.getElementById('vpDemoVideoPlayer');
-
-    if (player) {
-        try {
-            player.pause();
-            player.currentTime = 0;
-        } catch (e) {}
-    }
-
-    if (overlay) {
-        overlay.classList.remove('is-open');
-        overlay.setAttribute('aria-hidden', 'true');
-    }
-
-    document.body.classList.remove('vp-demo-video-open');
-}
-
-document.addEventListener('click', function (event) {
-    var overlay = document.getElementById('vpDemoVideoOverlay');
-    if (overlay && overlay.classList.contains('is-open') && event.target === overlay) {
-        closeVendorProductDemoVideo();
-    }
-});
-
-document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape') {
-        var overlay = document.getElementById('vpDemoVideoOverlay');
-        if (overlay && overlay.classList.contains('is-open')) {
-            closeVendorProductDemoVideo();
-        }
-    }
-});
-
-function updateVendorProductPreview() {
-    var emptyPlaceholder = '\u2014';
-    var brandSelect = document.getElementById('email2');
-    var productSelect = document.getElementById('email');
-    var modelInput = document.getElementById('model_name');
-    var modelNoInput = document.getElementById('model_no');
-    var brandPreview = document.getElementById('preview-brand');
-    var productPreview = document.getElementById('preview-product');
-    var modelPreview = document.getElementById('preview-model');
-    var modelNoPreview = document.getElementById('preview-modelno');
-    var brandText = brandSelect && brandSelect.value ? brandSelect.options[brandSelect.selectedIndex].text : emptyPlaceholder;
-    var productText = productSelect && productSelect.value ? productSelect.options[productSelect.selectedIndex].text : emptyPlaceholder;
-    var modelText = modelInput && modelInput.value ? modelInput.value : emptyPlaceholder;
-    var modelNoText = modelNoInput && modelNoInput.value ? modelNoInput.value : (modelInput && modelInput.value ? modelInput.value : emptyPlaceholder);
-
-    if (brandPreview) {
-        brandPreview.textContent = brandText;
-    }
-
-    if (productPreview) {
-        productPreview.textContent = productText;
-    }
-
-    if (modelPreview) {
-        modelPreview.textContent = modelText;
-    }
-
-    if (modelNoPreview) {
-        modelNoPreview.textContent = modelNoText;
-    }
-}
-
-function setVendorProductValidationState(fieldId, isInvalid) {
-    var field = document.getElementById(fieldId);
-
-    if (!field) {
-        return;
-    }
-
-    var formGroup = field.closest('.form-group');
-    var inputGroup = field.closest('.input-group');
-    var customSelect = document.querySelector('.vp-custom-select[data-select-id="' + fieldId + '"]');
-
-    field.classList.toggle('is-invalid', isInvalid);
-    field.setAttribute('aria-invalid', isInvalid ? 'true' : 'false');
-
-    if (formGroup) {
-        formGroup.classList.toggle('vp-has-error', isInvalid);
-    }
-
-    if (inputGroup) {
-        inputGroup.classList.toggle('vp-is-invalid', isInvalid);
-    }
-
-    if (customSelect) {
-        customSelect.classList.toggle('is-invalid', isInvalid);
-    }
-}
-
-function isVendorProductPatternValid(fieldId) {
-    var field = document.getElementById(fieldId);
-
-    if (!field || !field.value || !field.getAttribute('pattern')) {
-        return true;
-    }
-
-    return new RegExp(field.getAttribute('pattern')).test(field.value.trim());
-}
-
-function validateVendorProductForm(showAlert) {
-    var errors = [];
-    var requiredFields = [
-        { id: 'email2', label: 'Brand' },
-        { id: 'email', label: 'Product' },
-        { id: 'model_name', label: 'Model Name', pattern: true },
-        { id: 'version', label: 'Version', pattern: true },
-        { id: 'batch', label: 'Batch/Lot No.', pattern: true }
-    ];
-
-    requiredFields.forEach(function(item) {
-        var field = document.getElementById(item.id);
-        var value = field ? field.value.trim() : '';
-        var invalid = !value;
-
-        if (!invalid && item.pattern && !isVendorProductPatternValid(item.id)) {
-            invalid = true;
-            errors.push(item.label + ' format');
-        } else if (invalid) {
-            errors.push(item.label);
-        }
-
-        setVendorProductValidationState(item.id, invalid);
-    });
-
-    if (errors.length && showAlert && typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'error',
-            title: 'Please check required fields',
-            html: '<strong>Fix these fields:</strong><br>' + errors.join('<br>'),
-            confirmButtonColor: '#161716'
-        });
-    }
-
-    return errors.length === 0;
-}
-
-function showVendorProductSavedAlert(options) {
-    var settings = options || {};
-    var existingToast = document.querySelector('.vp-save-toast');
-
-    if (existingToast) {
-        existingToast.remove();
-    }
-
-    var toast = document.createElement('div');
-    toast.className = 'vp-save-toast';
-    toast.innerHTML = '<div class="vp-save-toast-icon"><i class="fa fa-check"></i></div>' +
-        '<div><p class="vp-save-toast-title">Saved successfully</p>' +
-        '<p class="vp-save-toast-text">Vendor product model has been saved.</p></div>';
-    document.body.appendChild(toast);
-
-    window.setTimeout(function() {
-        toast.classList.add('is-visible');
-    }, 20);
-
-    window.setTimeout(function() {
-        toast.classList.remove('is-visible');
-        window.setTimeout(function() {
-            if (toast && toast.parentNode) {
-                toast.parentNode.removeChild(toast);
-            }
-        }, 220);
-    }, settings.timer || 2200);
-
-    if (typeof Swal !== 'undefined') {
-        return Swal.fire({
-            icon: 'success',
-            title: 'Saved successfully',
-            text: 'Vendor product model has been saved.',
-            color: '#161716',
-            background: '#ffffff',
-            iconColor: '#778873',
-            confirmButtonColor: '#161716',
-            confirmButtonText: 'Done',
-            timer: settings.timer || 1800,
-            timerProgressBar: true,
-            showConfirmButton: settings.showConfirmButton || false,
-            customClass: {
-                popup: 'vp-swal-popup',
-                title: 'vp-swal-title',
-                confirmButton: 'vp-swal-confirm'
-            }
-        });
-    }
-
-    return Promise.resolve();
-}
-
-function initVendorProductNativeDropdowns() {
-    var selects = document.querySelectorAll('.vp-custom-select');
-    var previewInputs = document.querySelectorAll('#email2, #email, #model_name, #model_no, #version, #batch');
-
-    function closeAll(except) {
-        selects.forEach(function(selectUi) {
-            if (selectUi !== except) {
-                selectUi.classList.remove('is-open');
-                var btn = selectUi.querySelector('.vp-custom-select-btn');
-                if (btn) {
-                    btn.setAttribute('aria-expanded', 'false');
-                }
-            }
-        });
-    }
-
-    selects.forEach(function(selectUi) {
-        if (selectUi.dataset.vpBound === '1') {
-            return;
-        }
-
-        selectUi.dataset.vpBound = '1';
-        var btn = selectUi.querySelector('.vp-custom-select-btn');
-
-        if (btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                var willOpen = !selectUi.classList.contains('is-open');
-                closeAll(selectUi);
-                selectUi.classList.toggle('is-open', willOpen);
-                btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-            });
-        }
-
-        selectUi.querySelectorAll('.vp-custom-option').forEach(function(option) {
-            option.addEventListener('click', function(e) {
-                e.preventDefault();
-                var nativeSelect = document.getElementById(selectUi.dataset.selectId);
-
-                if (nativeSelect) {
-                    nativeSelect.value = option.dataset.value || '';
-                    nativeSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-
-                if (btn) {
-                    btn.innerHTML = option.innerHTML;
-                    btn.setAttribute('aria-expanded', 'false');
-                }
-
-                selectUi.querySelectorAll('.vp-custom-option').forEach(function(item) {
-                    item.classList.remove('is-selected');
-                });
-                option.classList.add('is-selected');
-                selectUi.classList.remove('is-open');
-                setVendorProductValidationState(selectUi.dataset.selectId, !option.dataset.value);
-                updateVendorProductPreview();
-            });
-        });
-    });
-
-    document.addEventListener('click', function(e) {
-        if (!e.target.closest('.vp-custom-select')) {
-            closeAll();
-        }
-    });
-
-    previewInputs.forEach(function(input) {
-        if (input.dataset.vpPreviewBound === '1') {
-            return;
-        }
-
-        input.dataset.vpPreviewBound = '1';
-        input.addEventListener('input', updateVendorProductPreview);
-        input.addEventListener('change', updateVendorProductPreview);
-        input.addEventListener('input', function() {
-            if (input.id) {
-                var invalid = !input.value.trim() || !isVendorProductPatternValid(input.id);
-                setVendorProductValidationState(input.id, invalid);
-            }
-        });
-        input.addEventListener('change', function() {
-            if (input.id) {
-                var invalid = !input.value.trim() || !isVendorProductPatternValid(input.id);
-                setVendorProductValidationState(input.id, invalid);
-            }
-        });
-    });
-
-    var form = document.getElementById('item-form');
-
-    if (form && form.dataset.vpValidationBound !== '1') {
-        form.dataset.vpValidationBound = '1';
-        form.addEventListener('submit', function(e) {
-            if (!validateVendorProductForm(true)) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                return;
-            }
-
-        }, true);
-    }
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-        applyVendorProductResponsiveLayout();
-        initVendorProductNativeDropdowns();
-        updateVendorProductPreview();
-    });
-} else {
-    applyVendorProductResponsiveLayout();
-    initVendorProductNativeDropdowns();
-    updateVendorProductPreview();
-}
-
-if (window.jQuery && window.jQuery.fn) {
-$(document).ready(function () {
-    // PREVENT MODAL CLOSURE ON KEYBOARD EVENTS
-    $(document).on('keydown', function(e) {
-        // Prevent Escape key from closing modal when inside form
-        if (e.key === 'Escape') {
-            // Check if focus is inside the form or modal
-            if ($('#item-form').is(':visible') || $('.modal').is(':visible')) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-        }
-        
-        // Prevent arrow keys from triggering page navigation
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-            // Allow navigation in select dropdowns
-            if ($('.select2-dropdown--open').length === 0 && 
-                !$(e.target).is('input, select, textarea')) {
-                e.preventDefault();
-            }
-        }
-    });
-
-    // Fix for Bootstrap modal if you're using one
-    if (typeof $.fn.modal !== 'undefined') {
-        $(document).on('show.bs.modal', '.modal', function() {
-            $(this).data('bs.modal')._config.keyboard = false;
-        });
-    }
-
-    // Prevent Select2 from closing modal
-    $(document).on('select2:open', function(e) {
-        var select2Dropdown = $('.select2-dropdown');
-        if (select2Dropdown.length) {
-            select2Dropdown.off('keydown').on('keydown', function(e) {
-                if (e.key === 'Escape') {
-                    e.stopPropagation();
-                }
-            });
-        }
-    });
-
-    // Initialize Select2
-    if ($.fn.select2) {
-        $('.select2').select2({
-            width: '100%',
-            minimumResultsForSearch: 5,
-            dropdownParent: $('body') // Ensure dropdown is attached to body
-        });
-    }
-
-    // Function to copy Model Name to Model No.
-    function copyModelNameToModelNo() {
-        var modelName = $('#model_name').val() || '';
-        syncVendorProductModelNo(modelName);
-        return modelName;
-    }
-
-    // Update Preview
-    function updatePreview() {
-        var brand = $('#email2 option:selected').text();
-        var product = $('#email option:selected').text();
-        var model = $('#model_name').val();
-        var modelNumber = $('#model_no').val() || model;
-        var emptyPlaceholder = '\u2014';
-        
-        $('#preview-brand').text($('#email2').val() ? brand : emptyPlaceholder);
-        $('#preview-product').text($('#email').val() ? product : emptyPlaceholder);
-        $('#preview-model').text(model || emptyPlaceholder);
-        $('#preview-modelno').text(modelNumber || emptyPlaceholder);
-    }
-
-    function setVendorProductFieldState(selector, isInvalid) {
-        var $field = $(selector);
-        var $group = $field.closest('.form-group');
-        var $inputGroup = $field.closest('.input-group');
-        var $customSelect = $('.vp-custom-select[data-select-id="' + $field.attr('id') + '"]');
-
-        $field.toggleClass('is-invalid', isInvalid).attr('aria-invalid', isInvalid ? 'true' : 'false');
-        $group.toggleClass('vp-has-error', isInvalid);
-        $inputGroup.toggleClass('vp-is-invalid', isInvalid);
-        $customSelect.toggleClass('is-invalid', isInvalid);
-    }
-
-    function isPatternValid(selector) {
-        var $field = $(selector);
-        var value = ($field.val() || '').trim();
-        var pattern = $field.attr('pattern');
-
-        if (!value || !pattern) {
-            return true;
-        }
-
-        return new RegExp(pattern).test(value);
-    }
-
-    function refreshVendorProductCustomSelects() {
-        $('.vp-custom-select').each(function() {
-            var $selectUi = $(this);
-            var $nativeSelect = $('#' + $selectUi.data('select-id'));
-            var value = $nativeSelect.val();
-            var $selectedOption = $nativeSelect.find('option:selected');
-            var selectedText = $selectedOption.text();
-
-            $selectUi.find('.vp-custom-select-btn').text(selectedText);
-            $selectUi.find('.vp-custom-option').removeClass('is-selected').each(function() {
-                if ($(this).data('value') === value) {
-                    $(this).addClass('is-selected');
-                }
-            });
-        });
-    }
-
-    $(document).off('click.vendorProductCustomSelect').on('click.vendorProductCustomSelect', '.vp-custom-select-btn', function(e) {
-        e.preventDefault();
-        var $selectUi = $(this).closest('.vp-custom-select');
-        var isOpen = $selectUi.hasClass('is-open');
-
-        $('.vp-custom-select').removeClass('is-open').find('.vp-custom-select-btn').attr('aria-expanded', 'false');
-
-        if (!isOpen) {
-            $selectUi.addClass('is-open');
-            $(this).attr('aria-expanded', 'true');
-        }
-    });
-
-    $(document).off('click.vendorProductCustomOption').on('click.vendorProductCustomOption', '.vp-custom-option', function(e) {
-        e.preventDefault();
-        var $option = $(this);
-        var $selectUi = $option.closest('.vp-custom-select');
-        var selectId = $selectUi.data('select-id');
-        var value = $option.data('value');
-        var text = $option.text();
-        var $nativeSelect = $('#' + selectId);
-
-        $nativeSelect.val(value).trigger('change');
-        $selectUi.find('.vp-custom-select-btn').text(text).attr('aria-expanded', 'false');
-        $selectUi.find('.vp-custom-option').removeClass('is-selected');
-        $option.addClass('is-selected');
-        $selectUi.removeClass('is-open');
-        setVendorProductFieldState('#' + selectId, !value);
-    });
-
-    $(document).off('click.vendorProductCloseCustomSelect').on('click.vendorProductCloseCustomSelect', function(e) {
-        if (!$(e.target).closest('.vp-custom-select').length) {
-            $('.vp-custom-select').removeClass('is-open').find('.vp-custom-select-btn').attr('aria-expanded', 'false');
-        }
-    });
-
-    // Form validation
-    function validateForm() {
-        var isValid = true;
-        var errorMessages = [];
-        
-        // Brand validation
-        if (!$('#email2').val()) {
-            setVendorProductFieldState('#email2', true);
-            errorMessages.push('Brand');
-            isValid = false;
-        } else {
-            setVendorProductFieldState('#email2', false);
-        }
-        
-        // Product validation
-        if (!$('#email').val()) {
-            setVendorProductFieldState('#email', true);
-            errorMessages.push('Product');
-            isValid = false;
-        } else {
-            setVendorProductFieldState('#email', false);
-        }
-        
-        // Model Name validation
-        if (!$('#model_name').val().trim()) {
-            setVendorProductFieldState('#model_name', true);
-            errorMessages.push('Model Name');
-            isValid = false;
-        } else if (!isPatternValid('#model_name')) {
-            setVendorProductFieldState('#model_name', true);
-            errorMessages.push('Model Name format');
-            isValid = false;
-        } else {
-            setVendorProductFieldState('#model_name', false);
-        }
-        
-        // Version validation
-        if (!$('#version').val().trim()) {
-            setVendorProductFieldState('#version', true);
-            errorMessages.push('Version');
-            isValid = false;
-        } else if (!isPatternValid('#version')) {
-            setVendorProductFieldState('#version', true);
-            errorMessages.push('Version format');
-            isValid = false;
-        } else {
-            setVendorProductFieldState('#version', false);
-        }
-        
-        // Batch validation
-        if (!$('#batch').val().trim()) {
-            setVendorProductFieldState('#batch', true);
-            errorMessages.push('Batch/Lot No.');
-            isValid = false;
-        } else if (!isPatternValid('#batch')) {
-            setVendorProductFieldState('#batch', true);
-            errorMessages.push('Batch/Lot No. format');
-            isValid = false;
-        } else {
-            setVendorProductFieldState('#batch', false);
-        }
-        
-        if (!isValid) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Please check required fields',
-                    html: '<strong>Fix these fields:</strong><br>' + errorMessages.join('<br>'),
-                    confirmButtonColor: '#161716'
-                });
-            }
-        }
-        
-        return isValid;
-    }
-
-    // Input event handlers
-    $(document).off('input.vendorProductModelName').on('input.vendorProductModelName', '#model_name', function() {
-        var modelName = copyModelNameToModelNo();
-        updatePreview();
-        
-        if (modelName) {
-            setVendorProductFieldState('#model_name', !isPatternValid('#model_name'));
-        }
-    });
-    
-    $('#version, #batch').on('input', function() {
-        updatePreview();
-        
-        if ($(this).val().trim()) {
-            setVendorProductFieldState('#' + this.id, !isPatternValid('#' + this.id));
-        }
-    });
-
-    $('#email2, #email').on('change', function() {
-        updatePreview();
-        setVendorProductFieldState('#' + this.id, !$(this).val());
-    });
-
-    $('#model_name, #version, #batch').on('blur', function() {
-        if (this.id === 'model_name') {
-            copyModelNameToModelNo();
-            updatePreview();
-        }
-
-        if (!$(this).val().trim()) {
-            setVendorProductFieldState('#' + this.id, true);
-        } else {
-            setVendorProductFieldState('#' + this.id, !isPatternValid('#' + this.id));
-        }
-    });
-
-    // Reset button
-    $('#reset-btn').on('click', function(e) {
-        e.preventDefault();
-        
-        Swal.fire({
-            title: 'Reset Form?',
-            text: 'All entered data will be cleared.',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#ef476f',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Yes, reset it!'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                $('#item-form')[0].reset();
-                $('.select2').val('').trigger('change');
-                $('#model_no').val('');
-                refreshVendorProductCustomSelects();
-                updatePreview();
-                $('.is-invalid').removeClass('is-invalid');
-                $('.vp-has-error').removeClass('vp-has-error');
-                $('.vp-is-invalid').removeClass('vp-is-invalid');
-                
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Reset Successful',
-                    text: 'Form has been reset.',
-                    confirmButtonColor: '#4361ee',
-                    timer: 1500,
-                    showConfirmButton: false
-                });
-            }
-        });
-    });
-
-    // The native logo-aware FormData handler below owns Save. No duplicate submit listener.
-
-    // Initialize preview and model no
-    updatePreview();
-    copyModelNameToModelNo();
-
-    // Do not attach Dropzone or appForm to this form; they can consume/omit model_logo_file.
-
-});
-}
+<script>
+/* Styled Brand/Product options; native select retains the original submitted value. */
+(function(){
+  var form=document.getElementById('item-form'); if(!form)return;
+  var selects=['vp-brand','vp-product'];
+  function closeAll(except){form.querySelectorAll('.vp-select-wrap.vp-open').forEach(function(w){if(w!==except){w.classList.remove('vp-open');w.querySelector('.vp-select-trigger').setAttribute('aria-expanded','false');}});}
+  selects.forEach(function(id){
+    var select=form.querySelector('#'+id);if(!select||select.dataset.vpDropdownReady)return;
+    select.dataset.vpDropdownReady='1';
+    var wrap=document.createElement('div');wrap.className='vp-select-wrap';
+    select.parentNode.insertBefore(wrap,select);wrap.appendChild(select);
+    var trigger=document.createElement('button');trigger.type='button';trigger.className='vp-select-trigger vp-placeholder';trigger.setAttribute('aria-haspopup','listbox');trigger.setAttribute('aria-expanded','false');
+    var caption=document.createElement('span');caption.className='vp-trigger-text';var chevron=document.createElementNS('http://www.w3.org/2000/svg','svg');chevron.setAttribute('viewBox','0 0 24 24');chevron.setAttribute('fill','none');chevron.setAttribute('stroke','currentColor');chevron.setAttribute('stroke-width','2');var path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d','m6 9 6 6 6-6');chevron.appendChild(path);trigger.append(caption,chevron);
+    var panel=document.createElement('div');panel.className='vp-select-popover';var search=document.createElement('input');search.type='search';search.className='vp-select-search';search.placeholder='Search '+(id==='vp-brand'?'brands':'products')+'...';search.setAttribute('aria-label',search.placeholder);
+    var options=document.createElement('div');options.className='vp-select-options';options.setAttribute('role','listbox');panel.append(search,options);wrap.append(trigger,panel);
+    function sync(){var selected=select.options[select.selectedIndex];caption.textContent=selected?selected.text:'Select';trigger.classList.toggle('vp-placeholder',!select.value);options.querySelectorAll('.vp-select-option').forEach(function(btn){btn.setAttribute('aria-selected',String(btn.dataset.value===select.value));});}
+    function render(q){options.replaceChildren();var count=0;Array.from(select.options).forEach(function(opt){if(!opt.value||opt.disabled)return;if(q&&!opt.text.toLocaleLowerCase().includes(q.toLocaleLowerCase()))return;count++;var btn=document.createElement('button');btn.type='button';btn.className='vp-select-option';btn.dataset.value=opt.value;btn.textContent=opt.text;btn.setAttribute('role','option');btn.setAttribute('aria-selected',String(opt.value===select.value));btn.onclick=function(){select.value=opt.value;select.dispatchEvent(new Event('change',{bubbles:true}));sync();closeAll();trigger.focus();};options.appendChild(btn);});if(!count){var empty=document.createElement('div');empty.className='vp-select-noresults';empty.textContent='No matching options';options.appendChild(empty);}}
+    trigger.onclick=function(){var opening=!wrap.classList.contains('vp-open');closeAll(wrap);wrap.classList.toggle('vp-open',opening);trigger.setAttribute('aria-expanded',String(opening));if(opening){search.value='';render('');search.focus();}};
+    search.addEventListener('input',function(){render(search.value.trim());});
+    wrap.addEventListener('keydown',function(e){if(e.key==='Escape'){closeAll();trigger.focus();e.stopPropagation();}if(e.key==='ArrowDown'&&document.activeElement===trigger){e.preventDefault();trigger.click();}});
+    select.addEventListener('change',sync);
+    render('');sync();wrap.classList.add('vp-enhanced');
+    // Native select keeps its original name, options, validation, and submit value.
+  });
+  document.addEventListener('pointerdown',function(e){if(!e.target.closest('#item-form .vp-select-wrap'))closeAll();});
+})();
 </script>
 
-<script type="text/javascript">
-// Emergency fix - prevent all modal closures
-if (typeof bootstrap !== 'undefined') {
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            var modals = document.querySelectorAll('.modal.show');
-            if (modals.length > 0) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
+
+
+
+<script>
+/* Native capture-phase actions: work for dynamically loaded RISE modals,
+   regardless of jQuery handlers or whether appForm is initialized. */
+(function () {
+  if (window.__vpNavCaptureInstalled) return;
+  window.__vpNavCaptureInstalled = true;
+  document.addEventListener('click', function (event) {
+    var closeDemo = event.target.closest && event.target.closest('#vp-demo-close, #vp-demo-use-form');
+    if (closeDemo) {
+      var enclosingForm = closeDemo.closest('#item-form');
+      if (!enclosingForm) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      enclosingForm.querySelector('#items-dropzone').classList.remove('vp-show-integrated-demo');
+      var demoPanel=enclosingForm.querySelector('#vp-integrated-demo'); if(demoPanel) demoPanel.hidden=true;
+      var demoButton=enclosingForm.querySelector('#vp-demo-btn'); if(demoButton) demoButton.setAttribute('aria-expanded','false');
+      enclosingForm.querySelector('.vp-heading').scrollIntoView({block:'start',behavior:'instant'});
+      return;
+    }
+    var button = event.target.closest && event.target.closest('#vp-demo-btn, #vp-header-back, #vp-refresh-btn');
+    if (!button) return;
+    var form = button.closest('form#item-form');
+    if (!form) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    var id = button.id;
+    if (id === 'vp-demo-btn') {
+      form.querySelector('#items-dropzone').classList.add('vp-show-integrated-demo');
+      var sample = form.querySelector('#vp-integrated-demo');
+      if (sample) { sample.hidden = false; sample.scrollIntoView({block:'start',behavior:'instant'}); }
+      button.setAttribute('aria-expanded','true');
+      return;
+    }
+    if (id === 'vp-header-back') {
+      var demo = form.querySelector('#items-dropzone');
+      if (demo && demo.classList.contains('vp-show-integrated-demo')) {
+        demo.classList.remove('vp-show-integrated-demo');
+        var sample = form.querySelector('#vp-integrated-demo'); if(sample) sample.hidden = true;
+        var demoBtn=form.querySelector('#vp-demo-btn'); if(demoBtn) demoBtn.setAttribute('aria-expanded','false');
+        return;
+      }
+      var modal = form.closest('.modal');
+      if (modal) {
+        if (window.bootstrap && window.bootstrap.Modal) {
+          var instance = window.bootstrap.Modal.getInstance(modal);
+          if (instance) { instance.hide(); return; }
         }
+        if (window.jQuery && window.jQuery.fn.modal) {
+          window.jQuery(modal).modal('hide'); return;
+        }
+      }
+      if (window.history.length > 1) window.history.back();
+      else window.location.assign(<?php echo json_encode(get_uri('items'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>);
+      return;
+    }
+    // Refresh resets content without reloading or submitting the page.
+    form.querySelectorAll('input, textarea').forEach(function (input) {
+      if (input.type === 'hidden' || input.type === 'submit' || input.type === 'button') return;
+      if (input.type === 'file') input.value = '';
+      else if (input.type === 'checkbox' || input.type === 'radio') input.checked = false;
+      else input.value = '';
     });
-}
+    form.querySelectorAll('select').forEach(function (select) {
+      select.selectedIndex = 0;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    var number = form.querySelector('#model_no');
+    if (number) number.value = '';
+    var image = form.querySelector('#vp-image-preview');
+    if (image) { image.hidden = true; image.style.display = 'none'; image.removeAttribute('src'); }
+    var placeholder = form.querySelector('#vp-image-empty');
+    if (placeholder) { placeholder.hidden = false; placeholder.style.display = 'flex'; }
+    var filename = form.querySelector('#vp-image-filename');
+    if (filename) filename.textContent = 'No image selected';
+    var remove = form.querySelector('#vp-image-remove');
+    if (remove) remove.disabled = true;
+    var imageError = form.querySelector('#vp-image-error');
+    if (imageError) { imageError.hidden = true; imageError.textContent = ''; }
+    var logoReset = form.querySelector('#vp-logo-reset');
+    if (logoReset) logoReset.click();
+    form.querySelectorAll('.vp-media-tab').forEach(function(tab){
+      tab.classList.remove('vp-media-active'); tab.setAttribute('aria-expanded','false');
+    });
+    form.querySelectorAll('.vp-media-panel').forEach(function(panel){ panel.hidden = true; });
+    form.querySelectorAll('.vp-field').forEach(function(field){ field.classList.remove('vp-invalid'); });
+    form.querySelectorAll('.vp-select-wrap').forEach(function(wrap){
+      wrap.classList.remove('vp-open');
+      var trigger=wrap.querySelector('.vp-select-trigger');
+      if(trigger)trigger.setAttribute('aria-expanded','false');
+    });
+    form.dispatchEvent(new Event('input', { bubbles: true }));
+    form.dispatchEvent(new Event('change', { bubbles: true }));
+    if (typeof window.vpUpdateModelPreview === 'function') window.vpUpdateModelPreview();
+  }, true);
+})();
 </script>
 
-<!-- SweetAlert2 for beautiful alerts -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+(function(){
+ if(window.__vpVideoTourInstalled)return;
+ window.__vpVideoTourInstalled=true;
+ document.addEventListener('click',function(e){
+  var chapter=e.target.closest&&e.target.closest('.vp-video-chapter');
+  if(chapter){
+   var box=chapter.closest('#vp-integrated-demo');var v=box&&box.querySelector('#vp-tour-video');
+   if(!v)return;
+   e.preventDefault();e.stopPropagation();
+   v.currentTime=Number(chapter.dataset.vpSeek)||0;
+   v.play().catch(function(){});
+  }
+  var demoBtn=e.target.closest&&e.target.closest('#vp-demo-btn');
+  if(demoBtn){
+   var form=demoBtn.closest('form');var v=form&&form.querySelector('#vp-tour-video');
+   if(v){v.currentTime=0;v.play().catch(function(){});}
+  }
+  var close=e.target.closest&&e.target.closest('#vp-demo-close,#vp-demo-use-form,#vp-header-back');
+  if(close){var form=close.closest('form');var v=form&&form.querySelector('#vp-tour-video');if(v)v.pause();}
+ },true);
+ document.addEventListener('timeupdate',function(e){
+  var v=e.target;
+  if(!v||v.id!=='vp-tour-video')return;
+  var box=v.closest('.vp-video-card');if(!box)return;
+  var t=v.currentTime;
+  box.querySelectorAll('.vp-video-chapter').forEach(function(b){
+   var next=b.nextElementSibling;
+   b.setAttribute('aria-current',String(t>=Number(b.dataset.vpSeek)&&(!next||t<Number(next.dataset.vpSeek))));
+  });
+ },true);
+})();
+</script>
 
-<!-- Select2 CSS & JS -->
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+/* Persistent image picker: this handler survives RISE AJAX-modal content insertion. */
+(function(){
+  if(window.__vpNativeImagePickerInstalled)return;
+  window.__vpNativeImagePickerInstalled=true;
+  var previewUrlByInput=new WeakMap();
+  function parts(input){
+    var form=input.closest('form#item-form');
+    if(!form)return null;
+    return {
+      form:form,
+      image:form.querySelector('#vp-image-preview'),
+      placeholder:form.querySelector('#vp-image-empty'),
+      filename:form.querySelector('#vp-image-filename'),
+      error:form.querySelector('#vp-image-error'),
+      remove:form.querySelector('#vp-image-remove')
+    };
+  }
+  function clear(input,resetInput){
+    var p=parts(input);if(!p)return;
+    var previous=previewUrlByInput.get(input);
+    if(previous){URL.revokeObjectURL(previous);previewUrlByInput.delete(input);}
+    if(resetInput)input.value='';
+    if(p.image){p.image.hidden=true;p.image.style.display='none';p.image.removeAttribute('src');}
+    if(p.placeholder){p.placeholder.hidden=false;p.placeholder.style.display='flex';}
+    if(p.filename)p.filename.textContent='No image selected';
+    if(p.remove)p.remove.disabled=true;
+    if(p.error){p.error.hidden=true;p.error.textContent='';}
+  }
+  function message(input,text){
+    var p=parts(input);if(!p)return;
+    clear(input,true);
+    if(p.error){p.error.hidden=false;p.error.textContent=text;}
+    if(p.filename)p.filename.textContent=text;
+  }
+  function chosen(input){
+    var p=parts(input);if(!p)return;
+    var f=input.files&&input.files[0];
+    if(!f){clear(input,false);return;}
+    var goodType=['image/jpeg','image/png','image/webp'].includes(f.type)
+      || /\.(jpe?g|png|webp)$/i.test(f.name);
+    if(!goodType){message(input,'Please select a JPG, PNG or WebP image.');return;}
+    if(f.size>5*1024*1024){message(input,'Image must be 5 MB or smaller.');return;}
+    var old=previewUrlByInput.get(input);if(old)URL.revokeObjectURL(old);
+    var url=URL.createObjectURL(f);previewUrlByInput.set(input,url);
+    if(p.image){
+      p.image.onload=function(){p.image.hidden=false;p.image.style.display='block';};
+      p.image.onerror=function(){message(input,'Could not preview this image. Please choose another file.');};
+      p.image.src=url;
+      p.image.hidden=false;p.image.style.display='block';
+    }
+    if(p.placeholder){p.placeholder.hidden=true;p.placeholder.style.display='none';}
+    if(p.filename)p.filename.textContent='Selected: '+f.name+' ('+(f.size/1024/1024).toFixed(2)+' MB)';
+    if(p.remove)p.remove.disabled=false;
+    if(p.error){p.error.hidden=true;p.error.textContent='';}
+  }
+  // Delegation is important: RISE loads modal markup after DOMContentLoaded.
+  document.addEventListener('change',function(e){
+    if(e.target && e.target.matches('form#item-form input#vp-model-image'))chosen(e.target);
+  },true);
+  document.addEventListener('click',function(e){
+    var remove=e.target.closest&&e.target.closest('form#item-form #vp-image-remove');
+    if(!remove)return;
+    e.preventDefault();e.stopImmediatePropagation();
+    var input=remove.closest('form').querySelector('#vp-model-image');
+    if(input)clear(input,true);
+  },true);
+  document.addEventListener('reset',function(e){
+    if(!e.target.matches('form#item-form'))return;
+    var input=e.target.querySelector('#vp-model-image');
+    if(input)clear(input,false);
+  },true);
+})();
+</script>
 
-<!-- Bootstrap CSS & JS (if not already loaded) -->
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-
-<!-- Font Awesome 4, matching the existing fa fa-* icon classes -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<style>
+/* Image state must win over layout display rules. */
+#item-form .vp-form #vp-image-preview[hidden],
+#item-form .vp-form #vp-image-empty[hidden],
+#item-form .vp-form #vp-image-error[hidden] { display:none !important; }
+#item-form .vp-form #vp-model-image { position:static!important; display:block!important; visibility:visible!important; opacity:1!important; pointer-events:auto!important; }
+</style>

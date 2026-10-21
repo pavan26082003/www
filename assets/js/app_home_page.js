@@ -3825,6 +3825,24 @@
     }
 
     renderWelcomeBanner();
+    syncHeaderAvatarPlacement();
+  }
+
+  function syncHeaderAvatarPlacement() {
+    var header = document.querySelector('#ahpHomePage .ahp-m-header');
+    var welcome = document.getElementById('ahpWelcome');
+    var avatar = document.getElementById('ahpWelcomeAvatar');
+    var more = header ? header.querySelector('.ahp-m-more') : null;
+    if (!header || !welcome || !avatar) return;
+    if (!shouldShowWelcomeBanner()) {
+      header.appendChild(avatar);
+      if (more) more.classList.add('ahp-is-hidden');
+    } else if (avatar.parentElement !== welcome) {
+      welcome.appendChild(avatar);
+      if (more) more.classList.remove('ahp-is-hidden');
+    } else if (more) {
+      more.classList.remove('ahp-is-hidden');
+    }
   }
 
   function renderBottomNav() {
@@ -4061,10 +4079,11 @@
     }
     var tpl = api.get(templateId);
     if (!options.skipConfirm && getActiveStaticUiId() && getActiveStaticUiId() !== templateId) {
-      if (!confirm('Switch to "' + tpl.label + '" static UI? Cube home stays saved; this only changes the preview home screen.')) {
+      if (!confirm('Switch to "' + tpl.label + '" static UI? Your cube home stays where you left it.')) {
         return false;
       }
     }
+    if (!getActiveStaticUiId()) captureHomeTemplateDraft(getActiveHomeTemplateId());
     layout.staticUiTemplate = tpl.id;
     layout.activePage = 'home';
     layout.bottomNavCategoryTarget = 'grid';
@@ -4394,10 +4413,24 @@
     return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
   }
 
+  function resolveStudioAvatarUrl(url) {
+    var src = String(url || '').trim();
+    if (!src || /^(data:|blob:)/i.test(src)) return '';
+    if (/\/assets\/images\/avatar\.jpg(\?|$)/i.test(src)) return '';
+    if (/^https?:\/\//i.test(src)) return src;
+    if (src.charAt(0) !== '/') {
+      src = src.indexOf('/') === -1 ? ('/files/profile_images/' + src) : ('/' + src);
+    }
+    var origin = (window.location && window.location.origin && !/localhost|127\.0\.0\.1/i.test(window.location.origin))
+      ? window.location.origin
+      : 'https://efactor.tech';
+    return origin.replace(/\/+$/, '') + src;
+  }
+
   function getProfileAvatarUrl(profile) {
     var page = profile || getProfilePage();
     var live = getLoginUserProfile();
-    return String(page.avatarUrl || live.avatarUrl || '').trim();
+    return resolveStudioAvatarUrl(live.avatarUrl) || resolveStudioAvatarUrl(page.avatarUrl);
   }
 
   function renderHomeAvatar() {
@@ -4498,7 +4531,6 @@
     setVal('toolProfileEmail', live.email || p.email || cfg.userEmail || '');
     setVal('toolProfilePhone', live.phone != null ? live.phone : (p.phone || ''));
     setVal('toolProfileMemberId', live.memberId || p.memberId || ('EF-' + (cfg.userId || '0')));
-    setVal('toolProfileLanguage', p.language || 'English (India)');
     setCheck('toolProfileNotifications', p.notificationsEnabled !== false);
   }
 
@@ -4526,14 +4558,6 @@
           renderProfilePage(getTheme().accentColor || '#202940');
           return;
         }
-        if (action === 'language') {
-          setEditMode(true);
-          setActiveMenu('profile');
-          var langField = document.getElementById('toolProfileLanguage');
-          if (langField) langField.focus();
-          showToast('Choose language in the Profile panel');
-          return;
-        }
         if (action === 'appearance') {
           setEditMode(true);
           setActiveMenu('theme');
@@ -4553,7 +4577,6 @@
     var email = p.email || cfg.userEmail || 'person@efactor.app';
     var phone = p.phone || '+91 123 456 7890';
     var memberId = p.memberId || ('EF-' + (cfg.userId || '177'));
-    var language = p.language || 'English (India)';
     var notifOn = p.notificationsEnabled !== false;
     var csrfInput = cfg.csrfName && cfg.csrfHash
       ? '<input type="hidden" name="' + esc(cfg.csrfName) + '" value="' + esc(cfg.csrfHash) + '">'
@@ -4561,7 +4584,6 @@
     var rows = [
       ['fa-user-pen', 'Edit profile', 'Manage account details', 'edit'],
       ['fa-bell', 'Notifications', notifOn ? 'Alerts and reminders enabled' : 'Alerts and reminders disabled', 'notifications'],
-      ['fa-language', 'Language', language, 'language'],
       ['fa-moon', 'Appearance', getThemeModeLabel() + ' mode', 'appearance'],
       ['fa-shield-halved', 'Privacy Policy', 'Security and data controls', 'privacy']
     ];
@@ -6722,6 +6744,70 @@
     return (t && t.homeTemplate) || layout.homeTemplate || 'default';
   }
 
+  function cloneTemplateValue(value) {
+    return JSON.parse(JSON.stringify(value == null ? null : value));
+  }
+
+  function ensureHomeTemplateDrafts() {
+    if (!layout.homeTemplateDrafts || typeof layout.homeTemplateDrafts !== 'object' || Array.isArray(layout.homeTemplateDrafts)) {
+      layout.homeTemplateDrafts = {};
+    }
+    return layout.homeTemplateDrafts;
+  }
+
+  function captureHomeTemplateDraft(templateId) {
+    var id = templateId || getActiveHomeTemplateId() || 'default';
+    if (!id || getActiveStaticUiId()) return;
+    var store = ensureHomeTemplateDrafts();
+    var theme = cloneTemplateValue(getTheme()) || {};
+    delete theme.staticUiTemplate;
+    store[id] = {
+      header: cloneTemplateValue(layout.header || {}),
+      welcome: cloneTemplateValue(layout.welcome || {}),
+      alerts: cloneTemplateValue(layout.alerts || {}),
+      theme: theme,
+      cards: cloneTemplateValue(layout.cards || []),
+      bottomNavCategoryTarget: layout.bottomNavCategoryTarget || 'grid'
+    };
+  }
+
+  function homeTemplateDraft(templateId) {
+    var store = layout.homeTemplateDrafts;
+    if (!store || typeof store !== 'object') return null;
+    var draft = store[templateId];
+    if (!draft || !Array.isArray(draft.cards) || !draft.cards.length) return null;
+    return draft;
+  }
+
+  function finishHomeTemplateSwitch(templateId, resumed) {
+    layout.homeTemplate = templateId;
+    layout.staticUiTemplate = null;
+    if (!layout.theme) layout.theme = {};
+    layout.theme.homeTemplate = templateId;
+    layout.theme.staticUiTemplate = null;
+    layout.theme.showBottomNav = true;
+    layout.bottomNavCategoryTarget = 'grid';
+    layout.activePage = 'home';
+    normalizeBottomNav();
+    layout.bottomNav.forEach(function (item) {
+      if (item) item.active = item.id === 'home';
+    });
+    selectedCardId = null;
+    cardEditorCardId = null;
+    selectedPageCardId = null;
+    activeFaceIndex = 0;
+    ensureLayoutStructure();
+    assignGridAreas();
+    ensureAllCardPositions(false);
+    renderAll();
+    renderHomeTemplates();
+    if (typeof renderStaticUiTemplates === 'function') renderStaticUiTemplates();
+    markLayoutDirty({ historyNow: true });
+    showToast(resumed
+      ? 'Restored where you left off — click Save to publish'
+      : 'Template applied — click Save to publish');
+  }
+
   function applyHomeTemplate(templateId, options) {
     options = options || {};
     var tpl = HOME_TEMPLATES[templateId];
@@ -6729,13 +6815,40 @@
       showToast('Template not found');
       return false;
     }
-    if (!options.skipConfirm && layout.cards && layout.cards.length && getActiveHomeTemplateId() !== templateId) {
-      if (!confirm('Apply "' + tpl.label + '" template? This replaces home cards, theme, and bottom nav. Unsaved changes stay until you Save.')) {
+    var currentId = getActiveHomeTemplateId();
+    var switching = currentId !== templateId || !!getActiveStaticUiId();
+    if (!switching && !options.force) {
+      showToast(tpl.label + ' is already at your latest edits');
+      return true;
+    }
+    if (!options.skipConfirm && layout.cards && layout.cards.length && switching) {
+      if (!confirm('Switch to "' + tpl.label + '"? This layout keeps the work you already did on it.')) {
         return false;
       }
     }
 
-    layout.homeTemplate = tpl.id;
+    if (!getActiveStaticUiId() && currentId && currentId !== templateId) {
+      captureHomeTemplateDraft(currentId);
+    }
+
+    var draft = options.useFactory ? null : homeTemplateDraft(templateId);
+    if (draft) {
+      var keptEmail = (layout.welcome && layout.welcome.email) || cfg.userEmail || '';
+      layout.header = cloneTemplateValue(draft.header || {});
+      layout.welcome = Object.assign({}, cloneTemplateValue(draft.welcome || {}), {
+        email: (draft.welcome && draft.welcome.email) || keptEmail
+      });
+      layout.alerts = cloneTemplateValue(draft.alerts || {});
+      layout.theme = Object.assign({}, getTheme(), draft.theme || {}, {
+        homeTemplate: templateId,
+        staticUiTemplate: null,
+        showBottomNav: true
+      });
+      layout.cards = cloneTemplateValue(draft.cards);
+      finishHomeTemplateSwitch(templateId, true);
+      return true;
+    }
+
     layout.header = Object.assign({}, layout.header || {}, tpl.header || {});
     layout.welcome = Object.assign({}, layout.welcome || {}, tpl.welcome || {}, {
       email: (layout.welcome && layout.welcome.email) || cfg.userEmail || ''
@@ -6743,33 +6856,14 @@
     layout.alerts = Object.assign({}, layout.alerts || {}, tpl.alerts || {});
     layout.theme = Object.assign({}, getTheme(), tpl.theme || {}, {
       homeTemplate: tpl.id,
+      staticUiTemplate: null,
       showBottomNav: true
     });
     layout.cards = (tpl.cards || []).map(function (spec) {
       return buildTemplateCard(spec);
     });
-    layout.bottomNav = (tpl.bottomNav && tpl.bottomNav.length)
-      ? JSON.parse(JSON.stringify(tpl.bottomNav))
-      : defaultTemplateBottomNav();
-    layout.bottomNavCategoryTarget = 'grid';
-    layout.activePage = 'home';
-    normalizeBottomNav();
-    layout.bottomNav.forEach(function (item) {
-      if (item) item.active = item.id === 'home';
-    });
-
     cardAnimOffsets = {};
-    selectedCardId = null;
-    cardEditorCardId = null;
-    selectedPageCardId = null;
-    activeFaceIndex = 0;
-    ensureLayoutStructure();
-    assignGridAreas();
-    ensureAllCardPositions(true);
-    renderAll();
-    renderHomeTemplates();
-    markLayoutDirty({ historyNow: true });
-    showToast(tpl.label + ' applied — click Save to keep');
+    finishHomeTemplateSwitch(tpl.id, false);
     return true;
   }
 
@@ -7630,7 +7724,6 @@
 
     var profile = getProfilePage();
     applyLoginUserProfileToLayout();
-    profile.language = getVal('toolProfileLanguage');
     profile.notificationsEnabled = getCheck('toolProfileNotifications');
 
     var devicesPage = getDevicesPage();
@@ -8015,12 +8108,6 @@
       setNavActive(getVal('toolNavActive'));
     });
 
-    bindField('toolProfileLanguage', function () {
-      getProfilePage().language = getVal('toolProfileLanguage');
-      if (layout.activePage === 'profile' || layout.activePage === 'settings') {
-        renderProfilePage(getTheme().accentColor || '#202940');
-      }
-    });
     bindField('toolProfileNotifications', function () {
       getProfilePage().notificationsEnabled = getCheck('toolProfileNotifications');
       if (layout.activePage === 'profile' || layout.activePage === 'settings') {

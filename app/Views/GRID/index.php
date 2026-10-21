@@ -244,6 +244,8 @@ $jsBundlePath = __DIR__ . '/react/dist/bundle.js';
         };
     </script>
 
+    <script src="/grid-offline.js?v=1"></script>
+
     <!-- React 18 Application Bundle -->
     <?php if (file_exists($jsBundlePath)): ?>
         <script><?= file_get_contents($jsBundlePath) ?></script>

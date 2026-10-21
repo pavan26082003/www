@@ -13,15 +13,28 @@ class Security_Controller extends App_Controller {
     protected $is_clients_project = false; //check if loged in user's client's project
 
     public function __construct($redirect = true) {
-        parent::__construct();
-
+        // Sign the webview in before the parent reads the session, and before any
+        // login redirect. A redirect here drops the new session cookie on the phone.
         if (class_exists(\App\Libraries\GridWebSso::class)) {
             \App\Libraries\GridWebSso::consumeIncomingToken();
         }
 
+        parent::__construct();
+
         //check user's login status, if not logged in redirect to signin page
         $login_user_id = $this->Users_model->login_user_id();
         if (!$login_user_id && $redirect) {
+            $requestUri = strtolower((string) ($_SERVER['REQUEST_URI'] ?? ''));
+            if (strpos($requestUri, 'items/save_view_page_ui_theme') !== false) {
+                header('Content-Type: application/json; charset=UTF-8');
+                http_response_code(401);
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Your session expired. Sign in again, then save.',
+                ]);
+                exit;
+            }
+
             $uri_string = uri_string();
 
             if (!$uri_string || $uri_string === "signin" || $uri_string === "/") {
@@ -33,6 +46,14 @@ class Security_Controller extends App_Controller {
                 $redirectPath = ltrim((string) $uri_string, '/');
                 while (preg_match('#^index\.php(/|$)#i', $redirectPath)) {
                     $redirectPath = ltrim((string) (preg_replace('#^index\.php/?#i', '', $redirectPath, 1) ?? $redirectPath), '/');
+                }
+                // target=grid / redirect_url=/index.php/grid must survive the login bounce.
+                // Otherwise a Circle Connect URL is reused for Professional Space too.
+                if (class_exists(\App\Libraries\GridWebSso::class)) {
+                    $namedPath = \App\Libraries\GridWebSso::requestedRelativePath();
+                    if ($namedPath !== '') {
+                        $redirectPath = $namedPath;
+                    }
                 }
                 $signin = 'signin?redirect=' . rawurlencode($redirectPath);
                 $sso = trim((string) ($_GET['grid_sso'] ?? ''));

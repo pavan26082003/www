@@ -2,13 +2,19 @@
 .env
 .env.*
 env_additions.txt
+app/Config/firebase-service-account.json
+**/*firebase-adminsdk*.json
 
 # GitHub rejects files larger than 100 MB.
 app.zip
+assets/Demo_Videos.zip
 assets/Demo_Videos/ApiForm/ApiForm.mp4
 assets/images/apifrom.mp4
 assets/images/demovideo1.mp4
 files/timeline_files/C51V961.EXE
+
+# Temporary schema check output
+writable/device_ui_schemas/SAVE-CHECK-TMP/
 
 # Runtime data
 logs/
