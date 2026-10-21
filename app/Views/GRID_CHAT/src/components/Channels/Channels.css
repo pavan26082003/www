@@ -255,28 +255,38 @@
 
 /* Directory Tabs */
 .directory-tabs-row {
-  flex: 0 0 52px;
-  height: 52px;
+  flex: 0 0 auto;
+  min-height: 52px;
+  height: auto;
   display: flex;
   border-bottom: 1px solid var(--border-light, #f1f5f9);
-  padding: 6px 14px;
-  gap: 8px;
+  padding: 6px 8px;
+  gap: 4px;
 }
 
 .directory-tab-btn {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 4px;
+  padding: 0 2px;
   background: transparent;
   border: none;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary, #64748b);
   cursor: pointer;
   transition: all 0.15s ease;
+}
+
+.directory-tab-btn > span:first-of-type {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .directory-tab-btn:hover {

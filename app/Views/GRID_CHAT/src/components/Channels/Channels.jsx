@@ -4,23 +4,57 @@ import ChannelPostCard from "./ChannelPostCard";
 import CreateChannelModal from "./CreateChannelModal";
 import "./Channels.css";
 
-function Channels({ isClosing, onBack, onToast }) {
-  const [channels, setChannels] = useState(() => {
-    const saved = localStorage.getItem("mychat_channels_data");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return initialChannels;
-      }
+const CHANNEL_CACHE_KEYS = ["mychat_channels_data", "cached_channels"];
+
+function readChannelCache() {
+  for (const key of CHANNEL_CACHE_KEYS) {
+    try {
+      const saved = localStorage.getItem(key);
+      if (!saved) continue;
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) continue;
+      const channels = parsed.filter(
+        (channel) => channel && typeof channel === "object" && channel.id
+      );
+      if (channels.length) return channels;
+    } catch {
+      // This cache entry is unreadable. Try the other key.
     }
-    return initialChannels;
-  });
+  }
+  return null;
+}
+
+function writeChannelCache(channels) {
+  const payload = JSON.stringify(channels);
+  for (const key of CHANNEL_CACHE_KEYS) {
+    try {
+      localStorage.setItem(key, payload);
+    } catch {
+      // Storage unavailable or quota exceeded.
+    }
+  }
+}
+
+function loadChannelDirectory() {
+  const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  try {
+    const cached = readChannelCache();
+    if (offline) return cached || initialChannels;
+    const directory = cached || initialChannels;
+    writeChannelCache(directory);
+    return directory;
+  } catch {
+    return readChannelCache() || initialChannels;
+  }
+}
+
+function Channels({ isClosing, onBack, onToast }) {
+  const [channels, setChannels] = useState(loadChannelDirectory);
 
   const [activeChannelId, setActiveChannelId] = useState(
     channels[0]?.id || "channel-1"
   );
-  const [activeDirectoryTab, setActiveDirectoryTab] = useState("all"); // 'all' | 'following'
+  const [activeDirectoryTab, setActiveDirectoryTab] = useState("all"); // 'all' | 'following' | 'mine'
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -28,21 +62,23 @@ function Channels({ isClosing, onBack, onToast }) {
   const [showInfoDrawer, setShowInfoDrawer] = useState(false);
 
   // Active Channel
-  const activeChannel = channels.find((c) => c.id === activeChannelId) || channels[0];
+  const activeChannel = (Array.isArray(channels) ? channels : []).find((c) => c && c.id === activeChannelId) || (Array.isArray(channels) ? channels[0] : undefined);
 
   // Helper to persist channels state
   const updateChannelsState = (newChannels) => {
     setChannels(newChannels);
-    try {
-      localStorage.setItem("mychat_channels_data", JSON.stringify(newChannels));
-    } catch {
-      // Storage unavailable or quota exceeded
-    }
+    writeChannelCache(newChannels);
   };
 
-  // Filter channels based on tab, category, and search query
-  const filteredChannels = channels.filter((channel) => {
+  const channelText = (value) => String(value || "").toLowerCase();
+
+  // Filter the saved directory locally. Tab clicks never wait on the network.
+  const filteredChannels = (Array.isArray(channels) ? channels : []).filter((channel) => {
+    if (!channel || typeof channel !== "object") return false;
     if (activeDirectoryTab === "following" && !channel.isFollowing) {
+      return false;
+    }
+    if (activeDirectoryTab === "mine" && !channel.isOwner) {
       return false;
     }
     if (selectedCategory !== "all" && channel.category !== selectedCategory) {
@@ -50,10 +86,11 @@ function Channels({ isClosing, onBack, onToast }) {
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      const matchName = channel.name.toLowerCase().includes(q);
-      const matchHandle = channel.handle.toLowerCase().includes(q);
-      const matchBio = channel.bio.toLowerCase().includes(q);
-      return matchName || matchHandle || matchBio;
+      return (
+        channelText(channel.name).includes(q) ||
+        channelText(channel.handle).includes(q) ||
+        channelText(channel.bio).includes(q)
+      );
     }
     return true;
   });
@@ -170,7 +207,9 @@ function Channels({ isClosing, onBack, onToast }) {
     onToast?.(`Channel link @${activeChannel.handle} copied to clipboard! 🔗`);
   };
 
-  const followingCount = channels.filter((c) => c.isFollowing).length;
+  const channelList = Array.isArray(channels) ? channels : [];
+  const followingCount = channelList.filter((c) => c.isFollowing).length;
+  const mineCount = channelList.filter((c) => c.isOwner).length;
 
   return (
     <div className={`channels-workstation-page ${isClosing ? "closing" : ""}`}>
@@ -256,7 +295,7 @@ function Channels({ isClosing, onBack, onToast }) {
             >
               <i className="fa-solid fa-compass"></i>
               <span>Explore</span>
-              <span className="tab-counter-pill">{channels.length}</span>
+              <span className="tab-counter-pill">{channelList.length}</span>
             </button>
             <button
               className={`directory-tab-btn ${
@@ -267,6 +306,16 @@ function Channels({ isClosing, onBack, onToast }) {
               <i className="fa-solid fa-circle-check"></i>
               <span>Following</span>
               <span className="tab-counter-pill">{followingCount}</span>
+            </button>
+            <button
+              className={`directory-tab-btn ${
+                activeDirectoryTab === "mine" ? "is-tab-active" : ""
+              }`}
+              onClick={() => setActiveDirectoryTab("mine")}
+            >
+              <i className="fa-solid fa-user"></i>
+              <span>My channels</span>
+              <span className="tab-counter-pill">{mineCount}</span>
             </button>
           </div>
 
@@ -299,6 +348,8 @@ function Channels({ isClosing, onBack, onToast }) {
                 <p>
                   {activeDirectoryTab === "following"
                     ? "You haven't followed any channels yet. Explore the directory to find interesting topics!"
+                    : activeDirectoryTab === "mine"
+                    ? "Channels you create are kept on this device and stay available here offline."
                     : "Try adjusting your search keywords or category filters."}
                 </p>
                 {activeDirectoryTab === "following" && (
