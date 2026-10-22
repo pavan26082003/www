@@ -48,52 +48,50 @@ class GridSduiSchemaBuilder
         return self::qrImageEndpoint() . '?' . $query;
     }
 
-    private static function isThirdPartyQrUrl($url): bool
+    /**
+     * Scan destination for one profile. Same shareQr fields; only the URL value changes.
+     * Professional opens that person's profile and sends a connection request.
+     * Circle opens a direct chat with that person.
+     */
+    private static function connectUrl(string $mode, int $userId): string
     {
-        $url = strtolower(trim((string) $url));
-        if ($url === '') {
-            return false;
+        $mode = $mode === 'circle' ? 'circle' : 'professional';
+        $base = class_exists(GridWebSso::class)
+            ? GridWebSso::publicWebUrl('grid/connect')
+            : 'https://efactor.tech/index.php/grid/connect';
+        $query = 'mode=' . rawurlencode($mode);
+        if ($userId > 0) {
+            $query .= '&user_id=' . $userId;
         }
-        return strpos($url, 'qrserver.com') !== false
-            || strpos($url, 'chart.googleapis.com') !== false
-            || strpos($url, 'chart.google.com') !== false;
+        return $base . '?' . $query;
     }
 
-    private static function fillShareQrImages(array $shareQr): array
+    private static function fillShareQrImages(array $shareQr, int $userId = 0): array
     {
         $selectedMode = (string) ($shareQr['selectedMode'] ?? 'professional');
-        $payload = trim((string) ($shareQr['qrPayload'] ?? ''));
-        if ($payload === '') {
-            $payload = 'https://efactor.tech/grid/connect?mode=' . rawurlencode($selectedMode);
-            $shareQr['qrPayload'] = $payload;
+        if ($selectedMode !== 'circle') {
+            $selectedMode = 'professional';
         }
+        $shareQr['selectedMode'] = $selectedMode;
+        $shareQr['qrPayload'] = self::connectUrl($selectedMode, $userId);
         $shareQr['qrImageUrlTemplate'] = self::qrImageUrlTemplate();
         $modes = is_array($shareQr['modes'] ?? null) ? $shareQr['modes'] : array();
-        $byMode = is_array($shareQr['qrImageUrlsByMode'] ?? null) ? $shareQr['qrImageUrlsByMode'] : array();
+        $byMode = array();
         foreach ($modes as $mode) {
             if (!is_array($mode)) {
                 continue;
             }
             $modeId = trim((string) ($mode['id'] ?? ''));
-            if ($modeId === '') {
+            if ($modeId !== 'professional' && $modeId !== 'circle') {
                 continue;
             }
-            $modePayload = 'https://efactor.tech/grid/connect?mode=' . rawurlencode($modeId);
-            if ($modeId === $selectedMode) {
-                $modePayload = $payload;
-            }
-            $existing = trim((string) ($byMode[$modeId] ?? ''));
-            if ($existing === '' || self::isThirdPartyQrUrl($existing)) {
-                $byMode[$modeId] = self::qrImageUrl($modePayload, $modeId);
-            }
+            $byMode[$modeId] = self::qrImageUrl(self::connectUrl($modeId, $userId), $modeId);
+        }
+        if ($byMode === array()) {
+            $byMode[$selectedMode] = self::qrImageUrl($shareQr['qrPayload'], $selectedMode);
         }
         $shareQr['qrImageUrlsByMode'] = $byMode;
-        $image = trim((string) ($shareQr['qrImageUrl'] ?? ''));
-        if ($image === '' || self::isThirdPartyQrUrl($image)) {
-            $shareQr['qrImageUrl'] = isset($byMode[$selectedMode])
-                ? $byMode[$selectedMode]
-                : self::qrImageUrl($payload, $selectedMode);
-        }
+        $shareQr['qrImageUrl'] = $byMode[$selectedMode] ?? self::qrImageUrl($shareQr['qrPayload'], $selectedMode);
         return $shareQr;
     }
 
@@ -234,7 +232,7 @@ class GridSduiSchemaBuilder
                     array('id' => 'circle', 'label' => 'Circle'),
                 ),
                 'qrCaption' => 'Scan to connect',
-                'qrPayload' => 'https://efactor.tech/grid/connect?mode=professional',
+                'qrPayload' => '',
                 'qrImageUrl' => '',
                 'qrImageUrlTemplate' => '',
                 'qrImageUrlsByMode' => array(),
@@ -309,7 +307,7 @@ class GridSduiSchemaBuilder
         if (empty($merged['header']['logoUrl'])) {
             $merged['header']['logoUrl'] = self::GRID_LOGO_URL;
         }
-        $merged['shareQr'] = self::fillShareQrImages(is_array($merged['shareQr'] ?? null) ? $merged['shareQr'] : array());
+        $merged['shareQr'] = self::fillShareQrImages(is_array($merged['shareQr'] ?? null) ? $merged['shareQr'] : array(), 0);
 
         return $merged;
     }
@@ -387,7 +385,7 @@ class GridSduiSchemaBuilder
         return $card;
     }
 
-    public static function buildComponents(array $content): array
+    public static function buildComponents(array $content, int $userId = 0): array
     {
         $header = is_array($content['header'] ?? null) ? $content['header'] : array();
         $exploring = is_array($content['exploring'] ?? null) ? $content['exploring'] : array();
@@ -749,9 +747,9 @@ class GridSduiSchemaBuilder
             'items' => $statItems,
         );
 
+        $shareQr = self::fillShareQrImages($shareQr, $userId);
         $selectedMode = (string) ($shareQr['selectedMode'] ?? 'professional');
-        $shareQr = self::fillShareQrImages($shareQr);
-        $qrPayload = (string) ($shareQr['qrPayload'] ?? ('https://efactor.tech/grid/connect?mode=' . rawurlencode($selectedMode)));
+        $qrPayload = (string) ($shareQr['qrPayload'] ?? self::connectUrl($selectedMode, $userId));
         $qrImageUrl = (string) ($shareQr['qrImageUrl'] ?? '');
         $qrImageUrlTemplate = (string) ($shareQr['qrImageUrlTemplate'] ?? self::qrImageUrlTemplate());
         $qrImageUrlsByMode = is_array($shareQr['qrImageUrlsByMode'] ?? null) ? $shareQr['qrImageUrlsByMode'] : array();
@@ -1099,6 +1097,10 @@ class GridSduiSchemaBuilder
     {
         $userId = max(0, (int) ($options['userId'] ?? 0));
         $content = self::mergeContent(isset($options['content']) && is_array($options['content']) ? $options['content'] : null);
+        $content['shareQr'] = self::fillShareQrImages(
+            is_array($content['shareQr'] ?? null) ? $content['shareQr'] : array(),
+            $userId
+        );
         if (class_exists(GridWebSso::class)) {
             $content = GridWebSso::prepareContentForClient(
                 $content,
@@ -1110,7 +1112,7 @@ class GridSduiSchemaBuilder
             $endpoint = 'grid_api_creation.php';
         }
 
-        $components = self::buildComponents($content);
+        $components = self::buildComponents($content, $userId);
 
         return array(
             'schemaType' => 'server-driven-mobile-app',

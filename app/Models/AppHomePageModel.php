@@ -183,7 +183,7 @@ class AppHomePageModel
                         array('id' => 'circle', 'label' => 'Circle'),
                     ),
                     'qrCaption' => 'Scan to connect',
-                    'qrPayload' => 'https://efactor.tech/grid/connect?mode=professional',
+                    'qrPayload' => '',
                     'shareActionId' => 'grid-share-qr',
                     'selectModeActionId' => 'grid-select-qr-mode',
                 ),

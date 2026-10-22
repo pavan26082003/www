@@ -55,6 +55,17 @@ class Security_Controller extends App_Controller {
                         $redirectPath = $namedPath;
                     }
                 }
+                // A scanned profile QR must come back to the same person after sign-in.
+                $connectPath = strtolower($redirectPath);
+                if ($connectPath === 'grid/connect' || strpos($connectPath, 'grid/connect?') === 0) {
+                    $connectMode = strtolower((string) ($_GET['mode'] ?? 'professional'));
+                    $connectMode = $connectMode === 'circle' ? 'circle' : 'professional';
+                    $connectUser = (int) ($_GET['user_id'] ?? $_GET['userId'] ?? 0);
+                    $redirectPath = 'grid/connect?mode=' . rawurlencode($connectMode);
+                    if ($connectUser > 0) {
+                        $redirectPath .= '&user_id=' . $connectUser;
+                    }
+                }
                 $signin = 'signin?redirect=' . rawurlencode($redirectPath);
                 $sso = trim((string) ($_GET['grid_sso'] ?? ''));
                 if ($sso !== '') {

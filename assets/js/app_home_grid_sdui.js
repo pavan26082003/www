@@ -140,10 +140,14 @@
         + ' data-action="' + esc((mode && mode.actionId) || 'grid-select-qr-mode') + '"'
         + ' data-mode="' + esc(id) + '">' + esc((mode && mode.label) || id) + '</button>';
     }).join('');
-    var qrImage = shareQr.qrImageUrl || shareQr.image || '';
-    if (!qrImage && shareQr.qrPayload) {
-      qrImage = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data='
-        + encodeURIComponent(String(shareQr.qrPayload));
+    var qrByMode = (shareQr.qrImageUrlsByMode && typeof shareQr.qrImageUrlsByMode === 'object')
+      ? shareQr.qrImageUrlsByMode : {};
+    var qrImage = shareQr.qrImageUrl || shareQr.image || qrByMode[selectedMode] || '';
+    if (!qrImage && shareQr.qrImageUrlTemplate && shareQr.qrPayload) {
+      qrImage = String(shareQr.qrImageUrlTemplate)
+        .replace('{data}', encodeURIComponent(String(shareQr.qrPayload)))
+        .replace('{payload}', encodeURIComponent(String(shareQr.qrPayload)))
+        .replace('{mode}', encodeURIComponent(selectedMode));
     }
     var shareQrHtml = '<section class="ahp-gn-qr">'
       + '<div class="ahp-gn-qr-copy">'
@@ -155,7 +159,9 @@
       + '<div class="ahp-gn-qr-modes" role="tablist">' + modesHtml + '</div>'
       + '</div>'
       + '<div class="ahp-gn-qr-media">'
-      + '<div class="ahp-gn-qr-frame">'
+      + '<div class="ahp-gn-qr-frame"'
+      + ' data-qr-professional="' + esc(qrByMode.professional || '') + '"'
+      + ' data-qr-circle="' + esc(qrByMode.circle || '') + '">'
       + (qrImage
         ? '<img src="' + esc(qrImage) + '" alt="Profile QR code" width="120" height="120" loading="lazy">'
         : '<div class="ahp-gn-qr-fallback" aria-hidden="true"></div>')
@@ -220,11 +226,10 @@
           root.querySelectorAll('.ahp-gn-qr-mode').forEach(function (el) {
             el.classList.toggle('is-active', el.getAttribute('data-mode') === mode);
           });
-          var img = root.querySelector('.ahp-gn-qr-frame img');
-          if (img) {
-            var payload = 'https://efactor.tech/grid/connect?mode=' + encodeURIComponent(mode);
-            img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=8&data=' + encodeURIComponent(payload);
-          }
+          var frame = root.querySelector('.ahp-gn-qr-frame');
+          var img = frame ? frame.querySelector('img') : null;
+          var nextSrc = frame ? (frame.getAttribute('data-qr-' + mode) || '') : '';
+          if (img && nextSrc) img.src = nextSrc;
         }
         if (typeof runtime.onAction === 'function') {
           runtime.onAction(actionId, {
