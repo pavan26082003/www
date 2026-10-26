@@ -1087,7 +1087,7 @@ class AppHomePageModel
             'method' => 'GET',
             'queryParameters' => array(
                 'user_id' => $userId,
-                'schema_rev' => 'scanner-qr-5',
+                'schema_rev' => 'scanner-qr-7',
             ),
             'headers' => array('Accept' => 'application/json'),
             'responseMapping' => array(
@@ -1096,8 +1096,8 @@ class AppHomePageModel
                 'components' => '$.schema.components',
                 'actions' => '$.schema.actions',
                 'iconRegistry' => '$.schema.iconRegistry',
-                'content' => '$.content',
-                'stats' => '$.content.stats',
+                'content' => '$.schema.content',
+                'stats' => '$.schema.content.stats',
             ),
             'cachePolicy' => 'network-first',
             'cacheTtlSec' => 60,

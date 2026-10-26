@@ -142,7 +142,7 @@
     heart: 'heart',
     star: 'star',
     fingerprint: 'fingerprint',
-    scanner: 'camera',
+    scanner: 'scanner',
     qrcode: 'qrcode',
     'id-card': 'idCard',
     shield: 'shieldHalved',
@@ -187,7 +187,7 @@
     heart: 'heart',
     star: 'star',
     fingerprint: 'fingerprint',
-    scanner: 'camera',
+    scanner: 'scanner',
     qrcode: 'qrcode',
     'id-card': 'id-card',
     shield: 'shield-halved',
@@ -2690,6 +2690,34 @@
     return url;
   }
 
+  function gridOpenUrlAction(url) {
+    return {
+      type: 'open-url',
+      url: url,
+      route: url,
+      title: '',
+      openIn: 'inAppWebView',
+      webView: {
+        javaScriptEnabled: true,
+        sharedCookies: true,
+        clearCache: false,
+        showAppBar: false,
+        showToolbar: false,
+        hideAppBar: true,
+        displayMode: 'fullscreen'
+      },
+      destination: {
+        url: url,
+        openIn: 'inAppWebView',
+        title: '',
+        sharedCookies: true,
+        showAppBar: false,
+        showToolbar: false,
+        hideAppBar: true
+      }
+    };
+  }
+
   function buildGridPageActions(cfg) {
     var circleUrl = resolveCircleConnectUrl(cfg);
     return {
@@ -2725,9 +2753,9 @@
           sharedCookies: true
         }
       },
-      'grid-open-find-talent': { type: 'host-action', actionId: 'open-grid-find-talent' },
-      'grid-open-join-circles': { type: 'host-action', actionId: 'open-grid-join-circles' },
-      'grid-see-all-exploring': { type: 'host-action', actionId: 'open-grid-exploring-all' }
+      'grid-open-find-talent': gridOpenUrlAction('https://efactor.tech/index.php/grid/network'),
+      'grid-open-join-circles': gridOpenUrlAction('https://efactor.tech/index.php/grid-chat'),
+      'grid-see-all-exploring': gridOpenUrlAction('https://efactor.tech/index.php/grid/network')
     };
   }
 
@@ -2754,7 +2782,7 @@
       type: 'rest',
       endpoint: endpoint,
       method: 'GET',
-      queryParameters: userId ? { user_id: userId, schema_rev: 'scanner-qr-5' } : { schema_rev: 'scanner-qr-5' },
+      queryParameters: userId ? { user_id: userId, schema_rev: 'scanner-qr-7' } : { schema_rev: 'scanner-qr-7' },
       headers: { Accept: 'application/json' },
       responseMapping: {
         schema: '$.schema',
@@ -2762,8 +2790,8 @@
         components: '$.schema.components',
         actions: '$.schema.actions',
         iconRegistry: '$.schema.iconRegistry',
-        content: '$.content',
-        stats: '$.content.stats'
+        content: '$.schema.content',
+        stats: '$.schema.content.stats'
       },
       cachePolicy: 'network-first',
       cacheTtlSec: 60,
@@ -2872,8 +2900,12 @@
           id: 'grid-header-avatar',
           type: 'avatarButton',
           label: header.avatarInitial || 'S',
+          initial: header.avatarInitial || 'S',
           color: header.avatarColor || '#7c3aed',
-          actionId: 'navigate-profile'
+          actionId: 'navigate-profile',
+          imageUrl: header.avatarUrl || '',
+          avatarUrl: header.avatarUrl || '',
+          image: header.avatarUrl || ''
         }
       ]
     };

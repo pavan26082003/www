@@ -300,6 +300,157 @@ class GridSduiSchemaBuilder
         return trim((string) ($row['grid_id'] ?? ''));
     }
 
+    /**
+     * Header photo for this account. GRID profile photo first, then users.image.
+     * The letter stays only when neither photo exists.
+     *
+     * @return array{initial:string,imageUrl:string}
+     */
+    private static function resolveHeaderProfile(int $userId): array
+    {
+        $empty = array('initial' => '', 'imageUrl' => '');
+        if ($userId <= 0) {
+            return $empty;
+        }
+        $row = self::readHeaderProfileFromCi($userId);
+        if ($row === null) {
+            $row = self::readHeaderProfileFromMysqli($userId);
+        }
+        if (!is_array($row)) {
+            return $empty;
+        }
+
+        $first = trim((string) ($row['first_name'] ?? ''));
+        $last = trim((string) ($row['last_name'] ?? ''));
+        $initial = '';
+        if ($first !== '') {
+            $initial = strtoupper(substr($first, 0, 1));
+        } elseif ($last !== '') {
+            $initial = strtoupper(substr($last, 0, 1));
+        }
+
+        $photo = trim((string) ($row['grid_avatar'] ?? ''));
+        if ($photo === '') {
+            $photo = trim((string) ($row['image'] ?? ''));
+        }
+
+        return array(
+            'initial' => $initial,
+            'imageUrl' => self::publicAvatarUrl($photo),
+        );
+    }
+
+    private static function readHeaderProfileFromCi(int $userId): ?array
+    {
+        if (!class_exists(\Config\Database::class)) {
+            return null;
+        }
+        try {
+            $db = \Config\Database::connect('default', false);
+            if (!$db->tableExists('users')) {
+                return null;
+            }
+            $row = $db->table('users')->select('first_name, last_name, image')->where('id', $userId)->get()->getRowArray();
+            if (!is_array($row)) {
+                return null;
+            }
+            $row['grid_avatar'] = '';
+            if ($db->tableExists('grid_profiles') && $db->fieldExists('avatar', 'grid_profiles')) {
+                $profile = $db->table('grid_profiles')->select('avatar')->where('user_id', $userId)->get()->getRowArray();
+                $row['grid_avatar'] = trim((string) ($profile['avatar'] ?? ''));
+            }
+            return $row;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private static function readHeaderProfileFromMysqli(int $userId): ?array
+    {
+        $db = self::openMysqli();
+        if (!$db || !self::mysqliHasColumn($db, 'users', 'image')) {
+            if ($db) {
+                $db->close();
+            }
+            return null;
+        }
+        $stmt = $db->prepare('SELECT first_name, last_name, image FROM users WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            $db->close();
+            return null;
+        }
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        if (!is_array($row)) {
+            $db->close();
+            return null;
+        }
+        $row['grid_avatar'] = '';
+        if (self::mysqliHasColumn($db, 'grid_profiles', 'avatar') && self::mysqliHasColumn($db, 'grid_profiles', 'user_id')) {
+            $profileStmt = $db->prepare('SELECT avatar FROM grid_profiles WHERE user_id = ? LIMIT 1');
+            if ($profileStmt) {
+                $profileStmt->bind_param('i', $userId);
+                $profileStmt->execute();
+                $profileResult = $profileStmt->get_result();
+                $profile = $profileResult ? $profileResult->fetch_assoc() : null;
+                $profileStmt->close();
+                if (is_array($profile)) {
+                    $row['grid_avatar'] = trim((string) ($profile['avatar'] ?? ''));
+                }
+            }
+        }
+        $db->close();
+        return $row;
+    }
+
+    private static function publicAvatarUrl(string $image): string
+    {
+        $image = trim($image);
+        if ($image === '' || $image === 'system_bot') {
+            return '';
+        }
+
+        $fileName = '';
+        $decoded = @unserialize($image);
+        if (is_array($decoded) && !empty($decoded['file_name'])) {
+            $fileName = trim((string) $decoded['file_name']);
+        }
+        if ($fileName === '' && preg_match('#^https?://#i', $image)) {
+            return self::canonicalizeAvatarUrl($image);
+        }
+        if ($fileName === '') {
+            $fileName = $image;
+        }
+        if (preg_match('#^https?://#i', $fileName)) {
+            return self::canonicalizeAvatarUrl($fileName);
+        }
+
+        $fileName = ltrim(str_replace('\\', '/', $fileName), '/');
+        if ($fileName === '' || preg_match('#(^|/)avatar\.jpg$#i', $fileName)) {
+            return '';
+        }
+        if (strpos($fileName, '/') === false) {
+            $fileName = 'files/profile_images/' . $fileName;
+        }
+
+        return self::canonicalizeAvatarUrl(rtrim(self::publicOrigin(), '/') . '/' . $fileName);
+    }
+
+    private static function canonicalizeAvatarUrl(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '' || preg_match('#/assets/images/avatar\.jpg(\?|$)#i', $url)) {
+            return '';
+        }
+        if (class_exists(GridWebSso::class)) {
+            return GridWebSso::preferHttps($url);
+        }
+        return $url;
+    }
+
     private static function fillShareQrImages(array $shareQr, int $userId = 0, string $gridId = ''): array
     {
         $selectedMode = (string) ($shareQr['selectedMode'] ?? 'professional');
@@ -781,6 +932,7 @@ class GridSduiSchemaBuilder
 
         $avatarInitial = (string) ($header['avatarInitial'] ?? 'S');
         $avatarColor = (string) ($header['avatarColor'] ?? '#7c3aed');
+        $avatarUrl = trim((string) ($header['avatarUrl'] ?? ''));
         $components['grid-page-header'] = array(
             'id' => 'grid-page-header',
             'type' => 'pageHeader',
@@ -898,10 +1050,27 @@ class GridSduiSchemaBuilder
                         'foregroundColor' => '#ffffff',
                         'fontSize' => 15,
                         'fontWeight' => 700,
+                        'imageUrl' => $avatarUrl,
                     ),
+                    'imageUrl' => $avatarUrl,
+                    'avatarUrl' => $avatarUrl,
+                    'image' => $avatarUrl,
                 ),
             ),
         );
+        if ($avatarUrl === '') {
+            foreach ($components['grid-page-header']['actions'] as $actionIndex => $headerAction) {
+                if (!is_array($headerAction) || (string) ($headerAction['id'] ?? '') !== 'grid-header-avatar') {
+                    continue;
+                }
+                unset(
+                    $components['grid-page-header']['actions'][$actionIndex]['imageUrl'],
+                    $components['grid-page-header']['actions'][$actionIndex]['avatarUrl'],
+                    $components['grid-page-header']['actions'][$actionIndex]['image'],
+                    $components['grid-page-header']['actions'][$actionIndex]['appearance']['imageUrl']
+                );
+            }
+        }
 
         $components['grid-feature-row'] = array(
             'id' => 'grid-feature-row',
@@ -1102,6 +1271,45 @@ class GridSduiSchemaBuilder
         );
     }
 
+    /**
+     * In-app web view action. Matches Professional Space and Circle Connect.
+     */
+    private static function inAppWebViewAction(string $url, array $webView): array
+    {
+        return array(
+            'type' => 'open-url',
+            'url' => $url,
+            'route' => $url,
+            'title' => '',
+            'openIn' => 'inAppWebView',
+            'webView' => $webView,
+            'destination' => array(
+                'url' => $url,
+                'openIn' => 'inAppWebView',
+                'title' => '',
+                'sharedCookies' => true,
+                'showAppBar' => false,
+                'showToolbar' => false,
+                'hideAppBar' => true,
+                'webView' => $webView,
+            ),
+        );
+    }
+
+    private static function signedWebUrl(string $path, string $ssoToken): string
+    {
+        $url = class_exists(GridWebSso::class)
+            ? GridWebSso::publicWebUrl($path)
+            : 'https://efactor.tech/index.php/' . trim($path, '/');
+        if ($url === '') {
+            $url = 'https://efactor.tech/index.php/' . trim($path, '/');
+        }
+        if ($ssoToken !== '' && class_exists(GridWebSso::class)) {
+            $url = GridWebSso::appendToken($url, $ssoToken);
+        }
+        return $url;
+    }
+
     public static function buildActions(array $content = array()): array
     {
         $featureCards = is_array($content['featureCards'] ?? null) ? $content['featureCards'] : array();
@@ -1177,43 +1385,14 @@ class GridSduiSchemaBuilder
             'displayMode' => 'fullscreen',
         );
 
-        $proAction = array(
-            'type' => 'open-url',
-            'url' => $proUrl,
-            'route' => $proUrl,
-            'title' => '',
-            'openIn' => 'inAppWebView',
-            'webView' => $hiddenWebView,
-            'destination' => array(
-                'url' => $proUrl,
-                'openIn' => 'inAppWebView',
-                'title' => '',
-                'sharedCookies' => true,
-                'showAppBar' => false,
-                'showToolbar' => false,
-                'hideAppBar' => true,
-                'webView' => $hiddenWebView,
-            ),
-        );
-
-        $circleAction = array(
-            'type' => 'open-url',
-            'url' => $circleUrl,
-            'route' => $circleUrl,
-            'title' => '',
-            'openIn' => 'inAppWebView',
-            'webView' => $hiddenWebView,
-            'destination' => array(
-                'url' => $circleUrl,
-                'openIn' => 'inAppWebView',
-                'title' => '',
-                'sharedCookies' => true,
-                'showAppBar' => false,
-                'showToolbar' => false,
-                'hideAppBar' => true,
-                'webView' => $hiddenWebView,
-            ),
-        );
+        $proAction = self::inAppWebViewAction($proUrl, $hiddenWebView);
+        $circleAction = self::inAppWebViewAction($circleUrl, $hiddenWebView);
+        // Same signed in-app shape as Professional Space and Circle Connect.
+        // Network is the web people hub. Circles live in grid-chat.
+        // See all opens that people hub, which is the web "show all" list.
+        $findTalentAction = self::inAppWebViewAction(self::signedWebUrl('grid/network', $ssoToken), $hiddenWebView);
+        $joinCirclesAction = self::inAppWebViewAction(self::signedWebUrl('grid-chat', $ssoToken), $hiddenWebView);
+        $seeAllAction = self::inAppWebViewAction(self::signedWebUrl('grid/network', $ssoToken), $hiddenWebView);
 
         return array(
             'navigate-grid' => array('type' => 'navigate', 'destination' => array('routeId' => 'grid')),
@@ -1229,9 +1408,9 @@ class GridSduiSchemaBuilder
             'grid-open-scanner' => self::scannerAction($hiddenWebView, self::scanPageUrlWithSso($ssoToken)),
             'grid-open-professional-space' => $proAction,
             'grid-open-circle-connect' => $circleAction,
-            'grid-open-find-talent' => array('type' => 'host-action', 'actionId' => 'open-grid-find-talent'),
-            'grid-open-join-circles' => array('type' => 'host-action', 'actionId' => 'open-grid-join-circles'),
-            'grid-see-all-exploring' => array('type' => 'host-action', 'actionId' => 'open-grid-exploring-all'),
+            'grid-open-find-talent' => $findTalentAction,
+            'grid-open-join-circles' => $joinCirclesAction,
+            'grid-see-all-exploring' => $seeAllAction,
             'grid-select-qr-mode' => array('type' => 'host-action', 'actionId' => 'select-grid-qr-mode'),
         );
     }
@@ -1316,7 +1495,7 @@ class GridSduiSchemaBuilder
         return array(
             'grid' => array('flutter' => 'borderAll', 'web' => 'border-all'),
             'search' => array('flutter' => 'magnifyingGlass', 'web' => 'magnifying-glass'),
-            'scanner' => array('flutter' => 'camera', 'web' => 'camera'),
+            'scanner' => array('flutter' => 'scanner', 'web' => 'scanner'),
             'user' => array('flutter' => 'user', 'web' => 'user'),
             'users' => array('flutter' => 'users', 'web' => 'users'),
             'quote' => array('flutter' => 'quoteLeft', 'web' => 'quote-left'),
@@ -1340,6 +1519,13 @@ class GridSduiSchemaBuilder
             $content['header'] = array();
         }
         $content['header']['searchIconToken'] = 'scanner';
+        $headerProfile = self::resolveHeaderProfile($userId);
+        if ($headerProfile['initial'] !== '') {
+            $content['header']['avatarInitial'] = $headerProfile['initial'];
+        }
+        if ($headerProfile['imageUrl'] !== '') {
+            $content['header']['avatarUrl'] = $headerProfile['imageUrl'];
+        }
         $content['shareQr'] = self::fillShareQrImages(
             is_array($content['shareQr'] ?? null) ? $content['shareQr'] : array(),
             $userId,
@@ -1402,7 +1588,11 @@ class GridSduiSchemaBuilder
                     )),
                     'responseMapping' => array(
                         'schema' => '$.schema',
-                        'content' => '$.content',
+                        'page' => '$.schema.page',
+                        'components' => '$.schema.components',
+                        'actions' => '$.schema.actions',
+                        'iconRegistry' => '$.schema.iconRegistry',
+                        'content' => '$.schema.content',
                     ),
                     'published' => true,
                 ),

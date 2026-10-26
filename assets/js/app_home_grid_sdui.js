@@ -161,9 +161,17 @@
       + '<span class="ahp-gn-qr-caption">' + esc(shareQr.qrCaption || 'Scan to connect') + '</span>'
       + '</div></section>';
 
+    var schemaActions = (schema && schema.actions) || {};
+    function actionUrl(actionId) {
+      var action = schemaActions[actionId] || {};
+      return action.url || (action.destination && action.destination.url) || action.route || '';
+    }
     var exploreHtml = exploreIds.map(function (id) {
       var item = components[id] || {};
-      return '<button type="button" class="ahp-gn-explore" data-action="' + esc(item.actionId || '') + '">'
+      var itemUrl = actionUrl(item.actionId || '');
+      return '<button type="button" class="ahp-gn-explore" data-action="' + esc(item.actionId || '') + '"'
+        + (itemUrl ? ' data-url="' + esc(itemUrl) + '"' : '')
+        + '>'
         + '<span class="ahp-gn-explore-icon" style="--ahp-gn-icon:' + esc(item.color || '#8b5cf6') + '">'
         + iconSvg(item.iconToken) + '</span>'
         + '<span class="ahp-gn-explore-copy"><strong>' + esc(item.title || '') + '</strong>'
@@ -173,6 +181,7 @@
     }).join('');
 
     var initial = String(avatar.label || (content.header && content.header.avatarInitial) || 'S').charAt(0).toUpperCase();
+    var avatarUrl = avatar.imageUrl || avatar.avatarUrl || avatar.image || (content.header && content.header.avatarUrl) || '';
     var quoteText = quoteComp.title || 'Connections turn potential into progress.';
     var quoteHtml = esc(quoteText).replace(/^Connections\b/, '<span class="ahp-gn-quote-accent">Connections</span>');
 
@@ -188,13 +197,17 @@
       + '<button type="button" class="ahp-gn-icon-btn" data-action="' + esc(scanAction.actionId || 'grid-open-scanner') + '" aria-label="Scan QR code">'
       + iconSvg(scanAction.iconToken || 'scanner') + '</button>'
       + '<button type="button" class="ahp-gn-avatar" data-action="' + esc(avatar.actionId || 'navigate-profile') + '"'
-      + ' style="background:' + esc(avatar.color || '#7c3aed') + '" aria-label="Profile">' + esc(initial) + '</button>'
+      + ' style="background:' + esc(avatar.color || '#7c3aed') + '" aria-label="Profile">'
+      + (avatarUrl ? '<img src="' + esc(avatarUrl) + '" alt="" width="40" height="40">' : esc(initial))
+      + '</button>'
       + '</div></header>'
       + '<div class="ahp-gn-feature-row">' + featuresHtml + '</div>'
       + shareQrHtml
       + '<div class="ahp-gn-section-head">'
       + '<h2>' + esc(exploreSection.title || 'Continue Exploring') + '</h2>'
-      + '<button type="button" class="ahp-gn-see-all" data-action="' + esc(trailing.actionId || 'grid-see-all-exploring') + '">'
+      + '<button type="button" class="ahp-gn-see-all" data-action="' + esc(trailing.actionId || 'grid-see-all-exploring') + '"'
+      + (actionUrl(trailing.actionId || 'grid-see-all-exploring') ? ' data-url="' + esc(actionUrl(trailing.actionId || 'grid-see-all-exploring')) + '"' : '')
+      + '>'
       + esc(trailing.label || 'See all') + '</button>'
       + '</div>'
       + '<div class="ahp-gn-explore-row">' + exploreHtml + '</div>'

@@ -442,6 +442,17 @@ window.GRID_DASHBOARD_BOOT = {
     }, 30);
   }
 
+  function previewActionTitle(actionId) {
+    var titles = {
+      'grid-open-professional-space': 'Professional Space',
+      'grid-open-circle-connect': 'Circle Connect',
+      'grid-open-find-talent': 'Find Talent',
+      'grid-open-join-circles': 'Join Circles',
+      'grid-see-all-exploring': 'Continue Exploring'
+    };
+    return titles[actionId] || 'GRID';
+  }
+
   function resolveFeatureUrl(actionId, schema) {
     var schemaUrl = resolveSchemaActionUrl(schema, actionId);
     var urls = getUrlInputs();
@@ -550,8 +561,8 @@ window.GRID_DASHBOARD_BOOT = {
           openScanner();
           return;
         }
-        if (url && (actionId === 'grid-open-professional-space' || actionId === 'grid-open-circle-connect' || meta.openUrl)) {
-          openInPhoneBrowser(url, actionId === 'grid-open-circle-connect' ? 'Circle Connect' : 'Professional Space');
+        if (url) {
+          openInPhoneBrowser(url, previewActionTitle(actionId));
           return;
         }
         if (actionId) toast('Action: ' + String(actionId).replace(/^grid-/, '').replace(/-/g, ' '));
