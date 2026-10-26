@@ -49,21 +49,42 @@ class Security_Controller extends App_Controller {
                 }
                 // target=grid / redirect_url=/index.php/grid must survive the login bounce.
                 // Otherwise a Circle Connect URL is reused for Professional Space too.
-                if (class_exists(\App\Libraries\GridWebSso::class)) {
+                $connectQuery = array();
+                parse_str((string) ($_SERVER['QUERY_STRING'] ?? ''), $connectQuery);
+                if (!is_array($connectQuery)) {
+                    $connectQuery = array();
+                }
+                if (isset($_GET) && is_array($_GET)) {
+                    $connectQuery = array_merge($connectQuery, $_GET);
+                }
+                $connectPath = strtolower($redirectPath);
+                $isProfessionalConnect = ($connectPath === 'grid/connect' || strpos($connectPath, 'grid/connect?') === 0);
+                $isCircleConnect = ($connectPath === 'grid-chat/connect' || strpos($connectPath, 'grid-chat/connect?') === 0);
+                // Do not rewrite a scanned connect link into plain /grid.
+                // That drops user_id and opens Professional Space home instead of the person.
+                if (!$isProfessionalConnect && !$isCircleConnect && class_exists(\App\Libraries\GridWebSso::class)) {
                     $namedPath = \App\Libraries\GridWebSso::requestedRelativePath();
                     if ($namedPath !== '') {
                         $redirectPath = $namedPath;
                     }
                 }
-                // A scanned profile QR must come back to the same person after sign-in.
-                $connectPath = strtolower($redirectPath);
-                if ($connectPath === 'grid/connect' || strpos($connectPath, 'grid/connect?') === 0) {
-                    $connectMode = strtolower((string) ($_GET['mode'] ?? 'professional'));
-                    $connectMode = $connectMode === 'circle' ? 'circle' : 'professional';
-                    $connectUser = (int) ($_GET['user_id'] ?? $_GET['userId'] ?? 0);
-                    $redirectPath = 'grid/connect?mode=' . rawurlencode($connectMode);
-                    if ($connectUser > 0) {
-                        $redirectPath .= '&user_id=' . $connectUser;
+                if ($isProfessionalConnect || $isCircleConnect) {
+                    $connectMode = $isCircleConnect ? 'circle' : 'professional';
+                    $requestedMode = strtolower((string) ($connectQuery['mode'] ?? $connectMode));
+                    if ($requestedMode === 'circle' || $requestedMode === 'professional') {
+                        $connectMode = $requestedMode;
+                    }
+                    $connectBase = $connectMode === 'circle' ? 'grid-chat/connect' : 'grid/connect';
+                    $redirectPath = $connectBase . '?mode=' . rawurlencode($connectMode);
+                    $connectGridId = trim((string) ($connectQuery['grid_id'] ?? $connectQuery['gridId'] ?? ''));
+                    if ($connectGridId !== '' && preg_match('/^[A-Za-z0-9_-]{1,80}$/', $connectGridId)) {
+                        $redirectPath .= '&grid_id=' . rawurlencode($connectGridId);
+                    }
+                    if ($connectMode !== 'circle') {
+                        $connectUser = (int) ($connectQuery['user_id'] ?? $connectQuery['userId'] ?? 0);
+                        if ($connectUser > 0) {
+                            $redirectPath .= '&user_id=' . $connectUser;
+                        }
                     }
                 }
                 $signin = 'signin?redirect=' . rawurlencode($redirectPath);

@@ -192,6 +192,27 @@ if (is_readable($jsPath)) {
   flex:1 1 auto;width:100%;min-height:0;border:0;background:#fff;display:block;
 }
 .gd-phone-browser-fallback{display:none!important}
+.gd-scan{
+  position:absolute;inset:0;z-index:30;
+  display:none;flex-direction:column;
+  background:#05070c;color:#fff;
+}
+.gd-scan.is-open{display:flex}
+.gd-scan-bar{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 12px;background:#0f172a;
+}
+.gd-scan-bar strong{flex:1;font-size:13px}
+.gd-scan-bar button{
+  border:0;border-radius:8px;background:#e2e8f0;color:#0f172a;
+  font-size:11px;font-weight:800;padding:6px 8px;cursor:pointer;
+}
+.gd-scan-stage{flex:1;min-height:0;position:relative}
+.gd-scan-stage #gdScanReader{width:100%;height:100%}
+.gd-scan-copy{
+  margin:0;padding:10px 14px 14px;text-align:center;
+  font-size:12px;color:#cbd5e1;
+}
 @media (max-width:1100px){
   .gd-workspace{grid-template-columns:1fr;overflow:auto}
   .gd-phone-wrap{order:1}
@@ -254,6 +275,14 @@ if (is_readable($jsPath)) {
           <div class="gd-phone-status"><span>9:41</span><span>LTE&nbsp;&nbsp;100%</span></div>
           <div class="gd-phone-screen">
             <div id="gdPreviewRoot" class="ahp-grid-network-root" aria-live="polite"></div>
+            <div class="gd-scan" id="gdScan" aria-hidden="true">
+              <div class="gd-scan-bar">
+                <button type="button" id="gdScanClose">Close</button>
+                <strong>Scan QR</strong>
+              </div>
+              <div class="gd-scan-stage"><div id="gdScanReader"></div></div>
+              <p class="gd-scan-copy" id="gdScanStatus">Align the QR code inside the frame</p>
+            </div>
             <div class="gd-phone-browser" id="gdPhoneBrowser" aria-hidden="true">
               <div class="gd-phone-browser-bar">
                 <button type="button" id="gdBrowserBackBtn">&#8592; Back</button>
@@ -297,6 +326,7 @@ window.GRID_DASHBOARD_BOOT = {
 };
 </script>
 <script src="<?= htmlspecialchars($gridSduiJs, ENT_QUOTES, 'UTF-8') ?>"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 (function () {
   'use strict';
@@ -430,6 +460,75 @@ window.GRID_DASHBOARD_BOOT = {
     return action.url || (action.destination && action.destination.url) || action.route || '';
   }
 
+  var scanReader = null;
+  var scanBusy = false;
+
+  function setScanStatus(text) {
+    var el = document.getElementById('gdScanStatus');
+    if (el) el.textContent = text;
+  }
+
+  function stopScanReader() {
+    if (!scanReader) return Promise.resolve();
+    var instance = scanReader;
+    scanReader = null;
+    return instance.stop().catch(function () { return instance.clear(); }).then(function () {
+      var mount = document.getElementById('gdScanReader');
+      if (mount) mount.innerHTML = '';
+    });
+  }
+
+  function closeScanner() {
+    var panel = document.getElementById('gdScan');
+    if (panel) {
+      panel.classList.remove('is-open');
+      panel.setAttribute('aria-hidden', 'true');
+    }
+    scanBusy = false;
+    setScanStatus('Align the QR code inside the frame');
+    return stopScanReader();
+  }
+
+  function openScannedUrl(raw) {
+    var value = String(raw || '').trim().replace(/^["']|["']$/g, '');
+    if (!/^https?:\/\//i.test(value)) {
+      toast('That QR is not a connect link');
+      return;
+    }
+    var title = /grid-chat\/connect/i.test(value) ? 'Circle Connect' : 'Professional Space';
+    openInPhoneBrowser(value, title);
+  }
+
+  function openScanner() {
+    var panel = document.getElementById('gdScan');
+    var mount = document.getElementById('gdScanReader');
+    if (!panel || !mount || typeof Html5Qrcode !== 'function') {
+      toast('QR scanner is unavailable in this browser');
+      return;
+    }
+    closeInPhoneBrowser();
+    panel.classList.add('is-open');
+    panel.setAttribute('aria-hidden', 'false');
+    setScanStatus('Align the QR code inside the frame');
+    scanBusy = false;
+    stopScanReader().then(function () {
+      scanReader = new Html5Qrcode('gdScanReader');
+      return scanReader.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        function (decodedText) {
+          if (scanBusy) return;
+          scanBusy = true;
+          var scanned = decodedText;
+          closeScanner().then(function () { openScannedUrl(scanned); });
+        },
+        function () {}
+      );
+    }).catch(function (err) {
+      setScanStatus((err && err.message) ? err.message : 'Could not start the camera');
+    });
+  }
+
   function renderPreview(payload) {
     var mount = document.getElementById('gdPreviewRoot');
     var api = window.AHP_GRID_SDUI;
@@ -447,6 +546,10 @@ window.GRID_DASHBOARD_BOOT = {
       onAction: function (actionId, meta) {
         meta = meta || {};
         var url = meta.url || resolveFeatureUrl(actionId, currentSchema);
+        if (actionId === 'grid-open-scanner') {
+          openScanner();
+          return;
+        }
         if (url && (actionId === 'grid-open-professional-space' || actionId === 'grid-open-circle-connect' || meta.openUrl)) {
           openInPhoneBrowser(url, actionId === 'grid-open-circle-connect' ? 'Circle Connect' : 'Professional Space');
           return;
@@ -558,6 +661,8 @@ window.GRID_DASHBOARD_BOOT = {
   });
   var browserBack = document.getElementById('gdBrowserBackBtn');
   if (browserBack) browserBack.addEventListener('click', closeInPhoneBrowser);
+  var scanClose = document.getElementById('gdScanClose');
+  if (scanClose) scanClose.addEventListener('click', function () { closeScanner(); });
 
   if (currentSchema) {
     applyPayload({

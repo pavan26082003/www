@@ -245,6 +245,21 @@ $jsBundlePath = __DIR__ . '/react/dist/bundle.js';
     </script>
 
     <script src="/grid-offline.js?v=1"></script>
+    <script>
+        (function () {
+            var path = window.location.pathname.toLowerCase();
+            if (path.indexOf('/grid/connect') === -1) return;
+            var params = new URLSearchParams(window.location.search);
+            var userId = params.get('user_id') || params.get('userId') || params.get('u') || '';
+            var gridId = params.get('grid_id') || params.get('gridId') || '';
+            var next = new URLSearchParams();
+            if (userId) next.set('userId', userId);
+            if (gridId) next.set('grid_id', gridId);
+            next.set('mode', 'professional');
+            var base = path.indexOf('/index.php/') !== -1 ? '/index.php/grid/profile' : '/grid/profile';
+            window.history.replaceState({ route: 'profile', targetUser: userId ? { id: userId } : null }, '', base + '?' + next.toString());
+        })();
+    </script>
 
     <!-- React 18 Application Bundle -->
     <?php if (file_exists($jsBundlePath)): ?>

@@ -37,6 +37,7 @@
       user: 'fa-user',
       users: 'fa-users',
       search: 'fa-search',
+      qrcode: 'fa-qrcode',
       quote: 'fa-quote-left',
       grid: 'fa-border-all',
       profile: 'fa-user',
@@ -51,6 +52,8 @@
       user: '<path d="M12 12.2A4.2 4.2 0 1 0 7.8 8 4.2 4.2 0 0 0 12 12.2zm0 1.8c-3.86 0-8.5 1.94-8.5 4.85V21h17v-2.15C20.5 15.94 15.86 14 12 14z"/>',
       users: '<path d="M8.8 11.4A3.4 3.4 0 1 0 5.4 8a3.4 3.4 0 0 0 3.4 3.4zm7.1-.2a3 3 0 1 0-3-3 3 3 0 0 0 3 3zM8.8 13.2c-3.08 0-7.3 1.54-7.3 4.6V21h12.4v-3.2c0-3.06-4.22-4.6-7.3-4.6zm7.1.5c-.5 0-1.04.05-1.6.14 1.55.94 2.6 2.24 2.6 4.06V21H22v-2.7c0-2.52-3.32-4.26-6.1-4.26z"/>',
       search: '<path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M10.75 18.25a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z"/><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M16.6 16.6 21 21"/>',
+      scanner: '<path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M7 4H5.5A1.5 1.5 0 0 0 4 5.5V7M17 4h1.5A1.5 1.5 0 0 1 20 5.5V7M20 17v1.5a1.5 1.5 0 0 1-1.5 1.5H17M7 20H5.5A1.5 1.5 0 0 1 4 18.5V17M4 12h16"/>',
+      qrcode: '<path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M7 4H5.5A1.5 1.5 0 0 0 4 5.5V7M17 4h1.5A1.5 1.5 0 0 1 20 5.5V7M20 17v1.5a1.5 1.5 0 0 1-1.5 1.5H17M7 20H5.5A1.5 1.5 0 0 1 4 18.5V17M4 12h16"/>',
       quote: '<path d="M10.2 18.4H4.6c0-3.55 1.7-6.35 5.1-8.4l1.15 1.7c-2.05 1.15-3.15 2.55-3.3 4.2h2.65zm9.2 0h-5.6c0-3.55 1.7-6.35 5.1-8.4l1.15 1.7c-2.05 1.15-3.15 2.55-3.3 4.2H19.4z"/>',
       grid: '<path d="M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7z"/>',
       profile: '<path d="M12 12.2A4.2 4.2 0 1 0 7.8 8 4.2 4.2 0 0 0 12 12.2zm0 1.8c-3.86 0-8.5 1.94-8.5 4.85V21h17v-2.15C20.5 15.94 15.86 14 12 14z"/>',
@@ -77,7 +80,6 @@
   function renderFromSchema(schema, content) {
     var components = (schema && schema.components) || {};
     var header = components['grid-page-header'] || {};
-    var statsComp = components['grid-stats-row'] || {};
     var shareQr = components['grid-share-qr'] || {};
     var exploreSection = components['grid-explore-section'] || {};
     var quoteComp = components['grid-quote-block'] || {};
@@ -86,11 +88,12 @@
 
     var featureIds = Array.isArray(featureRow.children) ? featureRow.children : [];
     var exploreIds = Array.isArray(exploreRow.children) ? exploreRow.children : [];
-    var stats = Array.isArray(statsComp.items) ? statsComp.items : ((content.stats) || []);
     var trailing = exploreSection.trailing || {};
     var headerActions = Array.isArray(header.actions) ? header.actions : [];
     var avatar = headerActions.find(function (a) { return a && a.type === 'avatarButton'; }) || {};
-    var searchAction = headerActions.find(function (a) { return a && a.iconToken === 'search'; }) || headerActions[0] || {};
+    var scanAction = headerActions.find(function (a) {
+      return a && a.type !== 'avatarButton';
+    }) || {};
     var logoUrl = header.logoUrl || header.image || (content.header && content.header.logoUrl) || content.logoUrl
       || 'https://efactor.tech/assets/images/GRID_Logo.png';
 
@@ -118,17 +121,6 @@
         + (subtitle ? '<small class="ahp-gn-feature-sub">' + esc(subtitle) + '</small>' : '')
         + '<span class="ahp-gn-feature-go" aria-hidden="true">' + iconSvg('chevron-right') + '</span>'
         + '</button>';
-    }).join('');
-
-    var statsHtml = stats.map(function (stat, index) {
-      var value = (stat && typeof stat.value === 'object' && stat.value !== null)
-        ? (stat.value.fallback != null ? stat.value.fallback : (stat.value.value != null ? stat.value.value : 0))
-        : (stat && stat.value != null ? stat.value : 0);
-      return '<div class="ahp-gn-stat">'
-        + '<strong>' + esc(String(value)) + '</strong>'
-        + '<span>' + esc((stat && stat.label) || '') + '</span>'
-        + '</div>'
-        + (index < stats.length - 1 ? '<span class="ahp-gn-stat-divider" aria-hidden="true"></span>' : '');
     }).join('');
 
     var modes = Array.isArray(shareQr.modes) ? shareQr.modes : [];
@@ -167,8 +159,6 @@
         : '<div class="ahp-gn-qr-fallback" aria-hidden="true"></div>')
       + '</div>'
       + '<span class="ahp-gn-qr-caption">' + esc(shareQr.qrCaption || 'Scan to connect') + '</span>'
-      + '<button type="button" class="ahp-gn-qr-share" data-action="' + esc(shareQr.shareActionId || shareQr.actionId || 'grid-share-qr') + '" aria-label="Share QR">'
-      + iconSvg('share') + '</button>'
       + '</div></section>';
 
     var exploreHtml = exploreIds.map(function (id) {
@@ -195,13 +185,12 @@
       + '<p>' + esc(header.subtitle || 'Your professional network space') + '</p>'
       + '</div>'
       + '<div class="ahp-gn-header-actions">'
-      + '<button type="button" class="ahp-gn-icon-btn" data-action="' + esc(searchAction.actionId || 'grid-open-search') + '" aria-label="Search">'
-      + iconSvg(searchAction.iconToken || 'search') + '</button>'
+      + '<button type="button" class="ahp-gn-icon-btn" data-action="' + esc(scanAction.actionId || 'grid-open-scanner') + '" aria-label="Scan QR code">'
+      + iconSvg(scanAction.iconToken || 'scanner') + '</button>'
       + '<button type="button" class="ahp-gn-avatar" data-action="' + esc(avatar.actionId || 'navigate-profile') + '"'
       + ' style="background:' + esc(avatar.color || '#7c3aed') + '" aria-label="Profile">' + esc(initial) + '</button>'
       + '</div></header>'
       + '<div class="ahp-gn-feature-row">' + featuresHtml + '</div>'
-      + '<div class="ahp-gn-stats">' + statsHtml + '</div>'
       + shareQrHtml
       + '<div class="ahp-gn-section-head">'
       + '<h2>' + esc(exploreSection.title || 'Continue Exploring') + '</h2>'

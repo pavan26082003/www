@@ -142,6 +142,7 @@
     heart: 'heart',
     star: 'star',
     fingerprint: 'fingerprint',
+    scanner: 'camera',
     qrcode: 'qrcode',
     'id-card': 'idCard',
     shield: 'shieldHalved',
@@ -186,6 +187,7 @@
     heart: 'heart',
     star: 'star',
     fingerprint: 'fingerprint',
+    scanner: 'camera',
     qrcode: 'qrcode',
     'id-card': 'id-card',
     shield: 'shield-halved',
@@ -1202,10 +1204,29 @@
     };
   }
 
+  function mediaOrigin(cfg) {
+    var filesBase = cfg && cfg.filesBase ? String(cfg.filesBase) : '';
+    var match = filesBase.match(/^(https?:\/\/[^/]+)/i);
+    if (match) return match[1];
+    var schemaApi = cfg && cfg.schemaApiUrl ? String(cfg.schemaApiUrl) : '';
+    match = schemaApi.match(/^(https?:\/\/[^/]+)/i);
+    if (match) return match[1];
+    if (typeof window !== 'undefined' && window.location && window.location.origin) return window.location.origin;
+    return '';
+  }
+
   function resolveMediaUrl(url, cfg) {
     var src = String(url || '').trim();
     if (!src) return '';
-    if (/^https?:\/\//i.test(src) || src.indexOf('/') === 0 || src.indexOf('files/') === 0) return src;
+    if (/^https?:\/\//i.test(src)) return src;
+    if (src.charAt(0) === '/') {
+      var origin = mediaOrigin(cfg);
+      return origin ? origin + src : src;
+    }
+    if (src.indexOf('files/') === 0 || src.indexOf('assets/') === 0 || src.indexOf('uploads/') === 0) {
+      var root = mediaOrigin(cfg);
+      return root ? root + '/' + src : '/' + src;
+    }
     var base = (cfg && cfg.filesBase) ? String(cfg.filesBase).replace(/\/+$/, '') : '/files';
     return base + '/brand_logo/' + encodeURIComponent(src);
   }
@@ -1350,8 +1371,60 @@
     return staticUi;
   }
 
-  function buildLayoutSnapshot(layout, cfg) {
+  var LIGHT_HOME_KITS = {
+    'efactor-quickmart': true,
+    'efactor-market': true,
+    'efactor-deals': true,
+    'efactor-shop': true,
+    'efactor-style': true
+  };
+
+  function publishedCardRadius(value) {
+    if (value == null || value === '') return 16;
+    var n = Number(value);
+    if (!isFinite(n) || n < 0) return 16;
+    if (n === 0) return 0;
+    if (n > 16) return 16;
+    return Math.round(n);
+  }
+
+  function themeIsDarkCanvas(theme) {
+    theme = theme || {};
+    if (String(theme.bgStyle || '').toLowerCase() === 'dark') return true;
+    var bg = String(theme.phoneBg || '').trim().toLowerCase();
+    return bg === '#0b0f1a' || bg === '#0b1220' || bg === '#111827' || bg === '#151b2e' || bg === '#000000';
+  }
+
+  /**
+   * Studio live preview is the dark bento. A leftover light kit id makes
+   * the app draw QuickMart instead of that canvas. Radius above 16 is a
+   * pill on a ~105px column; the studio canvas reads as 14–16.
+   */
+  function calibratePublishedHomeCanvas(layout) {
     layout = layout || {};
+    var theme = layout.theme || {};
+    layout.theme = theme;
+    var staticUi = String(layout.staticUiTemplate || theme.staticUiTemplate || '').trim();
+    var kit = String(theme.homeTemplate || layout.homeTemplate || '').toLowerCase();
+    if (!staticUi && themeIsDarkCanvas(theme) && LIGHT_HOME_KITS[kit]) {
+      layout.homeTemplate = 'default';
+      theme.homeTemplate = 'default';
+      theme.showWelcome = true;
+    }
+    if (!staticUi && (theme.showWelcome == null)) theme.showWelcome = true;
+    theme.cardBorderRadius = publishedCardRadius(theme.cardBorderRadius);
+    if (Array.isArray(layout.cards)) {
+      layout.cards.forEach(function (card) {
+        if (!card || card.borderRadius == null || card.borderRadius === '') return;
+        card.borderRadius = publishedCardRadius(card.borderRadius);
+      });
+    }
+    if (!staticUi) layout.homeTemplate = theme.homeTemplate || layout.homeTemplate || 'default';
+    return layout;
+  }
+
+  function buildLayoutSnapshot(layout, cfg) {
+    layout = calibratePublishedHomeCanvas(layout || {});
     cfg = cfg || {};
     var theme = layout.theme || {};
     var homeTemplate = theme.homeTemplate || layout.homeTemplate || 'default';
@@ -1367,7 +1440,9 @@
         gridGap: resolveGridGap(theme),
         homeTemplate: homeTemplate,
         staticUiTemplate: staticUiTemplate,
-        showBottomNav: theme.showBottomNav !== false
+        showBottomNav: theme.showBottomNav !== false,
+        showWelcome: theme.showWelcome !== false,
+        cardBorderRadius: publishedCardRadius(theme.cardBorderRadius)
       }),
       header: cloneJson(layout.header),
       welcome: cloneJson(layout.welcome),
@@ -1403,6 +1478,21 @@
         globalFaceSec: resolveCardFaceSec(null, theme, {})
       }
     };
+  }
+
+  function resolveNonNegativeRadius(value, fallback) {
+    if (value == null || value === '') return fallback;
+    var n = Number(value);
+    if (!isFinite(n)) return fallback;
+    return n < 0 ? 0 : n;
+  }
+
+  function resolveTileBorderRadius(card, theme) {
+    var fromCard = resolveNonNegativeRadius(card && card.borderRadius, null);
+    if (fromCard != null) return fromCard;
+    var fromTheme = resolveNonNegativeRadius(theme && theme.cardBorderRadius, null);
+    if (fromTheme != null) return fromTheme;
+    return 0;
   }
 
   function buildDesignTokens(theme) {
@@ -1457,7 +1547,13 @@
         deviceValue: { fontFamily: 'system', fontSize: 20, fontWeight: 700, lineHeight: 1 },
         byFaceType: DEFAULT_FACE_TYPOGRAPHY
       },
-      radius: { small: 8, card: 12, device: 16, large: 24, pill: 999 },
+      radius: {
+        small: 8,
+        card: publishedCardRadius(theme.cardBorderRadius),
+        device: 16,
+        large: 24,
+        pill: 999
+      },
       shadows: {
         card: isLight
           ? { color: '#140f172a', blur: 40, spread: 0, offsetX: 0, offsetY: 18, css: '0 18px 40px rgba(15,23,42,.08)' }
@@ -2504,7 +2600,7 @@
       header: {
         title: 'Grid',
         subtitle: 'Your professional network space',
-        searchIconToken: 'search',
+        searchIconToken: 'scanner',
         avatarInitial: 'S',
         avatarColor: '#7c3aed'
       },
@@ -2607,7 +2703,13 @@
         ],
         errorPresentation: { type: 'snackbar', message: 'Unable to refresh Grid' }
       },
-      'grid-open-search': { type: 'host-action', actionId: 'open-grid-search' },
+      'grid-open-scanner': {
+        type: 'open-url',
+        url: 'https://efactor.tech/v8/grid_scan.php',
+        route: 'https://efactor.tech/v8/grid_scan.php',
+        title: '',
+        openIn: 'inAppWebView'
+      },
       'grid-open-professional-space': { type: 'host-action', actionId: 'open-grid-professional-space' },
       'grid-open-circle-connect': {
         type: 'open-url',
@@ -2652,12 +2754,14 @@
       type: 'rest',
       endpoint: endpoint,
       method: 'GET',
-      queryParameters: userId ? { user_id: userId } : {},
+      queryParameters: userId ? { user_id: userId, schema_rev: 'scanner-qr-5' } : { schema_rev: 'scanner-qr-5' },
       headers: { Accept: 'application/json' },
       responseMapping: {
         schema: '$.schema',
         page: '$.schema.page',
         components: '$.schema.components',
+        actions: '$.schema.actions',
+        iconRegistry: '$.schema.iconRegistry',
         content: '$.content',
         stats: '$.content.stats'
       },
@@ -2681,10 +2785,9 @@
     var quote = page.quote || {};
     var featureCards = page.featureCards || [];
     var exploreItems = exploring.items || [];
-    var stats = page.stats || [];
 
     usedIcons.grid = true;
-    usedIcons.search = true;
+    usedIcons.scanner = true;
     usedIcons.user = true;
     usedIcons.users = true;
     usedIcons.quote = true;
@@ -2748,7 +2851,6 @@
       children: [
         'grid-page-header',
         'grid-feature-row',
-        'grid-stats-row',
         'grid-explore-section',
         'grid-quote-block'
       ]
@@ -2762,9 +2864,9 @@
       typography: { titleToken: 'typography.pageTitle', subtitleToken: 'typography.pageSubtitle' },
       actions: [
         {
-          id: 'grid-header-search',
-          iconToken: header.searchIconToken || 'search',
-          actionId: 'grid-open-search'
+          id: 'grid-header-scanner',
+          iconToken: 'scanner',
+          actionId: 'grid-open-scanner'
         },
         {
           id: 'grid-header-avatar',
@@ -2783,20 +2885,6 @@
       overflowPolicy: 'reflow',
       preserveChildOrder: true,
       children: featureChildIds
-    };
-
-    components['grid-stats-row'] = {
-      id: 'grid-stats-row',
-      type: 'statusSummary',
-      layout: { columns: 3, gap: 8 },
-      items: stats.map(function (stat) {
-        return {
-          id: stat.id || undefined,
-          label: stat.label || '',
-          value: bind('grid.stats.' + (stat.id || slugToken(stat.label)), stat.value != null ? stat.value : 0),
-          colorToken: 'colors.textPrimary'
-        };
-      })
     };
 
     components['grid-explore-section'] = {
@@ -2889,7 +2977,7 @@
         grid: (fullSchema.dataSources && fullSchema.dataSources.grid) || buildGridDataSource(cfg, layout)
       },
       content: resolveGridPageContent(layout),
-      iconRegistry: fullSchema.iconRegistry || buildIconRegistry(['grid', 'search', 'user', 'users', 'quote', 'chevron-right', 'profile'])
+      iconRegistry: fullSchema.iconRegistry || buildIconRegistry(['grid', 'scanner', 'user', 'users', 'quote', 'chevron-right', 'profile'])
     };
   }
 
@@ -2899,7 +2987,7 @@
     var getDeviceAnimOffset = helpers.getDeviceAnimOffset || function () { return 0; };
     var getDefaultFace = helpers.getDefaultFace || function () { return 0; };
 
-    layout = layout || {};
+    layout = calibratePublishedHomeCanvas(layout || {});
     cfg = cfg || {};
     var theme = layout.theme || {};
     layout.theme = theme;
@@ -3071,7 +3159,7 @@
       });
 
       var faceSec = resolveCardFaceSec(card, theme, helpers);
-      var cardBorderRadius = card.borderRadius != null ? Number(card.borderRadius) : 2;
+      var cardBorderRadius = resolveTileBorderRadius(card, theme);
       var cardCol = Math.max(1, Math.min(12, Number(card.colSpan != null ? card.colSpan : 1) || 1));
       var cardRow = Math.max(1, Math.min(16, Number(card.rowSpan != null ? card.rowSpan : 1) || 1));
       // Market Festival Specials must sit beside Daily Needs (not full-width).
@@ -4284,6 +4372,13 @@
   'use strict';
 
   var GREETING_WAVE = '';
+
+  function resolveNonNegativeRadius(value, fallback) {
+    if (value == null || value === '') return fallback;
+    var n = Number(value);
+    if (!isFinite(n)) return fallback;
+    return n < 0 ? 0 : n;
+  }
 
   function sanitizeWelcomeGreeting(raw) {
     if (global.AhpSchemaV2 && typeof global.AhpSchemaV2.sanitizeWelcomeGreeting === 'function') {
@@ -6083,13 +6178,15 @@
         card.colSpan != null ? card.colSpan : (card.columnSpan != null ? card.columnSpan : 1)
       ) || 1));
       var rowSpan = Math.max(1, Math.min(16, Number(card.rowSpan != null ? card.rowSpan : 1) || 1));
-      var borderRadius = card.borderRadius != null ? Number(card.borderRadius) : (
-        (existing.dimensions && existing.dimensions.borderRadius != null)
-          ? existing.dimensions.borderRadius
-          : ((freshTile && freshTile.dimensions && freshTile.dimensions.borderRadius != null)
-            ? freshTile.dimensions.borderRadius
-            : 10)
-      );
+      var borderRadius = card.borderRadius != null && card.borderRadius !== ''
+        ? resolveNonNegativeRadius(card.borderRadius, 0)
+        : (
+          (existing.dimensions && existing.dimensions.borderRadius != null && existing.dimensions.borderRadius !== '')
+            ? resolveNonNegativeRadius(existing.dimensions.borderRadius, 0)
+            : ((freshTile && freshTile.dimensions && freshTile.dimensions.borderRadius != null && freshTile.dimensions.borderRadius !== '')
+              ? resolveNonNegativeRadius(freshTile.dimensions.borderRadius, 0)
+              : resolveNonNegativeRadius((layout && layout.theme && layout.theme.cardBorderRadius), 0))
+        );
 
       if (freshTile) {
         out[compId] = Object.assign({}, freshTile, existing, {
@@ -6409,12 +6506,20 @@
         enrich.dimensions = Object.assign({}, c.dimensions || {}, {
           columnSpan: col,
           rowSpan: row,
-          borderRadius: src.borderRadius != null ? Number(src.borderRadius) : ((c.dimensions && c.dimensions.borderRadius) || 10),
+          borderRadius: src.borderRadius != null && src.borderRadius !== ''
+            ? (Number(src.borderRadius) < 0 || !isFinite(Number(src.borderRadius)) ? 0 : Number(src.borderRadius))
+            : ((c.dimensions && c.dimensions.borderRadius != null && c.dimensions.borderRadius !== '')
+              ? (Number(c.dimensions.borderRadius) < 0 || !isFinite(Number(c.dimensions.borderRadius)) ? 0 : Number(c.dimensions.borderRadius))
+              : 0),
           minRowHeightDp: homeGridRowHeight,
           sizeFormula: 'slotWidth'
         });
         enrich.appearance = Object.assign({}, c.appearance || {}, {
-          borderRadius: src.borderRadius != null ? Number(src.borderRadius) : ((c.appearance && c.appearance.borderRadius) || 10)
+          borderRadius: src.borderRadius != null && src.borderRadius !== ''
+            ? (Number(src.borderRadius) < 0 || !isFinite(Number(src.borderRadius)) ? 0 : Number(src.borderRadius))
+            : ((c.appearance && c.appearance.borderRadius != null && c.appearance.borderRadius !== '')
+              ? (Number(c.appearance.borderRadius) < 0 || !isFinite(Number(c.appearance.borderRadius)) ? 0 : Number(c.appearance.borderRadius))
+              : 0)
         });
         enrich.timing = Object.assign({}, c.timing || {}, {
           faceSec: (c.timing && c.timing.faceSec) || (src.faceSec != null && src.faceSec !== '' ? Math.max(2, Math.min(8, parseFloat(src.faceSec))) : undefined),

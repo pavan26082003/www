@@ -132,7 +132,7 @@ class AppHomePageModel
                     'title' => 'Grid',
                     'subtitle' => 'Your professional network space',
                     'logoUrl' => 'https://efactor.tech/assets/images/GRID_Logo.png',
-                    'searchIconToken' => 'search',
+                    'searchIconToken' => 'scanner',
                     'avatarInitial' => 'S',
                     'avatarColor' => '#7c3aed',
                 ),
@@ -638,178 +638,178 @@ class AppHomePageModel
 
     /**
      * Factory home mosaic for new accounts and Reset.
-     * Same card keys (id, type, faces, col, row, colSpan, rowSpan, …) — positions match the default phone layout.
+     * Same boxes, same face order, same grid positions as the studio phone.
      */
     private function getDefaultStarterCards(): array
     {
-        $recipeImage = 'https://images.unsplash.com/photo-1563379091339-03246963d96a?w=400&h=400&fit=crop';
         $gridLogo = 'https://efactor.tech/assets/images/GRID_Logo.png';
+        $efactorLogo = 'https://efactor.tech/assets/images/efactor-logo.jpg';
+        $hrmsImage = 'https://www.shutterstock.com/image-vector/hrms-human-resource-management-system-260nw-2283105665.jpg';
+        $cardImage = 'https://www.spiderworks.in/uploads/media/digital-business-card-maker-in-kerala64fee92edc3a8.jpg';
+        $recipeImage = '/assets/images/app_home_default/recipe-biryani.jpg';
+        $recipeIngredients = '/assets/images/app_home_default/recipe-ingredients.jpg';
+        $recipeSteps = '/assets/images/app_home_default/recipe-steps.webp';
+        $recipeTimer = '/assets/images/app_home_default/recipe-timer.jpg';
+        $ingredientsImage = 'https://www.thehighereducationreview.com/newsimagespl/0b5zEPRZ.jpeg';
+        $bannerImage = '/assets/images/app_home_default/biryani-banner.jpg';
+        $stepsImage = '/assets/images/app_home_default/biryani-steps.jpg';
+        $timerImage = '/assets/images/app_home_default/biryani-timer.jpg';
 
         return array(
             array(
-                'id' => 'signal',
-                'type' => 'link',
-                'gridArea' => 'signal',
-                'title' => '',
-                'label' => '',
-                'icon' => 'fa-signal',
-                'color' => '#6d28d9',
-                'textColor' => '#ffffff',
-                'col' => 1,
-                'row' => 1,
-                'colSpan' => 1,
-                'rowSpan' => 1,
-                'borderRadius' => 12,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'faces' => array(
-                    array('title' => '', 'icon' => 'fa-signal', 'color' => '#6d28d9'),
-                    array('title' => 'Signal', 'icon' => 'fa-wifi', 'color' => '#5b21b6'),
-                    array('title' => 'Network', 'icon' => 'fa-broadcast-tower', 'color' => '#7c3aed'),
-                    array('title' => 'Status', 'icon' => 'fa-chart-bar', 'color' => '#4c1d95'),
-                ),
-            ),
-            array(
-                'id' => 'grid',
-                'type' => 'link',
-                'gridArea' => 'grid',
-                'title' => 'Share',
-                'label' => 'Share',
-                'subtitle' => '',
-                'icon' => 'fa-share-alt',
-                'color' => '#f97316',
-                'textColor' => '#ffffff',
-                'col' => 2,
-                'row' => 1,
-                'colSpan' => 1,
-                'rowSpan' => 1,
-                'borderRadius' => 12,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'faces' => array(
-                    array('title' => 'Share', 'icon' => 'fa-share-alt', 'color' => '#f97316'),
-                    array('title' => 'GRID', 'subtitle' => 'Share & connect', 'icon' => 'fa-border-all', 'color' => '#ea580c'),
-                    array('title' => 'Network', 'subtitle' => '12 nodes', 'icon' => 'fa-project-diagram', 'color' => '#fb923c'),
-                    array('title' => 'Connect', 'subtitle' => 'Peers online', 'icon' => 'fa-link', 'color' => '#fdba74'),
-                ),
-            ),
-            array(
-                'id' => 'hrms',
-                'type' => 'link',
-                'gridArea' => 'hrms',
-                'title' => 'Leave',
-                'label' => 'Leave',
-                'subtitle' => '',
-                'icon' => 'fa-calendar',
-                'color' => '#2dd4bf',
-                'textColor' => '#ffffff',
-                'col' => 3,
-                'row' => 1,
-                'colSpan' => 1,
-                'rowSpan' => 1,
-                'borderRadius' => 12,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'faces' => array(
-                    array('title' => 'Leave', 'icon' => 'fa-calendar', 'color' => '#2dd4bf'),
-                    array('title' => 'HRMS', 'subtitle' => 'Employees & payroll', 'icon' => 'fa-user-tie', 'color' => '#14b8a6'),
-                    array('title' => 'Payroll', 'subtitle' => 'This month', 'icon' => 'fa-money-bill', 'color' => '#0d9488'),
-                    array('title' => 'Team', 'subtitle' => '24 active', 'icon' => 'fa-users', 'color' => '#5eead4'),
-                ),
-            ),
-            array(
                 'id' => 'user-modules',
-                'type' => 'link',
+                'type' => 'stack',
                 'gridArea' => 'user-modules',
                 'title' => 'Online',
                 'label' => 'Online',
                 'icon' => 'fa-fingerprint',
                 'color' => '#7c3aed',
                 'textColor' => '#ffffff',
+                'iconColor' => '#ffffff',
                 'col' => 1,
-                'row' => 2,
+                'row' => 1,
                 'colSpan' => 1,
                 'rowSpan' => 2,
-                'tall' => true,
-                'borderRadius' => 12,
+                'borderRadius' => 0,
                 'defaultFace' => 0,
                 'rotationDir' => 'ltr',
+                'orientation' => 'vertical',
+                'sameFaceColor' => true,
                 'faces' => array(
-                    array('title' => 'Online', 'icon' => 'fa-fingerprint', 'color' => '#7c3aed'),
-                    array('title' => 'Active', 'icon' => 'fa-chart-line', 'color' => '#6d28d9'),
-                    array('title' => 'Modules', 'icon' => 'fa-th-large', 'color' => '#5b21b6'),
-                    array('title' => 'Users', 'icon' => 'fa-th', 'color' => '#8b5cf6'),
+                    array('type' => 'stack', 'title' => 'Online', 'label' => 'Online', 'icon' => 'fa-fingerprint', 'color' => '#7c3aed', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Active', 'icon' => 'fa-chart-line', 'color' => '#7c3aed', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Modules', 'icon' => 'fa-th-large', 'color' => '#7c3aed', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Users', 'label' => 'Users', 'icon' => 'fa-th', 'color' => '#7c3aed', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                ),
+            ),
+            array(
+                'id' => 'grid',
+                'type' => 'stack',
+                'gridArea' => 'grid',
+                'title' => 'Share',
+                'label' => 'Share',
+                'icon' => 'fa-share-alt',
+                'color' => '#ea580c',
+                'textColor' => '#ffffff',
+                'iconColor' => '#ffffff',
+                'col' => 2,
+                'row' => 1,
+                'colSpan' => 1,
+                'rowSpan' => 1,
+                'borderRadius' => 0,
+                'defaultFace' => 0,
+                'rotationDir' => 'ltr',
+                'orientation' => 'square',
+                'sameFaceColor' => true,
+                'faces' => array(
+                    array('type' => 'stack', 'title' => 'Share', 'label' => 'Share', 'icon' => 'fa-share-alt', 'color' => '#ea580c', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'GRID', 'label' => 'GRID', 'subtitle' => 'Share & connect', 'icon' => 'fa-border-all', 'color' => '#ea580c', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Network', 'subtitle' => '12 nodes', 'icon' => 'fa-project-diagram', 'color' => '#ea580c', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Connect', 'subtitle' => 'Peers online', 'icon' => 'fa-link', 'color' => '#ea580c', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                ),
+            ),
+            array(
+                'id' => 'hrms',
+                'type' => 'stack',
+                'gridArea' => 'hrms',
+                'title' => 'Leave',
+                'label' => 'Leave',
+                'icon' => 'fa-calendar',
+                'color' => '#2dd4bf',
+                'textColor' => '#ffffff',
+                'iconColor' => '#ffffff',
+                'col' => 3,
+                'row' => 1,
+                'colSpan' => 1,
+                'rowSpan' => 1,
+                'borderRadius' => 0,
+                'defaultFace' => 0,
+                'rotationDir' => 'ltr',
+                'orientation' => 'square',
+                'sameFaceColor' => true,
+                'faces' => array(
+                    array('type' => 'stack', 'title' => 'Leave', 'label' => 'Leave', 'icon' => 'fa-calendar', 'color' => '#2dd4bf', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'HRMS', 'label' => 'HRMS', 'subtitle' => 'Employees & payroll', 'icon' => 'fa-user-tie', 'color' => '#2dd4bf', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Payroll', 'subtitle' => 'This month', 'icon' => 'fa-money-bill', 'color' => '#2dd4bf', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Team', 'label' => 'Team', 'subtitle' => '24 active', 'icon' => 'fa-users', 'color' => '#2dd4bf', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
                 ),
             ),
             array(
                 'id' => 'id-card',
-                'type' => 'link',
+                'type' => 'stack',
                 'gridArea' => 'id-card',
                 'title' => 'Verify',
                 'label' => 'Verify',
-                'subtitle' => '',
                 'icon' => 'fa-braille',
-                'color' => '#ec4899',
+                'color' => '#db2777',
                 'textColor' => '#ffffff',
+                'iconColor' => '#ffffff',
                 'col' => 2,
                 'row' => 2,
                 'colSpan' => 1,
                 'rowSpan' => 1,
-                'borderRadius' => 12,
+                'borderRadius' => 0,
                 'defaultFace' => 0,
                 'rotationDir' => 'ltr',
+                'orientation' => 'square',
+                'sameFaceColor' => true,
                 'faces' => array(
-                    array('title' => 'Verify', 'icon' => 'fa-braille', 'color' => '#ec4899'),
-                    array('title' => 'ID', 'subtitle' => 'Efactor ID', 'icon' => 'fa-fingerprint', 'color' => '#db2777'),
-                    array('title' => 'Profile', 'subtitle' => 'Your card', 'icon' => 'fa-id-card', 'color' => '#f472b6'),
-                    array('title' => 'Badge', 'subtitle' => 'Access pass', 'icon' => 'fa-shield-alt', 'color' => '#be185d'),
+                    array('type' => 'stack', 'title' => 'Verify', 'label' => 'Verify', 'icon' => 'fa-braille', 'color' => '#db2777', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'ID', 'label' => 'ID', 'subtitle' => 'Efactor ID', 'icon' => 'fa-fingerprint', 'color' => '#db2777', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Profile', 'subtitle' => 'Your card', 'icon' => 'fa-id-card', 'color' => '#db2777', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Badge', 'subtitle' => 'Access pass', 'icon' => 'fa-shield-alt', 'color' => '#db2777', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
                 ),
             ),
             array(
                 'id' => 'appid',
-                'type' => 'link',
+                'type' => 'stack',
                 'gridArea' => 'appid',
                 'title' => 'New',
                 'label' => 'New',
-                'subtitle' => '',
                 'icon' => 'fa-plus',
                 'color' => '#3b82f6',
                 'textColor' => '#ffffff',
+                'iconColor' => '#ffffff',
                 'col' => 3,
                 'row' => 2,
                 'colSpan' => 1,
                 'rowSpan' => 1,
-                'borderRadius' => 12,
+                'borderRadius' => 0,
                 'defaultFace' => 0,
                 'rotationDir' => 'ltr',
+                'orientation' => 'square',
+                'sameFaceColor' => false,
                 'faces' => array(
-                    array('title' => 'New', 'icon' => 'fa-plus', 'color' => '#3b82f6'),
-                    array('title' => 'AppID', 'subtitle' => 'Generation', 'icon' => 'fa-key', 'color' => '#2563eb'),
-                    array('title' => 'Active', 'subtitle' => '8 apps', 'icon' => 'fa-mobile-alt', 'color' => '#60a5fa'),
-                    array('title' => 'Keys', 'subtitle' => 'Manage', 'icon' => 'fa-lock', 'color' => '#1d4ed8'),
+                    array('type' => 'stack', 'title' => 'New', 'label' => 'New', 'icon' => 'fa-plus', 'color' => '#3b82f6', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'AppID', 'subtitle' => 'Generation', 'icon' => 'fa-key', 'color' => '#2563eb', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Active', 'subtitle' => '8 apps', 'icon' => 'fa-mobile-alt', 'color' => '#60a5fa', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Keys', 'subtitle' => 'Manage', 'icon' => 'fa-lock', 'color' => '#1d4ed8', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
                 ),
             ),
             array(
                 'id' => 'leads',
-                'type' => 'link',
+                'type' => 'stack',
                 'gridArea' => 'leads',
                 'title' => 'Hot',
                 'label' => 'Hot',
                 'icon' => 'fa-th',
                 'color' => '#22c55e',
                 'textColor' => '#ffffff',
-                'col' => 3,
+                'iconColor' => '#ffffff',
+                'col' => 1,
                 'row' => 3,
                 'colSpan' => 1,
                 'rowSpan' => 1,
-                'borderRadius' => 12,
+                'borderRadius' => 0,
                 'defaultFace' => 0,
                 'rotationDir' => 'ltr',
+                'orientation' => 'square',
+                'sameFaceColor' => true,
                 'faces' => array(
-                    array('title' => 'Hot', 'icon' => 'fa-th', 'color' => '#22c55e'),
-                    array('title' => 'Leads', 'value' => '52', 'icon' => 'fa-users', 'color' => '#16a34a'),
-                    array('title' => 'Converted', 'icon' => 'fa-check', 'color' => '#15803d'),
-                    array('title' => 'Follow-up', 'icon' => 'fa-phone', 'color' => '#4ade80'),
+                    array('type' => 'stack', 'title' => 'Hot', 'label' => 'Hot', 'icon' => 'fa-th', 'color' => '#22c55e', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Leads', 'icon' => 'fa-users', 'color' => '#22c55e', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Converted', 'icon' => 'fa-check', 'color' => '#22c55e', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Follow-up', 'icon' => 'fa-phone', 'color' => '#22c55e', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
                 ),
             ),
             array(
@@ -818,95 +818,54 @@ class AppHomePageModel
                 'gridArea' => 'efactor-grid',
                 'title' => '',
                 'label' => '',
-                'tag' => '',
+                'icon' => 'fa-cube',
                 'color' => '#ffffff',
                 'textColor' => '#111827',
+                'iconColor' => '#ffffff',
                 'image' => $gridLogo,
+                'col' => 2,
+                'row' => 3,
+                'colSpan' => 2,
+                'rowSpan' => 1,
+                'borderRadius' => 0,
+                'defaultFace' => 0,
+                'rotationDir' => 'ltr',
+                'orientation' => 'custom',
+                'sameFaceColor' => false,
                 'imageFit' => 'contain',
                 'imagePosition' => 'center',
-                'col' => 1,
-                'row' => 4,
-                'colSpan' => 3,
-                'rowSpan' => 1,
-                'borderRadius' => 12,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
+                'imageScale' => 91,
                 'faces' => array(
-                    array('title' => '', 'image' => $gridLogo, 'imageFit' => 'contain', 'color' => '#ffffff'),
-                    array('title' => 'GRID', 'icon' => 'fa-border-all', 'color' => '#111827'),
-                    array('title' => 'Featured', 'icon' => 'fa-star', 'color' => '#334155'),
-                    array('title' => 'Explore', 'icon' => 'fa-compass', 'color' => '#475569'),
+                    array('type' => 'image', 'icon' => 'fa-cube', 'color' => '#ffffff', 'textColor' => '#111827', 'iconColor' => '#ffffff', 'image' => $gridLogo, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 91),
+                    array('type' => 'image', 'title' => 'GRID', 'label' => 'GRID', 'icon' => 'fa-border-all', 'color' => '#111827', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $efactorLogo, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 86),
+                    array('type' => 'image', 'title' => 'Featured', 'label' => 'Featured', 'icon' => 'fa-star', 'color' => '#334155', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $hrmsImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
+                    array('type' => 'image', 'title' => 'Explore', 'label' => 'Explore', 'icon' => 'fa-compass', 'color' => '#475569', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $cardImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 189),
                 ),
             ),
             array(
-                'id' => 'add-device',
-                'type' => 'link',
-                'gridArea' => 'add-device',
-                'title' => 'Add image',
-                'label' => 'Add image',
-                'icon' => 'fa-heart',
-                'color' => '#0f172a',
-                'textColor' => '#ffffff',
-                'col' => 1,
-                'row' => 5,
-                'colSpan' => 2,
-                'rowSpan' => 2,
-                'tall' => true,
-                'borderRadius' => 12,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'faces' => array(
-                    array('title' => 'Add image', 'icon' => 'fa-heart', 'color' => '#0f172a'),
-                    array('title' => 'Upload', 'icon' => 'fa-image', 'color' => '#1e293b'),
-                    array('title' => 'Gallery', 'icon' => 'fa-images', 'color' => '#334155'),
-                    array('title' => 'Camera', 'icon' => 'fa-camera', 'color' => '#475569'),
-                ),
-            ),
-            array(
-                'id' => 'gallery-tile',
-                'type' => 'link',
-                'gridArea' => 'gallery-tile',
+                'id' => 'signal',
+                'type' => 'stack',
+                'gridArea' => 'signal',
                 'title' => '',
                 'label' => '',
-                'icon' => 'fa-image',
-                'color' => '#111827',
-                'textColor' => '#e2e8f0',
-                'col' => 3,
-                'row' => 5,
-                'colSpan' => 1,
-                'rowSpan' => 2,
-                'tall' => true,
-                'borderRadius' => 12,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'faces' => array(
-                    array('title' => '', 'icon' => 'fa-image', 'color' => '#111827'),
-                    array('title' => 'Photos', 'icon' => 'fa-images', 'color' => '#1e293b'),
-                    array('title' => 'Albums', 'icon' => 'fa-folder', 'color' => '#334155'),
-                    array('title' => 'Camera', 'icon' => 'fa-camera', 'color' => '#475569'),
-                ),
-            ),
-            array(
-                'id' => 'wifi',
-                'type' => 'link',
-                'gridArea' => 'wifi',
-                'title' => 'WIFI',
-                'label' => 'WIFI',
-                'icon' => 'fa-wifi',
-                'color' => '#0f172a',
+                'icon' => 'fa-signal',
+                'color' => '#6d28d9',
                 'textColor' => '#ffffff',
+                'iconColor' => '#ffffff',
                 'col' => 1,
-                'row' => 7,
-                'colSpan' => 1,
-                'rowSpan' => 1,
-                'borderRadius' => 12,
+                'row' => 4,
+                'colSpan' => 2,
+                'rowSpan' => 2,
+                'borderRadius' => 0,
                 'defaultFace' => 0,
                 'rotationDir' => 'ltr',
+                'orientation' => 'custom',
+                'sameFaceColor' => true,
                 'faces' => array(
-                    array('title' => 'WIFI', 'icon' => 'fa-wifi', 'color' => '#0f172a'),
-                    array('title' => 'Network', 'icon' => 'fa-signal', 'color' => '#1e293b'),
-                    array('title' => 'Devices', 'icon' => 'fa-broadcast-tower', 'color' => '#334155'),
-                    array('title' => 'Setup', 'icon' => 'fa-plus', 'color' => '#475569'),
+                    array('type' => 'stack', 'icon' => 'fa-signal', 'color' => '#6d28d9', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Signal', 'icon' => 'fa-wifi', 'color' => '#6d28d9', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Network', 'icon' => 'fa-broadcast-tower', 'color' => '#6d28d9', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Status', 'icon' => 'fa-chart-bar', 'color' => '#6d28d9', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
                 ),
             ),
             array(
@@ -915,48 +874,84 @@ class AppHomePageModel
                 'gridArea' => 'recipe',
                 'title' => 'Biryani',
                 'label' => 'Biryani',
-                'subtitle' => '',
+                'icon' => 'fa-cube',
                 'color' => '#78350f',
                 'textColor' => '#ffffff',
+                'iconColor' => '#ffffff',
                 'image' => $recipeImage,
-                'imageFit' => 'cover',
-                'imagePosition' => 'center',
-                'col' => 2,
-                'row' => 7,
+                'col' => 3,
+                'row' => 4,
                 'colSpan' => 1,
                 'rowSpan' => 1,
-                'borderRadius' => 12,
+                'borderRadius' => 0,
                 'defaultFace' => 0,
                 'rotationDir' => 'ltr',
+                'orientation' => 'square',
+                'sameFaceColor' => false,
+                'imageFit' => 'contain',
+                'imagePosition' => 'center',
+                'imageScale' => 100,
                 'faces' => array(
-                    array('title' => 'Biryani', 'image' => $recipeImage, 'color' => '#78350f'),
-                    array('title' => 'Ingredients', 'icon' => 'fa-list', 'color' => '#92400e'),
-                    array('title' => 'Steps', 'icon' => 'fa-clipboard-list', 'color' => '#a16207'),
-                    array('title' => 'Timer', 'icon' => 'fa-hourglass-half', 'color' => '#b45309'),
+                    array('type' => 'image', 'title' => 'Biryani', 'label' => 'Biryani', 'icon' => 'fa-cube', 'color' => '#78350f', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $recipeImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
+                    array('type' => 'image', 'title' => 'Ingredients', 'icon' => 'fa-list', 'color' => '#92400e', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $recipeIngredients, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
+                    array('type' => 'image', 'title' => 'Steps', 'icon' => 'fa-clipboard-list', 'color' => '#a16207', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $recipeSteps, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
+                    array('type' => 'image', 'title' => 'Timer', 'icon' => 'fa-hourglass-half', 'color' => '#b45309', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $recipeTimer, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
                 ),
             ),
             array(
-                'id' => 'gallery',
-                'type' => 'link',
-                'gridArea' => 'gallery',
-                'title' => 'Gallery',
-                'label' => 'Gallery',
-                'icon' => 'fa-image',
-                'color' => '#e5e7eb',
-                'textColor' => '#334155',
-                'iconColor' => '#334155',
+                'id' => 'wifi',
+                'type' => 'stack',
+                'gridArea' => 'wifi',
+                'title' => 'WIFI',
+                'label' => 'WIFI',
+                'icon' => 'fa-wifi',
+                'color' => '#0f172a',
+                'textColor' => '#ffffff',
+                'iconColor' => '#ffffff',
                 'col' => 3,
-                'row' => 7,
+                'row' => 5,
                 'colSpan' => 1,
                 'rowSpan' => 1,
                 'borderRadius' => 12,
                 'defaultFace' => 0,
                 'rotationDir' => 'ltr',
+                'orientation' => 'square',
+                'sameFaceColor' => false,
                 'faces' => array(
-                    array('title' => 'Gallery', 'icon' => 'fa-image', 'color' => '#e5e7eb', 'textColor' => '#334155', 'iconColor' => '#334155'),
-                    array('title' => 'Photos', 'icon' => 'fa-images', 'color' => '#cbd5e1', 'textColor' => '#1e293b'),
-                    array('title' => 'Albums', 'icon' => 'fa-folder', 'color' => '#94a3b8', 'textColor' => '#0f172a'),
-                    array('title' => 'Camera', 'icon' => 'fa-camera', 'color' => '#64748b', 'textColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'WIFI', 'label' => 'WIFI', 'icon' => 'fa-wifi', 'color' => '#0f172a', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Network', 'icon' => 'fa-signal', 'color' => '#1e293b', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Devices', 'icon' => 'fa-broadcast-tower', 'color' => '#334155', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Setup', 'icon' => 'fa-plus', 'color' => '#475569', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                ),
+            ),
+            array(
+                'id' => 'biryani-banner',
+                'type' => 'mixed',
+                'gridArea' => 'biryani-banner',
+                'title' => 'Biryani',
+                'label' => 'Biryani',
+                'icon' => 'fa-cube',
+                'color' => '#ffa238',
+                'textColor' => '#ffffff',
+                'iconColor' => '#ffffff',
+                'image' => $bannerImage,
+                'col' => 1,
+                'row' => 6,
+                'colSpan' => 3,
+                'rowSpan' => 2,
+                'borderRadius' => 0,
+                'defaultFace' => 0,
+                'rotationDir' => 'ltr',
+                'orientation' => 'custom',
+                'sameFaceColor' => false,
+                'imageFit' => 'contain',
+                'imagePosition' => 'center',
+                'imageScale' => 100,
+                'faces' => array(
+                    array('type' => 'image', 'title' => 'Biryani', 'label' => 'Biryani', 'icon' => 'fa-cube', 'color' => '#ffa238', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $bannerImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
+                    array('type' => 'image', 'title' => 'Ingredients', 'label' => 'Ingredients', 'icon' => 'fa-list', 'color' => '#ea8c53', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $ingredientsImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
+                    array('type' => 'image', 'title' => 'Steps', 'label' => 'Steps', 'icon' => 'fa-clipboard-list', 'color' => '#a16207', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $stepsImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
+                    array('type' => 'image', 'title' => 'Timer', 'label' => 'Timer', 'icon' => 'fa-hourglass-half', 'color' => '#b45309', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $timerImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 154),
                 ),
             ),
         );
@@ -1059,7 +1054,64 @@ class AppHomePageModel
             return array();
         }
 
-        return $this->normalizeSmartphoneBreakpoints($data);
+        return $this->attachGridDataSource($this->normalizeSmartphoneBreakpoints($data), $userId);
+    }
+
+    /**
+     * Home schema only stores a Grid stub. The app loads the real page from
+     * get_grid. Without this data source it keeps the last disk-cached Grid
+     * schema (old scanner action, old QR).
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    public function attachGridDataSource(array $schema, int $userId): array
+    {
+        if ($userId < 1) {
+            return $schema;
+        }
+
+        $endpoint = $this->getPublicGridApiBaseUrl();
+        $endpoint = rtrim($endpoint, '/');
+        if (stripos($endpoint, 'action=get_grid') === false) {
+            $endpoint .= (strpos($endpoint, '?') === false ? '?' : '&') . 'action=get_grid';
+        }
+
+        if (!isset($schema['dataSources']) || !is_array($schema['dataSources'])) {
+            $schema['dataSources'] = array();
+        }
+
+        $schema['dataSources']['grid'] = array(
+            'type' => 'rest',
+            'endpoint' => $endpoint,
+            'method' => 'GET',
+            'queryParameters' => array(
+                'user_id' => $userId,
+                'schema_rev' => 'scanner-qr-5',
+            ),
+            'headers' => array('Accept' => 'application/json'),
+            'responseMapping' => array(
+                'schema' => '$.schema',
+                'page' => '$.schema.page',
+                'components' => '$.schema.components',
+                'actions' => '$.schema.actions',
+                'iconRegistry' => '$.schema.iconRegistry',
+                'content' => '$.content',
+                'stats' => '$.content.stats',
+            ),
+            'cachePolicy' => 'network-first',
+            'cacheTtlSec' => 60,
+            'timeoutMs' => 30000,
+            'published' => true,
+            'errorPolicy' => array(
+                'useCachedData' => true,
+                'componentId' => 'grid-error',
+                'clearHostSession' => false,
+                'navigateToLogin' => false,
+            ),
+        );
+
+        return $schema;
     }
 
     /**
@@ -1112,10 +1164,22 @@ class AppHomePageModel
                 $userEmail = $profile['email'] ?? '';
             }
 
-            $headerBefore = json_encode($layout['header'] ?? null, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $headerBefore = json_encode(array(
+                'header' => $layout['header'] ?? null,
+                'homeTemplate' => $layout['homeTemplate'] ?? null,
+                'cardBorderRadius' => $layout['theme']['cardBorderRadius'] ?? null,
+                'showWelcome' => $layout['theme']['showWelcome'] ?? null,
+                'themeHomeTemplate' => $layout['theme']['homeTemplate'] ?? null,
+            ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $layout = $this->applyUserProfileToLayout($layout, $userId);
             $layout = $this->sanitizeLayoutForSchema($layout);
-            $headerAfter = json_encode($layout['header'] ?? null, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $headerAfter = json_encode(array(
+                'header' => $layout['header'] ?? null,
+                'homeTemplate' => $layout['homeTemplate'] ?? null,
+                'cardBorderRadius' => $layout['theme']['cardBorderRadius'] ?? null,
+                'showWelcome' => $layout['theme']['showWelcome'] ?? null,
+                'themeHomeTemplate' => $layout['theme']['homeTemplate'] ?? null,
+            ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             if ($headerBefore !== $headerAfter) {
                 $persistLayout = json_decode(json_encode($layout), true);
                 if (!is_array($persistLayout)) {
@@ -1506,10 +1570,81 @@ class AppHomePageModel
                 }
                 $used[$area] = true;
                 $layout['cards'][$i]['gridArea'] = $area;
+                if (array_key_exists('borderRadius', $card)) {
+                    $layout['cards'][$i]['borderRadius'] = $this->publishedCardRadius($card['borderRadius']);
+                }
             }
         }
 
+        $layout = $this->calibratePublishedHomeCanvas($layout);
+
         return self::applySharedBottomNav($layout);
+    }
+
+    /**
+     * Mobile columns are about 105px wide. A stored radius of 20 or 24
+     * draws a pill, while the studio canvas looks like 14–16.
+     */
+    private function publishedCardRadius($value): int
+    {
+        if ($value === null || $value === '') {
+            return 16;
+        }
+        $radius = (int) $value;
+        if ($radius < 0) {
+            return 16;
+        }
+        if ($radius === 0) {
+            return 0;
+        }
+        if ($radius > 16) {
+            return 16;
+        }
+
+        return $radius;
+    }
+
+    private function themeIsDarkCanvas(array $theme): bool
+    {
+        if (strtolower(trim((string) ($theme['bgStyle'] ?? ''))) === 'dark') {
+            return true;
+        }
+        $bg = strtolower(trim((string) ($theme['phoneBg'] ?? '')));
+
+        return in_array($bg, array('#0b0f1a', '#0b1220', '#111827', '#151b2e', '#000000'), true);
+    }
+
+    /**
+     * The studio live canvas is the dark bento. A leftover light kit id
+     * (QuickMart / Market) makes the app ignore that canvas.
+     *
+     * @param array<string, mixed> $layout
+     * @return array<string, mixed>
+     */
+    private function calibratePublishedHomeCanvas(array $layout): array
+    {
+        if (!isset($layout['theme']) || !is_array($layout['theme'])) {
+            $layout['theme'] = array();
+        }
+        $theme = $layout['theme'];
+        $staticUi = trim((string) ($layout['staticUiTemplate'] ?? ($theme['staticUiTemplate'] ?? '')));
+        $kit = strtolower(trim((string) ($theme['homeTemplate'] ?? ($layout['homeTemplate'] ?? ''))));
+        $lightKits = array('efactor-quickmart', 'efactor-market', 'efactor-deals', 'efactor-shop', 'efactor-style');
+        if ($staticUi === '' && $this->themeIsDarkCanvas($theme) && in_array($kit, $lightKits, true)) {
+            $layout['homeTemplate'] = 'default';
+            $theme['homeTemplate'] = 'default';
+            $theme['showWelcome'] = true;
+        }
+        if ($staticUi === '' && !array_key_exists('showWelcome', $theme)) {
+            $theme['showWelcome'] = true;
+        }
+        $theme['cardBorderRadius'] = $this->publishedCardRadius($theme['cardBorderRadius'] ?? 16);
+        $layout['theme'] = $theme;
+        if ($staticUi === '') {
+            $layout['homeTemplate'] = (string) ($theme['homeTemplate'] ?? ($layout['homeTemplate'] ?? 'default'));
+        }
+
+        return $layout;
     }
 
     public function saveSchema(int $userId, array $schema): bool

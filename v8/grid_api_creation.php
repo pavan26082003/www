@@ -207,17 +207,22 @@ $schema = \App\Libraries\GridSduiSchemaBuilder::build(array(
     'ssoToken' => $ssoToken,
 ));
 
+$schemaJson = json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 grid_api_json(array(
     'success' => true,
     'user_id' => $userId > 0 ? $userId : null,
     'pageId' => 'grid',
     'routeId' => 'grid',
     'schema_version' => $schema['schemaVersion'] ?? '3.0.0',
+    'updated_at' => gmdate('c'),
+    'contentHash' => is_string($schemaJson) ? hash('sha256', $schemaJson) : '',
     'gridApiUrl' => $endpoint,
     'content' => $schema['content'] ?? null,
     'schema' => $schema,
     'page' => isset($schema['page']) && is_array($schema['page']) ? $schema['page'] : null,
     'components' => isset($schema['components']) && is_array($schema['components']) ? $schema['components'] : null,
+    'actions' => isset($schema['actions']) && is_array($schema['actions']) ? $schema['actions'] : null,
+    'iconRegistry' => isset($schema['iconRegistry']) && is_array($schema['iconRegistry']) ? $schema['iconRegistry'] : null,
     'designTokens' => isset($schema['designTokens']) && is_array($schema['designTokens']) ? $schema['designTokens'] : null,
     'theme' => isset($schema['theme']) && is_array($schema['theme']) ? $schema['theme'] : null,
     'typography' => isset($schema['typography']) && is_array($schema['typography']) ? $schema['typography'] : null,

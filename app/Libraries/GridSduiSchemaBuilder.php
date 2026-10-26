@@ -50,30 +50,265 @@ class GridSduiSchemaBuilder
 
     /**
      * Scan destination for one profile. Same shareQr fields; only the URL value changes.
-     * Professional opens that person's profile and sends a connection request.
-     * Circle opens a direct chat with that person.
+     * Professional: /grid/connect?mode=professional&grid_id={their grid id}&user_id={their user id}
+     * Circle: /grid-chat/connect?mode=circle&grid_id={their grid id}
+     * Ids come from the signed-in account. Example ids are never written in.
      */
-    private static function connectUrl(string $mode, int $userId): string
+    private static function connectUrl(string $mode, int $userId, string $gridId = ''): string
     {
         $mode = $mode === 'circle' ? 'circle' : 'professional';
+        $gridId = trim($gridId);
+        $path = $mode === 'circle' ? 'grid-chat/connect' : 'grid/connect';
         $base = class_exists(GridWebSso::class)
-            ? GridWebSso::publicWebUrl('grid/connect')
-            : 'https://efactor.tech/index.php/grid/connect';
+            ? GridWebSso::publicWebUrl($path)
+            : 'https://efactor.tech/index.php/' . $path;
         $query = 'mode=' . rawurlencode($mode);
-        if ($userId > 0) {
+        if ($gridId !== '') {
+            $query .= '&grid_id=' . rawurlencode($gridId);
+        }
+        if ($mode === 'professional' && $userId > 0) {
             $query .= '&user_id=' . $userId;
         }
         return $base . '?' . $query;
     }
 
-    private static function fillShareQrImages(array $shareQr, int $userId = 0): array
+    /**
+     * Public grid id for this account. Reads users.grid_id, then grid_profiles.
+     * If the account has none yet, stores one new id on that user row.
+     */
+    private static function resolveGridId(int $userId): string
+    {
+        if ($userId <= 0) {
+            return '';
+        }
+        $gridId = self::resolveGridIdFromCi($userId);
+        if ($gridId === '') {
+            $gridId = self::resolveGridIdFromMysqli($userId);
+        }
+        if ($gridId === '') {
+            $gridId = self::assignGridId($userId);
+        }
+        return $gridId;
+    }
+
+    private static function resolveGridIdFromCi(int $userId): string
+    {
+        if (!class_exists(\Config\Database::class)) {
+            return '';
+        }
+        foreach (array('default', 'grid') as $group) {
+            try {
+                $db = \Config\Database::connect($group, false);
+            } catch (\Throwable $e) {
+                continue;
+            }
+            $gridId = self::readGridIdFromConnection($db, $userId);
+            if ($gridId !== '') {
+                return $gridId;
+            }
+        }
+        return '';
+    }
+
+    private static function readGridIdFromConnection($db, int $userId): string
+    {
+        try {
+            $tables = array('users');
+            try {
+                $prefixed = (string) $db->prefixTable('users');
+                if ($prefixed !== '' && $prefixed !== 'users') {
+                    array_unshift($tables, $prefixed);
+                }
+            } catch (\Throwable $e) {
+            }
+            foreach ($tables as $table) {
+                if (!$db->tableExists($table) || !$db->fieldExists('grid_id', $table)) {
+                    continue;
+                }
+                $row = $db->table($table)->select('grid_id')->where('id', $userId)->get()->getRowArray();
+                $gridId = trim((string) ($row['grid_id'] ?? ''));
+                if ($gridId !== '') {
+                    return $gridId;
+                }
+            }
+            if ($db->tableExists('grid_profiles') && $db->fieldExists('grid_id', 'grid_profiles')) {
+                $row = $db->table('grid_profiles')->select('grid_id')->where('user_id', $userId)->get()->getRowArray();
+                return trim((string) ($row['grid_id'] ?? ''));
+            }
+        } catch (\Throwable $e) {
+            return '';
+        }
+        return '';
+    }
+
+    private static function assignGridId(int $userId): string
+    {
+        $gridId = self::assignGridIdFromCi($userId);
+        if ($gridId !== '') {
+            return $gridId;
+        }
+        return self::assignGridIdFromMysqli($userId);
+    }
+
+    private static function assignGridIdFromCi(int $userId): string
+    {
+        if (!class_exists(\Config\Database::class)) {
+            return '';
+        }
+        try {
+            $db = \Config\Database::connect('default');
+            if (!$db->tableExists('users')) {
+                return '';
+            }
+            if (!$db->fieldExists('grid_id', 'users')) {
+                $db->query('ALTER TABLE `users` ADD COLUMN `grid_id` VARCHAR(48) NULL');
+            }
+            $row = $db->query('SELECT grid_id FROM users WHERE id = ? LIMIT 1', array($userId))->getRowArray();
+            $existing = trim((string) ($row['grid_id'] ?? ''));
+            if ($existing !== '') {
+                return $existing;
+            }
+            for ($attempt = 0; $attempt < 5; $attempt++) {
+                $candidate = strtoupper(bin2hex(random_bytes(10)));
+                $taken = $db->query('SELECT id FROM users WHERE grid_id = ? LIMIT 1', array($candidate))->getRowArray();
+                if ($taken) {
+                    continue;
+                }
+                $db->query(
+                    "UPDATE users SET grid_id = ? WHERE id = ? AND (grid_id IS NULL OR grid_id = '')",
+                    array($candidate, $userId)
+                );
+                $saved = $db->query('SELECT grid_id FROM users WHERE id = ? LIMIT 1', array($userId))->getRowArray();
+                $gridId = trim((string) ($saved['grid_id'] ?? ''));
+                if ($gridId !== '') {
+                    return $gridId;
+                }
+            }
+        } catch (\Throwable $e) {
+            return '';
+        }
+        return '';
+    }
+
+    private static function resolveGridIdFromMysqli(int $userId): string
+    {
+        $db = self::openMysqli();
+        if (!$db) {
+            return '';
+        }
+        $gridId = '';
+        if (self::mysqliHasColumn($db, 'users', 'grid_id')) {
+            $gridId = self::mysqliGridId($db, 'SELECT grid_id FROM users WHERE id = ? LIMIT 1', $userId);
+        }
+        if ($gridId === '' && self::mysqliHasColumn($db, 'grid_profiles', 'grid_id')) {
+            $gridId = self::mysqliGridId($db, 'SELECT grid_id FROM grid_profiles WHERE user_id = ? LIMIT 1', $userId);
+        }
+        $db->close();
+        return $gridId;
+    }
+
+    private static function assignGridIdFromMysqli(int $userId): string
+    {
+        $db = self::openMysqli();
+        if (!$db) {
+            return '';
+        }
+        if (!self::mysqliHasColumn($db, 'users', 'grid_id')) {
+            $db->query('ALTER TABLE `users` ADD COLUMN `grid_id` VARCHAR(48) NULL');
+        }
+        if (!self::mysqliHasColumn($db, 'users', 'grid_id')) {
+            $db->close();
+            return '';
+        }
+        $existing = self::mysqliGridId($db, 'SELECT grid_id FROM users WHERE id = ? LIMIT 1', $userId);
+        if ($existing !== '') {
+            $db->close();
+            return $existing;
+        }
+        $gridId = '';
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $candidate = strtoupper(bin2hex(random_bytes(10)));
+            $taken = self::mysqliGridId($db, 'SELECT grid_id FROM users WHERE grid_id = ? LIMIT 1', 0, $candidate);
+            if ($taken !== '') {
+                continue;
+            }
+            $stmt = $db->prepare("UPDATE users SET grid_id = ? WHERE id = ? AND (grid_id IS NULL OR grid_id = '')");
+            if (!$stmt) {
+                break;
+            }
+            $stmt->bind_param('si', $candidate, $userId);
+            $stmt->execute();
+            $stmt->close();
+            $gridId = self::mysqliGridId($db, 'SELECT grid_id FROM users WHERE id = ? LIMIT 1', $userId);
+            if ($gridId !== '') {
+                break;
+            }
+        }
+        $db->close();
+        return $gridId;
+    }
+
+    private static function openMysqli(): ?\mysqli
+    {
+        if (!defined('DB_HOST') || !defined('DB_USER') || !defined('DB_NAME')) {
+            return null;
+        }
+        $db = @new \mysqli(
+            (string) DB_HOST,
+            (string) DB_USER,
+            defined('DB_PASS') ? (string) DB_PASS : '',
+            (string) DB_NAME
+        );
+        if ($db->connect_errno) {
+            return null;
+        }
+        $db->set_charset('utf8mb4');
+        return $db;
+    }
+
+    private static function mysqliHasColumn(\mysqli $db, string $table, string $column): bool
+    {
+        $table = str_replace('`', '', $table);
+        $column = $db->real_escape_string(str_replace('`', '', $column));
+        $result = $db->query("SHOW COLUMNS FROM `{$table}` LIKE '{$column}'");
+        if (!$result) {
+            return false;
+        }
+        $ok = $result->num_rows > 0;
+        $result->free();
+        return $ok;
+    }
+
+    private static function mysqliGridId(\mysqli $db, string $sql, int $userId, string $gridId = ''): string
+    {
+        $stmt = $db->prepare($sql);
+        if (!$stmt) {
+            return '';
+        }
+        if ($gridId !== '') {
+            $stmt->bind_param('s', $gridId);
+        } else {
+            $stmt->bind_param('i', $userId);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+        if (!is_array($row)) {
+            return '';
+        }
+        return trim((string) ($row['grid_id'] ?? ''));
+    }
+
+    private static function fillShareQrImages(array $shareQr, int $userId = 0, string $gridId = ''): array
     {
         $selectedMode = (string) ($shareQr['selectedMode'] ?? 'professional');
         if ($selectedMode !== 'circle') {
             $selectedMode = 'professional';
         }
+        $gridId = trim($gridId);
         $shareQr['selectedMode'] = $selectedMode;
-        $shareQr['qrPayload'] = self::connectUrl($selectedMode, $userId);
+        $shareQr['qrPayload'] = self::connectUrl($selectedMode, $userId, $gridId);
         $shareQr['qrImageUrlTemplate'] = self::qrImageUrlTemplate();
         $modes = is_array($shareQr['modes'] ?? null) ? $shareQr['modes'] : array();
         $byMode = array();
@@ -85,13 +320,16 @@ class GridSduiSchemaBuilder
             if ($modeId !== 'professional' && $modeId !== 'circle') {
                 continue;
             }
-            $byMode[$modeId] = self::qrImageUrl(self::connectUrl($modeId, $userId), $modeId);
+            $byMode[$modeId] = self::qrImageUrl(self::connectUrl($modeId, $userId, $gridId), $modeId);
         }
         if ($byMode === array()) {
             $byMode[$selectedMode] = self::qrImageUrl($shareQr['qrPayload'], $selectedMode);
         }
         $shareQr['qrImageUrlsByMode'] = $byMode;
         $shareQr['qrImageUrl'] = $byMode[$selectedMode] ?? self::qrImageUrl($shareQr['qrPayload'], $selectedMode);
+        // Null, not omitted. The app draws the QR share button when this key is missing.
+        $shareQr['shareActionId'] = null;
+        unset($shareQr['showShareButton'], $shareQr['actionId']);
         return $shareQr;
     }
 
@@ -181,7 +419,7 @@ class GridSduiSchemaBuilder
                 'title' => 'Grid',
                 'subtitle' => 'Your professional network space',
                 'logoUrl' => self::GRID_LOGO_URL,
-                'searchIconToken' => 'search',
+                'searchIconToken' => 'scanner',
                 'avatarInitial' => 'S',
                 'avatarColor' => '#7c3aed',
             ),
@@ -385,14 +623,13 @@ class GridSduiSchemaBuilder
         return $card;
     }
 
-    public static function buildComponents(array $content, int $userId = 0): array
+    public static function buildComponents(array $content, int $userId = 0, string $gridId = ''): array
     {
         $header = is_array($content['header'] ?? null) ? $content['header'] : array();
         $exploring = is_array($content['exploring'] ?? null) ? $content['exploring'] : array();
         $quote = is_array($content['quote'] ?? null) ? $content['quote'] : array();
         $shareQr = is_array($content['shareQr'] ?? null) ? $content['shareQr'] : array();
         $featureCards = is_array($content['featureCards'] ?? null) ? $content['featureCards'] : array();
-        $stats = is_array($content['stats'] ?? null) ? $content['stats'] : array();
         $exploreItems = is_array($exploring['items'] ?? null) ? $exploring['items'] : array();
         $logoUrl = (string) ($header['logoUrl'] ?? $content['logoUrl'] ?? self::GRID_LOGO_URL);
 
@@ -509,28 +746,6 @@ class GridSduiSchemaBuilder
             );
         }
 
-        $statItems = array();
-        foreach ($stats as $stat) {
-            if (!is_array($stat)) {
-                continue;
-            }
-            $statId = (string) ($stat['id'] ?? '');
-            $statItems[] = array(
-                'id' => $statId !== '' ? $statId : null,
-                'label' => (string) ($stat['label'] ?? ''),
-                'value' => $stat['value'] ?? 0,
-                'colorToken' => 'colors.textPrimary',
-                'appearance' => array(
-                    'borderRadius' => 22,
-                    'backgroundColor' => '#ffffff',
-                    'valueFontSize' => 22,
-                    'labelFontSize' => 12,
-                    'paddingVertical' => 12,
-                    'paddingHorizontal' => 12,
-                ),
-            );
-        }
-
         $components['grid-page'] = array(
             'id' => 'grid-page',
             'type' => 'scrollPage',
@@ -558,7 +773,6 @@ class GridSduiSchemaBuilder
             'children' => array(
                 'grid-page-header',
                 'grid-feature-row',
-                'grid-stats-row',
                 'grid-share-qr',
                 'grid-explore-section',
                 'grid-quote-block',
@@ -619,9 +833,9 @@ class GridSduiSchemaBuilder
             ),
             'actions' => array(
                 array(
-                    'id' => 'grid-header-search',
-                    'iconToken' => (string) ($header['searchIconToken'] ?? 'search'),
-                    'actionId' => 'grid-open-search',
+                    'id' => 'grid-header-scanner',
+                    'iconToken' => 'scanner',
+                    'actionId' => 'grid-open-scanner',
                     'layout' => array(
                         'width' => 40,
                         'height' => 40,
@@ -714,42 +928,13 @@ class GridSduiSchemaBuilder
             'children' => $featureChildIds,
         );
 
-        $components['grid-stats-row'] = array(
-            'id' => 'grid-stats-row',
-            'type' => 'statusSummary',
-            'layout' => array(
-                'columns' => 3,
-                'gap' => 8,
-                'width' => 'fill',
-                'maxWidth' => '100%',
-                'minWidth' => 0,
-                'overflowX' => 'hidden',
-                'responsive' => array(
-                    'compact' => array('columns' => 3, 'gap' => 6, 'rowHeight' => 72, 'minRowHeight' => 64),
-                    'narrow' => array('columns' => 3, 'gap' => 6, 'rowHeight' => 56, 'minRowHeight' => 56),
-                    'regular' => array('columns' => 3, 'gap' => 8, 'rowHeight' => 72, 'minRowHeight' => 64),
-                    'medium' => array('columns' => 3, 'gap' => 8, 'rowHeight' => 72, 'minRowHeight' => 64),
-                    'expanded' => array('columns' => 3, 'gap' => 12, 'rowHeight' => 80, 'minRowHeight' => 64),
-                ),
-            ),
-            'appearance' => array(
-                'backgroundColor' => '#ffffff',
-                'borderRadius' => 22,
-                'valueFontSize' => 20,
-                'labelFontSize' => 11,
-                'paddingVertical' => 12,
-                'paddingHorizontal' => 8,
-                'labelMaxLines' => 2,
-                'labelOverflow' => 'ellipsis',
-                'minWidth' => 0,
-                'width' => 'fill',
-            ),
-            'items' => $statItems,
-        );
-
-        $shareQr = self::fillShareQrImages($shareQr, $userId);
+        $gridId = trim($gridId);
+        if ($gridId === '') {
+            $gridId = self::resolveGridId($userId);
+        }
+        $shareQr = self::fillShareQrImages($shareQr, $userId, $gridId);
         $selectedMode = (string) ($shareQr['selectedMode'] ?? 'professional');
-        $qrPayload = (string) ($shareQr['qrPayload'] ?? self::connectUrl($selectedMode, $userId));
+        $qrPayload = (string) ($shareQr['qrPayload'] ?? self::connectUrl($selectedMode, $userId, $gridId));
         $qrImageUrl = (string) ($shareQr['qrImageUrl'] ?? '');
         $qrImageUrlTemplate = (string) ($shareQr['qrImageUrlTemplate'] ?? self::qrImageUrlTemplate());
         $qrImageUrlsByMode = is_array($shareQr['qrImageUrlsByMode'] ?? null) ? $shareQr['qrImageUrlsByMode'] : array();
@@ -782,8 +967,7 @@ class GridSduiSchemaBuilder
             'qrImageUrl' => $qrImageUrl,
             'qrImageUrlTemplate' => $qrImageUrlTemplate,
             'qrImageUrlsByMode' => $qrImageUrlsByMode,
-            'shareActionId' => (string) ($shareQr['shareActionId'] ?? 'grid-share-qr'),
-            'actionId' => (string) ($shareQr['shareActionId'] ?? 'grid-share-qr'),
+            'shareActionId' => null,
             'layout' => array(
                 'direction' => 'horizontal',
                 'gap' => 12,
@@ -871,6 +1055,51 @@ class GridSduiSchemaBuilder
         );
 
         return $components;
+    }
+
+    /**
+     * Camera page. Grid only accepts open-url / host-action / navigate.
+     * type "native" is rejected by the app ("Unsupported Grid action type").
+     */
+    private static function scanPageUrl(): string
+    {
+        return rtrim(self::publicOrigin(), '/') . '/v8/grid_scan.php';
+    }
+
+    private static function scanPageUrlWithSso(string $ssoToken): string
+    {
+        $url = self::scanPageUrl();
+        $ssoToken = trim($ssoToken);
+        if ($ssoToken !== '' && class_exists(GridWebSso::class)) {
+            return GridWebSso::appendToken($url, $ssoToken);
+        }
+        return $url;
+    }
+
+    private static function scannerAction(array $webView, string $scanUrl): array
+    {
+        $webView['showAppBar'] = true;
+        $webView['showToolbar'] = true;
+        $webView['hideAppBar'] = false;
+        $webView['displayMode'] = 'standard';
+        return array(
+            'type' => 'open-url',
+            'url' => $scanUrl,
+            'route' => $scanUrl,
+            'title' => 'Scan QR',
+            'openIn' => 'inAppWebView',
+            'webView' => $webView,
+            'destination' => array(
+                'url' => $scanUrl,
+                'openIn' => 'inAppWebView',
+                'title' => 'Scan QR',
+                'sharedCookies' => true,
+                'showAppBar' => true,
+                'showToolbar' => true,
+                'hideAppBar' => false,
+                'webView' => $webView,
+            ),
+        );
     }
 
     public static function buildActions(array $content = array()): array
@@ -997,13 +1226,12 @@ class GridSduiSchemaBuilder
                     array('type' => 'set-state', 'path' => 'refreshing', 'value' => false),
                 ),
             ),
-            'grid-open-search' => array('type' => 'host-action', 'actionId' => 'open-grid-search'),
+            'grid-open-scanner' => self::scannerAction($hiddenWebView, self::scanPageUrlWithSso($ssoToken)),
             'grid-open-professional-space' => $proAction,
             'grid-open-circle-connect' => $circleAction,
             'grid-open-find-talent' => array('type' => 'host-action', 'actionId' => 'open-grid-find-talent'),
             'grid-open-join-circles' => array('type' => 'host-action', 'actionId' => 'open-grid-join-circles'),
             'grid-see-all-exploring' => array('type' => 'host-action', 'actionId' => 'open-grid-exploring-all'),
-            'grid-share-qr' => array('type' => 'host-action', 'actionId' => 'share-grid-qr'),
             'grid-select-qr-mode' => array('type' => 'host-action', 'actionId' => 'select-grid-qr-mode'),
         );
     }
@@ -1064,6 +1292,12 @@ class GridSduiSchemaBuilder
             'border-all' => 'grid',
             'search' => 'search',
             'magnifying-glass' => 'search',
+            'qrcode' => 'scanner',
+            'qr-code' => 'scanner',
+            'qr_code' => 'scanner',
+            'scan' => 'scanner',
+            'scanner' => 'scanner',
+            'qr-code-scanner' => 'scanner',
             'quote' => 'quote',
             'quote-left' => 'quote',
             'chevron-right' => 'chevron-right',
@@ -1073,7 +1307,7 @@ class GridSduiSchemaBuilder
         if (isset($map[$token])) {
             return $map[$token];
         }
-        $known = array('grid', 'search', 'user', 'users', 'quote', 'chevron-right', 'profile');
+        $known = array('grid', 'search', 'qrcode', 'scanner', 'user', 'users', 'quote', 'chevron-right', 'profile');
         return in_array($token, $known, true) ? $token : (string) $fallback;
     }
 
@@ -1082,6 +1316,7 @@ class GridSduiSchemaBuilder
         return array(
             'grid' => array('flutter' => 'borderAll', 'web' => 'border-all'),
             'search' => array('flutter' => 'magnifyingGlass', 'web' => 'magnifying-glass'),
+            'scanner' => array('flutter' => 'camera', 'web' => 'camera'),
             'user' => array('flutter' => 'user', 'web' => 'user'),
             'users' => array('flutter' => 'users', 'web' => 'users'),
             'quote' => array('flutter' => 'quoteLeft', 'web' => 'quote-left'),
@@ -1096,10 +1331,19 @@ class GridSduiSchemaBuilder
     public static function build(array $options = array()): array
     {
         $userId = max(0, (int) ($options['userId'] ?? 0));
+        $gridId = trim((string) ($options['gridId'] ?? ''));
+        if ($gridId === '') {
+            $gridId = self::resolveGridId($userId);
+        }
         $content = self::mergeContent(isset($options['content']) && is_array($options['content']) ? $options['content'] : null);
+        if (!isset($content['header']) || !is_array($content['header'])) {
+            $content['header'] = array();
+        }
+        $content['header']['searchIconToken'] = 'scanner';
         $content['shareQr'] = self::fillShareQrImages(
             is_array($content['shareQr'] ?? null) ? $content['shareQr'] : array(),
-            $userId
+            $userId,
+            $gridId
         );
         if (class_exists(GridWebSso::class)) {
             $content = GridWebSso::prepareContentForClient(
@@ -1112,7 +1356,7 @@ class GridSduiSchemaBuilder
             $endpoint = 'grid_api_creation.php';
         }
 
-        $components = self::buildComponents($content, $userId);
+        $components = self::buildComponents($content, $userId, $gridId);
 
         return array(
             'schemaType' => 'server-driven-mobile-app',

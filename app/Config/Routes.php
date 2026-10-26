@@ -998,14 +998,20 @@ $gridRoutesFile = APPPATH . 'Config/GRID_Config/Routes.php';
 if (is_file($gridRoutesFile)) {
     require $gridRoutesFile;
 }
+// Scanned professional QR. Same shell as /grid; the page reads user_id and grid_id.
+$routes->get('grid/connect', 'GRID_Controllers\GridController::index');
 
 
 // Mobile push contract. Session cookie or Bearer token, no CSRF.
 $routes->post('api/register_device_token', 'DevicePushController::registerDeviceToken');
+$routes->post('grid-chat/api/push/native-token', 'DevicePushController::registerDeviceToken');
+$routes->post('grid_chat/api/push/native-token', 'DevicePushController::registerDeviceToken');
 $routes->post('api/call_action', 'DevicePushController::callAction');
 $routes->post('api/call/decline', 'DevicePushController::declineCall');
 $routes->post('grid-chat/api/call/decline', 'DevicePushController::declineCall');
 $routes->post('grid_chat/api/call/decline', 'DevicePushController::declineCall');
+$routes->post('grid-chat/api/call/notify', 'DevicePushController::notifyCall');
+$routes->post('grid_chat/api/call/notify', 'DevicePushController::notifyCall');
 
 // -----------------------------------------------------------------------------
 // GRID CHAT Module (Config: Config/GRID_CHAT_CONFIG/Routes.php | Controller: Controllers/GRID_CHAT_CONTROLLERS)
