@@ -1295,6 +1295,10 @@ try {
     if ($action === 'get_iot_devices') {
         try {
             $devices = iot_devices_with_live_status($db, $token);
+            if (!is_array($devices)) {
+                $devices = array();
+            }
+            $devices = array_values($devices);
             $stats = iot_device_stats($devices);
             $resolvedUserId = iot_user_id_for_token($db, $token);
             $nodeIds = array();
@@ -1330,7 +1334,15 @@ try {
                 'devices' => $devices,
             ));
         } catch (Throwable $devicesError) {
-            iot_api_error($devicesError);
+            error_log('IoT API error: ' . $devicesError->getMessage() . ' @ ' . $devicesError->getFile() . ':' . $devicesError->getLine());
+            iot_json(array(
+                'success' => false,
+                'message' => 'IoT API error.',
+                'total' => 0,
+                'online' => 0,
+                'offline' => 0,
+                'devices' => array(),
+            ), 500);
         }
     }
 

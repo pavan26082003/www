@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Models\Items_model;
+use App\Models\Modal_api_model;
 
 //use WebSocket\Client;
 
@@ -1842,6 +1843,26 @@ public function savebrand_edit()
 
 
 
+private function modalApiModel()
+{
+    if (empty($this->Modal_api_model)) {
+        $class = '\\App\\Models\\Modal_api_model';
+        if (!class_exists($class, false)) {
+            foreach (array('Modal_api_model.php', 'modal_api_model.php') as $fileName) {
+                $modelFile = APPPATH . 'Models/' . $fileName;
+                if (is_file($modelFile)) {
+                    require_once $modelFile;
+                    break;
+                }
+            }
+        }
+
+        $this->Modal_api_model = new $class();
+    }
+
+    return $this->Modal_api_model;
+}
+
 public function modal_api($itemid = 0)
 {
     $user_id = session()->get('user_id') ?? ($this->login_user->id ?? null);
@@ -1860,41 +1881,31 @@ public function modal_api($itemid = 0)
     $view_data['edit_config_id'] = $edit_config_id;
     $view_data['edit_config_data'] = null;
 
-    $api_details_result = $this->Items_model->default_form_values($itemid, $user_id);
+    $api_details_row = $this->modalApiModel()->getProductMetaRow($itemid, $user_id);
 
-    if ($api_details_result) {
-        $api_details_row = $api_details_result->getRow();
-
-        if ($api_details_row) {
-            $view_data['brand'] = $api_details_row->brand;
-            $view_data['category'] = $api_details_row->category;
-            $view_data['model_name'] = $api_details_row->modelname;
-            $view_data['modelno'] = $api_details_row->modelno;
-            $view_data['version'] = $api_details_row->version ?? 'N/A';
-            $view_data['batch'] = $api_details_row->batch ?? 'N/A';
-
-            // ✅ Extract default API parameter names using model number
-            $paramNames = $this->Items_model->extract_api_default_names($user_id, $api_details_row->modelno);
-         $paramNames = $this->Items_model->extract_api_default_names($user_id, $api_details_row->modelname);
-            $view_data['paramNames'] = $paramNames;
-               //  print_r($view_data);
-
-          //echo $paramNames;
-
-        } else {
-            echo "API details row not found.";
-            return;
-        }
-    } else {
-        echo "API details result not found.";
+    if (!$api_details_row) {
+        echo "API details row not found.";
         return;
     }
+
+    $view_data['brand'] = $api_details_row->brand;
+    $view_data['category'] = $api_details_row->category;
+    $view_data['model_name'] = $api_details_row->modelname;
+    $view_data['modelno'] = $api_details_row->modelno;
+    $view_data['version'] = $api_details_row->version ?? 'N/A';
+    $view_data['batch'] = $api_details_row->batch ?? 'N/A';
+    $view_data['brand_image'] = $api_details_row->brand_image ?? '';
+    $view_data['product_image'] = $api_details_row->product_image ?? '';
+    $view_data['existing_parameter_names'] = $this->modalApiModel()
+        ->getCommandGetStatusResponseParameterNames($itemid, $user_id);
+    $view_data['paramNames'] = $this->modalApiModel()
+        ->extract_api_default_names($user_id, $api_details_row->modelname);
 
     $view_data['id'] = $this->request->getPost('id');
     $view_data['categories_dropdown'] = $this->Items_model->get_cats($user_id)->getResult();
 
     if ($edit_config_id > 0) {
-        $editConfig = $this->Items_model->getApiTreeConfigForEdit($edit_config_id, $user_id);
+        $editConfig = $this->modalApiModel()->getApiTreeConfigForEdit($edit_config_id, $user_id);
 
         if (!$editConfig || (int) ($editConfig['product']['itemid'] ?? 0) !== (int) $itemid) {
             echo "API configuration not found for editing.";
@@ -1925,10 +1936,25 @@ public function vendorMeta($itemid = 0)
         return $this->response->setStatusCode(401)->setJSON(array('success' => false, 'message' => 'Not signed in'));
     }
 
-    $row = $this->Items_model->default_form_values($itemid, $user_id)->getRow();
+    $product = $this->modalApiModel()->getProductMetaRow((int) $itemid, $user_id);
+    if (!$product) {
+        return $this->response->setJSON(array(
+            'success' => true,
+            'data' => array(),
+        ));
+    }
+
     return $this->response->setJSON(array(
         'success' => true,
-        'data' => $row,
+        'data' => array(array(
+            'id' => (int) ($product->id ?? $itemid),
+            'brand_name' => (string) ($product->brand ?? ''),
+            'product_name' => (string) ($product->category ?? ''),
+            'model_name' => (string) ($product->modelname ?? ''),
+            'model_no' => (string) ($product->modelno ?? ''),
+            'brand_image' => (string) ($product->brand_image ?? ''),
+            'product_image' => (string) ($product->product_image ?? ''),
+        )),
     ));
 }
 
@@ -1984,7 +2010,7 @@ public function modal_api_legacy($itemid = 0)
 
     $view_data['itemid'] = $itemid;
 
-    $api_details_result = $this->Items_model->default_form_values($itemid, $user_id);
+    $api_details_result = $this->modalApiModel()->default_form_values($itemid, $user_id);
 
     if ($api_details_result) {
         $api_details_row = $api_details_result->getRow();
@@ -1994,7 +2020,7 @@ public function modal_api_legacy($itemid = 0)
             $view_data['category'] = $api_details_row->category;
             $view_data['model_name'] = $api_details_row->modelname;
             $view_data['modelno'] = $api_details_row->modelno;
-            $view_data['paramNames'] = $this->Items_model->extract_api_default_names($user_id, $api_details_row->modelname);
+            $view_data['paramNames'] = $this->modalApiModel()->extract_api_default_names($user_id, $api_details_row->modelname);
         } else {
             echo "API details row not found.";
             return;
@@ -5128,12 +5154,12 @@ public function saveapi(){
 
         // Save into new normalized DB tables.
         if ($editConfigId > 0) {
-            $treeConfigId = $this->Items_model->replaceApiTreeConfig($editConfigId, $mainData, $all_data, $user_id);
+            $treeConfigId = $this->modalApiModel()->replaceApiTreeConfig($editConfigId, $mainData, $all_data, $user_id);
         } else {
-            $treeConfigId = $this->Items_model->saveApiTreeConfig($mainData, $all_data, $user_id);
+            $treeConfigId = $this->modalApiModel()->saveApiTreeConfig($mainData, $all_data, $user_id);
         }
 
-        $saveCheck = $this->Items_model->getApiTreeSaveCheck($treeConfigId);
+        $saveCheck = $this->modalApiModel()->getApiTreeSaveCheck($treeConfigId);
         // Keep your existing preview popup behavior.
         // ob_start();
 
@@ -8020,7 +8046,7 @@ private function _make_item_row1_vendor($data) {
 
      function list_data2($itemid = 0) {
         $user_id = session()->get('user_id') ?? ($this->login_user->id ?? null);
-        $list_data = $this->Items_model->getApiTreeConfigList($itemid, $user_id)->getResult();
+        $list_data = $this->modalApiModel()->getApiTreeConfigList($itemid, $user_id)->getResult();
         $legacy_data = $this->Items_model->get_itemapis_for_view($itemid)->getResult();
         $result = array();
         $seenLegacyKeys = array();
@@ -8292,7 +8318,7 @@ private function _make_item_row1_vendor($data) {
 
     function api_config_preview($config_id = 0) {
         $user_id = session()->get('user_id') ?? ($this->login_user->id ?? null);
-        $tree = $this->Items_model->getApiTreeConfigFull($config_id);
+        $tree = $this->modalApiModel()->getApiTreeConfigFull($config_id);
 
         if (!$tree || ($user_id && (int) $tree['config']['user_id'] !== (int) $user_id)) {
             return $this->response->setJSON(array('success' => false, 'message' => 'API config not found.'));
@@ -8308,7 +8334,7 @@ private function _make_item_row1_vendor($data) {
     function delete_api_config($config_id = 0) {
         $user_id = session()->get('user_id') ?? ($this->login_user->id ?? null);
         $configId = (int) $config_id;
-        $tree = $this->Items_model->getApiTreeConfigFull($configId);
+        $tree = $this->modalApiModel()->getApiTreeConfigFull($configId);
         $parameterName = (is_array($tree) && !empty($tree['config']['parameter_name']))
             ? $tree['config']['parameter_name']
             : '';
@@ -8320,7 +8346,7 @@ private function _make_item_row1_vendor($data) {
             ));
         }
 
-        $deleted = $this->Items_model->deleteApiTreeConfig($configId, $user_id);
+        $deleted = $this->modalApiModel()->deleteApiTreeConfig($configId, $user_id);
 
         return $this->response->setJSON(array(
             'success' => $deleted ? true : false,

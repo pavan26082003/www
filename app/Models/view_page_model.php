@@ -565,80 +565,15 @@ public function preserveDefaultStatusOperationLinking($modelno, array $pageNameM
 
 public function preserveLockedProductApiLinking($modelno, array $pageNameMap, array $linkingData, array $uiRows, $userId = null, $itemId = 0)
 {
-    [$pageNameMap, $linkingData, $uiRows] = $this->preserveDefaultStatusOperationLinking(
+    // Status.operation stays reserved. Every other page the user removes must
+    // stay removed. Rebuilding rows from product_api here put deleted pages back
+    // into api_page_linking_data on the next save.
+    return $this->preserveDefaultStatusOperationLinking(
         $modelno,
         $pageNameMap,
         $linkingData,
         $uiRows
     );
-
-    $lockedRows = $this->getProductApiPageParameterRows($modelno, $userId, $itemId);
-    if (empty($lockedRows)) {
-        return [$pageNameMap, $linkingData, $uiRows];
-    }
-
-    foreach ($lockedRows as $locked) {
-        $pageNo = trim((string) ($locked['page_no'] ?? ''));
-        $pageName = trim((string) ($locked['page_name'] ?? ''));
-        $lockedParams = is_array($locked['parameters'] ?? null) ? $locked['parameters'] : [];
-        if ($pageNo === '' || $pageName === '' || empty($lockedParams)) {
-            continue;
-        }
-
-        $found = false;
-        foreach ($uiRows as &$row) {
-            if (!is_array($row)) {
-                continue;
-            }
-            if (strtolower(trim((string) ($row['page_name'] ?? ''))) !== strtolower($pageName)) {
-                continue;
-            }
-
-            $found = true;
-            $row['page_no'] = $pageNo;
-            $row['page_name'] = $pageName;
-            $row['parameters'] = $lockedParams;
-            $row['locked'] = true;
-            $pageNameMap[$pageNo] = $pageName;
-            $linkingData[$pageNo] = [];
-            $sequence = 1;
-            foreach ($lockedParams as $parameter) {
-                $linkingData[$pageNo][] = [
-                    'parameter' => $parameter,
-                    'sequence' => $sequence++,
-                    'page_no' => $pageNo,
-                    'page_name' => $pageName,
-                ];
-            }
-            break;
-        }
-        unset($row);
-
-        if ($found) {
-            continue;
-        }
-
-        $uiRows[] = [
-            'page_no' => $pageNo,
-            'page_name' => $pageName,
-            'parameters' => $lockedParams,
-            'sequence' => max(1, (int) ($locked['sequence'] ?? $pageNo)),
-            'locked' => true,
-        ];
-        $pageNameMap[$pageNo] = $pageName;
-        $linkingData[$pageNo] = [];
-        $sequence = 1;
-        foreach ($lockedParams as $parameter) {
-            $linkingData[$pageNo][] = [
-                'parameter' => $parameter,
-                'sequence' => $sequence++,
-                'page_no' => $pageNo,
-                'page_name' => $pageName,
-            ];
-        }
-    }
-
-    return [$pageNameMap, $linkingData, $uiRows];
 }
 
 public function getPageParameterMapping($modelno)
@@ -694,7 +629,50 @@ public function getPageParameterMapping($modelno)
     if (isset($linkingData['__ui_rows__']) && is_array($linkingData['__ui_rows__'])) {
         $uiRows = $linkingData['__ui_rows__'];
     }
-    unset($linkingData['__ui_rows__']);
+    $removedPages = [];
+    if (isset($linkingData['__removed_pages__']) && is_array($linkingData['__removed_pages__'])) {
+        foreach ($linkingData['__removed_pages__'] as $removedName) {
+            $removedName = strtolower(trim((string) $removedName));
+            if ($removedName !== '') {
+                $removedPages[$removedName] = true;
+            }
+        }
+    }
+    unset($linkingData['__ui_rows__'], $linkingData['__removed_pages__']);
+
+    if (!empty($removedPages)) {
+        foreach ($pageNames as $pageNo => $pageName) {
+            if (isset($removedPages[strtolower(trim((string) $pageName))])) {
+                unset($pageNames[$pageNo]);
+            }
+        }
+        foreach ($linkingData as $linkKey => $entries) {
+            if (!is_array($entries)) {
+                unset($linkingData[$linkKey]);
+                continue;
+            }
+            $keptEntries = [];
+            foreach ($entries as $entry) {
+                $entryName = is_array($entry) ? trim((string) ($entry['page_name'] ?? '')) : '';
+                if ($entryName !== '' && isset($removedPages[strtolower($entryName)])) {
+                    continue;
+                }
+                $keptEntries[] = $entry;
+            }
+            if (empty($keptEntries)) {
+                unset($linkingData[$linkKey]);
+            } else {
+                $linkingData[$linkKey] = $keptEntries;
+            }
+        }
+        $uiRows = array_values(array_filter($uiRows, static function ($uiRow) use ($removedPages) {
+            if (!is_array($uiRow)) {
+                return false;
+            }
+            $pageName = strtolower(trim((string) ($uiRow['page_name'] ?? '')));
+            return $pageName === '' || !isset($removedPages[$pageName]);
+        }));
+    }
 
     $apiRows = $this->db->table('product_api')
         ->where('model_name', $modelno)
@@ -771,12 +749,11 @@ public function getPageParameterMapping($modelno)
         }
     }
 
-    // Always merge legacy product_api page+API assignments. Old models store the
-    // real pages there, and those rows stay locked the same way Status.operation is.
-    $this->mergeProductApiPageRows($rows, $pageNames, $pageNoByName, $apiRows, $apiByParameter, $vendorPageMap);
-
     if (!$hasSavedMappingRecord) {
-        // Merge V2 api_product_configs pages only before the first user save.
+        // Before the first save, old models still store their pages on product_api.
+        // After a save, api_page_linking_data is the list the user kept. Do not
+        // merge those legacy rows back in, or a removed page returns on refresh.
+        $this->mergeProductApiPageRows($rows, $pageNames, $pageNoByName, $apiRows, $apiByParameter, $vendorPageMap);
         $this->mergeV2ApiPageRows($rows, $pageNames, $pageNoByName, $modelno, $apiByParameter, $vendorPageMap);
     }
 
@@ -826,20 +803,22 @@ public function getPageParameterMapping($modelno)
                 $usedKeys[$key] = true;
             }
         }
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
+        if (!$hasSavedMappingRecord) {
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $key = $this->pageParameterLinkKey(
+                    trim((string) ($row['page_no'] ?? '')),
+                    trim((string) ($row['parameter'] ?? ''))
+                );
+                if ($key === '' || isset($usedKeys[$key])) {
+                    continue;
+                }
+                $row['sequence'] = $sequence++;
+                $orderedRows[] = $row;
+                $usedKeys[$key] = true;
             }
-            $key = $this->pageParameterLinkKey(
-                trim((string) ($row['page_no'] ?? '')),
-                trim((string) ($row['parameter'] ?? ''))
-            );
-            if ($key === '' || isset($usedKeys[$key])) {
-                continue;
-            }
-            $row['sequence'] = $sequence++;
-            $orderedRows[] = $row;
-            $usedKeys[$key] = true;
         }
         if (!empty($orderedRows)) {
             $rows = $orderedRows;
@@ -862,7 +841,9 @@ public function getPageParameterMapping($modelno)
         });
     }
 
-    $this->seedLockedUiRowsFromLoadedProductApi($apiRows, $rows, $pageNames, $uiRows);
+    if (!$hasSavedMappingRecord) {
+        $this->seedLockedUiRowsFromLoadedProductApi($apiRows, $rows, $pageNames, $uiRows);
+    }
 
     if (!empty($pageNames)) {
         uksort($pageNames, function ($a, $b) {
@@ -1791,11 +1772,7 @@ private function collectDeviceUiApiComponents(array $frames, $parameterName = ''
         'multiple_ui' => isset($writeMeta['multiple_ui']) && is_array($writeMeta['multiple_ui'])
             ? array_values($writeMeta['multiple_ui'])
             : ['false', 'false', 'false'],
-        'multiple_ui_by_source' => [
-            'command' => $this->deviceUiMultipleFlagEnabled($writeMeta['multiple_ui_command'] ?? ($writeMeta['multiple_ui'][0] ?? false)) ? 'true' : 'false',
-            'response' => $this->deviceUiMultipleFlagEnabled($writeMeta['multiple_ui_response'] ?? ($writeMeta['multiple_ui'][1] ?? false)) ? 'true' : 'false',
-            'error' => $this->deviceUiMultipleFlagEnabled($writeMeta['multiple_ui_error'] ?? ($writeMeta['multiple_ui'][2] ?? false)) ? 'true' : 'false',
-        ],
+        'multiple_ui_by_source' => $this->deviceUiMultipleFlagsBySource($writeMeta),
         'trigger_ui' => isset($writeMeta['trigger_ui']) && is_array($writeMeta['trigger_ui'])
             ? array_values($writeMeta['trigger_ui'])
             : ['false', 'false', 'false'],
@@ -1810,10 +1787,11 @@ private function collectDeviceUiApiComponents(array $frames, $parameterName = ''
         'response' => isset($frames['response']) && is_array($frames['response']) ? $frames['response'] : [],
         'error' => isset($frames['error']) && is_array($frames['error']) ? $frames['error'] : [],
     ];
+    $flagBySource = $this->deviceUiMultipleFlagsBySource($writeMeta);
     $multipleBySource = [
-        'command' => $this->deviceUiMultipleFlagEnabled($writeMeta['multiple_ui_command'] ?? ($writeMeta['multiple_ui'] ?? false)),
-        'response' => $this->deviceUiMultipleFlagEnabled($writeMeta['multiple_ui_response'] ?? false),
-        'error' => $this->deviceUiMultipleFlagEnabled($writeMeta['multiple_ui_error'] ?? false),
+        'command' => $flagBySource['command'] === 'true',
+        'response' => $flagBySource['response'] === 'true',
+        'error' => $flagBySource['error'] === 'true',
     ];
 
     foreach (['command', 'response', 'error'] as $source) {
@@ -1918,7 +1896,7 @@ private function selectDeviceUiComponentFieldIndexes(array $fields, $includeAllU
         $bytewiseKeep[] = $index;
     }
 
-    if ($includeAllUsable || !empty($bitwiseUsable)) {
+    if ($includeAllUsable) {
         $merged = array_merge($bytewiseKeep, $bitwiseUsable);
         sort($merged, SORT_NUMERIC);
         return array_values(array_unique($merged));
@@ -1950,7 +1928,78 @@ private function selectDeviceUiComponentFieldIndexes(array $fields, $includeAllU
         }
     }
 
-    return $selectedIndex !== null ? [$selectedIndex] : [];
+    if ($selectedIndex === null) {
+        foreach ($fields as $index => $field) {
+            if (!is_array($field)) {
+                continue;
+            }
+            $description = strtolower(trim((string) ($field['Field_description'] ?? ($field['field_description'] ?? ($field['default_name'] ?? '')))));
+            if (!in_array($description, ['data', 'trigger'], true)) {
+                continue;
+            }
+            $selectedIndex = $index;
+            break;
+        }
+    }
+
+    if ($selectedIndex === null) {
+        return [];
+    }
+
+    $selectedField = is_array($fields[$selectedIndex] ?? null) ? $fields[$selectedIndex] : [];
+    $selectedId = (int) ($selectedField['id'] ?? ($selectedField['field_id'] ?? ($selectedField['fieldId'] ?? 0)));
+    $childBits = [];
+    if ($selectedId > 0) {
+        foreach ($bitwiseUsable as $bitIndex) {
+            $parentId = (int) ($fields[$bitIndex]['parent_field_id'] ?? ($fields[$bitIndex]['parentFieldId'] ?? 0));
+            if ($parentId === $selectedId) {
+                $childBits[] = $bitIndex;
+            }
+        }
+    }
+    if (!empty($childBits)) {
+        return array_values($childBits);
+    }
+
+    return [$selectedIndex];
+}
+
+private function deviceUiMultipleFlagsBySource(array $writeMeta)
+{
+    $triple = isset($writeMeta['multiple_ui']) && is_array($writeMeta['multiple_ui'])
+        ? array_values($writeMeta['multiple_ui'])
+        : ['false', 'false', 'false'];
+
+    return [
+        'command' => $this->deviceUiOwnSourceFlagEnabled($writeMeta['multiple_ui_command'] ?? null, $triple[0] ?? false) ? 'true' : 'false',
+        'response' => $this->deviceUiOwnSourceFlagEnabled($writeMeta['multiple_ui_response'] ?? null, $triple[1] ?? false) ? 'true' : 'false',
+        'error' => $this->deviceUiOwnSourceFlagEnabled($writeMeta['multiple_ui_error'] ?? null, $triple[2] ?? false) ? 'true' : 'false',
+    ];
+}
+
+private function deviceUiOwnSourceFlagEnabled($ownValue, $fallback)
+{
+    if ($ownValue === null || $ownValue === '' || $ownValue === []) {
+        return $this->deviceUiMultipleFlagEnabled($fallback);
+    }
+
+    if (is_array($ownValue)) {
+        $list = array_values($ownValue);
+        if (count($list) >= 2) {
+            return $this->deviceUiMultipleFlagEnabled($list[0] ?? false);
+        }
+
+        return $this->deviceUiMultipleFlagEnabled($list[0] ?? false);
+    }
+
+    $decoded = json_decode(trim((string) $ownValue), true);
+    if (is_array($decoded) && count($decoded) >= 2) {
+        $list = array_values($decoded);
+
+        return $this->deviceUiMultipleFlagEnabled($list[0] ?? false);
+    }
+
+    return $this->deviceUiMultipleFlagEnabled($ownValue);
 }
 
 private function extractDeviceUiFrameFieldValue(array $fields, $fieldName)
@@ -1979,6 +2028,7 @@ private function buildDeviceUiFrameFieldList(array $row, $prefix)
     if ($prefix === '') {
         return [];
     }
+    $parameterLabel = trim((string) $this->deviceUiApiValue($row, ['parameter_name', 'parameterName', 'parameter']));
 
     $descriptions = $this->deviceUiApiList($this->deviceUiApiValue($row, [$prefix . '_fieldDescription', $prefix . '_fielddescription', $prefix . '_field_description']));
     $uiTypes = $this->deviceUiApiList($this->deviceUiApiValue($row, [$prefix . '_uiType', $prefix . '_uitype', $prefix . '_ui_type']));
@@ -2031,6 +2081,18 @@ private function buildDeviceUiFrameFieldList(array $row, $prefix)
         ) {
             $defaultName = trim((string) $rawDefault);
         }
+        if (in_array($prefix, ['resp', 'error'], true) && $this->deviceUiTelemetryNameIsGeneric($defaultName)) {
+            $humanDefault = is_string($rawDefault) ? trim($rawDefault) : '';
+            if ($humanDefault !== '' && !$this->deviceUiValueLooksLikeProtocolHex($humanDefault) && !$this->deviceUiTelemetryNameIsGeneric($humanDefault)) {
+                $defaultName = $humanDefault;
+            } elseif ($parameterLabel !== '' && strcasecmp($parameterLabel, 'frame') !== 0) {
+                $defaultName = $parameterLabel;
+            }
+        }
+        $fieldDescription = $description !== '' ? $description : $defaultName;
+        if (in_array($prefix, ['resp', 'error'], true) && $this->deviceUiTelemetryNameIsGeneric($fieldDescription)) {
+            $fieldDescription = $defaultName;
+        }
         $fieldLevel = strtolower(trim((string) ($fieldLevels[$index] ?? 'bytewise')));
         if ($fieldLevel !== 'bitwise') {
             $fieldLevel = 'bytewise';
@@ -2046,7 +2108,7 @@ private function buildDeviceUiFrameFieldList(array $row, $prefix)
             'default_name' => $defaultName,
             'value' => $wireValue,
             'asperui_value' => $rawDefault,
-            'Field_description' => $description !== '' ? $description : 'Data',
+            'Field_description' => $fieldDescription,
             'type' => trim((string) ($valueDefs[$index] ?? 'Fixed Value')),
             'data_type' => trim((string) ($dataTypes[$index] ?? 'UnsignedInt')),
             'no_of_bytes' => $byteCount,
@@ -2093,23 +2155,21 @@ private function buildDeviceUiFrameFieldList(array $row, $prefix)
                     }));
                 }
             }
-            $field['asperui'] = array_values(array_filter($fieldAsperui, static function ($value) {
-                return $value !== '';
-            }));
-            $field['asperui_values'] = array_values(array_filter($fieldAsperuiValues, static function ($value) {
-                return $value !== '';
-            }));
-            $field['sno_asperui'] = array_values(array_filter($fieldSnoAsperui, static function ($value) {
-                return $value !== '';
-            }));
-            list($choiceLabels, $choiceValues) = $this->normalizeDeviceUiChoiceLists($field['asperui'], $field['asperui_values']);
+            $field['asperui'] = $this->deviceUiChoiceListOrNull($fieldAsperui);
+            $field['asperui_values'] = $this->deviceUiChoiceListOrNull($fieldAsperuiValues);
+            $field['sno_asperui'] = $this->deviceUiChoiceListOrNull($fieldSnoAsperui);
+            list($choiceLabels, $choiceValues) = $this->normalizeDeviceUiChoiceLists(
+                is_array($field['asperui']) ? $field['asperui'] : [],
+                is_array($field['asperui_values']) ? $field['asperui_values'] : []
+            );
             if (!empty($choiceLabels)) {
                 $field['asperui'] = $choiceLabels;
                 $field['asperui_values'] = $choiceValues;
             }
             // Prefer numeric asperui default for the UI; keep wire hex on value.
-            if (!$this->deviceUiFrameValueIsEmpty($field['asperui_values'][0] ?? null)) {
-                $field['asperui_value'] = $field['asperui_values'][0];
+            $publishedValues = is_array($field['asperui_values'] ?? null) ? $field['asperui_values'] : [];
+            if (!$this->deviceUiFrameValueIsEmpty($publishedValues[0] ?? null)) {
+                $field['asperui_value'] = $publishedValues[0];
             } elseif ($this->deviceUiFrameValueIsEmpty($field['asperui_value'] ?? null)
                 || $this->deviceUiValueLooksLikeProtocolHex($field['asperui_value'])
             ) {
@@ -2187,6 +2247,12 @@ private function deviceUiResolveFrameWireValue($rawDefault, $hexMin, $byteCount,
     $fieldName = strtolower(preg_replace('/[\s_]+/', '', (string) $fieldName));
     if ($fieldName === 'terminator') {
         return '0A';
+    }
+    // Do not invent 00 for protocol ids. An empty slot can still be filled
+    // from protocolMeta.command_id / function_code. A real stored 00 is kept
+    // above, because deviceUiNormalizeProtocolHex already returned it.
+    if (in_array($fieldName, ['commandid', 'functioncode', 'actionid'], true)) {
+        return '';
     }
 
     $bytes = max(1, (int) $byteCount);
@@ -5760,6 +5826,9 @@ private function repairDeviceUiSchemaP0Contracts(array $schema)
             $control['writable'] = false;
             $control['interactive'] = false;
             $control['events'] = [];
+            if (isset($control['action']) && stripos((string) $control['action'], 'update_') === 0) {
+                unset($control['action']);
+            }
             if (!isset($control['component']) || !is_array($control['component'])) {
                 $control['component'] = [];
             }
@@ -5933,6 +6002,7 @@ private function repairDeviceUiSchemaP0Contracts(array $schema)
     $schema = $this->repairDeviceUiThemeIconColor($schema);
     $schema = $this->ensureDeviceUiCatalogTimerAndChip($schema);
     $schema = $this->ensureDeviceUiControlWidgetTrees($schema);
+    $schema = $this->finalizeDeviceUiPublishedInteractions($schema);
     $schema = $this->ensureDeviceUiSendIconLibrary($schema);
     $schema = $this->finalizeDeviceUiControlJsonObjects($schema);
     $schema = $this->markDeviceUiSduiExtensionNotProduction($schema);
@@ -7127,29 +7197,56 @@ private function stripDeviceUiWriteEventsFromTree(&$node)
         return;
     }
     if (isset($node['events']) && is_array($node['events'])) {
-        $node['events'] = array_values(array_filter($node['events'], static function ($event) {
-            if (!is_array($event)) {
-                return true;
-            }
-            $type = strtolower((string) ($event['action']['type'] ?? ''));
-            return $type !== 'send' && $type !== 'update';
-        }));
-    }
-    foreach (['children', 'widgetTree'] as $key) {
-        if (!empty($node[$key]) && is_array($node[$key])) {
-            if ($this->deviceUiIsAssocArray($node[$key])) {
-                $this->stripDeviceUiWriteEventsFromTree($node[$key]);
-            } else {
-                foreach ($node[$key] as &$child) {
-                    $this->stripDeviceUiWriteEventsFromTree($child);
+        $keys = array_keys($node['events']);
+        $isList = $keys === [] || $keys === range(0, count($keys) - 1);
+        if ($isList) {
+            $node['events'] = array_values(array_filter($node['events'], function ($event) {
+                return !$this->deviceUiEventIsWrite($event);
+            }));
+        } else {
+            foreach ($node['events'] as $eventName => $event) {
+                $probe = is_array($event) ? $event : [];
+                if (!isset($probe['event']) && !isset($probe['name'])) {
+                    $probe['event'] = (string) $eventName;
                 }
-                unset($child);
+                if ($this->deviceUiEventIsWrite($probe)) {
+                    unset($node['events'][$eventName]);
+                }
             }
         }
     }
-    if (!empty($node['component']['widgetTree']) && is_array($node['component']['widgetTree'])) {
-        $this->stripDeviceUiWriteEventsFromTree($node['component']['widgetTree']);
+    foreach ($node as $key => &$child) {
+        if ($key === 'events' || !is_array($child)) {
+            continue;
+        }
+        $this->stripDeviceUiWriteEventsFromTree($child);
     }
+    unset($child);
+}
+
+private function deviceUiEventIsWrite($event)
+{
+    if (!is_array($event)) {
+        return false;
+    }
+    $name = strtolower(trim((string) ($event['event'] ?? $event['name'] ?? '')));
+    if (in_array($name, ['onchange', 'onchanged', 'onchangeend', 'ontap', 'onvaluecommitted', 'onsubmitted', 'onselected', 'onsendtap', 'oncommand'], true)) {
+        return true;
+    }
+    $action = $event['action'] ?? null;
+    if (is_string($action) && stripos($action, 'update_') === 0) {
+        return true;
+    }
+    if (!is_array($action)) {
+        return false;
+    }
+    $type = strtolower(trim((string) ($action['type'] ?? '')));
+    if (in_array($type, ['send', 'update', 'write'], true)) {
+        return true;
+    }
+    $id = trim((string) ($action['id'] ?? $action['actionId'] ?? ''));
+
+    return stripos($id, 'update_') === 0;
 }
 
 private function ensureDeviceUiDisabledOpacityOnTree(&$node, $opacity = 0.45)
@@ -9691,6 +9788,230 @@ private function deviceUiFrameValueIsEmpty($value)
     return $value === '' || $value === null;
 }
 
+private function deviceUiHexIsZeroPadding($value)
+{
+    $text = strtoupper(preg_replace('/[^0-9A-F]/', '', (string) $value));
+
+    return $text !== '' && preg_match('/^0+$/', $text) === 1;
+}
+
+/**
+ * Empty slots and zero-padding written when product_api had no hex
+ * take the real protocolMeta id. A stored non-zero id is left alone.
+ */
+private function deviceUiProtocolSlotNeedsFill($current, $incoming)
+{
+    if ($this->deviceUiFrameValueIsEmpty($incoming)) {
+        return false;
+    }
+    if ($this->deviceUiFrameValueIsEmpty($current)) {
+        return true;
+    }
+
+    return $this->deviceUiHexIsZeroPadding($current) && !$this->deviceUiHexIsZeroPadding($incoming);
+}
+
+private function deviceUiTelemetryNameIsGeneric($name)
+{
+    $name = strtolower(trim((string) $name));
+
+    return $name === '' || in_array($name, ['data', 'none', 'field'], true) || preg_match('/^field_\d+$/', $name) === 1;
+}
+
+private function deviceUiTelemetryLabel(array $field, $parameterName)
+{
+    $current = trim((string) ($field['default_name'] ?? ''));
+    $description = trim((string) ($field['Field_description'] ?? $field['field_description'] ?? ''));
+    if ($current !== '' && !$this->deviceUiTelemetryNameIsGeneric($current)) {
+        return $current;
+    }
+    if ($description !== '' && !$this->deviceUiTelemetryNameIsGeneric($description)) {
+        return $description;
+    }
+    $parameterName = trim((string) $parameterName);
+    if ($parameterName !== '' && strcasecmp($parameterName, 'frame') !== 0) {
+        return $parameterName;
+    }
+
+    return 'Value';
+}
+
+private function deviceUiChoiceListOrNull($value)
+{
+    if ($value === null) {
+        return null;
+    }
+    if (!is_array($value)) {
+        $text = trim((string) $value);
+        if ($text === '' || $text === '[]' || $text === '{}') {
+            return null;
+        }
+        $decoded = json_decode($text, true);
+        $value = is_array($decoded) ? $decoded : [$text];
+    }
+    $clean = [];
+    foreach ($value as $item) {
+        if (is_array($item) || is_object($item)) {
+            continue;
+        }
+        $text = trim((string) $item);
+        if ($text === '' || $text === '[]' || $text === '{}' || strcasecmp($text, 'null') === 0) {
+            continue;
+        }
+        $clean[] = $text;
+    }
+
+    return $clean === [] ? null : array_values($clean);
+}
+
+private function repairDeviceUiFrameDocument(array $frame, $commandId, $functionCode, $actionId, $parameterName)
+{
+    $meta = [
+        'command_id' => $commandId,
+        'function_code' => $functionCode,
+        'action_id' => $actionId,
+    ];
+    foreach (['commands', 'response', 'error'] as $group) {
+        if (!isset($frame[$group]) || !is_array($frame[$group])) {
+            continue;
+        }
+        $fields = $this->hydrateDeviceUiFrameFields($frame[$group], $meta);
+        foreach ($fields as &$field) {
+            if (!is_array($field)) {
+                continue;
+            }
+            if (in_array($group, ['response', 'error'], true)) {
+                $label = $this->deviceUiTelemetryLabel($field, $parameterName);
+                if ($label !== '') {
+                    $field['default_name'] = $label;
+                    $description = trim((string) ($field['Field_description'] ?? $field['field_description'] ?? ''));
+                    if ($this->deviceUiTelemetryNameIsGeneric($description)) {
+                        $field['Field_description'] = $label;
+                        $field['field_description'] = $label;
+                    }
+                }
+            }
+            foreach (['asperui', 'asperui_values', 'sno_asperui'] as $listKey) {
+                if (array_key_exists($listKey, $field)) {
+                    $field[$listKey] = $this->deviceUiChoiceListOrNull($field[$listKey]);
+                }
+            }
+        }
+        unset($field);
+        $frame[$group] = $fields;
+    }
+
+    return $frame;
+}
+
+private function applyDeviceUiPublishedFrameContract(array &$control)
+{
+    $meta = isset($control['protocolMeta']) && is_array($control['protocolMeta']) ? $control['protocolMeta'] : [];
+    $parameterName = trim((string) ($control['parameterName'] ?? $control['parameter'] ?? $control['label'] ?? ''));
+    $commandId = $meta['command_id'] ?? ($meta['commandId'] ?? null);
+    $functionCode = $meta['function_code'] ?? ($meta['functionCode'] ?? null);
+    $actionId = $meta['action_id'] ?? ($meta['actionId'] ?? null);
+    if (isset($control['deviceFrame']) && is_array($control['deviceFrame'])) {
+        $control['deviceFrame'] = $this->repairDeviceUiFrameDocument($control['deviceFrame'], $commandId, $functionCode, $actionId, $parameterName);
+    }
+    if (isset($meta['frame']) && is_array($meta['frame'])) {
+        $meta['frame'] = $this->repairDeviceUiFrameDocument($meta['frame'], $commandId, $functionCode, $actionId, $parameterName);
+    }
+    if (isset($meta['ui_components']) && is_array($meta['ui_components'])) {
+        foreach ($meta['ui_components'] as $componentIndex => $component) {
+            if (!is_array($component)) {
+                continue;
+            }
+            $componentCommand = $component['command_id'] ?? $commandId;
+            $componentFunction = $component['function_code'] ?? $functionCode;
+            $componentAction = $component['action_id'] ?? $actionId;
+            $componentName = trim((string) ($component['parameter_name'] ?? $parameterName));
+            if (isset($component['frame']) && is_array($component['frame'])) {
+                $component['frame'] = $this->repairDeviceUiFrameDocument($component['frame'], $componentCommand, $componentFunction, $componentAction, $componentName);
+            }
+            foreach (['items', 'item_values', 'sno_asperui'] as $listKey) {
+                if (array_key_exists($listKey, $component)) {
+                    $component[$listKey] = $this->deviceUiChoiceListOrNull($component[$listKey]);
+                }
+            }
+            $meta['ui_components'][$componentIndex] = $component;
+        }
+    }
+    $control['protocolMeta'] = $meta;
+}
+
+/**
+ * Widget trees are attached after the first read-only pass, so write events
+ * have to be removed again. Writable controls get a schema.actions entry
+ * whose id matches control.action.
+ */
+private function finalizeDeviceUiPublishedInteractions(array $schema)
+{
+    if (empty($schema['controls']) || !is_array($schema['controls'])) {
+        return $schema;
+    }
+    foreach ($schema['controls'] as &$control) {
+        if (!is_array($control)) {
+            continue;
+        }
+        $this->applyDeviceUiPublishedFrameContract($control);
+        $writable = $this->deviceUiControlIsWritable($control);
+        if (!$writable) {
+            $control['events'] = [];
+            $control['readOnly'] = true;
+            $control['writable'] = false;
+            $control['interactive'] = false;
+            if (isset($control['action']) && stripos((string) $control['action'], 'update_') === 0) {
+                unset($control['action']);
+            }
+            if (isset($control['component']) && is_array($control['component'])) {
+                $control['component']['events'] = [];
+                if (!empty($control['component']['widgetTree']) && is_array($control['component']['widgetTree'])) {
+                    $this->stripDeviceUiWriteEventsFromTree($control['component']['widgetTree']);
+                }
+            }
+            if (!empty($control['widgetTree']) && is_array($control['widgetTree'])) {
+                $this->stripDeviceUiWriteEventsFromTree($control['widgetTree']);
+            }
+            continue;
+        }
+        $id = trim((string) ($control['id'] ?? ''));
+        if ($id === '') {
+            continue;
+        }
+        $actionId = 'update_' . trim(preg_replace('/[^a-zA-Z0-9]+/', '_', $id), '_');
+        $control['action'] = $actionId;
+        if (!isset($schema['actions']) || is_object($schema['actions'])) {
+            $schema['actions'] = is_object($schema['actions']) ? (array) $schema['actions'] : [];
+        }
+        if (!is_array($schema['actions'])) {
+            $schema['actions'] = [];
+        }
+        if (!isset($schema['actions'][$actionId]) || !is_array($schema['actions'][$actionId])) {
+            $meta = isset($control['protocolMeta']) && is_array($control['protocolMeta']) ? $control['protocolMeta'] : [];
+            $binding = trim((string) ($control['binding'] ?? ''));
+            $schema['actions'][$actionId] = [
+                'type' => 'dataOperation',
+                'dataSource' => 'deviceCommands',
+                'operation' => 'write',
+                'input' => [
+                    'modelNo' => '$app.modelNo',
+                    'parameter' => trim((string) ($control['parameterName'] ?? $control['parameter'] ?? $control['label'] ?? '')),
+                    'value' => $binding !== '' ? ('$' . $binding) : '',
+                    'commandId' => $meta['command_id'] ?? ($meta['commandId'] ?? null),
+                    'functionCode' => $meta['function_code'] ?? ($meta['functionCode'] ?? null),
+                ],
+            ];
+        }
+    }
+    unset($control);
+    if (isset($schema['actions']) && is_array($schema['actions']) && $schema['actions'] === []) {
+        $schema['actions'] = new \stdClass();
+    }
+
+    return $schema;
+}
+
 private function hydrateDeviceUiFrameFields(array $fields, array $meta = [])
 {
     $commandId = $meta['command_id'] ?? ($meta['commandId'] ?? null);
@@ -9704,6 +10025,21 @@ private function hydrateDeviceUiFrameFields(array $fields, array $meta = [])
         $bytes = isset($field['no_of_bytes']) ? max(1, (int) $field['no_of_bytes']) : 1;
         $field['no_of_bytes'] = $bytes;
         $name = $this->deviceUiFrameFieldName($field);
+        $slotFill = null;
+        if ($name === 'commandid') {
+            $slotFill = $commandId;
+        } elseif ($name === 'functioncode') {
+            $slotFill = $functionCode;
+        } elseif ($name === 'actionid') {
+            $slotFill = $actionId;
+        }
+        if ($slotFill !== null && !$this->deviceUiFrameValueIsEmpty($slotFill) && $this->deviceUiProtocolSlotNeedsFill($field['value'] ?? null, $slotFill)) {
+            $normalizedSlot = $this->deviceUiNormalizeProtocolHex($slotFill, $bytes);
+            $field['value'] = $normalizedSlot !== '' ? $normalizedSlot : $slotFill;
+            if ($this->deviceUiProtocolSlotNeedsFill($field['asperui_value'] ?? null, $field['value'])) {
+                $field['asperui_value'] = $field['value'];
+            }
+        }
 
         // Only promote asperui → wire when asperui is real protocol hex (never labels / live text).
         if ($this->deviceUiFrameValueIsEmpty($field['value'] ?? null)
@@ -9926,8 +10262,8 @@ private function defaultDeviceUiFrame($parameterName, array $meta = [])
         'trigger_ui' => [$isTrigger ? 'true' : 'false', 'false', 'false'],
         'commands' => $commands,
         'response' => [[
-            'default_name' => 'None',
-            'Field_description' => 'None',
+            'default_name' => ($parameterName !== '' && strcasecmp($parameterName, 'frame') !== 0) ? $parameterName : 'Value',
+            'Field_description' => ($parameterName !== '' && strcasecmp($parameterName, 'frame') !== 0) ? $parameterName : 'Value',
             'value' => '',
             'asperui_value' => '',
             'ui_type' => 'None',
@@ -9936,8 +10272,8 @@ private function defaultDeviceUiFrame($parameterName, array $meta = [])
             'byte_start_position' => 0,
         ]],
         'error' => [[
-            'default_name' => 'None',
-            'Field_description' => 'None',
+            'default_name' => ($parameterName !== '' && strcasecmp($parameterName, 'frame') !== 0) ? $parameterName : 'Value',
+            'Field_description' => ($parameterName !== '' && strcasecmp($parameterName, 'frame') !== 0) ? $parameterName : 'Value',
             'value' => '',
             'asperui_value' => '',
             'ui_type' => 'None',
@@ -11400,9 +11736,108 @@ public function savePageParameterJsonMapping($modelno, $pageNameMap, $linkingDat
         $linkingData = $this->mergePageLinkingData($existingLinking, $linkingData);
     }
 
-    unset($linkingData['__ui_rows__']);
+    $previousPageNames = [];
+    $removedPages = [];
+    if ($existing) {
+        $previousPageMap = json_decode($existing['page_names'] ?? '[]', true);
+        $previousLinking = json_decode($existing['linking_data'] ?? '[]', true);
+        if (!is_array($previousPageMap)) {
+            $previousPageMap = [];
+        }
+        if (!is_array($previousLinking)) {
+            $previousLinking = [];
+        }
+
+        foreach ($previousPageMap as $previousName) {
+            $previousName = trim((string) $previousName);
+            if ($previousName !== '') {
+                $previousPageNames[strtolower($previousName)] = $previousName;
+            }
+        }
+        if (!empty($previousLinking['__ui_rows__']) && is_array($previousLinking['__ui_rows__'])) {
+            foreach ($previousLinking['__ui_rows__'] as $previousRow) {
+                if (!is_array($previousRow)) {
+                    continue;
+                }
+                $previousName = trim((string) ($previousRow['page_name'] ?? ''));
+                if ($previousName !== '') {
+                    $previousPageNames[strtolower($previousName)] = $previousName;
+                }
+            }
+        }
+        if (!empty($previousLinking['__removed_pages__']) && is_array($previousLinking['__removed_pages__'])) {
+            foreach ($previousLinking['__removed_pages__'] as $removedName) {
+                $removedName = trim((string) $removedName);
+                if ($removedName !== '') {
+                    $removedPages[strtolower($removedName)] = $removedName;
+                }
+            }
+        }
+    }
+
+    $savedPageNames = [];
+    foreach ((array) $pageNameMap as $savedName) {
+        $savedName = trim((string) $savedName);
+        if ($savedName !== '') {
+            $savedPageNames[strtolower($savedName)] = $savedName;
+        }
+    }
+    foreach ((array) $uiRows as $savedRow) {
+        if (!is_array($savedRow)) {
+            continue;
+        }
+        $savedName = trim((string) ($savedRow['page_name'] ?? ''));
+        if ($savedName !== '') {
+            $savedPageNames[strtolower($savedName)] = $savedName;
+        }
+    }
+
+    foreach ($previousPageNames as $removedKey => $removedName) {
+        if (!isset($savedPageNames[$removedKey]) && !$this->isDefaultStatusOperationPage($removedName)) {
+            $removedPages[$removedKey] = $removedName;
+        }
+    }
+    foreach ($savedPageNames as $savedKey => $savedName) {
+        unset($removedPages[$savedKey]);
+    }
+
+    unset($linkingData['__ui_rows__'], $linkingData['__removed_pages__']);
     if (!empty($uiRows)) {
         $linkingData['__ui_rows__'] = array_values($uiRows);
+    }
+    if (!empty($removedPages)) {
+        $linkingData['__removed_pages__'] = array_values($removedPages);
+    }
+
+    if (!empty($removedPages) && $this->db->tableExists('product_api')) {
+        $legacyApiRows = $this->db->table('product_api')
+            ->select('id, page_names')
+            ->where('model_name', $modelno)
+            ->where('page_names !=', '')
+            ->get()
+            ->getResultArray();
+
+        foreach ($legacyApiRows as $legacyApiRow) {
+            $rawNames = trim((string) ($legacyApiRow['page_names'] ?? ''));
+            $parts = array_values(array_filter(array_map('trim', explode(',', $rawNames)), static function ($part) {
+                return $part !== '';
+            }));
+            $kept = [];
+            $changed = false;
+            foreach ($parts as $part) {
+                if (isset($removedPages[strtolower($part)])) {
+                    $changed = true;
+                    continue;
+                }
+                $kept[] = $part;
+            }
+            if (!$changed) {
+                continue;
+            }
+            $this->db->table('product_api')
+                ->where('id', (int) ($legacyApiRow['id'] ?? 0))
+                ->update(['page_names' => implode(',', $kept)]);
+        }
     }
 
     $data = [
@@ -11501,9 +11936,33 @@ public function getApiParameterNamesForLinking($itemId = 0, $userId = null, $mod
         $addParam($row['parameter_name'] ?? '');
     }
 
-    if ($modelno !== '') {
-        foreach ($this->extract_apis($userId, $modelno) as $param) {
-            $addParam($param);
+    $modelNames = method_exists($this, 'getModelNamesForItem')
+        ? $this->getModelNamesForItem($itemId, $modelno)
+        : array();
+    $modelno = trim((string) $modelno);
+    if ($modelno !== '' && !in_array($modelno, $modelNames, true)) {
+        $modelNames[] = $modelno;
+    }
+
+    if (!empty($modelNames)) {
+        foreach ($this->db->table('product_api')
+            ->select('parameter_name')
+            ->whereIn('model_name', $modelNames)
+            ->where('parameter_name !=', '')
+            ->orderBy('id', 'DESC')
+            ->get()
+            ->getResultArray() as $row) {
+            $addParam($row['parameter_name'] ?? '');
+        }
+
+        foreach ($this->db->table('api_product_configs')
+            ->select('parameter_name')
+            ->whereIn('model_name', $modelNames)
+            ->where('parameter_name !=', '')
+            ->orderBy('id', 'DESC')
+            ->get()
+            ->getResultArray() as $row) {
+            $addParam($row['parameter_name'] ?? '');
         }
     }
 

@@ -63,8 +63,16 @@ class Modal_api_page_linking_controller extends Security_Controller {
         return $name === 'status.operation' || $name === 'status';
     }
 
+    private function isReservedDefaultApiName($parameter)
+    {
+        $key = strtolower(trim((string) preg_replace('/\s+/', ' ', (string) $parameter)));
+
+        return in_array($key, array('send data', 'display log', 'command get status', 'display'), true);
+    }
+
     private function keepFirstPageLinkingParameters(array $uiRows)
     {
+        // Only the four Status.operation APIs are unique. Legacy and V2 APIs can be added on any page.
         $claimed = [];
         $assign = function (&$row) use (&$claimed) {
             if (!is_array($row)) {
@@ -80,11 +88,13 @@ class Modal_api_page_linking_controller extends Security_Controller {
                 }
 
                 $key = strtolower($parameter);
-                if (isset($claimed[$key])) {
+                if ($this->isReservedDefaultApiName($parameter) && isset($claimed[$key])) {
                     continue;
                 }
 
-                $claimed[$key] = true;
+                if ($this->isReservedDefaultApiName($parameter)) {
+                    $claimed[$key] = true;
+                }
                 $kept[] = $parameter;
             }
 

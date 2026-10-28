@@ -48,8 +48,15 @@ if (!empty($linking_page_options) && is_array($linking_page_options)) {
 
 $lockedRows = !empty($locked_rows) && is_array($locked_rows) ? $locked_rows : [];
 $lockedPageMap = [];
+$isReservedStatusPage = static function ($pageName) {
+    $compact = strtolower(preg_replace('/\s+/', '', trim((string) $pageName)));
+    return $compact === 'status.operation' || $compact === 'status';
+};
 foreach ($lockedRows as $lockedRow) {
     $pageName = trim((string) ($lockedRow['page_name'] ?? ''));
+    if (!$isReservedStatusPage($pageName)) {
+        continue;
+    }
     $pageNo = trim((string) ($lockedRow['page_no'] ?? ''));
     $parameters = [];
     if (!empty($lockedRow['parameters']) && is_array($lockedRow['parameters'])) {
@@ -130,7 +137,12 @@ if (!empty($savedUiRows)) {
         if (isset($pageOptionsByName[$pageKey])) {
             $pageNo = $pageOptionsByName[$pageKey]['page_no'];
             $pageName = $pageOptionsByName[$pageKey]['page_name'];
-        } elseif ($pageNo === '' || !isset($allowedPageNos[$pageNo])) {
+        } elseif ($pageName !== '') {
+            if ($pageNo === '') {
+                $pageNo = (string) (count($pageOptionsByName) + 1);
+            }
+            $addPageOption($pageNo, $pageName);
+        } else {
             continue;
         }
 
@@ -156,7 +168,12 @@ if (!empty($savedUiRows)) {
         if (isset($pageOptionsByName[$pageKey])) {
             $pageNo = $pageOptionsByName[$pageKey]['page_no'];
             $pageName = $pageOptionsByName[$pageKey]['page_name'];
-        } elseif ($pageNo === '' || !isset($allowedPageNos[$pageNo])) {
+        } elseif ($pageName !== '') {
+            if ($pageNo === '') {
+                $pageNo = (string) (count($pageOptionsByName) + 1);
+            }
+            $addPageOption($pageNo, $pageName);
+        } else {
             continue;
         }
 
@@ -215,12 +232,13 @@ usort($displayRows, function ($a, $b) {
 $groupedDisplayRows = [];
 foreach ($displayRows as $displayRow) {
     $pageNo = trim((string) ($displayRow['page_no'] ?? ''));
-    if ($pageNo === '') {
+    $pageNameKey = strtolower(trim((string) ($displayRow['page_name'] ?? '')));
+    if ($pageNo === '' || $pageNameKey === '') {
         continue;
     }
 
-    if (!isset($groupedDisplayRows[$pageNo])) {
-        $groupedDisplayRows[$pageNo] = [
+    if (!isset($groupedDisplayRows[$pageNameKey])) {
+        $groupedDisplayRows[$pageNameKey] = [
             'page_no' => $pageNo,
             'page_name' => trim((string) ($displayRow['page_name'] ?? '')),
             'parameters' => [],
@@ -228,19 +246,19 @@ foreach ($displayRows as $displayRow) {
             'locked' => !empty($displayRow['locked']),
         ];
     } else {
-        $groupedDisplayRows[$pageNo]['sequence'] = min(
-            (int) $groupedDisplayRows[$pageNo]['sequence'],
+        $groupedDisplayRows[$pageNameKey]['sequence'] = min(
+            (int) $groupedDisplayRows[$pageNameKey]['sequence'],
             max(1, (int) ($displayRow['sequence'] ?? 1))
         );
         if (!empty($displayRow['locked'])) {
-            $groupedDisplayRows[$pageNo]['locked'] = true;
+            $groupedDisplayRows[$pageNameKey]['locked'] = true;
         }
     }
 
     foreach (($displayRow['parameters'] ?? []) as $parameter) {
         $parameter = trim((string) $parameter);
-        if ($parameter !== '' && !in_array($parameter, $groupedDisplayRows[$pageNo]['parameters'], true)) {
-            $groupedDisplayRows[$pageNo]['parameters'][] = $parameter;
+        if ($parameter !== '' && !in_array($parameter, $groupedDisplayRows[$pageNameKey]['parameters'], true)) {
+            $groupedDisplayRows[$pageNameKey]['parameters'][] = $parameter;
         }
     }
 }
@@ -1339,7 +1357,7 @@ if (!function_exists('linking_icon')) {
       <div class="header-actions">
         <a href="<?= esc($viewApisUrl) ?>" class="header-btn header-btn-view"><?= linking_icon('eye') ?> View APIs</a>
         <a href="<?= esc($pagesUrl) ?>" class="header-btn header-btn-pages"><?= linking_icon('plus-circle') ?> Add Page</a>
-        <a href="#" class="header-btn" id="linking-back-button"><?= linking_icon('arrow-left') ?> Back</a>
+        <a href="<?= esc($pagesUrl) ?>" class="header-btn" id="linking-back-button"><?= linking_icon('arrow-left') ?> Back</a>
       </div>
     </div>
 
@@ -2547,17 +2565,6 @@ if (!function_exists('linking_icon')) {
       prepareFlatSubmitFields();
     });
 
-    function handleBackButton() {
-      window.history.back();
-    }
-    const linkingBackButton = document.getElementById('linking-back-button');
-    if (linkingBackButton && linkingBackButton.getAttribute('data-back-bound') !== '1') {
-      linkingBackButton.setAttribute('data-back-bound', '1');
-      linkingBackButton.addEventListener('click', function (event) {
-        event.preventDefault();
-        handleBackButton();
-      });
-    }
 
     initialRows.forEach(row => createRow(row));
     rebuildSequences();

@@ -3,18 +3,21 @@
 namespace App\Controllers;
 
 use App\Models\IotDashboardModel;
-use App\Models\View_page_model;
+use App\Models\View_page_ui_model;
 
 class View_page_controller extends Security_Controller {
+
+    /** @var View_page_ui_model */
+    protected $View_page_ui_model;
 
     function __construct() {
         parent::__construct();
         $this->init_permission_checker("order");
 
-        if (empty($this->View_page_model)) {
-            $class = '\\App\\Models\\View_page_model';
+        if (empty($this->View_page_ui_model)) {
+            $class = '\\App\\Models\\View_page_ui_model';
             if (!class_exists($class, false)) {
-                foreach (array('View_page_model.php', 'view_page_model.php') as $fileName) {
+                foreach (array('View_page_ui_model.php', 'view_page_ui_model.php') as $fileName) {
                     $modelFile = APPPATH . 'Models/' . $fileName;
                     if (is_file($modelFile)) {
                         require_once $modelFile;
@@ -24,7 +27,7 @@ class View_page_controller extends Security_Controller {
             }
 
             if (class_exists($class, false)) {
-                $this->View_page_model = new $class();
+                $this->View_page_ui_model = new $class();
             }
         }
     }
@@ -45,37 +48,37 @@ class View_page_controller extends Security_Controller {
     private function resolveBuilderModelNo($itemId, $requested = '')
     {
         $requested = trim((string) $requested);
-        if ($this->View_page_model && method_exists($this->View_page_model, 'resolveLinkingModelNo')) {
-            return $this->View_page_model->resolveLinkingModelNo((int) $itemId, $requested);
+        if ($this->View_page_ui_model && method_exists($this->View_page_ui_model, 'resolveLinkingModelNo')) {
+            return $this->View_page_ui_model->resolveLinkingModelNo((int) $itemId, $requested);
         }
 
         if ($requested !== '') {
             return $requested;
         }
 
-        return $this->View_page_model ? $this->View_page_model->getModelNameForItem((int) $itemId) : '';
+        return $this->View_page_ui_model ? $this->View_page_ui_model->getModelNameForItem((int) $itemId) : '';
     }
 
 public function view_page_ui($id = 0)
 {
-    if (\App\Models\View_page_model::loadDeviceUiSchemaGenerator()) {
+    if (\App\Models\View_page_ui_model::loadDeviceUiSchemaGenerator()) {
         \App\Services\DeviceUiSchemaGenerator::raiseMemoryLimit();
     }
 
     $modelno = $this->resolveBuilderModelNo($id, $this->request->getVar('modelno'));
-    $model_data = $this->View_page_model->getPageParameterMapping($modelno);
+    $model_data = $this->View_page_ui_model->getPageParameterMapping($modelno);
     if (!is_array($model_data)) {
         $model_data = ['rows' => [], 'page_names_array' => []];
     }
     // The canonical mapping is the DB row saved by submit_page_params/save_page_linking_row.
     // Avoid overriding it with short-lived session rows because those rows do not include
     // hydrated API metadata, which can make Studio revisit with missing/wrong components.
-    $uiTheme = $this->View_page_model->getDeviceUiTheme($modelno) ?: ['theme' => [], 'schema' => []];
+    $uiTheme = $this->View_page_ui_model->getDeviceUiTheme($modelno) ?: ['theme' => [], 'schema' => []];
     $requestNodeId = trim((string) $this->request->getGet('node_id'));
     $savedSchema = null;
     if (empty($model_data['rows'])) {
         try {
-            $savedSchema = $this->View_page_model->getDeviceUiSchema($modelno, $requestNodeId);
+            $savedSchema = $this->View_page_ui_model->getDeviceUiSchema($modelno, $requestNodeId);
         } catch (\Throwable $exception) {
             $savedSchema = null;
         }
@@ -93,7 +96,7 @@ public function view_page_ui($id = 0)
             $pageNo = trim((string) $this->request->getGet('row_page_no'));
             $pageName = trim((string) $this->request->getGet('row_page_name'));
             $sequence = (int) $this->request->getGet('row_sequence');
-            $preview = $this->View_page_model->buildSinglePagePreviewMapping(
+            $preview = $this->View_page_ui_model->buildSinglePagePreviewMapping(
                 $modelno,
                 $pageNo,
                 $pageName,
@@ -107,10 +110,10 @@ public function view_page_ui($id = 0)
         }
     }
 
-    $resolvedNodeId = method_exists($this->View_page_model, 'getDeviceUiNodeId')
-        ? $this->View_page_model->getDeviceUiNodeId($modelno, $requestNodeId)
+    $resolvedNodeId = method_exists($this->View_page_ui_model, 'getDeviceUiNodeId')
+        ? $this->View_page_ui_model->getDeviceUiNodeId($modelno, $requestNodeId)
         : '';
-    $deviceUiInfo = $this->View_page_model->getDeviceUiInfo($modelno, $requestNodeId !== '' ? $requestNodeId : $resolvedNodeId);
+    $deviceUiInfo = $this->View_page_ui_model->getDeviceUiInfo($modelno, $requestNodeId !== '' ? $requestNodeId : $resolvedNodeId);
 
     $schemaApiUrl = base_url('v8/api_schema.php') . '?model_no=' . rawurlencode((string) $modelno);
     $schemaNodeId = $resolvedNodeId !== '' ? $resolvedNodeId : $requestNodeId;
@@ -195,7 +198,7 @@ private function saveViewPageUiThemeBody()
     $modelno = trim((string) $this->request->getPost('modelno'));
     $themeJson = (string) $this->request->getPost('theme_json');
     $schemaJson = (string) $this->request->getPost('schema_json');
-    if (\App\Models\View_page_model::loadDeviceUiSchemaGenerator()) {
+    if (\App\Models\View_page_ui_model::loadDeviceUiSchemaGenerator()) {
         \App\Services\DeviceUiSchemaGenerator::raiseMemoryLimit();
     }
 
@@ -281,10 +284,10 @@ private function saveViewPageUiThemeBody()
         }
     }
 
-    $themeSaved = $this->View_page_model->saveDeviceUiTheme($modelno, $theme, $schema);
-    $schemaSaved = $this->View_page_model->saveDeviceUiSchema($modelno, $schema);
-    $saveError = method_exists($this->View_page_model, 'getDeviceUiSaveError')
-        ? trim((string) $this->View_page_model->getDeviceUiSaveError())
+    $themeSaved = $this->View_page_ui_model->saveDeviceUiTheme($modelno, $theme, $schema);
+    $schemaSaved = $this->View_page_ui_model->saveDeviceUiSchema($modelno, $schema);
+    $saveError = method_exists($this->View_page_ui_model, 'getDeviceUiSaveError')
+        ? trim((string) $this->View_page_ui_model->getDeviceUiSaveError())
         : '';
     $saveErrorSuffix = $saveError !== '' ? ' ' . $saveError : '';
 

@@ -268,7 +268,7 @@
 .ahp-card,.ahp-grid-slot{
   position:relative!important;
   overflow:hidden!important;
-  border-radius:var(--ahp-card-radius,2px)!important;
+  border-radius:var(--ahp-card-radius,0px)!important;
   background:transparent!important;
   box-shadow:none!important;
   min-height:0!important;
@@ -816,7 +816,7 @@ body.ahp-dragging-card .ahp-drag-handle{
 }
 .ahp-dev-cube{
   position:relative!important;
-  border-radius:16px!important;
+  border-radius:var(--ahp-card-radius,16px)!important;
   overflow:visible!important;
   isolation:isolate!important;
   box-shadow:0 0 0 1px rgba(255,255,255,.08),0 8px 20px rgba(0,0,0,.24)!important;
@@ -839,7 +839,7 @@ body.ahp-dragging-card .ahp-drag-handle{
 }
 .ahp-dev-face{
   padding:clamp(6px,10%,12px)!important;
-  border-radius:16px!important;
+  border-radius:var(--ahp-card-radius,16px)!important;
 }
 .ahp-dev-body{
   width:100%!important;height:100%!important;
@@ -2274,18 +2274,18 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
   row-gap:var(--ahp-grid-gap,4px)!important;
 }
 .ahp-card,.ahp-grid-slot{
-  border-radius:var(--ahp-card-radius,2px)!important;
+  border-radius:var(--ahp-card-radius,0px)!important;
   box-shadow:none!important;
   background:transparent!important;
 }
 .ahp-cube-face{
-  border-radius:var(--ahp-card-radius,2px)!important;
+  border-radius:var(--ahp-card-radius,0px)!important;
   box-shadow:none!important;
   border:0!important;
   text-shadow:none!important;
 }
 .ahp-grid:not(.ahp-application-grid) .ahp-cube-face{
-  border-radius:var(--ahp-card-radius,2px)!important;
+  border-radius:var(--ahp-card-radius,0px)!important;
   text-shadow:none!important;
 }
 .ahp-grid:not(.ahp-application-grid) .ahp-cube-face::after{
@@ -2353,7 +2353,7 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
   flex-direction:column!important;
   padding:0!important;
   overflow:hidden!important;
-  border-radius:var(--ahp-card-radius,2px)!important;
+  border-radius:var(--ahp-card-radius,0px)!important;
 }
 .ahp-mixed-image{
   flex:1 1 58%!important;
@@ -2472,8 +2472,9 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
   border:0!important;border-radius:50%!important;
   color:#fff!important;font-weight:800!important;font-size:15px!important;
   display:grid!important;place-items:center!important;cursor:pointer!important;
-  box-shadow:0 8px 18px rgba(124,58,237,.28)!important;
+  box-shadow:0 8px 18px rgba(124,58,237,.28)!important;overflow:hidden!important;padding:0!important;
 }
+.ahp-gn-avatar img{width:40px!important;height:40px!important;border-radius:50%!important;object-fit:cover!important;display:block!important;}
 .ahp-gn-feature-row{
   display:grid!important;
   grid-template-columns:repeat(2,minmax(0,1fr))!important;

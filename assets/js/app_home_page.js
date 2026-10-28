@@ -873,7 +873,7 @@
     ensureSavedCardsStructure();
     normalizeCardOrder();
     assignGridAreas();
-    ensureAllCardPositions(true);
+    ensureAllCardPositions(false);
     applyLoginUserProfileToLayout();
     layoutInitialized = true;
   }
@@ -2246,7 +2246,7 @@
       var n = parseInt(t.cardBorderRadius, 10);
       if (!isNaN(n)) return Math.max(0, Math.min(72, n));
     }
-    return 2;
+    return 0;
   }
 
   /** Label input = primary line on card; Subtitle input = secondary line. */
@@ -2403,8 +2403,14 @@
   }
 
   function deviceFaceRadius(face, device) {
-    if (face.borderRadius != null && face.borderRadius !== '') return parseInt(face.borderRadius, 10) || 16;
-    if (device.borderRadius != null && device.borderRadius !== '') return parseInt(device.borderRadius, 10) || 16;
+    if (face.borderRadius != null && face.borderRadius !== '') {
+      var faceRadiusValue = parseInt(face.borderRadius, 10);
+      if (!isNaN(faceRadiusValue)) return Math.max(0, faceRadiusValue);
+    }
+    if (device.borderRadius != null && device.borderRadius !== '') {
+      var deviceRadiusValue = parseInt(device.borderRadius, 10);
+      if (!isNaN(deviceRadiusValue)) return Math.max(0, deviceRadiusValue);
+    }
     return 16;
   }
 
@@ -3251,7 +3257,7 @@
         var text = readFaceEditorText(card, face);
         var label = text.label || ('Face ' + (i + 1));
         var sub = text.subtitle || '';
-        return '<button type="button" class="ahp-edit-face-card' + (i === activeFaceIndex ? ' active' : '') + '" data-face-index="' + i + '" style="background:' + esc(bg) + ';color:' + esc(titleColor) + ';border-radius:' + Math.max(12, Math.min(24, faceRadius(face, card))) + 'px">' +
+        return '<button type="button" class="ahp-edit-face-card' + (i === activeFaceIndex ? ' active' : '') + '" data-face-index="' + i + '" style="background:' + esc(bg) + ';color:' + esc(titleColor) + ';border-radius:' + faceRadius(face, card) + 'px">' +
           '<span class="ahp-edit-face-num">Face ' + (i + 1) + '</span>' +
           '<i class="fas ' + esc(face.icon || card.icon || 'fa-cube') + '" style="color:' + esc(iconColor) + '"></i>' +
           '<strong style="color:' + esc(titleColor) + '">' + esc(label) + '</strong>' +
@@ -3498,6 +3504,7 @@
     ensureCardSize(card);
     clampCardPosition(card);
     var slotStyle = styleAttr({
+      '--ahp-card-radius': radius + 'px',
       'border-radius': radius + 'px',
       'grid-column': card.col + ' / span ' + card.colSpan,
       'grid-row': card.row + ' / span ' + card.rowSpan
@@ -3520,6 +3527,7 @@
     clampCardPosition(card);
     var idx = layout.cards.findIndex(function (c) { return c.id === cardId; });
     var radius = cardRadius(card);
+    slot.style.setProperty('--ahp-card-radius', radius + 'px');
     slot.style.borderRadius = radius + 'px';
     slot.style.gridColumn = card.col + ' / span ' + card.colSpan;
     slot.style.gridRow = card.row + ' / span ' + card.rowSpan;
@@ -4805,6 +4813,7 @@
       '</div>';
     var slotStyle = styleAttr({
       '--ahp-dev-color': color,
+      '--ahp-card-radius': radius + 'px',
       'border-radius': radius + 'px',
       'grid-column': 'span ' + device.colSpan,
       'grid-row': 'span ' + device.rowSpan
@@ -5136,7 +5145,8 @@
 
       var faceRadiusNode = document.getElementById('deFaceRadius');
       if (faceRadiusNode) {
-        var cardR = parseInt(device.borderRadius, 10) || 16;
+        var cardR = parseInt(device.borderRadius, 10);
+        if (isNaN(cardR)) cardR = 16;
         var fr = parseInt(faceRadiusNode.value, 10);
         face.borderRadius = fr !== cardR ? fr : null;
       }
@@ -8023,9 +8033,18 @@
       radius = Math.max(0, Math.min(72, radius));
       getTheme().cardBorderRadius = radius;
       if (radiusNode) updateRangeUi(radiusNode, 'px');
-      if (el.grid && layout.cards && !layout.cards.length) {
-        renderLegacyCardGrid();
+      (layout.cards || []).forEach(function (card) {
+        if (!card) return;
+        card.borderRadius = radius;
+      });
+      var cardRadiusNode = document.getElementById('ceCardRadius');
+      if (cardRadiusNode) {
+        cardRadiusNode.value = String(radius);
+        updateRangeUi(cardRadiusNode, 'px');
+        var liveBox = document.querySelector('#ceCardRadiusLivePreview .ahp-radius-live-box');
+        if (liveBox) liveBox.style.borderRadius = radius + 'px';
       }
+      if (el.grid && layout.cards) renderGrid();
       markLayoutDirty();
     });
     bindField('toolCardFaceSec', function () {
@@ -8145,7 +8164,7 @@
             selectedNavEditId = null;
             layoutInitialized = false;
             ensureLayoutStructure();
-            ensureAllCardPositions(true);
+            ensureAllCardPositions(false);
             renderAll();
             resetLayoutHistory();
             layoutDirty = false;
@@ -8328,6 +8347,7 @@
     clampCardPosition(card);
     var idx = layout.cards.findIndex(function (c) { return c.id === cardId; });
     var radius = cardRadius(card);
+    slot.style.setProperty('--ahp-card-radius', radius + 'px');
     slot.style.borderRadius = radius + 'px';
     slot.style.gridColumn = card.col + ' / span ' + card.colSpan;
     slot.style.gridRow = card.row + ' / span ' + card.rowSpan;

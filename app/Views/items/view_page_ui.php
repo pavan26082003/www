@@ -732,17 +732,8 @@ if (!function_exists('view_ui_extract_all_ui_components')) {
             return $source === 'command' && view_ui_flag_is_true($flags);
         }
         $index = $source === 'response' ? 1 : ($source === 'error' ? 2 : 0);
-        if (isset($flags[$index]) && view_ui_flag_is_true($flags[$index])) {
-            return true;
-        }
-        if ($source === 'command') {
-            foreach ($flags as $flag) {
-                if (view_ui_flag_is_true($flag)) {
-                    return true;
-                }
-            }
-        }
-        return false;
+
+        return isset($flags[$index]) && view_ui_flag_is_true($flags[$index]);
     }
 
     function view_ui_field_level(array $field)
@@ -899,6 +890,101 @@ if (!function_exists('view_ui_extract_all_ui_components')) {
         }
 
         return !empty($components) ? $components : [$apiMeta];
+    }
+
+    /**
+     * Preview-only. One component per frame unless that frame's own multiple-UI
+     * flag is on. Schema generation still reads every rendered card.
+     */
+    function view_ui_source_multiple_ui_enabled(array $apiMeta, $source)
+    {
+        $source = strtolower(trim((string) $source));
+        $bySource = [];
+        if (!empty($apiMeta['multiple_ui_by_source']) && is_array($apiMeta['multiple_ui_by_source'])) {
+            $bySource = $apiMeta['multiple_ui_by_source'];
+        }
+        $frame = !empty($apiMeta['frame']) && is_array($apiMeta['frame']) ? $apiMeta['frame'] : [];
+        if (empty($bySource) && !empty($frame['multiple_ui_by_source']) && is_array($frame['multiple_ui_by_source'])) {
+            $bySource = $frame['multiple_ui_by_source'];
+        }
+        if (array_key_exists($source, $bySource)) {
+            return view_ui_flag_is_true($bySource[$source]);
+        }
+
+        $flags = $frame['multiple_ui'] ?? ($apiMeta['multiple_ui'] ?? []);
+        if (!is_array($flags)) {
+            return $source === 'command' && view_ui_flag_is_true($flags);
+        }
+        $index = $source === 'response' ? 1 : ($source === 'error' ? 2 : 0);
+
+        return isset($flags[$index]) && view_ui_flag_is_true($flags[$index]);
+    }
+
+    function view_ui_preview_visible_indexes(array $apiMeta, array $components)
+    {
+        $grouped = [];
+        foreach ($components as $index => $component) {
+            if (!is_array($component)) {
+                continue;
+            }
+            $source = strtolower(trim((string) ($component['ui_type_source'] ?? 'command')));
+            if (!in_array($source, ['command', 'response', 'error'], true)) {
+                $source = 'command';
+            }
+            $grouped[$source][] = $index;
+        }
+
+        $frame = !empty($apiMeta['frame']) && is_array($apiMeta['frame']) ? $apiMeta['frame'] : [];
+        $visible = [];
+        foreach ($grouped as $source => $indexes) {
+            if (view_ui_source_multiple_ui_enabled($apiMeta, $source)) {
+                foreach ($indexes as $index) {
+                    $visible[$index] = true;
+                }
+                continue;
+            }
+
+            $frameKey = $source === 'command' ? 'commands' : $source;
+            $fields = !empty($frame[$frameKey]) && is_array($frame[$frameKey]) ? $frame[$frameKey] : [];
+            $chosen = null;
+            foreach ($fields as $fieldIndex => $field) {
+                if (!is_array($field)) {
+                    continue;
+                }
+                $description = strtolower(trim((string) ($field['Field_description'] ?? ($field['field_description'] ?? ($field['default_name'] ?? '')))));
+                if (!in_array($description, ['data', 'trigger'], true)) {
+                    continue;
+                }
+                foreach ($indexes as $componentIndex) {
+                    if ((int) ($components[$componentIndex]['field_index'] ?? -1) === (int) $fieldIndex) {
+                        $chosen = $componentIndex;
+                        break 2;
+                    }
+                }
+            }
+            if ($chosen === null) {
+                foreach ($indexes as $componentIndex) {
+                    $description = strtolower(trim((string) ($components[$componentIndex]['field_description'] ?? '')));
+                    if (in_array($description, ['data', 'trigger'], true)) {
+                        $chosen = $componentIndex;
+                        break;
+                    }
+                }
+            }
+            if ($chosen === null) {
+                $chosen = $indexes[0];
+                foreach ($indexes as $componentIndex) {
+                    $fieldIndex = (int) ($components[$componentIndex]['field_index'] ?? PHP_INT_MAX);
+                    $chosenField = (int) ($components[$chosen]['field_index'] ?? PHP_INT_MAX);
+                    if ($fieldIndex < $chosenField) {
+                        $chosen = $componentIndex;
+                    }
+                }
+            }
+            $visible[$chosen] = true;
+        }
+
+        return $visible;
     }
 }
 if (!function_exists('view_ui_api_access_is_writable')) {
@@ -2632,6 +2718,10 @@ if (!function_exists('view_ui_icon')) {
 
     .param-component-stack > .param-card:last-child {
       border-bottom: 0;
+    }
+
+    .param-card.is-preview-collapsed {
+      display: none !important;
     }
 
     .param-card.is-grouped-component {
@@ -8411,6 +8501,16 @@ if (!function_exists('view_ui_icon')) {
                     if (view_ui_api_has_auto_trigger_component($apiMeta, $apiComponents)) {
                         continue;
                     }
+                    $previewVisibleIndexes = view_ui_preview_visible_indexes($apiMeta, $apiComponents);
+                    $previewVisibleCount = 0;
+                    foreach ($apiComponents as $previewIndex => $previewComponent) {
+                        if (isset($previewVisibleIndexes[$previewIndex])) {
+                            $previewVisibleCount++;
+                        }
+                    }
+                    if ($previewVisibleCount < 1) {
+                        $previewVisibleCount = count($apiComponents);
+                    }
                     $hasRelatedApiComponents = !empty($apiMeta) && is_array($apiMeta) && view_ui_api_ui_type_is_usable($apiMeta['ui_type'] ?? ($apiComponents[0]['ui_type'] ?? ''));
                     $hasMultipleApiComponents = count($apiComponents) > 1;
                     if ($hasRelatedApiComponents):
@@ -8418,7 +8518,7 @@ if (!function_exists('view_ui_icon')) {
                     <div class="param-group-card<?= $isGetStatusParam ? ' is-get-status-group' : '' ?>" data-get-status="<?= $isGetStatusParam ? '1' : '0' ?>" data-param-key="<?= esc($page['page_no'] . ':' . ($paramName ?: 'Parameter')) ?>" data-param-name="<?= esc($paramName ?: 'Parameter') ?>" data-sequence="<?= esc($param['sequence']) ?>">
                       <div class="param-group-header">
                         <span class="field-label"><?= esc($paramName ?: 'Parameter') ?></span>
-                        <span class="param-group-count"><?= esc((string) count($apiComponents)) ?> UI</span>
+                        <span class="param-group-count"><?= esc((string) $previewVisibleCount) ?> UI</span>
                       </div>
                       <div class="param-component-stack">
                     <?php endif;
@@ -8501,12 +8601,16 @@ if (!function_exists('view_ui_icon')) {
                         $closeResponsePanel = $nextSource !== 'response';
                     }
                     $getStatusCardClass = $isGetStatusResponse ? ' is-get-status-response' : ($isGetStatusCommand ? ' is-get-status-command' : '');
+                    $isPreviewCollapsed = !isset($previewVisibleIndexes[$apiComponentIndex]);
+                    if ($isPreviewCollapsed) {
+                        continue;
+                    }
                     ?>
                     <?php if ($openResponsePanel): ?>
                     <div class="get-status-response-panel" data-expanded="0">
                       <div class="get-status-response-inner">
                     <?php endif; ?>
-                    <div class="param-card<?= ($hasRelatedApiComponents ? ' is-grouped-component' : '') . ($isTimer ? ' layout-stacked' : '') . $getStatusCardClass ?>" data-get-status-command="<?= $isGetStatusCommand ? '1' : '0' ?>" data-param-key="<?= esc($paramKey) ?>" data-param-name="<?= esc($paramName ?: 'Parameter') ?>" data-api-ui-source="<?= esc($apiSource) ?>" data-api-field-index="<?= esc($apiFieldIndex) ?>" data-component-label="<?= esc($displayParamName ?: 'Component') ?>" data-component-value="<?= esc($displayParamValue ?: '') ?>" data-sequence="<?= esc($param['sequence']) ?>" data-component-type="<?= esc($componentType) ?>" data-api-meta="<?= esc(json_encode($apiMeta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
+                    <div class="param-card<?= ($hasRelatedApiComponents ? ' is-grouped-component' : '') . ($isTimer ? ' layout-stacked' : '') . $getStatusCardClass . ($isPreviewCollapsed ? ' is-preview-collapsed' : '') ?>" data-get-status-command="<?= $isGetStatusCommand ? '1' : '0' ?>" data-param-key="<?= esc($paramKey) ?>" data-param-name="<?= esc($paramName ?: 'Parameter') ?>" data-api-ui-source="<?= esc($apiSource) ?>" data-api-field-index="<?= esc($apiFieldIndex) ?>" data-component-label="<?= esc($displayParamName ?: 'Component') ?>" data-component-value="<?= esc($displayParamValue ?: '') ?>" data-sequence="<?= esc($param['sequence']) ?>" data-component-type="<?= esc($componentType) ?>" data-api-meta="<?= esc(json_encode($apiMeta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
                       <div class="param-main-row">
                         <button type="button" class="param-icon" data-icon-picker-trigger="1" data-icon="<?= esc($paramIcon) ?>" aria-label="Change <?= esc($paramName ?: 'parameter') ?> icon"><?= view_ui_icon($paramIcon) ?></button>
                         <div>
@@ -13196,6 +13300,9 @@ if (!function_exists('view_ui_icon')) {
         if (control.readOnly === true || !protocolAccessIsWritable(meta)) {
           control.events = [];
           control.interactive = false;
+          if (typeof control.action === 'string' && control.action.indexOf('update_') === 0) {
+            delete control.action;
+          }
           if (control.component) {
             control.component.events = [];
             control.component.interactive = false;
@@ -13407,16 +13514,36 @@ if (!function_exists('view_ui_icon')) {
       visitor(node);
       if (Array.isArray(node.children)) walkSchemaTree(node.children, visitor);
       if (node.widgetTree) walkSchemaTree(node.widgetTree, visitor);
+      if (node.properties && typeof node.properties === 'object') walkSchemaTree(node.properties, visitor);
       if (node.component && node.component.widgetTree) walkSchemaTree(node.component.widgetTree, visitor);
       if (node.ui && node.ui.widgetTree) walkSchemaTree(node.ui.widgetTree, visitor);
+    }
+
+    function eventIsWrite(ev) {
+      if (!ev) return false;
+      const name = String(ev.event || ev.name || '').toLowerCase();
+      if (['onchange', 'onchanged', 'onchangeend', 'ontap', 'onvaluecommitted', 'onsubmitted', 'onselected', 'onsendtap', 'oncommand'].indexOf(name) !== -1) {
+        return true;
+      }
+      const action = ev.action;
+      if (typeof action === 'string' && action.indexOf('update_') === 0) return true;
+      const type = action && String(action.type || '').toLowerCase();
+      if (type === 'send' || type === 'update' || type === 'write') return true;
+      const id = action && String(action.id || action.actionId || '');
+      return id.indexOf('update_') === 0;
     }
 
     function stripWriteActionsFromTree(tree) {
       walkSchemaTree(tree, function(node) {
         if (Array.isArray(node.events)) {
           node.events = node.events.filter(function(ev) {
-            const type = ev && ev.action && String(ev.action.type || '').toLowerCase();
-            return type !== 'send' && type !== 'update';
+            return !eventIsWrite(ev);
+          });
+        } else if (node.events && typeof node.events === 'object') {
+          Object.keys(node.events).forEach(function(eventName) {
+            const ev = node.events[eventName];
+            const probe = ev && typeof ev === 'object' ? Object.assign({ event: eventName }, ev) : { event: eventName };
+            if (eventIsWrite(probe)) delete node.events[eventName];
           });
         }
         if (node.props && typeof node.props === 'object') {
@@ -13454,6 +13581,9 @@ if (!function_exists('view_ui_icon')) {
       control.interactive = writable;
       if (writable) return control;
       control.events = [];
+      if (typeof control.action === 'string' && control.action.indexOf('update_') === 0) {
+        delete control.action;
+      }
       if (control.component) {
         control.component.events = [];
         control.component.readOnly = true;
@@ -14080,11 +14210,13 @@ if (!function_exists('view_ui_icon')) {
       }, extra || {});
     }
 
-    function noneDeviceFrameField() {
+    function noneDeviceFrameField(parameterName) {
+      const label = String(parameterName || '').trim();
+      const name = label && label.toLowerCase() !== 'frame' ? label : 'Value';
       return {
-        default_name: 'None',
+        default_name: name,
         value: null,
-        Field_description: 'None',
+        Field_description: name,
         no_of_bytes: 0,
         byte_start_position: 0,
         ui_type: 'None',
@@ -14121,6 +14253,53 @@ if (!function_exists('view_ui_icon')) {
       return raw;
     }
 
+    function hexIsZeroPadding(value) {
+      const raw = String(value == null ? '' : value).replace(/[^0-9A-Fa-f]/g, '');
+      return raw !== '' && /^0+$/.test(raw);
+    }
+
+    function protocolSlotNeedsFill(current, incoming) {
+      if (isEmptyFrameValue(incoming)) return false;
+      if (isEmptyFrameValue(current)) return true;
+      return hexIsZeroPadding(current) && !hexIsZeroPadding(incoming);
+    }
+
+    function choiceListOrNull(list) {
+      if (list == null) return null;
+      const source = Array.isArray(list) ? list : [list];
+      const clean = [];
+      source.forEach(function(item) {
+        if (item && typeof item === 'object') return;
+        const text = String(item == null ? '' : item).trim();
+        if (!text || text === '[]' || text === '{}' || text.toLowerCase() === 'null') return;
+        clean.push(text);
+      });
+      return clean.length ? clean : null;
+    }
+
+    function telemetryNameIsGeneric(name) {
+      const text = String(name || '').toLowerCase().trim();
+      return !text || text === 'data' || text === 'none' || text === 'field' || /^field_\d+$/.test(text);
+    }
+
+    function labelTelemetryFields(fields, parameterName) {
+      const label = String(parameterName || '').trim();
+      return (Array.isArray(fields) ? fields : []).map(function(field) {
+        if (!field || typeof field !== 'object') return field;
+        const current = String(field.default_name || '').trim();
+        const description = String(field.Field_description || field.field_description || '').trim();
+        if (!telemetryNameIsGeneric(current)) return field;
+        const nextLabel = !telemetryNameIsGeneric(description) ? description : (label && label.toLowerCase() !== 'frame' ? label : 'Value');
+        const next = Object.assign({}, field);
+        next.default_name = nextLabel;
+        if (telemetryNameIsGeneric(description)) {
+          next.Field_description = nextLabel;
+          next.field_description = nextLabel;
+        }
+        return next;
+      });
+    }
+
     function hydrateDeviceFrameFields(fields, meta) {
       meta = meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : {};
       const commandId = meta.command_id || meta.commandId;
@@ -14133,6 +14312,15 @@ if (!function_exists('view_ui_icon')) {
         let bytes = parseInt(next.no_of_bytes, 10);
         if (!Number.isFinite(bytes) || bytes < 1) bytes = 1;
         next.no_of_bytes = bytes;
+        let slotFill = null;
+        if (name === 'commandid') slotFill = commandId;
+        else if (name === 'functioncode') slotFill = functionCode;
+        else if (name === 'actionid') slotFill = actionId;
+        if (slotFill != null && !isEmptyFrameValue(slotFill) && protocolSlotNeedsFill(next.value, slotFill)) {
+          const normalizedSlot = normalizeProtocolHex(slotFill, bytes) || slotFill;
+          next.value = normalizedSlot;
+          if (protocolSlotNeedsFill(next.asperui_value, normalizedSlot)) next.asperui_value = normalizedSlot;
+        }
         // Only promote asperui → wire when asperui is protocol hex (Rule 1).
         if (isEmptyFrameValue(next.value) && !isEmptyFrameValue(next.asperui_value) && looksLikeProtocolHex(next.asperui_value)) {
           next.value = next.asperui_value;
@@ -14149,6 +14337,9 @@ if (!function_exists('view_ui_icon')) {
             }
             next.value = '00'.repeat(bytes);
           }
+          ['asperui', 'asperui_values', 'sno_asperui'].forEach(function(key) {
+            if (Object.prototype.hasOwnProperty.call(next, key)) next[key] = choiceListOrNull(next[key]);
+          });
           return next;
         }
         let fill = null;
@@ -14160,6 +14351,9 @@ if (!function_exists('view_ui_icon')) {
           next.value = fill;
           if (isEmptyFrameValue(next.asperui_value)) next.asperui_value = fill;
         }
+        ['asperui', 'asperui_values', 'sno_asperui'].forEach(function(key) {
+          if (Object.prototype.hasOwnProperty.call(next, key)) next[key] = choiceListOrNull(next[key]);
+        });
         return next;
       });
     }
@@ -14325,8 +14519,8 @@ if (!function_exists('view_ui_icon')) {
           },
           trigger_ui: Array.isArray(frame.trigger_ui) ? frame.trigger_ui : ['false', 'false', 'false'],
           commands: commands,
-          response: repairDeviceFrameBytePositions(hydrateDeviceFrameFields(Array.isArray(frame.response) ? frame.response : [], meta)),
-          error: repairDeviceFrameBytePositions(hydrateDeviceFrameFields(Array.isArray(frame.error) ? frame.error : [], meta))
+          response: labelTelemetryFields(repairDeviceFrameBytePositions(hydrateDeviceFrameFields(Array.isArray(frame.response) ? frame.response : [], meta)), name),
+          error: labelTelemetryFields(repairDeviceFrameBytePositions(hydrateDeviceFrameFields(Array.isArray(frame.error) ? frame.error : [], meta)), name)
         };
       }
       return buildDeviceFrameFromMeta(name, Object.assign({}, meta, frame && typeof frame === 'object' ? { frame: frame } : {}));
@@ -14368,9 +14562,9 @@ if (!function_exists('view_ui_icon')) {
         ui_type: uiType,
         local_control: 'enable',
         ui_ids: 0,
-        asperui: Array.isArray(meta.items) ? meta.items : [],
-        sno_asperui: Array.isArray(meta.sno_asperui) ? meta.sno_asperui : [],
-        asperui_values: Array.isArray(meta.item_values) ? meta.item_values : [],
+        asperui: choiceListOrNull(Array.isArray(meta.items) ? meta.items : []),
+        sno_asperui: choiceListOrNull(Array.isArray(meta.sno_asperui) ? meta.sno_asperui : []),
+        asperui_values: choiceListOrNull(Array.isArray(meta.item_values) ? meta.item_values : []),
         ui_description: access,
         slider_step_value: meta.step != null ? meta.step : '',
         display_value: {
@@ -14391,8 +14585,8 @@ if (!function_exists('view_ui_icon')) {
           : { command: multipleUi[0] || 'false', response: multipleUi[1] || 'false', error: multipleUi[2] || 'false' },
         trigger_ui: Array.isArray(meta.trigger_ui) ? meta.trigger_ui : [isTrigger ? 'true' : 'false', 'false', 'false'],
         commands: commands,
-        response: [noneDeviceFrameField()],
-        error: [noneDeviceFrameField()]
+        response: [noneDeviceFrameField(parameterName)],
+        error: [noneDeviceFrameField(parameterName)]
       };
     }
 
@@ -22751,10 +22945,12 @@ if (!function_exists('view_ui_icon')) {
                 inactiveColor: '#D9DEEB',
                 needleColor: '#0F2550'
               });
-              component.events = [
-                { event: 'onChanged', action: { type: 'update', binding: binding } },
-                { event: 'onValueCommitted', action: { type: 'send', binding: binding } }
-              ];
+              if (protocolAccessIsWritable(meta)) {
+                component.events = [
+                  { event: 'onChanged', action: { type: 'update', binding: binding } },
+                  { event: 'onValueCommitted', action: { type: 'send', binding: binding } }
+                ];
+              }
             }
           }
           if (type === 'segmented') {
@@ -22767,10 +22963,12 @@ if (!function_exists('view_ui_icon')) {
               });
             }
             if (segEl && segEl.dataset.value) component.default = segEl.dataset.value;
-            component.events = [
-              { event: 'onChanged', action: { type: 'update', binding: binding } },
-              { event: 'onSelected', action: { type: 'send', binding: binding } }
-            ];
+            if (protocolAccessIsWritable(meta)) {
+              component.events = [
+                { event: 'onChanged', action: { type: 'update', binding: binding } },
+                { event: 'onSelected', action: { type: 'send', binding: binding } }
+              ];
+            }
           }
           components[componentId] = component;
           actions[actionId] = {
@@ -23179,9 +23377,12 @@ if (!function_exists('view_ui_icon')) {
         }
         if ((!control.events || !control.events.length) && control.binding && control.readOnly !== true && protocolAccessIsWritable(control.protocolMeta)) {
           control.events = buildControlInteractionEvents(control.componentType || control.controlType || 'auto', control.binding, { writable: true });
-        } else if (control.readOnly === true || (control.protocolMeta && !protocolAccessIsWritable(control.protocolMeta))) {
+          } else if (control.readOnly === true || (control.protocolMeta && !protocolAccessIsWritable(control.protocolMeta))) {
           // P0-2: never re-add write events to read-only controls.
           control.events = [];
+          if (typeof control.action === 'string' && control.action.indexOf('update_') === 0) {
+            delete control.action;
+          }
           if (control.component) {
             control.component.events = [];
             // P0-1: ensure disabled visual state is present.
@@ -23201,6 +23402,9 @@ if (!function_exists('view_ui_icon')) {
               color: currentTheme.textColor || '#0F172A',
               textColor: currentTheme.textColor || '#0F172A'
             };
+            if (control.component.widgetTree) {
+              stripWriteActionsFromTree(control.component.widgetTree);
+            }
           }
         }
         if (control.initialValue == null && control.value != null) {

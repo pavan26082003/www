@@ -30,6 +30,7 @@ class ChatController extends GridChatBaseController
     private const MAX_FORWARD_MESSAGES = 30;
 
     private const CALL_HISTORY_LIMIT = 100;
+    private const MAX_DISAPPEARING_SECONDS = 31536000; // one year
 
     /** Mute options â†’ seconds (-1 = always, 0 = unmute). */
     private const MUTE_DURATIONS = ['8h' => 28800, '1w' => 604800, 'always' => -1, 'off' => 0];
@@ -65,10 +66,8 @@ class ChatController extends GridChatBaseController
                 return $this->respondError('Choose a user to chat with', 422, $errors);
             }
 
+            // My own id opens "Message yourself" (a direct chat with only me in it)
             $otherUserId = (int) $input['user_id'];
-            if ($otherUserId === $me) {
-                return $this->respondError('You cannot start a chat with yourself', 422);
-            }
             if ($this->userProfileModel->getUser($otherUserId)['isDeleted']) {
                 return $this->respondError('This user is not available', 404);
             }
@@ -191,6 +190,7 @@ class ChatController extends GridChatBaseController
                     'body' => $input['body'] !== '' ? $input['body'] : null,
                     'metadata' => $metadata,
                     'reply_to_message_id' => $replyTo > 0 ? $replyTo : null,
+                    'expires_at' => grid_chat_expires_at($this->conversationModel->getDisappearingSeconds($conversationId)),
                 ]);
 
                 $this->hideFromBlocker($conversationId, $messageId, $hiddenForUserId);
@@ -202,8 +202,8 @@ class ChatController extends GridChatBaseController
                 throw $e;
             }
 
-            $this->pushMobileNotification($me, $conversationId, (string) $input['message_type'], (string) $input['body'], $metadata);
             $this->notifyNewMessage($conversationId, $messageId, $me, $hiddenForUserId);
+            $this->pushOutgoingToDevices($me, $conversationId, (int) $messageId, (string) $input['message_type'], (string) $input['body'], $metadata);
 
             $message = $this->messageModel->findById($messageId);
             return $this->respondSuccess(['message' => $this->formatMessages([$message], $me)[0]], 201);
@@ -211,8 +211,44 @@ class ChatController extends GridChatBaseController
     }
 
     /**
-     * POST call_id, call_type, callee_user_id or conversation_id.
-     * Sends the high-priority INCOMING_CALL payload to the other person's device tokens.
+     * @param mixed $metadata
+     */
+    private function pushOutgoingToDevices(int $me, int $conversationId, int $messageId, string $messageType, string $body, $metadata): void
+    {
+        try {
+            $recipients = [];
+            foreach ($this->memberModel->activeMembers($conversationId) as $member) {
+                $memberId = (int) ($member['user_id'] ?? 0);
+                if ($memberId > 0 && $memberId !== $me) {
+                    $recipients[] = $memberId;
+                }
+            }
+            if ($recipients === []) {
+                return;
+            }
+
+            $push = new \App\Libraries\DevicePushService();
+            if ($messageType === 'call') {
+                $data = is_string($metadata) ? json_decode($metadata, true) : $metadata;
+                $status = is_array($data) ? strtolower((string) ($data['status'] ?? '')) : '';
+                $callId = is_array($data) ? trim((string) ($data['call_id'] ?? '')) : '';
+                if ($callId !== '' && in_array($status, ['cancelled', 'canceled', 'declined'], true)) {
+                    foreach ($recipients as $recipientId) {
+                        $push->sendCallSignal($recipientId, $callId, 'CALL_CANCELLED');
+                    }
+                }
+                return;
+            }
+
+            $push->sendChatMessage($me, $recipients, $body, (string) $messageId);
+        } catch (\Throwable $e) {
+            log_message('error', 'Chat push: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * POST call_id, call_type, callee_user_id or conversation_id, target_grid_id.
+     * Forwards the call to the FCM push. Does not change the chat message.
      */
     public function call_invite()
     {
@@ -222,7 +258,7 @@ class ChatController extends GridChatBaseController
             $calleeId = (int) $this->request->getPost('callee_user_id');
             $conversationId = (int) $this->request->getPost('conversation_id');
 
-            if (!$this->isCallId($callId)) {
+            if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/', $callId)) {
                 return $this->respondError('Invalid call id', 422);
             }
             if (!in_array($callType, self::CALL_TYPES, true)) {
@@ -239,8 +275,13 @@ class ChatController extends GridChatBaseController
                 return $this->respondError('Callee not found', 422);
             }
 
+            $targetGridId = trim((string) $this->request->getPost('target_grid_id'));
+            if ($targetGridId === '') {
+                $targetGridId = trim((string) $this->request->getPost('callee_grid_id'));
+            }
+
             try {
-                (new \App\Libraries\DevicePushService())->sendIncomingCall($me, $calleeId, $callId, $callType);
+                (new \App\Libraries\DevicePushService())->sendIncomingCall($me, $calleeId, $callId, $callType, $targetGridId);
             } catch (\Throwable $e) {
                 log_message('error', 'Call invite push: ' . $e->getMessage());
             }
@@ -286,6 +327,56 @@ class ChatController extends GridChatBaseController
             }
 
             return $this->respondSuccess(['conversationId' => $conversationId] + $state);
+        });
+    }
+
+    /**
+     * POST conversation_id, message_id -> record that this device received a message.
+     *
+     * Delivery and reading are separate: receiving a notification/chat event gives
+     * the sender grey double ticks, while only read() may give blue double ticks.
+     */
+    public function delivered()
+    {
+        return $this->guarded(function (int $me) {
+            $input = [
+                'conversation_id' => $this->request->getPost('conversation_id'),
+                'message_id' => $this->request->getPost('message_id'),
+            ];
+            $errors = $this->validateInput([
+                'conversation_id' => 'required|is_natural_no_zero',
+                'message_id' => 'required|is_natural_no_zero',
+            ], $input);
+            if ($errors) {
+                return $this->respondError('Invalid request', 422, $errors);
+            }
+
+            $conversationId = (int) $input['conversation_id'];
+            $messageId = (int) $input['message_id'];
+            if (!$this->findMembership($conversationId, $me)) {
+                return $this->respondError('Conversation not found', 404);
+            }
+
+            // The receiver may acknowledge only a message they can actually see.
+            // Duplicate socket events and retries are harmless in markDelivered().
+            $rows = array_values(array_filter(
+                $this->messageModel->visibleForUserByIds($me, [$messageId]),
+                static fn (array $row): bool => (int) $row['conversation_id'] === $conversationId
+            ));
+            if (!$rows) {
+                return $this->respondError('Message not found', 404);
+            }
+
+            $senders = $this->receiptModel->markDelivered($me, $rows);
+            if ($senders) {
+                $this->notifyReceipts($senders, $me);
+            }
+
+            return $this->respondSuccess([
+                'conversationId' => $conversationId,
+                'messageId' => $messageId,
+                'delivered' => true,
+            ]);
         });
     }
 
@@ -384,6 +475,73 @@ class ChatController extends GridChatBaseController
 
             $this->memberModel->setFavourite($conversationId, $me, $input['is_favourite'] === '1');
             return $this->respondConversation($me, $conversationId);
+        });
+    }
+
+    /** POST conversation_id, seconds -> timer for new messages in this conversation. */
+    public function disappearing()
+    {
+        return $this->guarded(function (int $me) {
+            $input = [
+                'conversation_id' => $this->request->getPost('conversation_id'),
+                'seconds' => $this->request->getPost('seconds'),
+            ];
+            $errors = $this->validateInput([
+                'conversation_id' => 'required|is_natural_no_zero',
+                'seconds' => 'required|is_natural|less_than_equal_to[' . self::MAX_DISAPPEARING_SECONDS . ']',
+            ], $input);
+            if ($errors) {
+                return $this->respondError('Invalid disappearing-message duration', 422, $errors);
+            }
+
+            $conversationId = (int) $input['conversation_id'];
+            $seconds = (int) $input['seconds'];
+            if (!$this->findMembership($conversationId, $me)) {
+                return $this->respondError('Conversation not found', 404);
+            }
+
+            $previousSeconds = $this->conversationModel->getDisappearingSeconds($conversationId);
+            if ($previousSeconds === $seconds) {
+                return $this->respondConversation($me, $conversationId);
+            }
+
+            if (!$this->conversationModel->setDisappearingSeconds($conversationId, $seconds)) {
+                return $this->respondError('Could not update disappearing messages', 500);
+            }
+
+            // Keep an auditable, non-expiring notice in the conversation. Unlike regular
+            // messages this row never inherits the disappearing timer it announces.
+            $messageId = $this->messageModel->createSystemMessage(
+                $conversationId,
+                $me,
+                'disappearing',
+                ['seconds' => $seconds]
+            );
+            $messageRow = $this->messageModel->findById($messageId);
+
+            // Other participants sync the new notice immediately without receiving an OS
+            // "new message" push for a settings change.
+            $this->notifyMessageChanged($conversationId, $messageId, $me);
+            $this->notifyDisappearingUpdated($conversationId, $seconds, $me);
+            return $this->respondSuccess([
+                'conversation' => $this->buildConversationList($me, [$conversationId])[0] ?? null,
+                'message' => $messageRow ? ($this->formatMessages([$messageRow], $me)[0] ?? null) : null,
+            ]);
+        });
+    }
+
+    /** POST -> hard-delete expired messages in conversations belonging to this user. */
+    public function purge_expired()
+    {
+        return $this->guarded(function (int $me) {
+            $result = (new \App\Libraries\GRID_CHAT\DisappearingMessageService())->purgeForUser($me);
+            return $this->respondSuccess([
+                'messageIds' => $result['messageIds'],
+                'conversationIds' => $result['conversationIds'],
+                'conversations' => $result['conversationIds']
+                    ? $this->buildConversationList($me, $result['conversationIds'])
+                    : [],
+            ]);
         });
     }
 
@@ -585,8 +743,8 @@ class ChatController extends GridChatBaseController
         }
 
         $isGroup = !empty($data['is_group']);
-        $callId = trim((string) ($data['call_id'] ?? ''));
-        if ($callId !== '' && !$this->isCallId($callId)) {
+        $callId = (string) ($data['call_id'] ?? '');
+        if ($callId !== '' && !preg_match('/^[A-Za-z0-9-]{1,64}$/', $callId)) {
             return [null, 'Invalid call id'];
         }
         if ($status === 'ongoing' && (!$isGroup || $callId === '')) {
@@ -611,56 +769,10 @@ class ChatController extends GridChatBaseController
         ];
         if ($isGroup) {
             $record['is_group'] = true;
-        }
-        if ($callId !== '' || $isGroup) {
             $record['call_id'] = $callId !== '' ? $callId : null;
         }
 
         return [$record, null];
-    }
-
-    /** UUID from the web app, or the mobile id shape such as CALL_1042_9921. */
-    private function isCallId(string $callId): bool
-    {
-        return (bool) preg_match('/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/', $callId);
-    }
-
-    /**
-     * Data-only FCM: NEW_MESSAGE for chat, CALL_HANDLED or MISSED_CALL for a finished call.
-     */
-    private function pushMobileNotification(int $senderId, int $conversationId, string $messageType, string $body, $metadata): void
-    {
-        try {
-            $recipients = [];
-            foreach ($this->memberModel->activeMembers($conversationId) as $member) {
-                $memberId = (int) ($member['user_id'] ?? 0);
-                if ($memberId > 0 && $memberId !== $senderId) {
-                    $recipients[] = $memberId;
-                }
-            }
-            if (!$recipients) {
-                return;
-            }
-
-            $push = new \App\Libraries\DevicePushService();
-            if ($messageType === 'call') {
-                $data = is_string($metadata) ? json_decode($metadata, true) : null;
-                $status = is_array($data) ? strtolower((string) ($data['status'] ?? '')) : '';
-                $callId = is_array($data) ? trim((string) ($data['call_id'] ?? '')) : '';
-                $type = $status === 'missed' ? 'CALL_MISSED' : 'CALL_CANCELLED';
-                if ($status === 'completed' || $status === 'ongoing' || $callId === '') {
-                    return;
-                }
-                foreach ($recipients as $recipientId) {
-                    $push->sendCallSignal($recipientId, $callId, $type);
-                }
-                return;
-            }
-
-            $push->sendChatMessage($senderId, $recipients, $body);
-        } catch (\Throwable $e) {
-            log_message('error', 'Chat push: ' . $e->getMessage());
-        }
     }
 
     /** POST message_id, option_index â€” records vote in grid_chat_db.poll_votes */
@@ -787,6 +899,7 @@ class ChatController extends GridChatBaseController
                         'body' => $source['body'],
                         'metadata' => json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                         'reply_to_message_id' => null,
+                        'expires_at' => grid_chat_expires_at($this->conversationModel->getDisappearingSeconds($conversationId)),
                     ], $file ? [
                         // Same stored file: messages are only ever soft-deleted, so it stays available
                         'file_path' => $file['file_path'],

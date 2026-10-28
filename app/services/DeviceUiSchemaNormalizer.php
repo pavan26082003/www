@@ -85,9 +85,11 @@ class DeviceUiSchemaNormalizer
         // Inventing bytes is still forbidden — only copy known product_api values.
         // Terminator is protocol-fixed (0A) when the slot is present but empty.
         $schema = self::hydrateWriteFieldsFromMeta($schema, $report);
+        $schema = self::repairPublishedFrames($schema);
         // Send/writable controls: complete CommandId/Function/Data/Terminator
         // framing, enforce hex-width = 2*no_of_bytes, and publish write access.
         $schema = self::enforceSendProtocolContract($schema, $report);
+        $schema = self::repairPublishedFrames($schema);
         $schema = self::applyCardStyles($schema, $report);
         $schema = self::normalizeControlContracts($schema);
         // Rebuild missing multi-page hardware frames after controls are normalized.
@@ -518,9 +520,11 @@ class DeviceUiSchemaNormalizer
                 $fill = $actionId;
             }
 
-            if (($value === null || $value === '' || $value === []) && $fill !== null) {
+            if ($fill !== null && self::protocolSlotNeedsFill($value, $fill)) {
                 $field['value'] = $fill;
-                if (!isset($field['asperui_value']) || $field['asperui_value'] === null || $field['asperui_value'] === '') {
+                if (!isset($field['asperui_value']) || $field['asperui_value'] === null || $field['asperui_value'] === ''
+                    || self::protocolSlotNeedsFill($field['asperui_value'], $fill)
+                ) {
                     $field['asperui_value'] = $fill;
                 }
                 $changed = true;
@@ -577,6 +581,300 @@ class DeviceUiSchemaNormalizer
             return $candidate;
         }
         return null;
+    }
+
+    /**
+     * Empty slots and zero-padding written when product_api had no hex
+     * must take the real protocolMeta id. A stored non-zero id is left alone.
+     */
+    private static function protocolSlotNeedsFill($current, $incoming)
+    {
+        if ($incoming === null || $incoming === '' || $incoming === []) {
+            return false;
+        }
+        if ($current === null || $current === '' || $current === []) {
+            return true;
+        }
+        $currentHex = strtoupper(preg_replace('/[^0-9A-F]/', '', (string) $current));
+        $incomingHex = strtoupper(preg_replace('/[^0-9A-F]/', '', (string) $incoming));
+        $currentZero = $currentHex !== '' && preg_match('/^0+$/', $currentHex) === 1;
+        $incomingZero = $incomingHex !== '' && preg_match('/^0+$/', $incomingHex) === 1;
+
+        return $currentZero && !$incomingZero;
+    }
+
+    /**
+     * Copy known command ids into every frame the app reads, drop "[]" option
+     * lists, and name response telemetry after the parameter.
+     */
+    private static function repairPublishedFrames(array $schema)
+    {
+        if (!isset($schema['controls']) || !is_array($schema['controls'])) {
+            return $schema;
+        }
+        foreach ($schema['controls'] as $index => $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+            $meta = isset($control['protocolMeta']) && is_array($control['protocolMeta']) ? $control['protocolMeta'] : [];
+            $parameterName = trim((string) self::firstNonEmpty(
+                isset($control['parameterName']) ? $control['parameterName'] : null,
+                isset($control['parameter']) ? $control['parameter'] : null,
+                isset($control['label']) ? $control['label'] : null
+            ));
+            $commandId = self::firstNonEmpty(
+                isset($meta['command_id']) ? $meta['command_id'] : null,
+                isset($meta['commandId']) ? $meta['commandId'] : null
+            );
+            $functionCode = self::firstNonEmpty(
+                isset($meta['function_code']) ? $meta['function_code'] : null,
+                isset($meta['functionCode']) ? $meta['functionCode'] : null
+            );
+            $actionId = self::firstNonEmpty(
+                isset($meta['action_id']) ? $meta['action_id'] : null,
+                isset($meta['actionId']) ? $meta['actionId'] : null
+            );
+            if (isset($control['deviceFrame']) && is_array($control['deviceFrame'])) {
+                $control['deviceFrame'] = self::repairFrameDocument($control['deviceFrame'], $commandId, $functionCode, $actionId, $parameterName);
+            }
+            if (isset($meta['frame']) && is_array($meta['frame'])) {
+                $meta['frame'] = self::repairFrameDocument($meta['frame'], $commandId, $functionCode, $actionId, $parameterName);
+            }
+            if (isset($meta['ui_components']) && is_array($meta['ui_components'])) {
+                foreach ($meta['ui_components'] as $componentIndex => $component) {
+                    if (!is_array($component)) {
+                        continue;
+                    }
+                    $componentCommand = self::firstNonEmpty(
+                        isset($component['command_id']) ? $component['command_id'] : null,
+                        $commandId
+                    );
+                    $componentFunction = self::firstNonEmpty(
+                        isset($component['function_code']) ? $component['function_code'] : null,
+                        $functionCode
+                    );
+                    $componentAction = self::firstNonEmpty(
+                        isset($component['action_id']) ? $component['action_id'] : null,
+                        $actionId
+                    );
+                    $componentName = trim((string) self::firstNonEmpty(
+                        isset($component['parameter_name']) ? $component['parameter_name'] : null,
+                        $parameterName
+                    ));
+                    if (isset($component['frame']) && is_array($component['frame'])) {
+                        $component['frame'] = self::repairFrameDocument($component['frame'], $componentCommand, $componentFunction, $componentAction, $componentName);
+                    }
+                    foreach (['items', 'item_values', 'sno_asperui'] as $listKey) {
+                        if (array_key_exists($listKey, $component)) {
+                            $component[$listKey] = self::choiceListOrNull($component[$listKey]);
+                        }
+                    }
+                    $meta['ui_components'][$componentIndex] = $component;
+                }
+            }
+            $control['protocolMeta'] = $meta;
+            $schema['controls'][$index] = $control;
+        }
+
+        return $schema;
+    }
+
+    private static function repairFrameDocument(array $frame, $commandId, $functionCode, $actionId, $parameterName)
+    {
+        foreach (['commands', 'response', 'error'] as $group) {
+            if (!isset($frame[$group]) || !is_array($frame[$group])) {
+                continue;
+            }
+            foreach ($frame[$group] as $index => $field) {
+                if (!is_array($field)) {
+                    continue;
+                }
+                $name = self::frameFieldName($field);
+                $fill = null;
+                if ($name === 'commandid') {
+                    $fill = $commandId;
+                } elseif ($name === 'functioncode') {
+                    $fill = $functionCode;
+                } elseif ($name === 'actionid') {
+                    $fill = $actionId;
+                }
+                if ($fill !== null && self::protocolSlotNeedsFill(isset($field['value']) ? $field['value'] : null, $fill)) {
+                    $field['value'] = $fill;
+                    if (!isset($field['asperui_value']) || self::protocolSlotNeedsFill($field['asperui_value'], $fill)) {
+                        $field['asperui_value'] = $fill;
+                    }
+                }
+                if (in_array($group, ['response', 'error'], true)) {
+                    $label = self::telemetryLabel($field, $parameterName);
+                    if ($label !== '') {
+                        $field['default_name'] = $label;
+                        $description = trim((string) (isset($field['Field_description']) ? $field['Field_description'] : (isset($field['field_description']) ? $field['field_description'] : '')));
+                        if ($description === '' || self::telemetryNameIsGeneric($description)) {
+                            $field['Field_description'] = $label;
+                            $field['field_description'] = $label;
+                        }
+                    }
+                }
+                foreach (['asperui', 'asperui_values', 'sno_asperui'] as $listKey) {
+                    if (array_key_exists($listKey, $field)) {
+                        $field[$listKey] = self::choiceListOrNull($field[$listKey]);
+                    }
+                }
+                $frame[$group][$index] = $field;
+            }
+        }
+
+        return $frame;
+    }
+
+    private static function telemetryNameIsGeneric($name)
+    {
+        $name = strtolower(trim((string) $name));
+
+        return $name === '' || in_array($name, ['data', 'none', 'field'], true) || preg_match('/^field_\d+$/', $name) === 1;
+    }
+
+    private static function telemetryLabel(array $field, $parameterName)
+    {
+        $current = trim((string) (isset($field['default_name']) ? $field['default_name'] : ''));
+        $description = trim((string) (isset($field['Field_description']) ? $field['Field_description'] : (isset($field['field_description']) ? $field['field_description'] : '')));
+        if (!self::telemetryNameIsGeneric($current) && $current !== '') {
+            return $current;
+        }
+        if (!self::telemetryNameIsGeneric($description) && $description !== '') {
+            return $description;
+        }
+        $raw = isset($field['asperui_value']) ? trim((string) $field['asperui_value']) : '';
+        if ($raw !== '' && !self::telemetryNameIsGeneric($raw) && !preg_match('/^[0-9A-Fa-f]+$/', $raw)) {
+            return $raw;
+        }
+        $parameterName = trim((string) $parameterName);
+        if ($parameterName !== '' && strcasecmp($parameterName, 'frame') !== 0) {
+            return $parameterName;
+        }
+
+        return $current !== '' && !self::telemetryNameIsGeneric($current) ? $current : 'Value';
+    }
+
+    private static function choiceListOrNull($value)
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (!is_array($value)) {
+            $text = trim((string) $value);
+            if ($text === '' || $text === '[]' || $text === '{}') {
+                return null;
+            }
+            $decoded = json_decode($text, true);
+            $value = is_array($decoded) ? $decoded : [$text];
+        }
+        $clean = [];
+        foreach ($value as $item) {
+            if (is_array($item) || is_object($item)) {
+                continue;
+            }
+            $text = trim((string) $item);
+            if ($text === '' || $text === '[]' || $text === '{}' || strcasecmp($text, 'null') === 0) {
+                continue;
+            }
+            $clean[] = $text;
+        }
+
+        return $clean === [] ? null : array_values($clean);
+    }
+
+    private static function stripWriteEvents(&$node)
+    {
+        if (!is_array($node)) {
+            return;
+        }
+        if (isset($node['events']) && is_array($node['events'])) {
+            $keys = array_keys($node['events']);
+            $isList = $keys === [] || $keys === range(0, count($keys) - 1);
+            if ($isList) {
+                $node['events'] = array_values(array_filter($node['events'], static function ($event) {
+                    return !self::eventIsWrite($event);
+                }));
+            } else {
+                foreach ($node['events'] as $eventName => $event) {
+                    $probe = is_array($event) ? $event : [];
+                    if (!isset($probe['event']) && !isset($probe['name'])) {
+                        $probe['event'] = (string) $eventName;
+                    }
+                    if (self::eventIsWrite($probe)) {
+                        unset($node['events'][$eventName]);
+                    }
+                }
+            }
+        }
+        foreach ($node as $key => &$child) {
+            if ($key === 'events' || !is_array($child)) {
+                continue;
+            }
+            self::stripWriteEvents($child);
+        }
+        unset($child);
+    }
+
+    private static function eventIsWrite($event)
+    {
+        if (!is_array($event)) {
+            return false;
+        }
+        $name = strtolower(trim((string) (isset($event['event']) ? $event['event'] : (isset($event['name']) ? $event['name'] : ''))));
+        if (in_array($name, ['onchange', 'onchanged', 'onchangeend', 'ontap', 'onvaluecommitted', 'onsubmitted', 'onselected', 'onsendtap', 'oncommand'], true)) {
+            return true;
+        }
+        $action = isset($event['action']) ? $event['action'] : null;
+        if (is_string($action) && stripos($action, 'update_') === 0) {
+            return true;
+        }
+        if (!is_array($action)) {
+            return false;
+        }
+        $type = strtolower(trim((string) (isset($action['type']) ? $action['type'] : '')));
+        if (in_array($type, ['send', 'update', 'write'], true)) {
+            return true;
+        }
+        $id = trim((string) (isset($action['id']) ? $action['id'] : (isset($action['actionId']) ? $action['actionId'] : '')));
+
+        return stripos($id, 'update_') === 0;
+    }
+
+    private static function rememberControlAction(array &$schema, array $control)
+    {
+        $actionId = trim((string) (isset($control['action']) ? $control['action'] : ''));
+        if ($actionId === '') {
+            return;
+        }
+        if (!isset($schema['actions']) || is_object($schema['actions'])) {
+            $schema['actions'] = is_object($schema['actions']) ? (array) $schema['actions'] : [];
+        }
+        if (!is_array($schema['actions'])) {
+            $schema['actions'] = [];
+        }
+        if (isset($schema['actions'][$actionId]) && is_array($schema['actions'][$actionId])) {
+            return;
+        }
+        $meta = isset($control['protocolMeta']) && is_array($control['protocolMeta']) ? $control['protocolMeta'] : [];
+        $binding = trim((string) (isset($control['binding']) ? $control['binding'] : ''));
+        $schema['actions'][$actionId] = [
+            'type' => 'dataOperation',
+            'dataSource' => 'deviceCommands',
+            'operation' => 'write',
+            'input' => [
+                'modelNo' => '$app.modelNo',
+                'parameter' => trim((string) self::firstNonEmpty(
+                    isset($control['parameterName']) ? $control['parameterName'] : null,
+                    isset($control['parameter']) ? $control['parameter'] : null,
+                    isset($control['label']) ? $control['label'] : null
+                )),
+                'value' => $binding !== '' ? ('$' . $binding) : '',
+                'commandId' => isset($meta['command_id']) ? $meta['command_id'] : null,
+                'functionCode' => isset($meta['function_code']) ? $meta['function_code'] : null,
+            ],
+        ];
     }
 
     // ---------------------------------------------------------------- node ids
@@ -2046,9 +2344,6 @@ class DeviceUiSchemaNormalizer
                 continue;
             }
             $id = trim((string) (isset($control['id']) ? $control['id'] : ''));
-            if ($id !== '') {
-                $control['action'] = 'update_' . trim(preg_replace('/[^a-zA-Z0-9]+/', '_', $id), '_');
-            }
             $type = strtolower(str_replace(['_', '-'], '', (string) (isset($control['componentType']) ? $control['componentType'] : '')));
             $catalog = strtolower(str_replace(['_', '-'], '', (string) (isset($control['catalogComponentType']) ? $control['catalogComponentType'] : '')));
             $labels = [
@@ -2139,6 +2434,22 @@ class DeviceUiSchemaNormalizer
             $control['readOnly'] = !$writable;
             $control['interactive'] = $writable;
             $control['enabled'] = $writable;
+            if ($writable && $id !== '') {
+                $control['action'] = 'update_' . trim(preg_replace('/[^a-zA-Z0-9]+/', '_', $id), '_');
+                self::rememberControlAction($schema, $control);
+            } else {
+                unset($control['action']);
+                $control['events'] = [];
+                if (isset($control['component']) && is_array($control['component'])) {
+                    $control['component']['events'] = [];
+                    if (!empty($control['component']['widgetTree']) && is_array($control['component']['widgetTree'])) {
+                        self::stripWriteEvents($control['component']['widgetTree']);
+                    }
+                }
+                if (!empty($control['widgetTree']) && is_array($control['widgetTree'])) {
+                    self::stripWriteEvents($control['widgetTree']);
+                }
+            }
             // Rule 3: writable Send/input controls publish access explicitly.
             if ($writable) {
                 $control['access'] = 'write';

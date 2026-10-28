@@ -41,6 +41,7 @@ $reorderPageUrl = get_uri("items/reorder_saved_pages");
 $deletePageUrlAlt = get_uri("modal_pages_controller/delete_saved_page");
 $reorderPageUrlAlt = get_uri("modal_pages_controller/reorder_saved_pages");
 $linkingPageUrl = get_uri("items/api_page_linking/" . (int) $modal_id . "?modelno=" . rawurlencode($modelno));
+$backUrl = get_uri("items/viewapis/" . (int) $modal_id . "?modelno=" . rawurlencode((string) $modelno));
 $viewApisUrl = get_uri("items/viewapis/" . (int) $modal_id . "?modelno=" . rawurlencode($modelno));
 $csrfName = function_exists('csrf_token') ? csrf_token() : 'rise_csrf_token';
 $csrfHash = function_exists('csrf_hash') ? csrf_hash() : '';
@@ -49,7 +50,7 @@ $csrfHash = function_exists('csrf_hash') ? csrf_hash() : '';
 <div class="page-config-shell">
     <header class="page-config-header">
         <div class="page-config-header-main">
-            <a href="#" id="backButton" class="btn page-back-button" aria-label="Go back">
+            <a href="<?php echo esc($backUrl); ?>" id="backButton" class="btn page-back-button" aria-label="Go back">
                 <i class="fa fa-arrow-left" aria-hidden="true"></i>
             </a>
 
@@ -1601,7 +1602,7 @@ select.form-control {
                     data: form.serialize(),
                     success: function(response) {
                         if (response && response.success) {
-                            pages_names = uniquePages(response.pages && response.pages.length ? response.pages : pages_names.concat(submittedPages));
+                            pages_names = uniquePages(pages_names.concat(submittedPages).concat(response.pages || []));
                             clearAddPageForm();
                             counter = 1;
                             renderPageList();
@@ -1760,18 +1761,4 @@ select.form-control {
     document.head.appendChild(jqueryScript);
 })();
 
-function handleBackButton() {
-    window.history.back();
-}
-(function () {
-    var back = document.getElementById('backButton');
-    if (!back || back.getAttribute('data-back-bound') === '1') {
-        return;
-    }
-    back.setAttribute('data-back-bound', '1');
-    back.addEventListener('click', function (event) {
-        event.preventDefault();
-        handleBackButton();
-    });
-})();
 </script>

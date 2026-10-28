@@ -129,7 +129,25 @@ class Modal_pages_model extends Model
 
     public function extract_pages($user_id, $modelno, $id = null)
     {
-        $pages = [];
+        $pages = $this->loadVendorPages($user_id, $modelno, $id);
+        $pages = $this->mergeLegacyProductApiPagesIntoExtract($pages, $modelno, $id);
+
+        // Old models keep their real pages on product_api. Once any new page is
+        // stored in vendorproduct_pages, those older pages must stay in the list
+        // and become real rows so a later save cannot drop them.
+        if ($id !== null && $id !== '' && (int) $id > 0) {
+            $inserted = $this->persistMissingVendorPages((int) $id, $user_id, $modelno, $pages);
+            if ($inserted > 0) {
+                $pages = $this->loadVendorPages($user_id, $modelno, $id);
+                $pages = $this->mergeLegacyProductApiPagesIntoExtract($pages, $modelno, $id);
+            }
+        }
+
+        return $pages;
+    }
+
+    private function loadVendorPages($user_id, $modelno, $id = null)
+    {
         $table = $this->vendorPagesTable();
 
         if ($id !== null && $id !== '') {
@@ -139,22 +157,177 @@ class Modal_pages_model extends Model
                 ORDER BY IFNULL(sequence_no, id), id";
 
             $query = $this->db->query($sql, array((int) $id));
-            $pages = $query ? $query->getResultArray() : array();
-        } else {
-            $sql = "SELECT full_page_name AS page_names, sequence_no
-                FROM " . $table . "
-                WHERE user_id = ? AND modelno = ?
-                ORDER BY IFNULL(sequence_no, id), id";
- 
-            $query = $this->db->query($sql, array($user_id, $modelno));
-            $pages = $query ? $query->getResultArray() : array();
+            return $query ? $query->getResultArray() : array();
         }
 
-        if (!empty($pages)) {
-            return $pages;
+        $sql = "SELECT full_page_name AS page_names, sequence_no
+            FROM " . $table . "
+            WHERE user_id = ? AND modelno = ?
+            ORDER BY IFNULL(sequence_no, id), id";
+
+        $query = $this->db->query($sql, array($user_id, $modelno));
+        return $query ? $query->getResultArray() : array();
+    }
+
+    private function persistMissingVendorPages($vendorProductId, $userId, $modelNo, array $pages)
+    {
+        $vendorProductId = (int) $vendorProductId;
+        if ($vendorProductId <= 0 || empty($pages)) {
+            return 0;
         }
 
-        return $this->mergeLegacyProductApiPagesIntoExtract($pages, $modelno, $id);
+        $table = $this->vendorPagesTable();
+        $existingQuery = $this->db->query(
+            "SELECT full_page_name, user_id, modelno, sequence_no FROM " . $table . " WHERE vendorproduct_id = ?",
+            array($vendorProductId)
+        );
+        $existingRows = $existingQuery ? $existingQuery->getResultArray() : array();
+
+        $seen = array();
+        $resolvedUserId = trim((string) $userId);
+        $resolvedModelNo = trim((string) $modelNo);
+        $maxSequence = 0;
+
+        foreach ($existingRows as $row) {
+            $name = strtolower(trim((string) (isset($row['full_page_name']) ? $row['full_page_name'] : '')));
+            if ($name !== '') {
+                $seen[$name] = true;
+            }
+            if ($resolvedUserId === '' && !empty($row['user_id'])) {
+                $resolvedUserId = trim((string) $row['user_id']);
+            }
+            if ($resolvedModelNo === '' && !empty($row['modelno'])) {
+                $resolvedModelNo = trim((string) $row['modelno']);
+            }
+            $sequence = (int) (isset($row['sequence_no']) ? $row['sequence_no'] : 0);
+            if ($sequence > $maxSequence) {
+                $maxSequence = $sequence;
+            }
+        }
+
+        if ($resolvedModelNo === '') {
+            $resolvedModelNo = $this->resolveModelNoForVendorProduct($vendorProductId, $modelNo);
+        }
+
+        if ($resolvedUserId === '' && $resolvedModelNo !== '') {
+            $apiTable = $this->productApiTable();
+            $userQuery = $this->db->query(
+                "SELECT user_id FROM " . $apiTable . " WHERE model_name = ? AND user_id IS NOT NULL AND user_id != '' ORDER BY id DESC LIMIT 1",
+                array($resolvedModelNo)
+            );
+            $userRow = $userQuery ? $userQuery->getRowArray() : null;
+            if (!empty($userRow['user_id'])) {
+                $resolvedUserId = trim((string) $userRow['user_id']);
+            }
+        }
+
+        if ($resolvedUserId === '') {
+            return 0;
+        }
+
+        $inserted = 0;
+        foreach ($pages as $page) {
+            $fullPageName = trim((string) (isset($page['page_names']) ? $page['page_names'] : ''));
+            $nameKey = strtolower($fullPageName);
+            if ($fullPageName === '' || isset($seen[$nameKey]) || strcasecmp($fullPageName, 'None') === 0) {
+                continue;
+            }
+
+            $pageName = $fullPageName;
+            $pageExtension = 'PAGE';
+            $dotPosition = strrpos($fullPageName, '.');
+            if ($dotPosition !== false && $dotPosition > 0) {
+                $pageName = substr($fullPageName, 0, $dotPosition);
+                $extension = substr($fullPageName, $dotPosition + 1);
+                if ($extension !== '') {
+                    $pageExtension = $extension;
+                }
+            }
+
+            $sequenceNo = (int) (isset($page['sequence_no']) ? $page['sequence_no'] : 0);
+            if ($sequenceNo <= 0) {
+                $maxSequence++;
+                $sequenceNo = $maxSequence;
+            } elseif ($sequenceNo > $maxSequence) {
+                $maxSequence = $sequenceNo;
+            }
+
+            $insertSql = "INSERT INTO " . $table . "
+                (vendorproduct_id, user_id, modelno, page_name, page_extension, full_page_name, sequence_no)
+                VALUES (?, ?, ?, ?, ?, ?, ?)";
+            $insertOk = $this->db->query($insertSql, array(
+                $vendorProductId,
+                substr($resolvedUserId, 0, 10),
+                $resolvedModelNo,
+                substr($pageName, 0, 150),
+                substr($pageExtension, 0, 30),
+                substr($fullPageName, 0, 200),
+                $sequenceNo
+            ));
+
+            if ($insertOk) {
+                $seen[$nameKey] = true;
+                $inserted++;
+            }
+        }
+
+        if ($inserted > 0) {
+            $this->autoPersistDeviceUiSchemaForModel($resolvedModelNo);
+        }
+
+        return $inserted;
+    }
+
+    private function collectModelAliases($vendorProductId, $fallbackModelNo = '')
+    {
+        $aliases = array();
+        $addAlias = function ($value) use (&$aliases) {
+            $value = trim((string) $value);
+            if ($value !== '' && strcasecmp($value, 'N/A') !== 0 && !in_array($value, $aliases, true)) {
+                $aliases[] = $value;
+            }
+        };
+
+        $addAlias($fallbackModelNo);
+        $vendorProductId = (int) $vendorProductId;
+
+        if ($vendorProductId > 0) {
+            try {
+                $row = $this->db->table('vendorproducts')
+                    ->select('modelno, modelname')
+                    ->where('id', $vendorProductId)
+                    ->get()
+                    ->getRowArray();
+                if (!empty($row)) {
+                    $addAlias(isset($row['modelno']) ? $row['modelno'] : '');
+                    $addAlias(isset($row['modelname']) ? $row['modelname'] : '');
+                }
+            } catch (\Throwable $e) {
+                // Keep the fallback model number.
+            }
+
+            $table = $this->vendorPagesTable();
+            $query = $this->db->query(
+                "SELECT DISTINCT modelno FROM " . $table . " WHERE vendorproduct_id = ? AND modelno IS NOT NULL AND modelno != ''",
+                array($vendorProductId)
+            );
+            foreach (($query ? $query->getResultArray() : array()) as $pageRow) {
+                $addAlias(isset($pageRow['modelno']) ? $pageRow['modelno'] : '');
+            }
+        }
+
+        if (!empty($aliases) && $this->db->tableExists('product_api')) {
+            $placeholders = implode(', ', array_fill(0, count($aliases), '?'));
+            $apiQuery = $this->db->query(
+                "SELECT DISTINCT model_name FROM " . $this->productApiTable() . " WHERE model_name IN (" . $placeholders . ")",
+                $aliases
+            );
+            foreach (($apiQuery ? $apiQuery->getResultArray() : array()) as $apiRow) {
+                $addAlias(isset($apiRow['model_name']) ? $apiRow['model_name'] : '');
+            }
+        }
+
+        return $aliases;
     }
 
     private function mergeLegacyProductApiPagesIntoExtract(array $pages, $modelno, $id = null)
@@ -180,35 +353,36 @@ class Modal_pages_model extends Model
         }
 
         $apiTable = $this->productApiTable();
-        $itemId = (int) $id;
-
-        if ($itemId > 0) {
-            $sql = "SELECT page_names, page_no, cmd_uipageno
-                FROM " . $apiTable . "
-                WHERE model_name = ?
-                AND page_names != ''
-                AND (itemid = ? OR model_name = ?)
-                ORDER BY id ASC";
-            $query = $this->db->query($sql, array($modelno, $itemId, $modelno));
-        } else {
-            $sql = "SELECT page_names, page_no, cmd_uipageno
-                FROM " . $apiTable . "
-                WHERE model_name = ?
-                AND page_names != ''
-                ORDER BY id ASC";
-            $query = $this->db->query($sql, array($modelno));
+        $aliases = $this->collectModelAliases($id, $modelno);
+        if (empty($aliases)) {
+            return $pages;
         }
+
+        $placeholders = implode(', ', array_fill(0, count($aliases), '?'));
+        $sql = "SELECT page_names, page_no, cmd_uipageno
+            FROM " . $apiTable . "
+            WHERE model_name IN (" . $placeholders . ")
+            AND page_names != ''
+            ORDER BY id ASC";
+        $query = $this->db->query($sql, $aliases);
 
         $legacyRows = $query ? $query->getResultArray() : array();
 
         $legacyByName = [];
         foreach ($legacyRows as $legacyRow) {
-            $name = trim((string) ($legacyRow['page_names'] ?? ''));
-            if ($name === '' || isset($legacyByName[strtolower($name)])) {
-                continue;
-            }
+            $rawName = trim((string) ($legacyRow['page_names'] ?? ''));
+            $nameParts = (strpos($rawName, ',') !== false) ? explode(',', $rawName) : array($rawName);
 
-            $legacyByName[strtolower($name)] = $legacyRow;
+            foreach ($nameParts as $name) {
+                $name = trim((string) $name);
+                if ($name === '' || strcasecmp($name, 'None') === 0 || isset($legacyByName[strtolower($name)])) {
+                    continue;
+                }
+
+                $copy = $legacyRow;
+                $copy['page_names'] = $name;
+                $legacyByName[strtolower($name)] = $copy;
+            }
         }
 
         foreach ($legacyByName as $legacyRow) {
@@ -463,21 +637,131 @@ class Modal_pages_model extends Model
         }
 
         $apiTable = $this->productApiTable();
-        $itemId = (int) $modal_id;
+        $query = $this->db->query(
+            "SELECT id, page_names FROM " . $apiTable . "
+                WHERE model_name = ?
+                AND page_names IS NOT NULL
+                AND TRIM(page_names) <> ''",
+            array($modelno)
+        );
+        $rows = $query ? $query->getResultArray() : array();
 
-        if ($itemId > 0) {
-            $updateSql = "UPDATE " . $apiTable . "
-                SET page_names = ''
-                WHERE model_name = ? AND page_names = ? AND itemid = ?";
-            $ok = $this->db->query($updateSql, array($modelno, $pageName, $itemId));
-        } else {
-            $updateSql = "UPDATE " . $apiTable . "
-                SET page_names = ''
-                WHERE model_name = ? AND page_names = ?";
-            $ok = $this->db->query($updateSql, array($modelno, $pageName));
+        foreach ($rows as $row) {
+            $rawName = trim((string) (isset($row['page_names']) ? $row['page_names'] : ''));
+            $parts = array_values(array_filter(array_map('trim', explode(',', $rawName)), function ($part) {
+                return $part !== '';
+            }));
+            $kept = array();
+            $removed = false;
+
+            foreach ($parts as $part) {
+                if (strcasecmp($part, $pageName) === 0) {
+                    $removed = true;
+                    continue;
+                }
+                $kept[] = $part;
+            }
+
+            if (!$removed) {
+                continue;
+            }
+
+            $this->db->query(
+                "UPDATE " . $apiTable . " SET page_names = ? WHERE id = ?",
+                array(implode(',', $kept), (int) $row['id'])
+            );
         }
 
-        return $ok ? true : false;
+        $this->removePageFromLinkingRecord($modelno, $pageName);
+
+        return true;
+    }
+
+    private function removePageFromLinkingRecord($modelno, $pageName)
+    {
+        $modelno = trim((string) $modelno);
+        $pageName = strtolower(trim((string) $pageName));
+        if ($modelno === '' || $pageName === '' || !$this->db->tableExists('api_page_linking_data')) {
+            return false;
+        }
+
+        $record = $this->db->table('api_page_linking_data')
+            ->where('model_name', $modelno)
+            ->orderBy('created_at', 'DESC')
+            ->get()
+            ->getRowArray();
+
+        if (empty($record['id'])) {
+            return false;
+        }
+
+        $pageNames = json_decode(isset($record['page_names']) ? $record['page_names'] : '[]', true);
+        $linkingData = json_decode(isset($record['linking_data']) ? $record['linking_data'] : '[]', true);
+        if (!is_array($pageNames)) {
+            $pageNames = array();
+        }
+        if (!is_array($linkingData)) {
+            $linkingData = array();
+        }
+
+        $removedPageNos = array();
+        foreach ($pageNames as $pageNo => $name) {
+            if (strtolower(trim((string) $name)) === $pageName) {
+                $removedPageNos[] = (string) $pageNo;
+                unset($pageNames[$pageNo]);
+            }
+        }
+
+        foreach ($linkingData as $pageKey => $entries) {
+            if ($pageKey === '__ui_rows__' || !is_array($entries)) {
+                continue;
+            }
+
+            if (in_array((string) $pageKey, $removedPageNos, true)) {
+                unset($linkingData[$pageKey]);
+                continue;
+            }
+
+            $keptEntries = array();
+            foreach ($entries as $entry) {
+                $entryName = is_array($entry) ? trim((string) (isset($entry['page_name']) ? $entry['page_name'] : '')) : '';
+                if ($entryName !== '' && strtolower($entryName) === $pageName) {
+                    continue;
+                }
+                $keptEntries[] = $entry;
+            }
+
+            if (empty($keptEntries)) {
+                unset($linkingData[$pageKey]);
+            } else {
+                $linkingData[$pageKey] = array_values($keptEntries);
+            }
+        }
+
+        if (isset($linkingData['__ui_rows__']) && is_array($linkingData['__ui_rows__'])) {
+            $keptRows = array();
+            foreach ($linkingData['__ui_rows__'] as $uiRow) {
+                if (!is_array($uiRow)) {
+                    continue;
+                }
+                $rowName = strtolower(trim((string) (isset($uiRow['page_name']) ? $uiRow['page_name'] : '')));
+                $rowNo = trim((string) (isset($uiRow['page_no']) ? $uiRow['page_no'] : ''));
+                if ($rowName === $pageName || ($rowNo !== '' && in_array($rowNo, $removedPageNos, true))) {
+                    continue;
+                }
+                $keptRows[] = $uiRow;
+            }
+            $linkingData['__ui_rows__'] = array_values($keptRows);
+        }
+
+        $this->db->table('api_page_linking_data')
+            ->where('id', (int) $record['id'])
+            ->update(array(
+                'page_names' => json_encode($pageNames, JSON_UNESCAPED_UNICODE),
+                'linking_data' => json_encode($linkingData, JSON_UNESCAPED_UNICODE),
+            ));
+
+        return true;
     }
 
     public function get_last_db_error()

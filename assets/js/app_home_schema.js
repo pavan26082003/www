@@ -669,19 +669,28 @@
     statLabel: { maxLines: 2, overflow: 'ellipsis', softWrap: true }
   };
 
+  /**
+   * rowHeight and minRowHeight are always dp numbers. The app rejects a
+   * non-numeric rowHeight (it becomes null and the home grid is not drawn).
+   */
   function buildResponsiveGridLayouts(theme) {
     theme = theme || {};
     var homeGridColumns = resolveHomeGridColumns(theme);
     var gridGap = resolveGridGap(theme);
     var homeGridRowHeight = resolveHomeGridRowHeight(theme);
     var narrowColumns = Math.min(2, homeGridColumns);
+    function track(numericHeight) {
+      var n = Number(numericHeight);
+      if (!isFinite(n)) n = homeGridRowHeight;
+      return n;
+    }
     return {
       narrow: {
         columns: narrowColumns,
         columnGap: gridGap,
         rowGap: gridGap,
-        rowHeight: homeGridRowHeight,
-        minRowHeight: homeGridRowHeight,
+        rowHeight: track(homeGridRowHeight),
+        minRowHeight: track(homeGridRowHeight),
         maximumContentWidth: 359,
         minimumCellWidthDp: 96
       },
@@ -689,27 +698,31 @@
         columns: homeGridColumns,
         columnGap: gridGap,
         rowGap: gridGap,
-        rowHeight: homeGridRowHeight,
-        minRowHeight: homeGridRowHeight,
+        rowHeight: track(homeGridRowHeight),
+        minRowHeight: track(homeGridRowHeight),
         minimumCellWidthDp: 96
       },
       medium: {
         columns: Math.max(homeGridColumns, 4),
         columnGap: gridGap,
         rowGap: gridGap,
-        rowHeight: Math.max(88, homeGridRowHeight - 8),
-        minRowHeight: Math.max(88, homeGridRowHeight - 8),
+        rowHeight: track(Math.max(88, homeGridRowHeight - 8)),
+        minRowHeight: track(Math.max(88, homeGridRowHeight - 8)),
         maximumContentWidth: 720
       },
       expanded: {
         columns: Math.max(homeGridColumns, 6),
         columnGap: gridGap,
         rowGap: gridGap,
-        rowHeight: Math.max(96, homeGridRowHeight),
-        minRowHeight: Math.max(96, homeGridRowHeight),
+        rowHeight: track(Math.max(96, homeGridRowHeight)),
+        minRowHeight: track(Math.max(96, homeGridRowHeight)),
         maximumContentWidth: 1200
       }
     };
+  }
+
+  function homeGridLayouts(theme) {
+    return buildResponsiveGridLayouts(theme);
   }
 
   function clampColumnSpan(columnSpan, maxColumns) {
@@ -1122,7 +1135,7 @@
     var isLight = theme.bgStyle === 'light';
     var logout = resolveLogoutButtonColors(theme);
     var defaultRotation = resolveCardRotationDirection(null);
-    var responsiveLayouts = buildResponsiveGridLayouts(theme);
+    var responsiveLayouts = homeGridLayouts(theme);
     var gridGap = resolveGridGap(theme);
     return {
       version: '1.0.0',
@@ -1139,6 +1152,7 @@
         gap: gridGap,
         rowHeightDp: resolveHomeGridRowHeight(theme),
         minCardRowHeightDp: resolveHomeGridRowHeight(theme),
+        sizeFormula: 'slotWidth',
         cardWidthFormula: '(cellWidth * columnSpan) + ((columnSpan - 1) * columnGap)',
         cardHeightFormula: '(rowHeight * rowSpan) + ((rowSpan - 1) * rowGap)',
         responsiveLayouts: responsiveLayouts
@@ -1384,7 +1398,7 @@
     var n = Number(value);
     if (!isFinite(n) || n < 0) return 16;
     if (n === 0) return 0;
-    if (n > 16) return 16;
+    if (n > 72) return 72;
     return Math.round(n);
   }
 
@@ -1412,12 +1426,19 @@
       theme.showWelcome = true;
     }
     if (!staticUi && (theme.showWelcome == null)) theme.showWelcome = true;
-    theme.cardBorderRadius = publishedCardRadius(theme.cardBorderRadius);
+    var explicitRadii = [];
     if (Array.isArray(layout.cards)) {
       layout.cards.forEach(function (card) {
         if (!card || card.borderRadius == null || card.borderRadius === '') return;
         card.borderRadius = publishedCardRadius(card.borderRadius);
+        explicitRadii.push(card.borderRadius);
       });
+    }
+    // A tile radius of 0 is square. Do not leave radius.card at 16 when every tile is 0.
+    if (explicitRadii.length && explicitRadii.every(function (n) { return n === 0; })) {
+      theme.cardBorderRadius = 0;
+    } else {
+      theme.cardBorderRadius = publishedCardRadius(theme.cardBorderRadius);
     }
     if (!staticUi) layout.homeTemplate = theme.homeTemplate || layout.homeTemplate || 'default';
     return layout;
@@ -1468,9 +1489,10 @@
         gap: resolveGridGap(theme),
         rowHeightDp: resolveHomeGridRowHeight(theme),
         minCardRowHeightDp: resolveHomeGridRowHeight(theme),
+        sizeFormula: 'slotWidth',
         defaultFaceSec: resolveCardFaceSec(null, theme, {}),
         defaultCycleDurationMs: (theme.cardSpeed != null ? Number(theme.cardSpeed) : 16) * 1000,
-        responsiveLayouts: buildResponsiveGridLayouts(theme)
+        responsiveLayouts: homeGridLayouts(theme)
       },
       animation: {
         holdRatio: CUBE_HOLD_RATIO,
@@ -1632,6 +1654,11 @@
     return { fit: fit, position: pos, scale: scale };
   }
 
+  function isSelfLabeledBanner(url) {
+    var u = String(url || '').toLowerCase();
+    return u.indexOf('hrms-human-resource-management-system') !== -1 || u.indexOf('2283105665') !== -1;
+  }
+
   function buildHomeFace(face, card, fi, usedIcons, theme, cfg) {
     var cardType = card.type || 'link';
     var type = faceType(cardType, face, fi, card);
@@ -1712,6 +1739,21 @@
           objectFit: imageDisplay.fit,
           objectPosition: imageDisplay.position
         });
+        if (isSelfLabeledBanner(imgSrc)) {
+          out.title = '';
+          delete out.subtitle;
+          out.showIcon = false;
+          out.imageFit = 'contain';
+          out.imageScale = 100;
+          out.appearance = Object.assign({}, out.appearance, {
+            backgroundColor: '#ffffff',
+            hideIcon: true,
+            showIcon: false,
+            imageFit: 'contain',
+            objectFit: 'contain',
+            imageScale: 100
+          });
+        }
       } else {
         out.type = 'stack';
         out.title = face.title || face.label || card.title || card.label || '';
@@ -3229,7 +3271,7 @@
           columnSpan: cardCol,
           rowSpan: cardRow,
           borderRadius: cardBorderRadius,
-          minRowHeightDp: resolveHomeGridRowHeight(theme),
+          minRowHeightDp: homeGridRowHeight,
           sizeFormula: 'slotWidth'
         },
         appearance: {
@@ -3456,9 +3498,10 @@
         gap: resolveGridGap(theme),
         independentScroll: false,
         width: '100%',
-        maxWidth: '100%'
-      }, buildResponsiveGridLayouts(theme).compact),
-      layouts: buildResponsiveGridLayouts(theme),
+        maxWidth: '100%',
+        sizeFormula: 'slotWidth'
+      }, homeGridLayouts(theme).compact),
+      layouts: homeGridLayouts(theme),
       overflowPolicy: 'reflow',
       preventHorizontalOverflow: true,
       preserveChildOrder: true,
@@ -3862,7 +3905,7 @@
           narrowScreenMaxColumns: 2,
           preserveMetroColumnsOnNarrow: false,
           recalculateOnOrientationChange: true,
-          layouts: buildResponsiveGridLayouts(theme),
+          layouts: homeGridLayouts(theme),
           breakpointColumns: {
             narrow: Math.min(2, homeGridColumns),
             compact: homeGridColumns,
@@ -3878,6 +3921,7 @@
           homeGridColumns: homeGridColumns,
           columnGap: gridGap,
           rowGap: gridGap,
+          sizeFormula: 'slotWidth',
           defaultRowHeightDp: homeGridRowHeight,
           minCardRowHeightDp: homeGridRowHeight
         }
@@ -4959,10 +5003,10 @@
     var responsiveLayouts = (global.AhpSchemaV2 && global.AhpSchemaV2.buildResponsiveGridLayouts)
       ? global.AhpSchemaV2.buildResponsiveGridLayouts(theme)
       : {
-        narrow: { columns: 2, columnGap: 12, rowGap: 12, rowHeight: 96 },
-        compact: { columns: 3, columnGap: 12, rowGap: 12, rowHeight: 96 },
-        medium: { columns: 4, columnGap: 12, rowGap: 12, rowHeight: 88 },
-        expanded: { columns: 6, columnGap: 12, rowGap: 12, rowHeight: 96 }
+        narrow: { columns: 2, columnGap: 12, rowGap: 12, rowHeight: 96, minRowHeight: 96 },
+        compact: { columns: 3, columnGap: 12, rowGap: 12, rowHeight: 96, minRowHeight: 96 },
+        medium: { columns: 4, columnGap: 12, rowGap: 12, rowHeight: 88, minRowHeight: 88 },
+        expanded: { columns: 6, columnGap: 12, rowGap: 12, rowHeight: 96, minRowHeight: 96 }
       };
     return {
       enabled: true,
@@ -6448,7 +6492,8 @@
           type: 'metroGrid',
           columns: (gridLayouts.compact && gridLayouts.compact.columns) || 4,
           gap: (v2.resolveGridGap ? v2.resolveGridGap(theme) : 8),
-          independentScroll: false
+          independentScroll: false,
+          sizeFormula: 'slotWidth'
         }),
         layouts: gridLayouts,
         overflowPolicy: 'reflow',

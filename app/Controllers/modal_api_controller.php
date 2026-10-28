@@ -2,7 +2,7 @@
 
 namespace App\Controllers;
 
-use App\Models\model_apiform;
+use App\Models\Modal_api_model;
 
 /**
  * Dedicated controller for app/Views/items/modal_api.php.
@@ -15,12 +15,24 @@ use App\Models\model_apiform;
  */
 class modal_api_controller extends Security_Controller
 {
-    private model_apiform $apiConfigurationModel;
+    private Modal_api_model $apiConfigurationModel;
 
     public function __construct()
     {
         parent::__construct();
-        $this->apiConfigurationModel = new model_apiform();
+
+        $class = '\\App\\Models\\Modal_api_model';
+        if (!class_exists($class, false)) {
+            foreach (array('Modal_api_model.php', 'modal_api_model.php') as $fileName) {
+                $modelFile = APPPATH . 'Models/' . $fileName;
+                if (is_file($modelFile)) {
+                    require_once $modelFile;
+                    break;
+                }
+            }
+        }
+
+        $this->apiConfigurationModel = new $class();
     }
 
     private function currentUserId(): ?int

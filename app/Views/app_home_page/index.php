@@ -412,7 +412,7 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
                                 <input type="range" id="toolCardBorderRadius" min="0" max="72" step="1" value="<?= $cardBorderRadius ?>" style="--ahp-range-pct:<?= $cardBorderRadiusPct ?>%" aria-valuemin="0" aria-valuemax="72" aria-valuenow="<?= $cardBorderRadius ?>">
                             </div>
                             <div class="ahp-range-scale"><span>0 (none)</span><span>72px</span></div>
-                            <p class="ahp-tool-hint" style="margin-top:8px">New blocks start square. Per-card radius can override this in the card editor.</p>
+                            <p class="ahp-tool-hint" style="margin-top:8px">Radius 0 keeps every box square. This updates all boxes. A card editor radius can change one box until you move this again.</p>
                         </div>
                         <?php
                         $cardSpeed = (int) ($layout['theme']['cardSpeed'] ?? 16);

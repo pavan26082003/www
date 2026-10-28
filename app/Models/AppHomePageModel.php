@@ -838,7 +838,7 @@ class AppHomePageModel
                 'faces' => array(
                     array('type' => 'image', 'icon' => 'fa-cube', 'color' => '#ffffff', 'textColor' => '#111827', 'iconColor' => '#ffffff', 'image' => $gridLogo, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 91),
                     array('type' => 'image', 'title' => 'GRID', 'label' => 'GRID', 'icon' => 'fa-border-all', 'color' => '#111827', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $efactorLogo, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 86),
-                    array('type' => 'image', 'title' => 'Featured', 'label' => 'Featured', 'icon' => 'fa-star', 'color' => '#334155', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $hrmsImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
+                    array('type' => 'image', 'title' => '', 'label' => '', 'icon' => 'fa-star', 'color' => '#ffffff', 'textColor' => '#111827', 'iconColor' => '#111827', 'image' => $hrmsImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100, 'hideIcon' => true),
                     array('type' => 'image', 'title' => 'Explore', 'label' => 'Explore', 'icon' => 'fa-compass', 'color' => '#475569', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $cardImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 189),
                 ),
             ),
@@ -1582,8 +1582,7 @@ class AppHomePageModel
     }
 
     /**
-     * Mobile columns are about 105px wide. A stored radius of 20 or 24
-     * draws a pill, while the studio canvas looks like 14–16.
+     * Same range as the studio slider (0–72). 0 stays square.
      */
     private function publishedCardRadius($value): int
     {
@@ -1597,8 +1596,8 @@ class AppHomePageModel
         if ($radius === 0) {
             return 0;
         }
-        if ($radius > 16) {
-            return 16;
+        if ($radius > 72) {
+            return 72;
         }
 
         return $radius;
@@ -1638,7 +1637,29 @@ class AppHomePageModel
         if ($staticUi === '' && !array_key_exists('showWelcome', $theme)) {
             $theme['showWelcome'] = true;
         }
-        $theme['cardBorderRadius'] = $this->publishedCardRadius($theme['cardBorderRadius'] ?? 16);
+        $explicitRadii = array();
+        if (isset($layout['cards']) && is_array($layout['cards'])) {
+            foreach ($layout['cards'] as $card) {
+                if (!is_array($card) || !array_key_exists('borderRadius', $card)) {
+                    continue;
+                }
+                if ($card['borderRadius'] === null || $card['borderRadius'] === '') {
+                    continue;
+                }
+                $explicitRadii[] = $this->publishedCardRadius($card['borderRadius']);
+            }
+        }
+        $allSquare = $explicitRadii !== array();
+        foreach ($explicitRadii as $radius) {
+            if ($radius !== 0) {
+                $allSquare = false;
+                break;
+            }
+        }
+        // Tile radius 0 must win over the theme default of 16/20.
+        $theme['cardBorderRadius'] = $allSquare
+            ? 0
+            : $this->publishedCardRadius($theme['cardBorderRadius'] ?? 16);
         $layout['theme'] = $theme;
         if ($staticUi === '') {
             $layout['homeTemplate'] = (string) ($theme['homeTemplate'] ?? ($layout['homeTemplate'] ?? 'default'));

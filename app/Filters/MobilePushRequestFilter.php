@@ -82,22 +82,41 @@ class MobilePushRequestFilter implements FilterInterface
 
     private function bearerToken(RequestInterface $request): string
     {
-        $header = $request->getHeaderLine('Authorization');
-        if ($header === '' && isset($_SERVER['HTTP_AUTHORIZATION'])) {
-            $header = (string) $_SERVER['HTTP_AUTHORIZATION'];
+        $candidates = [
+            $request->getHeaderLine('Authorization'),
+            (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? ''),
+            (string) ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? ''),
+            (string) ($_SERVER['Authorization'] ?? ''),
+            (string) (getenv('HTTP_AUTHORIZATION') ?: ''),
+            (string) (getenv('REDIRECT_HTTP_AUTHORIZATION') ?: ''),
+        ];
+        if (function_exists('getallheaders')) {
+            $headers = getallheaders();
+            if (is_array($headers)) {
+                foreach ($headers as $key => $value) {
+                    if (strcasecmp((string) $key, 'Authorization') === 0) {
+                        $candidates[] = (string) $value;
+                    }
+                }
+            }
         }
-        if ($header === '' && isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
-            $header = (string) $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
-        }
-        if ($header === '' && function_exists('apache_request_headers')) {
+        if (function_exists('apache_request_headers')) {
             $headers = apache_request_headers();
             if (is_array($headers)) {
                 foreach ($headers as $key => $value) {
                     if (strcasecmp((string) $key, 'Authorization') === 0) {
-                        $header = (string) $value;
-                        break;
+                        $candidates[] = (string) $value;
                     }
                 }
+            }
+        }
+
+        $header = '';
+        foreach ($candidates as $value) {
+            $value = trim((string) $value);
+            if ($value !== '') {
+                $header = $value;
+                break;
             }
         }
 
