@@ -877,6 +877,7 @@ $routes->match(['get', 'post'], 'iot-dashboard/api/(:segment)', 'IotDashboard::a
 // Grid New studio (dash URL needs an explicit route; translateURIDashes is false)
 // -----------------------------------------------------------------------------
 $routes->get('grid-dashboard', 'GridDashboard::index');
+$routes->get('grid-dashboard/scanner', 'GridDashboard::scanner');
 $routes->match(['get', 'post'], 'grid-dashboard/api/(:segment)', 'GridDashboard::api/$1');
 
 $routes->get('items/vendor', 'vendor_controller::vendor');

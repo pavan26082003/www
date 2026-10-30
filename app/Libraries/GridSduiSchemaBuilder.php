@@ -34,25 +34,36 @@ class GridSduiSchemaBuilder
 
     private static function qrImageUrlTemplate(): string
     {
-        return self::qrImageEndpoint() . '?data={data}&mode={mode}&size=160';
+        return self::qrImageEndpoint() . '?data={data}&mode={mode}&size=200';
     }
 
     private static function qrImageUrl($payload, $mode = ''): string
     {
         $payload = trim((string) $payload);
         $mode = trim((string) $mode);
-        $query = 'data=' . rawurlencode($payload) . '&size=160';
+        $query = 'data=' . rawurlencode($payload) . '&size=200';
         if ($mode !== '') {
             $query .= '&mode=' . rawurlencode($mode);
         }
         return self::qrImageEndpoint() . '?' . $query;
     }
 
+    private static function initialsImageUrl(string $initials, string $color): string
+    {
+        $letters = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $initials) ?: 'S', 0, 2));
+        $hex = strtolower((string) preg_replace('/[^a-f0-9]/i', '', ltrim($color, '#')));
+        if (strlen($hex) !== 6) {
+            $hex = '5b6cff';
+        }
+        return rtrim(self::publicOrigin(), '/') . '/v8/grid_initials.php?t=' . rawurlencode($letters) . '&c=' . rawurlencode($hex);
+    }
+
     /**
      * Scan destination for one profile. Same shareQr fields; only the URL value changes.
      * Professional: /grid/connect?mode=professional&grid_id={their grid id}&user_id={their user id}
-     * Circle: /grid-chat/connect?mode=circle&grid_id={their grid id}
+     * Circle: /grid-chat/connect?mode=circle&grid_id={their grid id}&user_id={their user id}
      * Ids come from the signed-in account. Example ids are never written in.
+     * Share QR is scanned by other phones — never encode localhost/loopback.
      */
     private static function connectUrl(string $mode, int $userId, string $gridId = ''): string
     {
@@ -62,11 +73,15 @@ class GridSduiSchemaBuilder
         $base = class_exists(GridWebSso::class)
             ? GridWebSso::publicWebUrl($path)
             : 'https://efactor.tech/index.php/' . $path;
+        $host = strtolower((string) (parse_url($base, PHP_URL_HOST) ?: ''));
+        if ($host === '' || in_array($host, array('localhost', '127.0.0.1', '::1'), true)) {
+            $base = 'https://efactor.tech/index.php/' . $path;
+        }
         $query = 'mode=' . rawurlencode($mode);
         if ($gridId !== '') {
             $query .= '&grid_id=' . rawurlencode($gridId);
         }
-        if ($mode === 'professional' && $userId > 0) {
+        if ($userId > 0) {
             $query .= '&user_id=' . $userId;
         }
         return $base . '?' . $query;
@@ -76,7 +91,7 @@ class GridSduiSchemaBuilder
      * Public grid id for this account. Reads users.grid_id, then grid_profiles.
      * If the account has none yet, stores one new id on that user row.
      */
-    private static function resolveGridId(int $userId): string
+    public static function resolveGridId(int $userId): string
     {
         if ($userId <= 0) {
             return '';
@@ -301,8 +316,8 @@ class GridSduiSchemaBuilder
     }
 
     /**
-     * Header photo for this account. GRID profile photo first, then users.image.
-     * The letter stays only when neither photo exists.
+     * Header photo for this account. grid_profiles.avatar when it is set,
+     * otherwise the account photo in users.image. The letter stays only when neither exists.
      *
      * @return array{initial:string,imageUrl:string}
      */
@@ -329,14 +344,16 @@ class GridSduiSchemaBuilder
             $initial = strtoupper(substr($last, 0, 1));
         }
 
-        $photo = trim((string) ($row['grid_avatar'] ?? ''));
-        if ($photo === '') {
-            $photo = trim((string) ($row['image'] ?? ''));
+        // GRID profile photo first. The account photo in users.image is the
+        // picture already stored for this user when GRID has not saved one.
+        $imageUrl = self::storedPhotoUrl((string) ($row['grid_avatar'] ?? ''));
+        if ($imageUrl === '') {
+            $imageUrl = self::storedPhotoUrl((string) ($row['image'] ?? ''));
         }
 
         return array(
             'initial' => $initial,
-            'imageUrl' => self::publicAvatarUrl($photo),
+            'imageUrl' => $imageUrl,
         );
     }
 
@@ -355,9 +372,17 @@ class GridSduiSchemaBuilder
                 return null;
             }
             $row['grid_avatar'] = '';
-            if ($db->tableExists('grid_profiles') && $db->fieldExists('avatar', 'grid_profiles')) {
-                $profile = $db->table('grid_profiles')->select('avatar')->where('user_id', $userId)->get()->getRowArray();
-                $row['grid_avatar'] = trim((string) ($profile['avatar'] ?? ''));
+            // GRID profiles live in the dedicated `grid` connection, not the
+            // account database. Reading the default connection could show a
+            // stale or unrelated account image.
+            try {
+                $gridDb = \Config\Database::connect('grid', false);
+                if ($gridDb->tableExists('grid_profiles') && $gridDb->fieldExists('avatar', 'grid_profiles')) {
+                    $profile = $gridDb->table('grid_profiles')->select('avatar')->where('user_id', $userId)->get()->getRowArray();
+                    $row['grid_avatar'] = trim((string) ($profile['avatar'] ?? ''));
+                }
+            } catch (\Throwable $e) {
+                // users.image below remains the safe account-level fallback.
             }
             return $row;
         } catch (\Throwable $e) {
@@ -404,6 +429,32 @@ class GridSduiSchemaBuilder
         }
         $db->close();
         return $row;
+    }
+
+    public static function liveHeaderProfile(int $userId): array
+    {
+        return self::resolveHeaderProfile($userId);
+    }
+
+    private static function storedPhotoUrl(string $photo): string
+    {
+        $photo = trim($photo);
+        if ($photo === '' || $photo === 'system_bot') {
+            return '';
+        }
+        if (function_exists('helper')) {
+            try {
+                helper('general');
+            } catch (\Throwable $e) {
+            }
+        }
+        if (function_exists('get_avatar')) {
+            $url = trim((string) get_avatar($photo));
+            if ($url !== '' && !preg_match('#/assets/images/avatar\.jpg(\?|$)#i', $url)) {
+                return self::canonicalizeAvatarUrl($url);
+            }
+        }
+        return self::publicAvatarUrl($photo);
     }
 
     private static function publicAvatarUrl(string $image): string
@@ -458,6 +509,9 @@ class GridSduiSchemaBuilder
             $selectedMode = 'professional';
         }
         $gridId = trim($gridId);
+        if ($gridId === '' && $userId > 0) {
+            $gridId = self::resolveGridId($userId);
+        }
         $shareQr['selectedMode'] = $selectedMode;
         $shareQr['qrPayload'] = self::connectUrl($selectedMode, $userId, $gridId);
         $shareQr['qrImageUrlTemplate'] = self::qrImageUrlTemplate();
@@ -629,27 +683,10 @@ class GridSduiSchemaBuilder
                 'selectModeActionId' => 'grid-select-qr-mode',
             ),
             'exploring' => array(
-                'title' => 'Continue Exploring',
+                'title' => 'Recent Activity',
                 'seeAllLabel' => 'See all',
                 'seeAllActionId' => 'grid-see-all-exploring',
-                'items' => array(
-                    array(
-                        'id' => 'find-talent',
-                        'title' => 'Find Talent',
-                        'subtitle' => 'People with skills you need',
-                        'iconToken' => 'user',
-                        'color' => '#8b5cf6',
-                        'actionId' => 'grid-open-find-talent',
-                    ),
-                    array(
-                        'id' => 'join-circles',
-                        'title' => 'Join Circles',
-                        'subtitle' => "Communities you'll love",
-                        'iconToken' => 'users',
-                        'color' => '#14b8a6',
-                        'actionId' => 'grid-open-join-circles',
-                    ),
-                ),
+                'items' => array(),
             ),
             'quote' => array(
                 'text' => 'Connections turn potential into progress.',
@@ -679,7 +716,22 @@ class GridSduiSchemaBuilder
         if (empty($override['stats']) || !is_array($override['stats'])) {
             $merged['stats'] = $defaults['stats'];
         }
-        if (empty($override['exploring']['items']) || !is_array($override['exploring']['items'])) {
+        $savedExplore = $override['exploring']['items'] ?? null;
+        $savedExploreIsLegacy = false;
+        if (is_array($savedExplore)) {
+            foreach ($savedExplore as $savedItem) {
+                if (!is_array($savedItem)) {
+                    continue;
+                }
+                $savedId = (string) ($savedItem['id'] ?? '');
+                if ($savedId === 'find-talent' || $savedId === 'join-circles') {
+                    $savedExploreIsLegacy = true;
+                    break;
+                }
+            }
+        }
+        if ($savedExploreIsLegacy || empty($savedExplore) || !is_array($savedExplore)) {
+            $merged['exploring']['title'] = 'Recent Activity';
             $merged['exploring']['items'] = $defaults['exploring']['items'];
         }
         if (empty($override['shareQr']) || !is_array($override['shareQr'])) {
@@ -867,30 +919,124 @@ class GridSduiSchemaBuilder
             }
             $id = 'grid-explore-' . (string) ($item['id'] ?? $index);
             $exploreChildIds[] = $id;
+            $itemUrl = trim((string) ($item['url'] ?? $item['route'] ?? ''));
+            $initials = (string) ($item['initials'] ?? '');
+            $avatarColor = (string) ($item['avatarColor'] ?? '#5b6cff');
+            $tint = (string) ($item['backgroundColor'] ?? '#eef2ff');
+            $time = (string) ($item['time'] ?? '');
+            $badge = (string) ($item['badge'] ?? '');
+            $avatarUrl = self::initialsImageUrl($initials, $avatarColor);
+            $avatar = array(
+                'type' => 'avatarButton',
+                'label' => $initials,
+                'initial' => $initials,
+                'color' => $avatarColor,
+                'backgroundColor' => $avatarColor,
+                'foregroundColor' => '#ffffff',
+                'imageUrl' => $avatarUrl,
+                'fontSize' => 14,
+                'appearance' => array(
+                    'size' => 42,
+                    'width' => 42,
+                    'height' => 42,
+                    'borderRadius' => 21,
+                    'backgroundColor' => $avatarColor,
+                    'foregroundColor' => '#ffffff',
+                    'fontSize' => 14,
+                    'fontWeight' => 700,
+                    'imageUrl' => $avatarUrl,
+                ),
+            );
+            // Keep initials only on leading/avatar. Card-level label/initial were
+            // concatenated with title+badge into one line (e.g. "MMessagesProfessionalNo").
+            $previewText = (string) ($item['preview'] ?? $item['subtitle'] ?? '');
+            $kind = strtolower(trim((string) ($item['kind'] ?? 'message')));
+            $iconTokenFallback = ($kind === 'call') ? 'phone' : 'message';
+            $iconToken = self::knownIconToken($item['iconToken'] ?? $iconTokenFallback, $iconTokenFallback);
             $components[$id] = array(
                 'id' => $id,
-                'type' => 'exploreCard',
+                'type' => 'featureCard',
+                'style' => 'softCard',
                 'title' => (string) ($item['title'] ?? ''),
-                'subtitle' => (string) ($item['subtitle'] ?? ''),
-                'iconToken' => self::knownIconToken($item['iconToken'] ?? 'user', 'user'),
-                'color' => (string) ($item['color'] ?? '#8b5cf6'),
+                'subtitle' => implode(' · ', array_values(array_filter(array(
+                    $previewText,
+                    $time,
+                ), function ($part) {
+                    return trim((string) $part) !== '';
+                }))),
+                'label' => '',
+                'initial' => '',
+                // Top-level iconToken for web/mobile fallback next to avatarButton icon.
+                'iconToken' => $iconToken,
+                'image' => $avatarUrl,
+                'imageUrl' => $avatarUrl,
+                'icon' => $avatar,
+                'leading' => $avatar,
+                'color' => $avatarColor,
+                'badge' => $badge,
+                'chip' => $badge !== '' ? array('label' => $badge) : null,
+                'time' => $time,
+                'trailing' => $time !== '' ? array('label' => $time, 'color' => '#94a3b8') : null,
+                'initials' => $initials,
+                'space' => (string) ($item['space'] ?? ''),
+                'preview' => $previewText,
+                'unread' => !empty($item['unread']),
+                'backgroundColor' => $tint,
+                'avatarColor' => $avatarColor,
+                'gradientStart' => $tint,
+                'gradientEnd' => $tint,
+                'textColor' => '#1e1b4b',
+                'url' => $itemUrl !== '' ? $itemUrl : null,
+                'route' => $itemUrl !== '' ? $itemUrl : null,
+                'openIn' => $itemUrl !== '' ? 'inAppWebView' : null,
                 'actionId' => $item['actionId'] ?? null,
                 'events' => !empty($item['actionId']) ? array('tap' => array('actionId' => $item['actionId'])) : null,
                 'layout' => array(
+                    'direction' => 'horizontal',
+                    'alignItems' => 'center',
+                    'crossAxisAlignment' => 'center',
+                    'mainAxisSize' => 'max',
                     'columnSpan' => 1,
                     'rowSpan' => 1,
-                    'minHeight' => 112,
+                    'gap' => 12,
+                    'height' => 72,
+                    'minHeight' => 72,
+                    'maxHeight' => 76,
                     'minWidth' => 0,
                     'width' => 'fill',
                     'maxWidth' => '100%',
+                    'overflowX' => 'hidden',
+                    'titleFlex' => 1,
+                    'titleMinWidth' => 0,
                 ),
                 'appearance' => array(
-                    'borderRadius' => 18,
-                    'backgroundColor' => '#ffffff',
-                    'titleMaxLines' => 2,
-                    'subtitleMaxLines' => 2,
+                    'borderRadius' => 16,
+                    'backgroundColor' => $tint,
+                    'backgroundGradient' => array(
+                        'start' => $tint,
+                        'end' => $tint,
+                    ),
+                    'iconPosition' => 'leading',
+                    'titlePosition' => 'besideIcon',
+                    'showIcon' => true,
+                    'showAvatar' => true,
+                    'iconBorderRadius' => 21,
+                    'showSubtitle' => true,
+                    'showActionArrow' => false,
+                    'showBadge' => $badge !== '',
+                    'badgePlacement' => 'trailing',
+                    'iconSize' => 42,
+                    'titleFontSize' => 15,
+                    'subtitleFontSize' => 12,
+                    'titlePadding' => 0,
+                    'titleMaxLines' => 1,
+                    'subtitleMaxLines' => 1,
                     'titleOverflow' => 'ellipsis',
                     'subtitleOverflow' => 'ellipsis',
+                    'padding' => 12,
+                    'height' => 72,
+                    'minHeight' => 72,
+                    'maxHeight' => 76,
                     'minWidth' => 0,
                     'width' => 'fill',
                 ),
@@ -1127,43 +1273,95 @@ class GridSduiSchemaBuilder
             'type' => 'shareQrCard',
             'title' => (string) ($shareQr['title'] ?? 'Share Profile QR'),
             'subtitle' => (string) ($shareQr['subtitle'] ?? 'Share your professional or circle profile with anyone.'),
-            'iconToken' => self::knownIconToken($shareQr['iconToken'] ?? 'grid', 'grid'),
+            'iconToken' => self::knownIconToken($shareQr['iconToken'] ?? 'qrcode', 'qrcode'),
             'selectedMode' => $selectedMode,
             'modes' => $modeItems,
             'qrCaption' => (string) ($shareQr['qrCaption'] ?? 'Scan to connect'),
             'qrPayload' => $qrPayload,
+            // Client-side QR fallback (same value as qrPayload).
+            'data' => $qrPayload,
+            // Flutter shareQrCard reads imageUrl; keep image + qrImageUrl for web.
             'image' => $qrImageUrl,
+            'imageUrl' => $qrImageUrl,
             'qrImageUrl' => $qrImageUrl,
             'qrImageUrlTemplate' => $qrImageUrlTemplate,
             'qrImageUrlsByMode' => $qrImageUrlsByMode,
             'shareActionId' => null,
             'layout' => array(
                 'direction' => 'horizontal',
-                'gap' => 12,
+                'alignItems' => 'center',
+                'crossAxisAlignment' => 'center',
+                'gap' => 16,
                 'width' => 'fill',
                 'maxWidth' => '100%',
                 'minWidth' => 0,
                 'overflowX' => 'hidden',
+                'qrSize' => 140,
                 'responsive' => array(
-                    'compact' => array('direction' => 'horizontal', 'gap' => 10),
-                    'narrow' => array('direction' => 'vertical', 'gap' => 10),
-                    'regular' => array('direction' => 'horizontal', 'gap' => 12),
-                    'medium' => array('direction' => 'horizontal', 'gap' => 12),
-                    'expanded' => array('direction' => 'horizontal', 'gap' => 16),
+                    'narrow' => array('direction' => 'vertical', 'gap' => 14, 'alignItems' => 'stretch', 'qrSize' => 160),
+                    'compact' => array('direction' => 'horizontal', 'gap' => 14, 'qrSize' => 132),
+                    'regular' => array('direction' => 'horizontal', 'gap' => 16, 'qrSize' => 140),
+                    'medium' => array('direction' => 'horizontal', 'gap' => 18, 'qrSize' => 148),
+                    'expanded' => array('direction' => 'horizontal', 'gap' => 20, 'qrSize' => 160),
                 ),
             ),
             'appearance' => array(
-                'backgroundColor' => '#eef2f7',
+                'backgroundColor' => '#ffffff',
+                'borderColor' => '#e5e7eb',
+                'borderWidth' => 1,
                 'borderRadius' => 20,
-                'titleFontSize' => 18,
-                'subtitleFontSize' => 13,
+                'padding' => 16,
+                'titleFontSize' => 16,
+                'titleFontWeight' => 800,
+                'titleColor' => '#1e1b4b',
+                'subtitleFontSize' => 12,
+                'subtitleColor' => '#6b7280',
+                'qrSize' => 140,
+                'qrPadding' => 10,
+                'qrBorderRadius' => 14,
+                'qrBackgroundColor' => '#ffffff',
+                'qrBorderColor' => '#e5e7eb',
+                'captionFontSize' => 11,
+                'captionColor' => '#94a3b8',
+                'modeChipBorderRadius' => 999,
+                'modeChipPaddingHorizontal' => 12,
+                'modeChipPaddingVertical' => 8,
+                'modeChipFontSize' => 12,
+                'modeChipBackground' => '#f3f4f6',
+                'modeChipColor' => '#475569',
+                'modeChipSelectedBackground' => '#7c3aed',
+                'modeChipSelectedColor' => '#ffffff',
             ),
         );
 
+        $filters = is_array($exploring['filters'] ?? null) ? $exploring['filters'] : array();
+        $filterModes = array();
+        foreach ($filters as $filter) {
+            if (!is_array($filter)) {
+                continue;
+            }
+            $filterLabel = (string) ($filter['label'] ?? '');
+            if (isset($filter['count']) && $filter['count'] !== '') {
+                $filterLabel .= ' ' . $filter['count'];
+            }
+            $filterModes[] = array(
+                'id' => (string) ($filter['id'] ?? ''),
+                'label' => $filterLabel,
+                'selected' => !empty($filter['selected']),
+            );
+        }
         $components['grid-explore-section'] = array(
             'id' => 'grid-explore-section',
             'type' => 'section',
-            'title' => (string) ($exploring['title'] ?? 'Continue Exploring'),
+            'title' => (string) ($exploring['title'] ?? 'Recent Activity'),
+            'badge' => (string) ($exploring['badge'] ?? ''),
+            'headerBadge' => array(
+                'label' => (string) ($exploring['badge'] ?? ''),
+                'backgroundColor' => '#dcfce7',
+                'color' => '#16a34a',
+            ),
+            'filters' => $filters,
+            'modes' => $filterModes,
             'trailing' => array(
                 'label' => (string) ($exploring['seeAllLabel'] ?? 'See all'),
                 'actionId' => (string) ($exploring['seeAllActionId'] ?? 'grid-see-all-exploring'),
@@ -1174,22 +1372,22 @@ class GridSduiSchemaBuilder
         $components['grid-explore-row'] = array(
             'id' => 'grid-explore-row',
             'type' => 'responsiveGrid',
-            'layout' => array_merge(self::gridLayoutMetrics(2, 12, 122), array(
+            'layout' => array_merge(self::gridLayoutMetrics(1, 8, 76), array(
                 'independentScroll' => false,
                 'responsive' => array(
-                    'narrow' => self::gridLayoutMetrics(2, 10, 122),
-                    'compact' => self::gridLayoutMetrics(2, 10, 122),
-                    'regular' => self::gridLayoutMetrics(2, 12, 122),
-                    'medium' => self::gridLayoutMetrics(2, 12, 122),
-                    'expanded' => self::gridLayoutMetrics(2, 16, 122, array('maximumContentWidth' => 720)),
+                    'narrow' => self::gridLayoutMetrics(1, 8, 76),
+                    'compact' => self::gridLayoutMetrics(1, 8, 76),
+                    'regular' => self::gridLayoutMetrics(1, 8, 76),
+                    'medium' => self::gridLayoutMetrics(1, 8, 76),
+                    'expanded' => self::gridLayoutMetrics(1, 10, 76, array('maximumContentWidth' => 720)),
                 ),
             )),
             'layouts' => array(
-                'narrow' => self::gridLayoutMetrics(2, 10, 122),
-                'compact' => self::gridLayoutMetrics(2, 10, 122),
-                'regular' => self::gridLayoutMetrics(2, 12, 122),
-                'medium' => self::gridLayoutMetrics(2, 12, 122),
-                'expanded' => self::gridLayoutMetrics(2, 16, 122, array('maximumContentWidth' => 720)),
+                'narrow' => self::gridLayoutMetrics(1, 8, 76),
+                'compact' => self::gridLayoutMetrics(1, 8, 76),
+                'regular' => self::gridLayoutMetrics(1, 8, 76),
+                'medium' => self::gridLayoutMetrics(1, 8, 76),
+                'expanded' => self::gridLayoutMetrics(1, 10, 76, array('maximumContentWidth' => 720)),
             ),
             'overflowPolicy' => 'reflow',
             'preserveChildOrder' => true,
@@ -1232,7 +1430,11 @@ class GridSduiSchemaBuilder
      */
     private static function scanPageUrl(): string
     {
-        return rtrim(self::publicOrigin(), '/') . '/v8/grid_scan.php';
+        // Canonical scanner path used by the app (must not 404).
+        // grid-dashboard/scanner remains as a studio alias.
+        return class_exists(GridWebSso::class)
+            ? GridWebSso::publicWebUrl('grid/qr')
+            : 'https://efactor.tech/index.php/grid/qr';
     }
 
     private static function scanPageUrlWithSso(string $ssoToken): string
@@ -1393,10 +1595,29 @@ class GridSduiSchemaBuilder
         $findTalentAction = self::inAppWebViewAction(self::signedWebUrl('grid/network', $ssoToken), $hiddenWebView);
         $joinCirclesAction = self::inAppWebViewAction(self::signedWebUrl('grid-chat', $ssoToken), $hiddenWebView);
         $seeAllAction = self::inAppWebViewAction(self::signedWebUrl('grid/network', $ssoToken), $hiddenWebView);
+        $notificationActions = array();
+        $exploreItems = is_array($content['exploring']['items'] ?? null) ? $content['exploring']['items'] : array();
+        foreach ($exploreItems as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $actionId = trim((string) ($item['actionId'] ?? ''));
+            $itemUrl = trim((string) ($item['url'] ?? $item['route'] ?? ''));
+            if ($actionId === '' || $itemUrl === '' || isset($notificationActions[$actionId])) {
+                continue;
+            }
+            $notificationActions[$actionId] = self::inAppWebViewAction($itemUrl, $hiddenWebView);
+        }
+        // Avatar image is display-only on the header button. Tapping must open
+        // the profile route — never the raw PNG in a WebView.
+        $profileAction = array(
+            'type' => 'navigate',
+            'destination' => array('routeId' => 'profile'),
+        );
 
         return array(
             'navigate-grid' => array('type' => 'navigate', 'destination' => array('routeId' => 'grid')),
-            'navigate-profile' => array('type' => 'navigate', 'destination' => array('routeId' => 'profile')),
+            'navigate-profile' => $profileAction,
             'refresh-grid' => array(
                 'type' => 'sequence',
                 'actions' => array(
@@ -1412,7 +1633,7 @@ class GridSduiSchemaBuilder
             'grid-open-join-circles' => $joinCirclesAction,
             'grid-see-all-exploring' => $seeAllAction,
             'grid-select-qr-mode' => array('type' => 'host-action', 'actionId' => 'select-grid-qr-mode'),
-        );
+        ) + $notificationActions;
     }
 
     /**
@@ -1482,11 +1703,15 @@ class GridSduiSchemaBuilder
             'chevron-right' => 'chevron-right',
             'profile' => 'profile',
             'user-pen' => 'profile',
+            'message' => 'message',
+            'comment' => 'message',
+            'phone' => 'phone',
+            'call' => 'phone',
         );
         if (isset($map[$token])) {
             return $map[$token];
         }
-        $known = array('grid', 'search', 'qrcode', 'scanner', 'user', 'users', 'quote', 'chevron-right', 'profile');
+        $known = array('grid', 'search', 'qrcode', 'scanner', 'user', 'users', 'quote', 'chevron-right', 'profile', 'message', 'phone');
         return in_array($token, $known, true) ? $token : (string) $fallback;
     }
 
@@ -1495,13 +1720,127 @@ class GridSduiSchemaBuilder
         return array(
             'grid' => array('flutter' => 'borderAll', 'web' => 'border-all'),
             'search' => array('flutter' => 'magnifyingGlass', 'web' => 'magnifying-glass'),
-            'scanner' => array('flutter' => 'scanner', 'web' => 'scanner'),
+            // Material "scanner" is a flatbed doc icon; QR header needs qr_code_scanner.
+            'scanner' => array('flutter' => 'qrCodeScanner', 'web' => 'qrcode'),
+            'qrcode' => array('flutter' => 'qrCode', 'web' => 'qrcode'),
             'user' => array('flutter' => 'user', 'web' => 'user'),
             'users' => array('flutter' => 'users', 'web' => 'users'),
             'quote' => array('flutter' => 'quoteLeft', 'web' => 'quote-left'),
             'chevron-right' => array('flutter' => 'chevronRight', 'web' => 'chevron-right'),
             'profile' => array('flutter' => 'userPen', 'web' => 'user-pen'),
+            'message' => array('flutter' => 'chatBubble', 'web' => 'comment'),
+            'phone' => array('flutter' => 'phone', 'web' => 'phone'),
         );
+    }
+
+    /**
+     * Replace Find Talent / Join Circles with this account's recent
+     * Professional Space and Circle Connect messages and calls.
+     * Same exploring item fields the section already renders.
+     */
+    private static function applyRecentNotifications(array $content, int $userId, string $ssoToken): array
+    {
+        if (!class_exists(GridActivityNotifications::class)) {
+            return $content;
+        }
+        if (!isset($content['exploring']) || !is_array($content['exploring'])) {
+            $content['exploring'] = array();
+        }
+        $content['exploring']['title'] = 'Recent Activity';
+        $items = GridActivityNotifications::forUser($userId, $ssoToken);
+        $unread = 0;
+        $professionalCount = 0;
+        $circleCount = 0;
+        foreach ($items as $item) {
+            if (!is_array($item) || (string) ($item['id'] ?? '') === 'professional-message') {
+                continue;
+            }
+            if (!empty($item['unread'])) {
+                $unread++;
+            }
+            if ((string) ($item['space'] ?? '') === 'circle') {
+                $circleCount++;
+            } else {
+                $professionalCount++;
+            }
+        }
+        $content['exploring']['badge'] = $unread > 0 ? ($unread . ' new') : '';
+        $content['exploring']['filters'] = array(
+            array('id' => 'all', 'label' => 'All', 'selected' => true),
+            array('id' => 'professional', 'label' => 'Professional', 'count' => $professionalCount),
+            array('id' => 'circle', 'label' => 'Circle Connect', 'count' => $circleCount),
+        );
+        foreach ($items as $index => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $id = strtolower(trim((string) ($item['id'] ?? $index)));
+            $id = preg_replace('/[^a-z0-9\-]+/', '-', $id) ?? '';
+            $id = trim($id, '-');
+            $base = trim((string) ($item['actionId'] ?? 'grid-open-notification'));
+            if ($id !== '' && substr($base, -strlen('-' . $id)) !== '-' . $id) {
+                $item['actionId'] = $base . '-' . $id;
+            }
+            $items[$index] = $item;
+        }
+        $content['exploring']['items'] = $items;
+        return $content;
+    }
+
+    /**
+     * The app paints the Grid section stored in the saved home schema.
+     * Replace only that section with the live Recent Activity rows.
+     */
+    public static function patchRecentActivity(array $schema, int $userId, string $ssoToken = ''): array
+    {
+        if (!isset($schema['components']) || !is_array($schema['components'])) {
+            return $schema;
+        }
+        $fresh = self::build(array(
+            'userId' => $userId,
+            'ssoToken' => $ssoToken,
+        ));
+        $freshComponents = is_array($fresh['components'] ?? null) ? $fresh['components'] : array();
+        foreach (array_keys($schema['components']) as $key) {
+            if ($key === 'grid-explore-section' || $key === 'grid-explore-row' || strpos((string) $key, 'grid-explore-') === 0) {
+                unset($schema['components'][$key]);
+            }
+        }
+        foreach ($freshComponents as $key => $component) {
+            if ($key === 'grid-explore-section' || $key === 'grid-explore-row' || strpos((string) $key, 'grid-explore-') === 0) {
+                $schema['components'][$key] = $component;
+            }
+        }
+        if (!isset($schema['actions']) || !is_array($schema['actions'])) {
+            $schema['actions'] = array();
+        }
+        $freshActions = is_array($fresh['actions'] ?? null) ? $fresh['actions'] : array();
+        foreach ($schema['components'] as $component) {
+            if (!is_array($component)) {
+                continue;
+            }
+            $actionId = (string) ($component['actionId'] ?? '');
+            if ($actionId !== '' && isset($freshActions[$actionId])) {
+                $schema['actions'][$actionId] = $freshActions[$actionId];
+            }
+        }
+        if (isset($fresh['content']['exploring']) && is_array($fresh['content']['exploring'])) {
+            if (!isset($schema['content']) || !is_array($schema['content'])) {
+                $schema['content'] = array();
+            }
+            $schema['content']['exploring'] = $fresh['content']['exploring'];
+        }
+        if (isset($fresh['iconRegistry']) && is_array($fresh['iconRegistry'])) {
+            if (!isset($schema['iconRegistry']) || !is_array($schema['iconRegistry'])) {
+                $schema['iconRegistry'] = array();
+            }
+            foreach (array('message', 'phone') as $iconKey) {
+                if (isset($fresh['iconRegistry'][$iconKey])) {
+                    $schema['iconRegistry'][$iconKey] = $fresh['iconRegistry'][$iconKey];
+                }
+            }
+        }
+        return $schema;
     }
 
     /**
@@ -1523,20 +1862,19 @@ class GridSduiSchemaBuilder
         if ($headerProfile['initial'] !== '') {
             $content['header']['avatarInitial'] = $headerProfile['initial'];
         }
-        if ($headerProfile['imageUrl'] !== '') {
-            $content['header']['avatarUrl'] = $headerProfile['imageUrl'];
-        }
+        // Always replace the saved value. Otherwise an account without a photo
+        // inherits the avatar cached in gridPage by the previously active account.
+        $content['header']['avatarUrl'] = $headerProfile['imageUrl'];
         $content['shareQr'] = self::fillShareQrImages(
             is_array($content['shareQr'] ?? null) ? $content['shareQr'] : array(),
             $userId,
             $gridId
         );
+        $ssoToken = trim((string) ($options['ssoToken'] ?? ''));
         if (class_exists(GridWebSso::class)) {
-            $content = GridWebSso::prepareContentForClient(
-                $content,
-                trim((string) ($options['ssoToken'] ?? ''))
-            );
+            $content = GridWebSso::prepareContentForClient($content, $ssoToken);
         }
+        $content = self::applyRecentNotifications($content, $userId, $ssoToken);
         $endpoint = trim((string) ($options['endpoint'] ?? 'grid_api_creation.php'));
         if ($endpoint === '') {
             $endpoint = 'grid_api_creation.php';

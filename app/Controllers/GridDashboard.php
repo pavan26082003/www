@@ -42,6 +42,8 @@ class GridDashboard extends Security_Controller
             'professionalSpaceUrl' => $proUrl !== '' ? $proUrl : $defaults['professional-space'],
             'circleConnectUrl' => $circleUrl !== '' ? $circleUrl : $defaults['circle-connect'],
             'userId' => $userId,
+            'userEmail' => $userEmail,
+            'gridId' => $payload['grid_id'] ?? '',
             'apiBase' => site_url('grid-dashboard/api'),
             'dashboardUrl' => site_url(''),
             'gridApiUrl' => $payload['gridApiUrl'] ?? '',
@@ -49,6 +51,11 @@ class GridDashboard extends Security_Controller
             'csrfTokenName' => function_exists('csrf_token') ? csrf_token() : '',
             'csrfHash' => function_exists('csrf_hash') ? csrf_hash() : '',
         ));
+    }
+
+    public function scanner()
+    {
+        return view('grid_dashboard/scanner');
     }
 
     public function api(string $action = ''): ResponseInterface
@@ -59,6 +66,18 @@ class GridDashboard extends Security_Controller
 
         if ($action === 'schema') {
             return $this->jsonResponse($this->buildSchemaPayload($userId, $userEmail));
+        }
+
+        // Fresh token for each scanned-URL open. Schema-embedded tokens go stale;
+        // /grid/connect verifies against this host's secret and rejects expired ones.
+        if ($action === 'mint-sso' || $action === 'sso-token') {
+            $token = $userId > 0 ? \App\Libraries\GridWebSso::issue($userId) : '';
+            return $this->jsonResponse(array(
+                'success' => $token !== '',
+                'grid_sso' => $token,
+                'param' => \App\Libraries\GridWebSso::QUERY_PARAM,
+                'host' => strtolower((string) preg_replace('/:\d+$/', '', (string) ($_SERVER['HTTP_HOST'] ?? ''))),
+            ), $token !== '' ? 200 : 401);
         }
 
         if ($action === 'generate-schema') {
@@ -163,19 +182,36 @@ class GridDashboard extends Security_Controller
             );
         }
 
+        $userProfile = $this->appHomePageModel->getUserProfile($userId);
+        $gridId = trim((string) ($userProfile['gridId'] ?? ''));
+        if ($gridId === '' && class_exists(GridSduiSchemaBuilder::class)) {
+            $gridId = GridSduiSchemaBuilder::resolveGridId($userId);
+        }
+        if ($gridId === '') {
+            $gridId = 'grid-chat';
+        }
+
         $gridApiUrl = $this->appHomePageModel->getGridApiUrl($userId);
         $ssoToken = $userId > 0 ? \App\Libraries\GridWebSso::issue($userId) : '';
         $schema = GridSduiSchemaBuilder::build(array(
             'userId' => $userId,
+            'email' => $userEmail,
+            'gridId' => $gridId,
             'content' => $content,
             'endpoint' => $gridApiUrl,
             'ssoToken' => $ssoToken,
         ));
         $meta = $this->extractFeatureMeta(is_array($schema['content'] ?? null) ? $schema['content'] : $content);
 
+        if ($persist && isset($schema['content'])) {
+            $layout['gridPage'] = $schema['content'];
+            $this->appHomePageModel->saveLayout($userId, $layout);
+        }
+
         return array(
             'success' => true,
             'user_id' => $userId,
+            'grid_id' => $gridId,
             'pageId' => 'grid',
             'routeId' => 'grid',
             'schema_version' => $schema['schemaVersion'] ?? '3.0.0',

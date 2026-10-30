@@ -2073,7 +2073,8 @@
   }
 
   var CUBE_FACE_COUNT = 4;
-  var CUBE_HOLD_RATIO = 0.84;
+  // Match published schema: longer rotate phase for smoother face changes.
+  var CUBE_HOLD_RATIO = 0.72;
 
   function easeInOutCubic(t) {
     if (t <= 0) return 0;

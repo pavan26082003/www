@@ -134,9 +134,10 @@ class AppHomePageModel
                 'gridGap' => 4,
                 'gridColumns' => 3,
                 'gridRows' => 6,
-                'gridRowHeight' => 117,
+                // ~375dp design width / 3 cols / gap 4 → square 1x1 cells; Flutter still prefers sizeFormula=slotWidth.
+                'gridRowHeight' => 122,
                 'squareTiles' => true,
-                'cardBorderRadius' => 16,
+                'cardBorderRadius' => 0,
                 'cardSpeed' => 16,
                 'logoIcon' => 'fa-crosshairs',
                 'showWelcome' => true,
@@ -219,27 +220,10 @@ class AppHomePageModel
                     'selectModeActionId' => 'grid-select-qr-mode',
                 ),
                 'exploring' => array(
-                    'title' => 'Continue Exploring',
+                    'title' => 'Recent Activity',
                     'seeAllLabel' => 'See all',
                     'seeAllActionId' => 'grid-see-all-exploring',
-                    'items' => array(
-                        array(
-                            'id' => 'find-talent',
-                            'title' => 'Find Talent',
-                            'subtitle' => 'People with skills you need',
-                            'iconToken' => 'user',
-                            'color' => '#8b5cf6',
-                            'actionId' => 'grid-open-find-talent',
-                        ),
-                        array(
-                            'id' => 'join-circles',
-                            'title' => 'Join Circles',
-                            'subtitle' => "Communities you'll love",
-                            'iconToken' => 'users',
-                            'color' => '#14b8a6',
-                            'actionId' => 'grid-open-join-circles',
-                        ),
-                    ),
+                    'items' => array(),
                 ),
                 'quote' => array(
                     'text' => 'Connections turn potential into progress.',
@@ -995,10 +979,214 @@ class AppHomePageModel
             return array();
         }
 
+        // Live identity + Recent Activity on top of the saved Home schema.
+        $data = $this->applyLiveUserProfileToSchema($data, $userId);
+        if (class_exists(\App\Libraries\GridSduiSchemaBuilder::class)) {
+            $ssoToken = '';
+            if ($userId > 0 && class_exists(\App\Libraries\GridWebSso::class)) {
+                $ssoToken = \App\Libraries\GridWebSso::issue($userId);
+            }
+            $data = \App\Libraries\GridSduiSchemaBuilder::patchRecentActivity($data, $userId, $ssoToken);
+        }
+
         $schema = $this->attachGridDataSource($this->normalizeSmartphoneBreakpoints($data), $userId);
         $schema = $this->prepareRatingOpenUrlForClient($schema, $userId);
 
         return \App\Libraries\AppHomeSchemaSigner::attachSignature($schema);
+    }
+
+    /**
+     * Replace stale identity values in a saved mobile schema with the current
+     * users-table values. Only existing schema keys are updated; no component,
+     * parameter, binding, or schema structure is added or removed.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    public function applyLiveUserProfileToSchema(array $schema, int $userId): array
+    {
+        if ($userId <= 0 || $schema === array()) {
+            return $schema;
+        }
+
+        $profile = $this->getUserProfile($userId);
+        $name = trim((string) ($profile['name'] ?? ''));
+        $email = trim((string) ($profile['email'] ?? ''));
+        $phone = trim((string) ($profile['phone'] ?? ''));
+        $memberId = trim((string) ($profile['memberId'] ?? ''));
+        $avatarUrl = trim((string) ($profile['avatarUrl'] ?? ''));
+        $initials = $this->profileInitials($name, $email);
+
+        if (isset($schema['state']['session']['user']) && is_array($schema['state']['session']['user'])) {
+            $this->replaceExistingValues($schema['state']['session']['user'], array(
+                'email' => $email,
+                'displayName' => $name,
+                'greetingName' => $name,
+                'firstName' => $this->profileFirstName($name, $email),
+                'initials' => $initials,
+                'avatarUrl' => $avatarUrl,
+                'phone' => $phone,
+                'memberId' => $memberId,
+            ));
+        }
+
+        if (isset($schema['components']['profile-header']) && is_array($schema['components']['profile-header'])) {
+            $header =& $schema['components']['profile-header'];
+            $this->replaceExistingValues($header, array(
+                'name' => $name,
+                'title' => $name,
+                'fullName' => $name,
+                'displayName' => $name,
+                'email' => $email,
+                'phone' => $phone,
+                'memberId' => $memberId,
+                'eyebrow' => $memberId,
+                'meta' => $memberId,
+                'chip' => $phone,
+                'phoneChip' => $phone,
+                'avatarText' => $initials,
+                'avatarUrl' => $avatarUrl,
+                'imageUrl' => $avatarUrl,
+            ));
+
+            if (isset($header['avatar']) && is_array($header['avatar'])) {
+                $this->replaceExistingValues($header['avatar'], array(
+                    'initials' => $initials,
+                    'imageUrl' => $avatarUrl,
+                ));
+                $this->replaceBindingFallback($header['avatar'], 'imageUrlBinding', $avatarUrl);
+            }
+
+            if (isset($header['fields']) && is_array($header['fields'])) {
+                $fieldValues = array(
+                    'memberId' => $memberId,
+                    'name' => $name,
+                    'email' => $email,
+                    'phone' => $phone,
+                );
+                foreach ($fieldValues as $field => $value) {
+                    if (!isset($header['fields'][$field]) || !is_array($header['fields'][$field])) {
+                        continue;
+                    }
+                    if (array_key_exists('value', $header['fields'][$field])) {
+                        $header['fields'][$field]['value'] = $value;
+                    }
+                    $this->replaceBindingFallback($header['fields'][$field], 'binding', $value);
+                }
+            }
+
+            $fallbacks = array(
+                'nameBinding' => $name,
+                'titleBinding' => $name,
+                'emailBinding' => $email,
+                'phoneBinding' => $phone,
+                'memberIdBinding' => $memberId,
+                'eyebrowBinding' => $memberId,
+                'avatarUrlBinding' => $avatarUrl,
+                'imageUrlBinding' => $avatarUrl,
+                'avatarTextBinding' => $initials,
+            );
+            foreach ($fallbacks as $binding => $value) {
+                $this->replaceBindingFallback($header, $binding, $value);
+            }
+            unset($header);
+        }
+
+        if ($avatarUrl === '' && class_exists(\App\Libraries\GridSduiSchemaBuilder::class)) {
+            $liveHeader = \App\Libraries\GridSduiSchemaBuilder::liveHeaderProfile($userId);
+            $avatarUrl = trim((string) ($liveHeader['imageUrl'] ?? ''));
+            if ($initials === '' && trim((string) ($liveHeader['initial'] ?? '')) !== '') {
+                $initials = trim((string) $liveHeader['initial']);
+            }
+        }
+        if (isset($schema['components']['grid-page-header']['actions']) && is_array($schema['components']['grid-page-header']['actions'])) {
+            foreach ($schema['components']['grid-page-header']['actions'] as $actionIndex => $headerAction) {
+                if (!is_array($headerAction)) {
+                    continue;
+                }
+                $isAvatar = (string) ($headerAction['id'] ?? '') === 'grid-header-avatar'
+                    || (string) ($headerAction['type'] ?? '') === 'avatarButton';
+                if (!$isAvatar || $avatarUrl === '') {
+                    continue;
+                }
+                $schema['components']['grid-page-header']['actions'][$actionIndex]['imageUrl'] = $avatarUrl;
+                $schema['components']['grid-page-header']['actions'][$actionIndex]['avatarUrl'] = $avatarUrl;
+                $schema['components']['grid-page-header']['actions'][$actionIndex]['image'] = $avatarUrl;
+                if (!isset($schema['components']['grid-page-header']['actions'][$actionIndex]['appearance']) || !is_array($schema['components']['grid-page-header']['actions'][$actionIndex]['appearance'])) {
+                    $schema['components']['grid-page-header']['actions'][$actionIndex]['appearance'] = array();
+                }
+                $schema['components']['grid-page-header']['actions'][$actionIndex]['appearance']['imageUrl'] = $avatarUrl;
+            }
+        }
+        if (isset($schema['content']['header']) && is_array($schema['content']['header']) && $avatarUrl !== '') {
+            $schema['content']['header']['avatarUrl'] = $avatarUrl;
+        }
+
+        foreach (array('profile', 'profilePage') as $profileKey) {
+            if (!isset($schema[$profileKey]) || !is_array($schema[$profileKey])) {
+                continue;
+            }
+            $this->replaceExistingValues($schema[$profileKey], array(
+                'name' => $name,
+                'email' => $email,
+                'phone' => $phone,
+                'memberId' => $memberId,
+                'avatarUrl' => $avatarUrl,
+            ));
+        }
+
+        return $schema;
+    }
+
+    /**
+     * @param array<string, mixed> $target
+     * @param array<string, mixed> $values
+     */
+    private function replaceExistingValues(array &$target, array $values): void
+    {
+        foreach ($values as $key => $value) {
+            if (array_key_exists($key, $target)) {
+                $target[$key] = $value;
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $target
+     */
+    private function replaceBindingFallback(array &$target, string $key, string $value): void
+    {
+        if (isset($target[$key]) && is_array($target[$key]) && array_key_exists('fallback', $target[$key])) {
+            $target[$key]['fallback'] = $value;
+        }
+    }
+
+    private function profileFirstName(string $name, string $email): string
+    {
+        $name = trim($name);
+        if ($name !== '' && strcasecmp($name, 'Guest') !== 0) {
+            $parts = preg_split('/\s+/', $name);
+
+            return trim((string) ($parts[0] ?? $name));
+        }
+
+        return strpos($email, '@') !== false ? (string) strstr($email, '@', true) : $email;
+    }
+
+    private function profileInitials(string $name, string $email): string
+    {
+        $name = trim($name);
+        if ($name === '' || strcasecmp($name, 'Guest') === 0) {
+            $name = $this->profileFirstName('', $email);
+        }
+        $parts = array_values(array_filter(preg_split('/\s+/', $name) ?: array()));
+        if ($parts === array()) {
+            return 'U';
+        }
+        $first = mb_substr((string) $parts[0], 0, 1);
+        $last = count($parts) > 1 ? mb_substr((string) $parts[count($parts) - 1], 0, 1) : '';
+
+        return strtoupper($first . $last);
     }
 
     /**
@@ -1278,6 +1466,7 @@ class AppHomePageModel
                 'themeHomeTemplate' => $layout['theme']['homeTemplate'] ?? null,
                 'squareTiles' => $layout['theme']['squareTiles'] ?? null,
                 'gridRowHeight' => $layout['theme']['gridRowHeight'] ?? null,
+                'cardsRadii' => $this->layoutCardsRadiiFingerprint($layout),
             ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $layout = $this->applyUserProfileToLayout($layout, $userId);
             $layout = $this->sanitizeLayoutForSchema($layout);
@@ -1289,6 +1478,7 @@ class AppHomePageModel
                 'themeHomeTemplate' => $layout['theme']['homeTemplate'] ?? null,
                 'squareTiles' => $layout['theme']['squareTiles'] ?? null,
                 'gridRowHeight' => $layout['theme']['gridRowHeight'] ?? null,
+                'cardsRadii' => $this->layoutCardsRadiiFingerprint($layout),
             ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             if ($headerBefore !== $headerAfter) {
                 $persistLayout = json_decode(json_encode($layout), true);
@@ -1791,6 +1981,24 @@ class AppHomePageModel
         return $radius;
     }
 
+    /**
+     * @param array<string, mixed> $layout
+     * @return array<int, int|null>
+     */
+    private function layoutCardsRadiiFingerprint(array $layout): array
+    {
+        $out = array();
+        foreach ($layout['cards'] ?? array() as $card) {
+            if (!is_array($card)) {
+                $out[] = null;
+                continue;
+            }
+            $out[] = array_key_exists('borderRadius', $card) ? $this->publishedCardRadius($card['borderRadius']) : null;
+        }
+
+        return $out;
+    }
+
     private function themeIsDarkCanvas(array $theme): bool
     {
         if (strtolower(trim((string) ($theme['bgStyle'] ?? ''))) === 'dark') {
@@ -1826,36 +2034,19 @@ class AppHomePageModel
             $theme['showWelcome'] = true;
         }
 
-        // Every account: 1x1 cells are square. Radius only changes corner roundness.
+        // Metro / every account: 1x1 cells are square with sharp corners.
         $theme = $this->applySquareTilesTheme($theme);
 
-        $explicitRadii = array();
         if (isset($layout['cards']) && is_array($layout['cards'])) {
             foreach ($layout['cards'] as $i => $card) {
                 if (!is_array($card)) {
                     continue;
                 }
-                // New / missing radius defaults to sharp square corners (0).
-                if (!array_key_exists('borderRadius', $card) || $card['borderRadius'] === null || $card['borderRadius'] === '') {
-                    $layout['cards'][$i]['borderRadius'] = $this->publishedCardRadius($theme['cardBorderRadius'] ?? 0);
-                    $explicitRadii[] = (int) $layout['cards'][$i]['borderRadius'];
-                    continue;
-                }
-                $explicitRadii[] = $this->publishedCardRadius($card['borderRadius']);
-                $layout['cards'][$i]['borderRadius'] = $explicitRadii[count($explicitRadii) - 1];
+                // squareTiles=true → sharp metro tiles (0). Clears leftover 12/16/18/20 from older layouts.
+                $layout['cards'][$i]['borderRadius'] = 0;
             }
         }
-        $allSharp = $explicitRadii !== array();
-        foreach ($explicitRadii as $radius) {
-            if ($radius !== 0) {
-                $allSharp = false;
-                break;
-            }
-        }
-        // Sharp corners (0) win; otherwise keep theme radius (default 0 for all accounts).
-        $theme['cardBorderRadius'] = $allSharp
-            ? 0
-            : $this->publishedCardRadius($theme['cardBorderRadius'] ?? 0);
+        $theme['cardBorderRadius'] = 0;
         $layout['theme'] = $theme;
         if ($staticUi === '') {
             $layout['homeTemplate'] = (string) ($theme['homeTemplate'] ?? ($layout['homeTemplate'] ?? 'default'));
@@ -1866,14 +2057,14 @@ class AppHomePageModel
 
     /**
      * Force square 1x1 phone cells for every account (column width ≈ row height).
-     * Corner roundness is controlled only by cardBorderRadius / per-card borderRadius.
+     * Metro contract: squareTiles + cardBorderRadius 0 (sharp corners).
      *
      * @param array<string, mixed> $theme
      * @return array<string, mixed>
      */
     private function applySquareTilesTheme(array $theme): array
     {
-        // Always on for every account — 1x1 cells stay square; radius only changes corners.
+        // Always on for every account — 1x1 cells stay square with sharp corners.
         $theme['squareTiles'] = true;
         $cols = (int) ($theme['gridColumns'] ?? 3);
         if ($cols < 1) {
@@ -1889,8 +2080,8 @@ class AppHomePageModel
         if ($gap > 24) {
             $gap = 24;
         }
-        // Match Flutter phone design width used in schema (~360dp).
-        $square = (int) round((360 - ($gap * max(0, $cols - 1))) / $cols);
+        // Match Flutter phone.designWidth (~375dp). App still uses sizeFormula=slotWidth at runtime.
+        $square = (int) round((375 - ($gap * max(0, $cols - 1))) / $cols);
         if ($square < 40) {
             $square = 40;
         }
@@ -1898,9 +2089,7 @@ class AppHomePageModel
             $square = 160;
         }
         $theme['gridRowHeight'] = $square;
-        if (!array_key_exists('cardBorderRadius', $theme) || $theme['cardBorderRadius'] === null || $theme['cardBorderRadius'] === '') {
-            $theme['cardBorderRadius'] = 0;
-        }
+        $theme['cardBorderRadius'] = 0;
 
         return $theme;
     }

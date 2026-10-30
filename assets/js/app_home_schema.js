@@ -408,7 +408,8 @@
     return JSON.parse(JSON.stringify(obj || {}));
   }
 
-  var CUBE_HOLD_RATIO = 0.84;
+  // Longer rotate phase (shorter hold) so face changes feel smooth, not snappy.
+  var CUBE_HOLD_RATIO = 0.72;
   var CUBE_FACE_COUNT = 4;
   var FACE_GEOMETRY = ['front', 'right', 'back', 'left'];
   /** demo.mp4 = closed solid cube (faces meet at the edge). Keep 0 unless theme overrides. */
@@ -672,6 +673,11 @@
 
   function resolveHomeGridRowHeight(theme) {
     theme = theme || {};
+    // Metro square tiles: never publish a stale fixed height (e.g. 117) from older layouts.
+    // Runtime still prefers layout.sizeFormula = "slotWidth" for true 1:1 across device widths.
+    if (theme.squareTiles !== false) {
+      return resolveSquarePhoneRowHeight(theme);
+    }
     if (theme.gridRowHeight != null && !isNaN(Number(theme.gridRowHeight))) {
       return Math.max(40, Math.min(160, Number(theme.gridRowHeight)));
     }
@@ -679,18 +685,26 @@
   }
 
   /**
-   * 1x1 phone cell height that matches column width (~360dp / columns).
+   * 1x1 phone cell height that matches column width (~375dp designWidth / columns).
    * Uses existing rowHeight fields only — no new schema keys.
    * When squareTiles is on (default for every account), height === column width.
+   * Flutter should still honor sizeFormula "slotWidth" so height tracks real cellWidth.
    */
   function resolveSquarePhoneRowHeight(theme) {
     theme = theme || {};
     // Always publish square 1x1 cells for every account.
     var cols = resolveHomeGridColumns(theme);
     var gap = resolveGridGap(theme);
-    var phoneWidth = 360;
+    var phoneWidth = 375;
     var square = Math.round((phoneWidth - gap * Math.max(0, cols - 1)) / Math.max(1, cols));
     return Math.max(40, Math.min(160, square));
+  }
+
+  function squareRowHeightForColumns(columns, gap) {
+    var cols = Math.max(1, Number(columns) || 1);
+    var g = Number(gap);
+    if (!isFinite(g)) g = DEFAULT_GRID_GAP;
+    return Math.max(40, Math.min(160, Math.round((375 - g * Math.max(0, cols - 1)) / cols)));
   }
 
   var RESPONSIVE_TEXT_OVERFLOW = {
@@ -715,17 +729,23 @@
     var phoneSquare = resolveSquarePhoneRowHeight(theme);
     var squareOn = theme.squareTiles !== false;
     var narrowColumns = Math.min(2, homeGridColumns);
+    var mediumColumns = Math.max(homeGridColumns, 4);
+    var expandedColumns = Math.max(homeGridColumns, 6);
     function track(numericHeight) {
       var n = Number(numericHeight);
       if (!isFinite(n)) n = squareOn ? phoneSquare : homeGridRowHeight;
       return n;
     }
     var narrowSquare = track(squareOn
-      ? Math.round((360 - gridGap * Math.max(0, narrowColumns - 1)) / Math.max(1, narrowColumns))
-      : Math.max(
-        homeGridRowHeight,
-        Math.round((360 - gridGap * Math.max(0, narrowColumns - 1)) / Math.max(1, narrowColumns))
-      ));
+      ? squareRowHeightForColumns(narrowColumns, gridGap)
+      : Math.max(homeGridRowHeight, squareRowHeightForColumns(narrowColumns, gridGap)));
+    var compactSquare = track(phoneSquare);
+    var mediumSquare = track(squareOn
+      ? squareRowHeightForColumns(mediumColumns, gridGap)
+      : Math.max(88, homeGridRowHeight - 8));
+    var expandedSquare = track(squareOn
+      ? squareRowHeightForColumns(expandedColumns, gridGap)
+      : Math.max(96, homeGridRowHeight));
     return {
       narrow: {
         columns: narrowColumns,
@@ -733,6 +753,7 @@
         rowGap: gridGap,
         rowHeight: narrowSquare,
         minRowHeight: narrowSquare,
+        sizeFormula: 'slotWidth',
         maximumContentWidth: 359,
         minimumCellWidthDp: 96
       },
@@ -740,24 +761,27 @@
         columns: homeGridColumns,
         columnGap: gridGap,
         rowGap: gridGap,
-        rowHeight: track(phoneSquare),
-        minRowHeight: track(phoneSquare),
+        rowHeight: compactSquare,
+        minRowHeight: compactSquare,
+        sizeFormula: 'slotWidth',
         minimumCellWidthDp: 96
       },
       medium: {
-        columns: Math.max(homeGridColumns, 4),
+        columns: mediumColumns,
         columnGap: gridGap,
         rowGap: gridGap,
-        rowHeight: track(Math.max(88, homeGridRowHeight - 8)),
-        minRowHeight: track(Math.max(88, homeGridRowHeight - 8)),
+        rowHeight: mediumSquare,
+        minRowHeight: mediumSquare,
+        sizeFormula: 'slotWidth',
         maximumContentWidth: 720
       },
       expanded: {
-        columns: Math.max(homeGridColumns, 6),
+        columns: expandedColumns,
         columnGap: gridGap,
         rowGap: gridGap,
-        rowHeight: track(Math.max(96, homeGridRowHeight)),
-        minRowHeight: track(Math.max(96, homeGridRowHeight)),
+        rowHeight: expandedSquare,
+        minRowHeight: expandedSquare,
+        sizeFormula: 'slotWidth',
         maximumContentWidth: 1200
       }
     };
@@ -883,9 +907,18 @@
   }
 
   function resolveCardFaceSec(card, theme, helpers) {
-    // Prefer card.faceSec / theme when helper is the broken "always 16" stub.
+    // Per-tile override from card editor.
     if (card && card.faceSec != null && card.faceSec !== '' && !isNaN(parseFloat(card.faceSec))) {
       return Math.max(2, Math.min(8, parseFloat(card.faceSec)));
+    }
+    // App Settings "Face display time" → theme.cardSpeed (full 4-face cycle seconds).
+    // Do not prefer provision stubs that hardcode 16; that froze every tile at 4s.
+    var speed = theme && theme.cardSpeed != null && theme.cardSpeed !== ''
+      ? Number(theme.cardSpeed)
+      : NaN;
+    if (isFinite(speed) && speed > 0) {
+      if (speed < 8) speed = 8;
+      return Math.max(2, Math.min(8, speed / CUBE_FACE_COUNT));
     }
     if (helpers && typeof helpers.getCardFaceSec === 'function') {
       var fromHelper = helpers.getCardFaceSec(card);
@@ -896,8 +929,7 @@
         return Math.max(2, Math.min(8, helperSec));
       }
     }
-    var speed = theme && theme.cardSpeed != null ? Number(theme.cardSpeed) : 16;
-    return Math.max(2, Math.min(8, speed / CUBE_FACE_COUNT));
+    return 4;
   }
 
   function resolveCardDurationMs(card, theme, helpers) {
@@ -1243,7 +1275,7 @@
         '--ahp-surface': theme.surfaceColor || theme.alertBg || '#ffffff',
         '--ahp-grid-gap': resolveGridGap(theme) + 'px',
         '--ahp-grid-columns': String(resolveHomeGridColumns(theme)),
-        '--ahp-grid-row-height': resolveHomeGridRowHeight(theme) + 'px',
+        '--ahp-grid-row-height': resolveSquarePhoneRowHeight(theme) + 'px',
         '--ahp-card-speed': (theme.cardSpeed != null ? Number(theme.cardSpeed) : 16) + 's',
         '--ahp-card-shadow': isLight
           ? '0 18px 40px rgba(15,23,42,.08)'
@@ -1494,19 +1526,16 @@
       theme.showWelcome = true;
     }
     if (!staticUi && (theme.showWelcome == null)) theme.showWelcome = true;
-    var explicitRadii = [];
+    // Metro contract (squareTiles): sharp corners + square 1x1 cells for every account.
+    // Clears leftover theme/card radii (12/16/18/20/22) from older layouts.
+    theme.squareTiles = true;
+    theme.cardBorderRadius = 0;
+    theme.gridRowHeight = resolveSquarePhoneRowHeight(theme);
     if (Array.isArray(layout.cards)) {
       layout.cards.forEach(function (card) {
-        if (!card || card.borderRadius == null || card.borderRadius === '') return;
-        card.borderRadius = publishedCardRadius(card.borderRadius);
-        explicitRadii.push(card.borderRadius);
+        if (!card) return;
+        card.borderRadius = 0;
       });
-    }
-    // A tile radius of 0 is square. Do not leave radius.card at 16 when every tile is 0.
-    if (explicitRadii.length && explicitRadii.every(function (n) { return n === 0; })) {
-      theme.cardBorderRadius = 0;
-    } else {
-      theme.cardBorderRadius = publishedCardRadius(theme.cardBorderRadius);
     }
     if (!staticUi) layout.homeTemplate = theme.homeTemplate || layout.homeTemplate || 'default';
     return layout;
@@ -1533,9 +1562,7 @@
         showWelcome: theme.showWelcome !== false,
         squareTiles: true,
         gridRowHeight: resolveSquarePhoneRowHeight(Object.assign({}, theme, { squareTiles: true })),
-        cardBorderRadius: publishedCardRadius(
-          theme.cardBorderRadius != null && theme.cardBorderRadius !== '' ? theme.cardBorderRadius : 0
-        )
+        cardBorderRadius: 0
       }),
       header: cloneJson(layout.header),
       welcome: cloneJson(layout.welcome),
@@ -1582,6 +1609,10 @@
   }
 
   function resolveTileBorderRadius(card, theme) {
+    // Metro squareTiles: always sharp corners so every account matches accounts 177/762.
+    if (!theme || theme.squareTiles !== false) {
+      return 0;
+    }
     var fromCard = resolveNonNegativeRadius(card && card.borderRadius, null);
     if (fromCard != null) return fromCard;
     var fromTheme = resolveNonNegativeRadius(theme && theme.cardBorderRadius, null);
@@ -1643,7 +1674,8 @@
       },
       radius: {
         small: 8,
-        card: publishedCardRadius(theme.cardBorderRadius),
+        // Metro squareTiles → sharp card corners for every account.
+        card: (!theme || theme.squareTiles !== false) ? 0 : publishedCardRadius(theme.cardBorderRadius),
         device: 16,
         large: 24,
         pill: 999
@@ -4420,6 +4452,9 @@
     resolveHomeGridColumns: resolveHomeGridColumns,
     resolveHomeGridRows: resolveHomeGridRows,
     resolveHomeGridRowHeight: resolveHomeGridRowHeight,
+    resolveSquarePhoneRowHeight: resolveSquarePhoneRowHeight,
+    resolveCardFaceSec: resolveCardFaceSec,
+    resolveCardDurationMs: resolveCardDurationMs,
     resolveGridGap: resolveGridGap,
     resolveCubeFaceGap: resolveCubeFaceGap,
     DEFAULT_CUBE_FACE_GAP: DEFAULT_CUBE_FACE_GAP,
@@ -5654,6 +5689,49 @@
     if (!hasAppCube && out.animationPresets && out.animationPresets.applicationCubeRotation) {
       delete out.animationPresets.applicationCubeRotation;
     }
+    // Metro squareTiles safety net: theme + tokens + home tiles always sharp + sizeFormula.
+    (function enforceMetroSquareTiles(doc) {
+      var snapTheme = doc.meta && doc.meta.layoutSnapshot && doc.meta.layoutSnapshot.theme;
+      var squareOn = !snapTheme || snapTheme.squareTiles !== false;
+      if (!squareOn) return;
+      if (snapTheme) {
+        snapTheme.squareTiles = true;
+        snapTheme.cardBorderRadius = 0;
+      }
+      if (doc.meta && doc.meta.layoutSnapshot && Array.isArray(doc.meta.layoutSnapshot.cards)) {
+        doc.meta.layoutSnapshot.cards.forEach(function (card) {
+          if (card) card.borderRadius = 0;
+        });
+      }
+      if (doc.designTokens && doc.designTokens.radius) {
+        doc.designTokens.radius.card = 0;
+      }
+      var homeGrid = doc.components && doc.components['home-grid'];
+      var childIds = (homeGrid && Array.isArray(homeGrid.children)) ? homeGrid.children : [];
+      if (homeGrid) {
+        if (!homeGrid.layout || typeof homeGrid.layout !== 'object') homeGrid.layout = {};
+        homeGrid.layout.sizeFormula = 'slotWidth';
+        if (homeGrid.layouts && typeof homeGrid.layouts === 'object') {
+          Object.keys(homeGrid.layouts).forEach(function (bp) {
+            if (homeGrid.layouts[bp] && typeof homeGrid.layouts[bp] === 'object') {
+              homeGrid.layouts[bp].sizeFormula = 'slotWidth';
+            }
+          });
+        }
+      }
+      if (!doc.components) return;
+      Object.keys(doc.components).forEach(function (id) {
+        var c = doc.components[id];
+        if (!c) return;
+        var isHomeTile = c.presetId === 'home-tile' || childIds.indexOf(id) !== -1;
+        if (!isHomeTile) return;
+        if (!c.appearance || typeof c.appearance !== 'object') c.appearance = {};
+        c.appearance.borderRadius = 0;
+        if (!c.dimensions || typeof c.dimensions !== 'object') c.dimensions = {};
+        c.dimensions.borderRadius = 0;
+        c.dimensions.sizeFormula = 'slotWidth';
+      });
+    })(out);
     function scrubRotationDimensions(node) {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) {
@@ -6515,15 +6593,20 @@
         card.colSpan != null ? card.colSpan : (card.columnSpan != null ? card.columnSpan : 1)
       ) || 1));
       var rowSpan = Math.max(1, Math.min(16, Number(card.rowSpan != null ? card.rowSpan : 1) || 1));
-      var borderRadius = card.borderRadius != null && card.borderRadius !== ''
-        ? resolveNonNegativeRadius(card.borderRadius, 0)
-        : (
-          (existing.dimensions && existing.dimensions.borderRadius != null && existing.dimensions.borderRadius !== '')
-            ? resolveNonNegativeRadius(existing.dimensions.borderRadius, 0)
-            : ((freshTile && freshTile.dimensions && freshTile.dimensions.borderRadius != null && freshTile.dimensions.borderRadius !== '')
-              ? resolveNonNegativeRadius(freshTile.dimensions.borderRadius, 0)
-              : resolveNonNegativeRadius((layout && layout.theme && layout.theme.cardBorderRadius), 0))
-        );
+      // Metro squareTiles: always publish sharp tile corners (0).
+      var borderRadius = ((layout && layout.theme && layout.theme.squareTiles === false)
+        ? (
+          card.borderRadius != null && card.borderRadius !== ''
+            ? resolveNonNegativeRadius(card.borderRadius, 0)
+            : (
+              (existing.dimensions && existing.dimensions.borderRadius != null && existing.dimensions.borderRadius !== '')
+                ? resolveNonNegativeRadius(existing.dimensions.borderRadius, 0)
+                : ((freshTile && freshTile.dimensions && freshTile.dimensions.borderRadius != null && freshTile.dimensions.borderRadius !== '')
+                  ? resolveNonNegativeRadius(freshTile.dimensions.borderRadius, 0)
+                  : resolveNonNegativeRadius((layout && layout.theme && layout.theme.cardBorderRadius), 0))
+            )
+        )
+        : 0);
 
       if (freshTile) {
         out[compId] = Object.assign({}, freshTile, existing, {
@@ -6578,13 +6661,16 @@
         if (typeof v2Rotate.buildCardRotationBlock === 'function') {
           var themeForRotate = (layout && layout.theme) || {};
           rebuiltRotation = v2Rotate.buildCardRotationBlock(card, index, themeForRotate, {}, cards.length);
-          var faceSecRebuild = (card.faceSec != null && card.faceSec !== '' && !isNaN(parseFloat(card.faceSec)))
-            ? Math.max(2, Math.min(8, parseFloat(card.faceSec)))
-            : null;
+          var hasCardFaceSec = card.faceSec != null && card.faceSec !== '' && !isNaN(parseFloat(card.faceSec));
+          var faceSecRebuild = v2Rotate.resolveCardFaceSec
+            ? v2Rotate.resolveCardFaceSec(card, themeForRotate, {})
+            : (hasCardFaceSec
+              ? Math.max(2, Math.min(8, parseFloat(card.faceSec)))
+              : Math.max(2, Math.min(8, (Number(themeForRotate.cardSpeed) || 16) / 4)));
           rebuiltTiming = {
             faceSec: faceSecRebuild,
             cycleDurationMs: rebuiltRotation.durationMs,
-            usesGlobalDefault: faceSecRebuild == null,
+            usesGlobalDefault: !hasCardFaceSec,
             startDelayMs: card.startDelayMs != null && card.startDelayMs !== '' ? Number(card.startDelayMs) : null
           };
         }
@@ -6644,11 +6730,13 @@
       : (theme.gridColumns != null && !isNaN(Number(theme.gridColumns))
         ? Math.max(1, Math.min(12, Number(theme.gridColumns)))
         : 3);
-    var homeGridRowHeight = v2.resolveHomeGridRowHeight
-      ? v2.resolveHomeGridRowHeight(theme)
-      : (theme.gridRowHeight != null && !isNaN(Number(theme.gridRowHeight))
-        ? Math.max(40, Math.min(160, Number(theme.gridRowHeight)))
-        : 96);
+    var homeGridRowHeight = (v2.resolveSquarePhoneRowHeight
+      ? v2.resolveSquarePhoneRowHeight(theme)
+      : (v2.resolveHomeGridRowHeight
+        ? v2.resolveHomeGridRowHeight(theme)
+        : (theme.gridRowHeight != null && !isNaN(Number(theme.gridRowHeight))
+          ? Math.max(40, Math.min(160, Number(theme.gridRowHeight)))
+          : 122)));
     var cardsById = {};
     (layout.cards || []).forEach(function (card) {
       if (card && card.id) cardsById[card.id] = card;
@@ -6841,20 +6929,17 @@
         enrich.dimensions = Object.assign({}, c.dimensions || {}, {
           columnSpan: col,
           rowSpan: row,
-          borderRadius: src.borderRadius != null && src.borderRadius !== ''
+          // Metro squareTiles: sharp corners; keep sizeFormula so Flutter height === cellWidth.
+          borderRadius: (theme.squareTiles === false && src.borderRadius != null && src.borderRadius !== '')
             ? (Number(src.borderRadius) < 0 || !isFinite(Number(src.borderRadius)) ? 0 : Number(src.borderRadius))
-            : ((c.dimensions && c.dimensions.borderRadius != null && c.dimensions.borderRadius !== '')
-              ? (Number(c.dimensions.borderRadius) < 0 || !isFinite(Number(c.dimensions.borderRadius)) ? 0 : Number(c.dimensions.borderRadius))
-              : 0),
+            : 0,
           minRowHeightDp: homeGridRowHeight,
           sizeFormula: 'slotWidth'
         });
         enrich.appearance = Object.assign({}, c.appearance || {}, {
-          borderRadius: src.borderRadius != null && src.borderRadius !== ''
+          borderRadius: (theme.squareTiles === false && src.borderRadius != null && src.borderRadius !== '')
             ? (Number(src.borderRadius) < 0 || !isFinite(Number(src.borderRadius)) ? 0 : Number(src.borderRadius))
-            : ((c.appearance && c.appearance.borderRadius != null && c.appearance.borderRadius !== '')
-              ? (Number(c.appearance.borderRadius) < 0 || !isFinite(Number(c.appearance.borderRadius)) ? 0 : Number(c.appearance.borderRadius))
-              : 0)
+            : 0
         });
         enrich.timing = Object.assign({}, c.timing || {}, {
           faceSec: (c.timing && c.timing.faceSec) || (src.faceSec != null && src.faceSec !== '' ? Math.max(2, Math.min(8, parseFloat(src.faceSec))) : undefined),

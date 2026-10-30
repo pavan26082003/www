@@ -4,6 +4,9 @@
  * Flutter caches this URL; the schema must not point at third-party QR CDNs.
  *
  * GET /v8/qr_image.php?data={payload}&mode={mode}&size=160
+ *
+ * Prefer local GD generation (tcpdf QRcode). Fall back to a QR HTTP API only
+ * when GD/local encode is unavailable.
  */
 
 header('Access-Control-Allow-Origin: *');
@@ -48,7 +51,7 @@ foreach ($cacheDirCandidates as $dir) {
     }
 }
 
-$hash = sha1($data . '|' . $mode . '|' . $size);
+$hash = sha1($data . '|local|' . $mode . '|' . $size);
 $cacheFile = $cacheDir ? ($cacheDir . '/qr_' . $hash . '.png') : '';
 if ($cacheFile !== '' && is_file($cacheFile) && filesize($cacheFile) > 32) {
     header('Content-Type: image/png');
@@ -58,18 +61,19 @@ if ($cacheFile !== '' && is_file($cacheFile) && filesize($cacheFile) > 32) {
     exit;
 }
 
-$encoded = rawurlencode($data);
-$sources = array(
-    'https://api.qrserver.com/v1/create-qr-code/?size=' . $size . 'x' . $size . '&margin=8&ecc=M&data=' . $encoded,
-);
-
-$png = '';
-foreach ($sources as $url) {
-    $png = qr_image_fetch($url);
-    if (is_string($png) && strlen($png) > 32 && strncmp($png, "\x89PNG", 4) === 0) {
-        break;
+$png = qr_image_render_local($data, $size);
+if ($png === '') {
+    $encoded = rawurlencode($data);
+    $sources = array(
+        'https://api.qrserver.com/v1/create-qr-code/?size=' . $size . 'x' . $size . '&margin=8&ecc=M&data=' . $encoded,
+    );
+    foreach ($sources as $url) {
+        $png = qr_image_fetch($url);
+        if (is_string($png) && strlen($png) > 32 && strncmp($png, "\x89PNG", 4) === 0) {
+            break;
+        }
+        $png = '';
     }
-    $png = '';
 }
 
 if ($png === '') {
@@ -90,6 +94,91 @@ header('Content-Type: image/png');
 header('Cache-Control: public, max-age=2592000, immutable');
 header('Content-Length: ' . strlen($png));
 echo $png;
+
+/**
+ * Build a PNG with the bundled tcpdf QR encoder + GD (no outbound HTTP).
+ */
+function qr_image_render_local($data, $size)
+{
+    if (!function_exists('imagecreatetruecolor') || !function_exists('imagepng')) {
+        return '';
+    }
+
+    $qrFileCandidates = array(
+        dirname(__DIR__) . '/app/ThirdParty/tcpdf/include/barcodes/qrcode.php',
+        dirname(__DIR__) . '/../app/ThirdParty/tcpdf/include/barcodes/qrcode.php',
+        __DIR__ . '/../app/ThirdParty/tcpdf/include/barcodes/qrcode.php',
+    );
+    $loaded = class_exists('QRcode', false);
+    if (!$loaded) {
+        foreach ($qrFileCandidates as $path) {
+            if (!is_file($path)) {
+                continue;
+            }
+            require_once $path;
+            if (class_exists('QRcode', false)) {
+                $loaded = true;
+                break;
+            }
+        }
+    }
+    if (!$loaded) {
+        return '';
+    }
+
+    try {
+        $qr = new QRcode((string) $data, 'M');
+        $barcode = $qr->getBarcodeArray();
+    } catch (Throwable $e) {
+        return '';
+    }
+
+    if (!is_array($barcode) || empty($barcode['bcode']) || empty($barcode['num_rows'])) {
+        return '';
+    }
+
+    $modules = (int) $barcode['num_rows'];
+    if ($modules < 1) {
+        return '';
+    }
+
+    $marginModules = 2;
+    $matrix = $modules + ($marginModules * 2);
+    $pixel = max(2, (int) floor($size / $matrix));
+    $imgSize = $pixel * $matrix;
+    $img = imagecreatetruecolor($imgSize, $imgSize);
+    if ($img === false) {
+        return '';
+    }
+    $white = imagecolorallocate($img, 255, 255, 255);
+    $black = imagecolorallocate($img, 0, 0, 0);
+    imagefilledrectangle($img, 0, 0, $imgSize - 1, $imgSize - 1, $white);
+
+    for ($y = 0; $y < $modules; $y++) {
+        $row = $barcode['bcode'][$y] ?? null;
+        if (!is_array($row)) {
+            continue;
+        }
+        for ($x = 0; $x < $modules; $x++) {
+            if (empty($row[$x])) {
+                continue;
+            }
+            $x1 = ($x + $marginModules) * $pixel;
+            $y1 = ($y + $marginModules) * $pixel;
+            imagefilledrectangle($img, $x1, $y1, $x1 + $pixel - 1, $y1 + $pixel - 1, $black);
+        }
+    }
+
+    ob_start();
+    imagepng($img);
+    $png = ob_get_clean();
+    imagedestroy($img);
+
+    if (!is_string($png) || strlen($png) < 32 || strncmp($png, "\x89PNG", 4) !== 0) {
+        return '';
+    }
+    return $png;
+}
 
 function qr_image_fetch($url)
 {

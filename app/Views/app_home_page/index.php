@@ -355,7 +355,7 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
                         $gridGapPct = max(0, min(100, round(($gridGap / 24) * 100)));
                         $gridColumnsPct = max(0, min(100, round((($gridColumns - 1) / 11) * 100)));
                         $gridRowHeightPct = max(0, min(100, round((($gridRowHeight - 40) / 120) * 100)));
-                        $cardBorderRadius = (int) ($layout['theme']['cardBorderRadius'] ?? 20);
+                        $cardBorderRadius = (int) ($layout['theme']['cardBorderRadius'] ?? 0);
                         $cardBorderRadiusPct = max(0, min(100, round(($cardBorderRadius / 72) * 100)));
                         ?>
                         <div class="ahp-field ahp-range-field">

@@ -60,8 +60,9 @@ function defaultHelpers() {
     getDeviceAnimOffset: function () { return 0; },
     getDefaultFace: function () { return 0; },
     getDeviceDefaultFace: function () { return 0; },
-    getCardFaceSec: function () { return 16; },
-    getCardRotationSpeed: function () { return 16; }
+    // Do not hardcode face timing — AhpSchema resolves from theme.cardSpeed / card.faceSec.
+    getCardFaceSec: function () { return null; },
+    getCardRotationSpeed: function () { return null; }
   };
 }
 

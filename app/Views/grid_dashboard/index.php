@@ -192,6 +192,35 @@ if (is_readable($jsPath)) {
   flex:1 1 auto;width:100%;min-height:0;border:0;background:#fff;display:block;
 }
 .gd-phone-browser-fallback{display:none!important}
+.gd-photo{
+  position:absolute;inset:0;z-index:25;
+  display:none;flex-direction:column;
+  background:#0b1220;color:#fff;
+}
+.gd-photo.is-open{display:flex}
+.gd-photo-bar{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;
+  padding:10px 12px;background:#111827;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.gd-photo-bar button{
+  border:0;border-radius:8px;background:#e2e8f0;color:#1e293b;
+  font-size:11px;font-weight:800;padding:6px 8px;cursor:pointer;
+}
+.gd-photo-stage{
+  flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
+  padding:28px 20px 40px;
+}
+.gd-photo-stage img,
+.gd-photo-fallback{
+  width:min(78%,280px);aspect-ratio:1;border-radius:50%;
+  box-shadow:0 18px 50px rgba(0,0,0,.35);
+}
+.gd-photo-stage img{object-fit:cover;display:block;background:#1e293b}
+.gd-photo-fallback{
+  display:grid;place-items:center;
+  color:#fff;font-size:72px;font-weight:800;line-height:1;
+}
 .gd-scan{
   position:absolute;inset:0;z-index:30;
   display:none;flex-direction:column;
@@ -200,18 +229,59 @@ if (is_readable($jsPath)) {
 .gd-scan.is-open{display:flex}
 .gd-scan-bar{
   display:flex;align-items:center;gap:8px;
-  padding:10px 12px;background:#0f172a;
+  padding:10px 12px;background:linear-gradient(135deg,#111827,#172554);
+  border-bottom:1px solid rgba(255,255,255,.1);
 }
 .gd-scan-bar strong{flex:1;font-size:13px}
-.gd-scan-bar button{
-  border:0;border-radius:8px;background:#e2e8f0;color:#0f172a;
+.gd-scan-bar button,.gd-scan-bar label{
+  border:1px solid rgba(255,255,255,.14);border-radius:9px;
+  background:rgba(255,255,255,.1);color:#fff;
   font-size:11px;font-weight:800;padding:6px 8px;cursor:pointer;
 }
-.gd-scan-stage{flex:1;min-height:0;position:relative}
+.gd-scan-bar button:hover,.gd-scan-bar label:hover{background:rgba(255,255,255,.18)}
+.gd-scan-bar input{display:none}
+.gd-scan-stage{flex:1;min-height:0;position:relative;overflow:hidden;background:#020617}
 .gd-scan-stage #gdScanReader{width:100%;height:100%}
+.gd-scan-stage #gdScanReader video{width:100%!important;height:100%!important;object-fit:cover!important}
+.gd-scan-stage #qr-shaded-region{display:none!important}
+.gd-scan-overlay{
+  position:absolute;inset:0;z-index:3;display:grid;place-items:center;
+  pointer-events:none;
+  background:radial-gradient(circle at center,transparent 0 31%,rgba(2,6,23,.2) 43%,rgba(2,6,23,.52) 100%);
+}
+.gd-scan-frame{
+  position:relative;width:min(68%,240px);aspect-ratio:1;border-radius:24px;
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow:0 0 0 999px rgba(2,6,23,.16),0 18px 50px rgba(0,0,0,.28),inset 0 0 30px rgba(34,211,238,.05);
+}
+.gd-scan-frame::before,.gd-scan-frame::after{
+  content:"";position:absolute;inset:-3px;border-radius:25px;
+  background:
+    linear-gradient(#67e8f9,#67e8f9) left top/35px 4px no-repeat,
+    linear-gradient(#67e8f9,#67e8f9) left top/4px 35px no-repeat,
+    linear-gradient(#67e8f9,#67e8f9) right top/35px 4px no-repeat,
+    linear-gradient(#67e8f9,#67e8f9) right top/4px 35px no-repeat;
+}
+.gd-scan-frame::after{
+  transform:rotate(180deg);
+  filter:drop-shadow(0 0 7px rgba(34,211,238,.8));
+}
+.gd-scan-line{
+  position:absolute;left:10px;right:10px;top:12px;height:2px;border-radius:999px;
+  background:linear-gradient(90deg,transparent,#22d3ee 12%,#fff 50%,#22d3ee 88%,transparent);
+  box-shadow:0 0 8px #22d3ee,0 0 18px rgba(34,211,238,.75);
+  animation:gdScanSweep 2.4s ease-in-out infinite alternate;
+}
+.gd-scan-line::after{
+  content:"";position:absolute;inset:-10px 0;
+  background:linear-gradient(180deg,transparent,rgba(34,211,238,.13),transparent);
+}
+@keyframes gdScanSweep{from{top:12px}to{top:calc(100% - 14px)}}
+@media (prefers-reduced-motion:reduce){.gd-scan-line{animation:none;top:50%}}
 .gd-scan-copy{
-  margin:0;padding:10px 14px 14px;text-align:center;
-  font-size:12px;color:#cbd5e1;
+  margin:0;padding:12px 14px 16px;text-align:center;
+  font-size:11px;font-weight:700;letter-spacing:.01em;color:#cbd5e1;
+  background:linear-gradient(180deg,#020617,#0f172a);
 }
 @media (max-width:1100px){
   .gd-workspace{grid-template-columns:1fr;overflow:auto}
@@ -279,9 +349,21 @@ if (is_readable($jsPath)) {
               <div class="gd-scan-bar">
                 <button type="button" id="gdScanClose">Close</button>
                 <strong>Scan QR</strong>
+                <label for="gdScanFile">Upload QR<input type="file" id="gdScanFile" accept="image/*"></label>
               </div>
-              <div class="gd-scan-stage"><div id="gdScanReader"></div></div>
+              <div class="gd-scan-stage">
+                <div id="gdScanReader"></div>
+                <div class="gd-scan-overlay" aria-hidden="true">
+                  <div class="gd-scan-frame"><span class="gd-scan-line"></span></div>
+                </div>
+              </div>
               <p class="gd-scan-copy" id="gdScanStatus">Align the QR code inside the frame</p>
+            </div>
+            <div class="gd-photo" id="gdPhoto" aria-hidden="true">
+              <div class="gd-photo-bar">
+                <button type="button" id="gdPhotoClose">&#8592; Back</button>
+              </div>
+              <div class="gd-photo-stage" id="gdPhotoStage"></div>
             </div>
             <div class="gd-phone-browser" id="gdPhoneBrowser" aria-hidden="true">
               <div class="gd-phone-browser-bar">
@@ -407,6 +489,67 @@ window.GRID_DASHBOARD_BOOT = {
     return url;
   }
 
+  function headerAvatar() {
+    var components = (currentSchema && currentSchema.components) || {};
+    var header = components['grid-page-header'] || {};
+    var actions = Array.isArray(header.actions) ? header.actions : [];
+    var avatar = {};
+    for (var i = 0; i < actions.length; i++) {
+      var item = actions[i];
+      if (item && (item.type === 'avatarButton' || item.id === 'grid-header-avatar')) {
+        avatar = item;
+        break;
+      }
+    }
+    var content = (currentSchema && currentSchema.content) || boot.content || {};
+    var headerContent = (content && content.header) || {};
+    var appearance = avatar.appearance || {};
+    var url = avatar.imageUrl || avatar.avatarUrl || avatar.image || appearance.imageUrl || headerContent.avatarUrl || '';
+    var live = document.querySelector('#gdPreviewRoot .ahp-gn-avatar img');
+    if (live && live.getAttribute('src')) url = live.getAttribute('src');
+    return {
+      url: String(url || '').trim(),
+      initial: String(avatar.initial || avatar.label || headerContent.avatarInitial || 'S').charAt(0).toUpperCase(),
+      color: avatar.color || avatar.backgroundColor || appearance.backgroundColor || headerContent.avatarColor || '#7c3aed'
+    };
+  }
+
+  function closeProfilePhoto() {
+    var panel = document.getElementById('gdPhoto');
+    var stage = document.getElementById('gdPhotoStage');
+    if (panel) {
+      panel.classList.remove('is-open');
+      panel.setAttribute('aria-hidden', 'true');
+    }
+    if (stage) stage.innerHTML = '';
+  }
+
+  function openProfilePhoto() {
+    var panel = document.getElementById('gdPhoto');
+    var stage = document.getElementById('gdPhotoStage');
+    if (!panel || !stage) return;
+    closeInPhoneBrowser();
+    closeScanner();
+    var avatar = headerAvatar();
+    stage.innerHTML = '';
+    if (avatar.url) {
+      var photo = document.createElement('img');
+      photo.src = avatar.url;
+      photo.alt = 'Profile photo';
+      stage.appendChild(photo);
+    } else {
+      var fallback = document.createElement('div');
+      fallback.className = 'gd-photo-fallback';
+      fallback.style.background = avatar.color;
+      fallback.textContent = avatar.initial;
+      stage.appendChild(fallback);
+    }
+    var screen = panel.parentElement;
+    if (screen) screen.scrollTop = 0;
+    panel.classList.add('is-open');
+    panel.setAttribute('aria-hidden', 'false');
+  }
+
   function closeInPhoneBrowser() {
     var browser = document.getElementById('gdPhoneBrowser');
     var frame = document.getElementById('gdBrowserFrame');
@@ -424,6 +567,7 @@ window.GRID_DASHBOARD_BOOT = {
       toast('Set a URL first, then Schema Generate');
       return;
     }
+    closeProfilePhoto();
     currentBrowserUrl = url;
     var browser = document.getElementById('gdPhoneBrowser');
     var frame = document.getElementById('gdBrowserFrame');
@@ -473,6 +617,86 @@ window.GRID_DASHBOARD_BOOT = {
 
   var scanReader = null;
   var scanBusy = false;
+  var scanStream = null;
+  var scanTimer = 0;
+
+  function stopDashboardCamera() {
+    if (scanTimer) {
+      clearTimeout(scanTimer);
+      scanTimer = 0;
+    }
+    if (scanStream) {
+      scanStream.getTracks().forEach(function (track) { track.stop(); });
+      scanStream = null;
+    }
+  }
+
+  function startDashboardCamera(mount, onCode) {
+    stopDashboardCamera();
+    mount.innerHTML = '';
+    var video = document.createElement('video');
+    video.setAttribute('playsinline', '');
+    video.muted = true;
+    video.autoplay = true;
+    video.style.width = '100%';
+    video.style.height = '100%';
+    video.style.objectFit = 'cover';
+    mount.appendChild(video);
+    var canvas = document.createElement('canvas');
+    var context = canvas.getContext('2d', { willReadFrequently: true });
+    var detector = (window.BarcodeDetector) ? new window.BarcodeDetector({ formats: ['qr_code'] }) : null;
+    var hidden = document.getElementById('gdScanFileDecoder');
+    if (!hidden) {
+      hidden = document.createElement('div');
+      hidden.id = 'gdScanFileDecoder';
+      hidden.hidden = true;
+      document.body.appendChild(hidden);
+    }
+    var fileDecoder = (typeof Html5Qrcode === 'function') ? new Html5Qrcode('gdScanFileDecoder') : null;
+    scanReader = {
+      stop: function () { stopDashboardCamera(); return Promise.resolve(); },
+      clear: function () { return Promise.resolve(); },
+      scanFile: fileDecoder ? function (file, show) { return fileDecoder.scanFile(file, show); } : function () { return Promise.reject(); }
+    };
+    return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }).then(function (stream) {
+      scanStream = stream;
+      video.srcObject = stream;
+      return video.play();
+    }).then(function () {
+      var tick = function () {
+        if (!scanStream || scanBusy || video.readyState < 2) {
+          if (scanStream && !scanBusy) scanTimer = setTimeout(tick, 300);
+          return;
+        }
+        var width = video.videoWidth || 0;
+        var height = video.videoHeight || 0;
+        if (!width || !height) {
+          scanTimer = setTimeout(tick, 300);
+          return;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        context.drawImage(video, 0, 0, width, height);
+        var again = function () { if (scanStream && !scanBusy) scanTimer = setTimeout(tick, 350); };
+        if (detector) {
+          detector.detect(canvas).then(function (codes) {
+            if (codes && codes[0] && codes[0].rawValue) onCode(codes[0].rawValue);
+            else again();
+          }).catch(again);
+          return;
+        }
+        if (!fileDecoder || !canvas.toBlob) {
+          again();
+          return;
+        }
+        canvas.toBlob(function (blob) {
+          if (!blob || scanBusy) return;
+          fileDecoder.scanFile(new File([blob], 'frame.png', { type: 'image/png' }), false).then(onCode).catch(again);
+        }, 'image/png');
+      };
+      tick();
+    });
+  }
 
   function setScanStatus(text) {
     var el = document.getElementById('gdScanStatus');
@@ -495,25 +719,92 @@ window.GRID_DASHBOARD_BOOT = {
       panel.classList.remove('is-open');
       panel.setAttribute('aria-hidden', 'true');
     }
-    scanBusy = false;
     setScanStatus('Align the QR code inside the frame');
     return stopScanReader();
   }
 
-  function openScannedUrl(raw) {
+  // QR codes open /grid/connect (or grid-chat/connect). Do not rewrite to /profile —
+  // connect now does the grid_sso handoff and redirects. Always mint a fresh token
+  // on this host so verify() matches (stale schema tokens / cross-host secrets fail).
+  function scannedDestination(raw, freshToken) {
     var value = String(raw || '').trim().replace(/^["']|["']$/g, '');
-    if (!/^https?:\/\//i.test(value)) {
-      toast('That QR is not a connect link');
-      return;
+    if (!/^https?:\/\//i.test(value)) return '';
+    var scannedUrl;
+    try {
+      scannedUrl = new URL(value);
+    } catch (e) {
+      return '';
     }
-    var title = /grid-chat\/connect/i.test(value) ? 'Circle Connect' : 'Professional Space';
-    openInPhoneBrowser(value, title);
+    if (/grid-dashboard\/scanner|\/grid\/scanner/i.test(scannedUrl.pathname)) return '';
+    var scannedHost = scannedUrl.hostname.toLowerCase();
+    var currentHost = window.location.hostname.toLowerCase();
+    var trustedHost = scannedHost === currentHost
+      || scannedHost === 'efactor.tech'
+      || scannedHost === 'www.efactor.tech'
+      || scannedHost === 'localhost'
+      || scannedHost === '127.0.0.1';
+    if (!trustedHost) return '';
+
+    var path = scannedUrl.pathname;
+    var mode = (scannedUrl.searchParams.get('mode') || '').toLowerCase();
+    var isCircle = /grid-chat\/connect|grid_chat\/connect/i.test(path) || mode === 'circle';
+    var isProfessional = /\/grid\/connect/i.test(path) || (mode === 'professional' && !isCircle);
+    var token = String(freshToken || '').trim();
+    scannedUrl.searchParams.delete('grid_sso');
+
+    if (isCircle || isProfessional) {
+      var connectPath = isCircle ? '/index.php/grid-chat/connect' : '/index.php/grid/connect';
+      var next = new URL(window.location.origin + connectPath);
+      next.searchParams.set('mode', isCircle ? 'circle' : 'professional');
+      var gridId = scannedUrl.searchParams.get('grid_id') || scannedUrl.searchParams.get('gridId') || '';
+      var user = scannedUrl.searchParams.get('user_id') || scannedUrl.searchParams.get('userId') || '';
+      if (gridId) next.searchParams.set('grid_id', gridId);
+      if (!isCircle && user) next.searchParams.set('user_id', user);
+      if (token) next.searchParams.set('grid_sso', token);
+      return next.toString();
+    }
+
+    if (token) scannedUrl.searchParams.set('grid_sso', token);
+    if (scannedHost !== currentHost && (scannedHost === 'efactor.tech' || scannedHost === 'www.efactor.tech')) {
+      scannedUrl.protocol = window.location.protocol;
+      scannedUrl.host = window.location.host;
+    }
+    return scannedUrl.toString();
+  }
+
+  function mintFreshSso() {
+    return fetch(apiBase + '/mint-sso', {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(function (res) { return res.json(); }).then(function (data) {
+      return (data && data.success && data.grid_sso) ? String(data.grid_sso) : '';
+    }).catch(function () { return ''; });
+  }
+
+  function openScannedUrl(raw) {
+    mintFreshSso().then(function (token) {
+      var value = scannedDestination(raw, token);
+      if (!value) {
+        scanBusy = false;
+        toast('That QR is not a connect link');
+        return;
+      }
+      if (!token) {
+        scanBusy = false;
+        toast('Could not mint a login token. Sign in again, then rescan.');
+        return;
+      }
+      try { sessionStorage.setItem('gdScanDone', String(Date.now())); } catch (e) {}
+      var title = /grid-chat/i.test(value) ? 'Circle Connect' : 'Professional Space';
+      openInPhoneBrowser(value, title);
+    });
   }
 
   function openScanner() {
     var panel = document.getElementById('gdScan');
     var mount = document.getElementById('gdScanReader');
-    if (!panel || !mount || typeof Html5Qrcode !== 'function') {
+    if (!panel || !mount || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       toast('QR scanner is unavailable in this browser');
       return;
     }
@@ -523,21 +814,37 @@ window.GRID_DASHBOARD_BOOT = {
     setScanStatus('Align the QR code inside the frame');
     scanBusy = false;
     stopScanReader().then(function () {
-      scanReader = new Html5Qrcode('gdScanReader');
-      return scanReader.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 220, height: 220 } },
-        function (decodedText) {
-          if (scanBusy) return;
-          scanBusy = true;
-          var scanned = decodedText;
-          closeScanner().then(function () { openScannedUrl(scanned); });
-        },
-        function () {}
-      );
+      return startDashboardCamera(mount, function (decodedText) {
+        if (scanBusy) return;
+        scanBusy = true;
+        closeScanner().then(function () { openScannedUrl(decodedText); });
+      });
     }).catch(function (err) {
+      scanBusy = false;
       setScanStatus((err && err.message) ? err.message : 'Could not start the camera');
     });
+  }
+
+  function scanUploadedFile(file) {
+    if (!file || scanBusy || typeof Html5Qrcode !== 'function') return;
+    var panel = document.getElementById('gdScan');
+    if (panel) {
+      panel.classList.add('is-open');
+      panel.setAttribute('aria-hidden', 'false');
+    }
+    scanBusy = true;
+    setScanStatus('Reading QR image…');
+    var instance = scanReader || new Html5Qrcode('gdScanReader');
+    scanReader = instance;
+    var decode = function () {
+      instance.scanFile(file, true).then(function (decodedText) {
+        closeScanner().then(function () { openScannedUrl(decodedText); });
+      }).catch(function () {
+        scanBusy = false;
+        setScanStatus('No QR code was found in that image');
+      });
+    };
+    instance.stop().then(decode).catch(decode);
   }
 
   function renderPreview(payload) {
@@ -558,7 +865,12 @@ window.GRID_DASHBOARD_BOOT = {
         meta = meta || {};
         var url = meta.url || resolveFeatureUrl(actionId, currentSchema);
         if (actionId === 'grid-open-scanner') {
+          closeProfilePhoto();
           openScanner();
+          return;
+        }
+        if (actionId === 'navigate-profile') {
+          openProfilePhoto();
           return;
         }
         if (url) {
@@ -586,6 +898,7 @@ window.GRID_DASHBOARD_BOOT = {
       );
     }
     setSchemaOutput(currentSchema);
+    closeProfilePhoto();
     closeInPhoneBrowser();
     renderPreview(payload);
   }
@@ -657,7 +970,24 @@ window.GRID_DASHBOARD_BOOT = {
   }
 
   var backBtn = document.getElementById('gdBackBtn');
-  if (backBtn) backBtn.addEventListener('click', function () { window.location.href = dashboardUrl; });
+  if (backBtn) backBtn.addEventListener('click', function () {
+    var photo = document.getElementById('gdPhoto');
+    var scanner = document.getElementById('gdScan');
+    var browser = document.getElementById('gdPhoneBrowser');
+    if (photo && photo.classList.contains('is-open')) {
+      closeProfilePhoto();
+      return;
+    }
+    if (scanner && scanner.classList.contains('is-open')) {
+      closeScanner();
+      return;
+    }
+    if (browser && browser.classList.contains('is-open')) {
+      closeInPhoneBrowser();
+      return;
+    }
+    window.location.assign(dashboardUrl || '/');
+  });
   var refreshBtn = document.getElementById('gdRefreshBtn');
   if (refreshBtn) refreshBtn.addEventListener('click', refreshSchema);
   var genBtn = document.getElementById('gdGenerateSchemaBtn');
@@ -670,10 +1000,18 @@ window.GRID_DASHBOARD_BOOT = {
   if (copyJson) copyJson.addEventListener('click', function () {
     copyText(document.getElementById('gdSchemaOutput').value, 'Schema JSON copied');
   });
+  var photoClose = document.getElementById('gdPhotoClose');
+  if (photoClose) photoClose.addEventListener('click', closeProfilePhoto);
   var browserBack = document.getElementById('gdBrowserBackBtn');
   if (browserBack) browserBack.addEventListener('click', closeInPhoneBrowser);
   var scanClose = document.getElementById('gdScanClose');
   if (scanClose) scanClose.addEventListener('click', function () { closeScanner(); });
+  var scanFile = document.getElementById('gdScanFile');
+  if (scanFile) scanFile.addEventListener('change', function (event) {
+    var file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    scanUploadedFile(file);
+  });
 
   if (currentSchema) {
     applyPayload({

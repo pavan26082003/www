@@ -32,8 +32,9 @@
         "gridGap": 8,
         "gridColumns": 3,
         "gridRows": 7,
-        "gridRowHeight": 96,
-        "cardBorderRadius": 22,
+        "gridRowHeight": 120,
+        "squareTiles": true,
+        "cardBorderRadius": 0,
         "cardSpeed": 24,
         "logoIcon": "fa-crosshairs",
         "showWelcome": true,
@@ -58,7 +59,7 @@
             "colSpan": 1,
             "rowSpan": 2,
             "tall": true,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -112,7 +113,7 @@
             "row": 1,
             "colSpan": 1,
             "rowSpan": 1,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -172,7 +173,7 @@
             "row": 1,
             "colSpan": 1,
             "rowSpan": 1,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -232,7 +233,7 @@
             "row": 2,
             "colSpan": 1,
             "rowSpan": 1,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -292,7 +293,7 @@
             "row": 2,
             "colSpan": 1,
             "rowSpan": 1,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -348,7 +349,7 @@
             "row": 3,
             "colSpan": 1,
             "rowSpan": 1,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -405,7 +406,7 @@
             "row": 3,
             "colSpan": 1,
             "rowSpan": 1,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -525,7 +526,7 @@
             "row": 4,
             "colSpan": 3,
             "rowSpan": 1,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -644,7 +645,7 @@
             "row": 3,
             "colSpan": 1,
             "rowSpan": 1,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -697,7 +698,7 @@
             "row": 5,
             "colSpan": 1,
             "rowSpan": 1,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -751,7 +752,7 @@
             "row": 5,
             "colSpan": 1,
             "rowSpan": 1,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -819,7 +820,7 @@
             "colSpan": 1,
             "rowSpan": 2,
             "tall": true,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -874,7 +875,7 @@
             "row": 6,
             "colSpan": 1,
             "rowSpan": 1,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -933,7 +934,7 @@
             "row": 6,
             "colSpan": 1,
             "rowSpan": 1,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
@@ -992,7 +993,7 @@
             "row": 7,
             "colSpan": 1,
             "rowSpan": 1,
-            "borderRadius": 18,
+            "borderRadius": 0,
             "defaultFace": 0,
             "rotationDir": "ltr",
             "faces": [
