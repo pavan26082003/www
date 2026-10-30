@@ -25,7 +25,17 @@ class Security_Controller extends App_Controller {
         $login_user_id = $this->Users_model->login_user_id();
         if (!$login_user_id && $redirect) {
             $requestUri = strtolower((string) ($_SERVER['REQUEST_URI'] ?? ''));
-            if (strpos($requestUri, 'items/save_view_page_ui_theme') !== false) {
+            $routePath = '';
+            try {
+                $routePath = strtolower((string) uri_string());
+            } catch (\Throwable $exception) {
+                $routePath = '';
+            }
+            if (strpos($requestUri, 'items/save_view_page_ui_theme') !== false
+                || strpos($routePath, 'items/save_view_page_ui_theme') !== false) {
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
                 header('Content-Type: application/json; charset=UTF-8');
                 http_response_code(401);
                 echo json_encode([

@@ -304,6 +304,7 @@ class DevicePushService
             $messageType = 'text';
         }
         $isGroup = ((string) ($meta['is_group'] ?? '0')) === '1' ? '1' : '0';
+        $groupTitle = $isGroup === '1' ? trim((string) ($meta['group_title'] ?? '')) : '';
         $expiresAt = trim((string) ($meta['expires_at'] ?? ''));
         $lockedMap = is_array($meta['locked'] ?? null) ? $meta['locked'] : [];
 
@@ -317,8 +318,11 @@ class DevicePushService
                 'notification_type' => 'message',
                 'conversation_id' => $conversationId,
                 'message_id' => $messageId,
-                'message_type' => $messageType,
-                'title' => $locked ? 'GRID Chat' : $sender['name'],
+                // "message_type" is reserved by FCM: a data key with that name makes Firebase reject the push (400)
+                'msg_type' => $messageType,
+                // A group is titled with its name; sender_name still says who wrote it
+                'title' => $locked ? 'GRID Chat' : ($groupTitle !== '' ? $groupTitle : $sender['name']),
+                'group_title' => $locked ? '' : $groupTitle,
                 'body' => $locked ? 'New message' : $preview,
                 'sender_id' => (string) $senderId,
                 'sender_name' => $locked ? '' : $sender['name'],

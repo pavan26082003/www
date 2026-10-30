@@ -24,6 +24,33 @@ class AppHomePageController extends Security_Controller
         $this->appHomePageModel = new AppHomePageModel();
     }
 
+    /**
+     * In-app Rating page (stars + comment). Opened from Account so Flutter
+     * does not need a home textInput component.
+     */
+    public function rating()
+    {
+        helper(array('url'));
+        if ((int) ($this->login_user->id ?? 0) <= 0) {
+            return redirect()->to(site_url('signin?redirect=app-home-page/rating'));
+        }
+
+        $logoUrl = 'https://efactor.tech/files/home/Logo_new.png';
+        try {
+            $cfg = $this->appHomePageModel->buildSchemaConfig((int) $this->login_user->id);
+            if (!empty($cfg['logoUrl'])) {
+                $logoUrl = (string) $cfg['logoUrl'];
+            }
+        } catch (\Throwable $e) {
+            // keep default logo
+        }
+
+        return view('app_home_page/rating', array(
+            'apiBase' => site_url('app-home-page/api'),
+            'logoUrl' => $logoUrl,
+        ));
+    }
+
     public function index()
     {
         helper(array('url'));
@@ -110,6 +137,12 @@ class AppHomePageController extends Security_Controller
                     return $this->jsonResponse(array('success' => false, 'message' => 'Method not allowed'), 405);
                 }
                 return $this->jsonResponse($this->saveProfilePreferencesPayload());
+
+            case 'rating-feedback':
+                if (strtolower($this->request->getMethod()) !== 'post') {
+                    return $this->jsonResponse(array('success' => false, 'message' => 'Method not allowed'), 405);
+                }
+                return $this->jsonResponse($this->saveHelpFeedbackPayload());
 
             case 'reset':
                 if ($this->request->getMethod() !== 'post') {
@@ -568,6 +601,29 @@ class AppHomePageController extends Security_Controller
         }
 
         return $layout;
+    }
+
+    /**
+     * Account → Help report. Stored in app_home_help_feedback, separate from layout settings.
+     */
+    private function saveHelpFeedbackPayload(): array
+    {
+        $userId = (int) ($this->login_user->id ?? 0);
+        if ($userId <= 0) {
+            return array('success' => false, 'message' => 'Not signed in');
+        }
+
+        $payload = $this->request->getJSON(true);
+        if (!is_array($payload)) {
+            $payload = $this->request->getPost();
+        }
+        if (!is_array($payload)) {
+            $payload = array();
+        }
+
+        $profile = $this->appHomePageModel->getUserProfile($userId);
+
+        return $this->appHomePageModel->saveHelpFeedback($userId, $payload, $profile);
     }
 
     /**

@@ -164,8 +164,10 @@ class DevicePushController extends Controller
 
     /**
      * POST /grid-chat/api/call/notify
-     * call_id, call_type, and callee_user_id or callee_grid_id.
-     * Always sends the data-only INCOMING_CALL FCM to the callee device token.
+     * call_id, call_type, status, and callee_user_id or target_grid_id / callee_grid_id.
+     * status "ringing" (the default) sends the data-only INCOMING_CALL FCM to the callee.
+     * "missed" sends MISSED_CALL; "answered" / "declined" send CALL_HANDLED (mapped to
+     * CALL_CANCELLED in DevicePushService), so a finished call stops ringing.
      */
     public function notifyCall()
     {
@@ -189,6 +191,10 @@ class DevicePushController extends Controller
         if (!in_array($callType, ['audio', 'video'], true)) {
             return $this->json(['status' => 'failure', 'success' => false, 'message' => 'call_type must be audio or video'], 422);
         }
+        $callStatus = strtolower(trim((string) ($body['status'] ?? '')));
+        if (!in_array($callStatus, ['missed', 'answered', 'declined'], true)) {
+            $callStatus = 'ringing';
+        }
 
         $calleeId = $this->calleeIdFromBody($body, $me);
         if ($calleeId <= 0 || $calleeId === $me) {
@@ -201,6 +207,24 @@ class DevicePushController extends Controller
             if ($targetGridId !== '') {
                 break;
             }
+        }
+
+        // The call is over: end the ring on the callee's phone instead of starting a new one
+        if ($callStatus !== 'ringing') {
+            try {
+                (new DevicePushService())->sendCallSignal($calleeId, $callId, $callStatus === 'missed' ? 'MISSED_CALL' : 'CALL_HANDLED');
+            } catch (\Throwable $e) {
+                log_message('error', 'Call notify end push: ' . $e->getMessage());
+            }
+
+            return $this->json([
+                'status' => 'success',
+                'success' => true,
+                'message' => 'Call notify accepted',
+                'call_id' => $callId,
+                'callee_user_id' => $calleeId,
+                'call_status' => $callStatus,
+            ]);
         }
 
         $fcmSent = 0;
@@ -242,7 +266,8 @@ class DevicePushController extends Controller
         }
 
         $push = new DevicePushService();
-        foreach (['callee_grid_id', 'recipient_grid_id', 'grid_id'] as $key) {
+        // target_grid_id is what the GRID Chat web app sends
+        foreach (['target_grid_id', 'callee_grid_id', 'recipient_grid_id', 'grid_id'] as $key) {
             $gridId = trim((string) ($body[$key] ?? ''));
             if ($gridId === '') {
                 continue;

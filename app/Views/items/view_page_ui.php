@@ -20764,12 +20764,22 @@ if (!function_exists('view_ui_icon')) {
     }
 
     function parseSaveResponse(response) {
+      if (!response || response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+        throw new Error('Your session expired. Sign in again, then save.');
+      }
       return response.text().then(function(raw) {
         let result = {};
+        const body = String(raw || '').replace(/^\uFEFF/, '').trim();
         try {
-          result = raw ? JSON.parse(raw) : {};
+          result = body ? JSON.parse(body) : {};
         } catch (error) {
-          throw new Error('Server returned an invalid response while saving.');
+          if (/signin|sign in|login|session/i.test(body)) {
+            throw new Error('Your session expired. Sign in again, then save.');
+          }
+          const plain = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          throw new Error(plain
+            ? plain.slice(0, 240)
+            : 'Server returned an invalid response while saving.');
         }
         if (!response.ok) {
           throw new Error(result.message || ('Save failed with status ' + response.status + '.'));
@@ -25551,7 +25561,12 @@ if (!function_exists('view_ui_icon')) {
         fetch(saveThemeUrl, {
           method: 'POST',
           body: formData,
-          credentials: 'same-origin'
+          credentials: 'same-origin',
+          redirect: 'manual',
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          }
         })
         .then(parseSaveResponse)
         .then(function(result) {
@@ -25629,8 +25644,17 @@ if (!function_exists('view_ui_icon')) {
           syncData.append('modelno', modelNo);
           syncData.append('theme_json', JSON.stringify(syncTheme));
           syncData.append('schema_json', schemaCache.compact || JSON.stringify(initialSchema));
-          fetch(saveThemeUrl, { method: 'POST', body: syncData, credentials: 'same-origin' })
-            .then(function(response) { return response.json(); })
+          fetch(saveThemeUrl, {
+            method: 'POST',
+            body: syncData,
+            credentials: 'same-origin',
+            redirect: 'manual',
+            headers: {
+              'Accept': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          })
+            .then(parseSaveResponse)
             .then(function(result) {
               if (result && (result.success === true || result.success === 1 || result.success === '1')) {
                 showSaveToast('Linked pages saved to schema.');

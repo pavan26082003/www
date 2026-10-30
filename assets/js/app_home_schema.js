@@ -160,7 +160,8 @@
     profile: 'userPen',
     'chevron-right': 'chevronRight',
     appearance: 'moon',
-    category: 'list'
+    category: 'list',
+    help: 'circleQuestion'
   };
 
   var WEB_ICON_NAMES = {
@@ -205,7 +206,8 @@
     profile: 'user-pen',
     'chevron-right': 'chevron-right',
     appearance: 'moon',
-    category: 'list'
+    category: 'list',
+    help: 'circle-question'
   };
 
   var BOTTOM_NAV_CONTRACTS = {
@@ -409,6 +411,8 @@
   var CUBE_HOLD_RATIO = 0.84;
   var CUBE_FACE_COUNT = 4;
   var FACE_GEOMETRY = ['front', 'right', 'back', 'left'];
+  /** demo.mp4 = closed solid cube (faces meet at the edge). Keep 0 unless theme overrides. */
+  var DEFAULT_CUBE_FACE_GAP = 0;
 
   function resolveCardRotationDirection(card) {
     var isLtr = card && card.rotationDir === 'ltr';
@@ -444,6 +448,21 @@
     var n = Number(theme.gridGap);
     if (isNaN(n)) return DEFAULT_GRID_GAP;
     return Math.max(0, Math.min(24, n));
+  }
+
+  /**
+   * Optional theme.cubeFaceGap only. Default 0 = closed solid box (demo.mp4 clone).
+   * Does not alter layout/card schema keys.
+   */
+  function resolveCubeFaceGap(theme) {
+    theme = theme || {};
+    if (theme.cubeFaceGap != null && theme.cubeFaceGap !== '') {
+      var custom = Number(theme.cubeFaceGap);
+      if (!isNaN(custom)) {
+        return Math.max(0, Math.min(24, Math.round(custom)));
+      }
+    }
+    return DEFAULT_CUBE_FACE_GAP;
   }
 
   /**
@@ -659,6 +678,21 @@
     return DEFAULT_HOME_GRID_ROW_HEIGHT;
   }
 
+  /**
+   * 1x1 phone cell height that matches column width (~360dp / columns).
+   * Uses existing rowHeight fields only — no new schema keys.
+   * When squareTiles is on (default for every account), height === column width.
+   */
+  function resolveSquarePhoneRowHeight(theme) {
+    theme = theme || {};
+    // Always publish square 1x1 cells for every account.
+    var cols = resolveHomeGridColumns(theme);
+    var gap = resolveGridGap(theme);
+    var phoneWidth = 360;
+    var square = Math.round((phoneWidth - gap * Math.max(0, cols - 1)) / Math.max(1, cols));
+    return Math.max(40, Math.min(160, square));
+  }
+
   var RESPONSIVE_TEXT_OVERFLOW = {
     greeting: { maxLines: 1, overflow: 'ellipsis', softWrap: true },
     title: { maxLines: 2, overflow: 'ellipsis', softWrap: true },
@@ -678,19 +712,27 @@
     var homeGridColumns = resolveHomeGridColumns(theme);
     var gridGap = resolveGridGap(theme);
     var homeGridRowHeight = resolveHomeGridRowHeight(theme);
+    var phoneSquare = resolveSquarePhoneRowHeight(theme);
+    var squareOn = theme.squareTiles !== false;
     var narrowColumns = Math.min(2, homeGridColumns);
     function track(numericHeight) {
       var n = Number(numericHeight);
-      if (!isFinite(n)) n = homeGridRowHeight;
+      if (!isFinite(n)) n = squareOn ? phoneSquare : homeGridRowHeight;
       return n;
     }
+    var narrowSquare = track(squareOn
+      ? Math.round((360 - gridGap * Math.max(0, narrowColumns - 1)) / Math.max(1, narrowColumns))
+      : Math.max(
+        homeGridRowHeight,
+        Math.round((360 - gridGap * Math.max(0, narrowColumns - 1)) / Math.max(1, narrowColumns))
+      ));
     return {
       narrow: {
         columns: narrowColumns,
         columnGap: gridGap,
         rowGap: gridGap,
-        rowHeight: track(homeGridRowHeight),
-        minRowHeight: track(homeGridRowHeight),
+        rowHeight: narrowSquare,
+        minRowHeight: narrowSquare,
         maximumContentWidth: 359,
         minimumCellWidthDp: 96
       },
@@ -698,8 +740,8 @@
         columns: homeGridColumns,
         columnGap: gridGap,
         rowGap: gridGap,
-        rowHeight: track(homeGridRowHeight),
-        minRowHeight: track(homeGridRowHeight),
+        rowHeight: track(phoneSquare),
+        minRowHeight: track(phoneSquare),
         minimumCellWidthDp: 96
       },
       medium: {
@@ -751,48 +793,52 @@
       return {
         mode: 'stack',
         direction: 'column',
-        align: 'stretch',
-        justify: 'space-between',
+        align: 'center',
+        justify: 'center',
         primaryField: 'title',
         secondaryField: 'subtitle',
         valueField: 'value',
         primaryRole: 'title',
         secondaryRole: 'subtitle',
-        iconPosition: 'center',
-        captionPosition: 'bottom-left',
+        iconPosition: 'top',
+        titlePosition: 'center',
+        subtitlePosition: 'center',
+        captionPosition: 'center',
         valuePosition: 'center',
-        labelPosition: 'bottom-left',
+        labelPosition: 'center',
         overflow: 'clip',
         titleMaxLines: RESPONSIVE_TEXT_OVERFLOW.statLabel.maxLines,
         subtitleMaxLines: RESPONSIVE_TEXT_OVERFLOW.statValue.maxLines,
-        padding: { horizontal: 10, vertical: 8 },
-        gap: 0,
+        padding: { horizontal: 8, vertical: 8 },
+        gap: 4,
         iconGap: 4,
-        alignText: 'left',
-        style: 'startTile'
+        alignText: 'center',
+        style: 'centeredStack'
       };
     }
     if (faceType === 'mixed') {
       return {
         mode: 'mixed',
         direction: 'column',
-        align: 'stretch',
-        justify: 'space-between',
+        align: 'center',
+        justify: 'center',
         primaryField: 'title',
         secondaryField: 'subtitle',
         imageField: 'image',
         primaryRole: 'title',
         secondaryRole: 'subtitle',
-        iconPosition: 'center',
-        captionPosition: 'bottom-left',
-        labelPosition: 'bottom-left',
+        iconPosition: 'top',
+        titlePosition: 'center',
+        subtitlePosition: 'center',
+        captionPosition: 'center',
+        labelPosition: 'center',
         overflow: 'clip',
         titleMaxLines: RESPONSIVE_TEXT_OVERFLOW.cardTitle.maxLines,
         subtitleMaxLines: RESPONSIVE_TEXT_OVERFLOW.cardSubtitle.maxLines,
-        padding: { horizontal: 10, vertical: 8 },
-        gap: 0,
-        alignText: 'left',
-        style: 'startTile'
+        padding: { horizontal: 8, vertical: 8 },
+        gap: 4,
+        alignText: 'center',
+        style: 'centeredStack'
       };
     }
     if (faceType === 'image') {
@@ -872,18 +918,18 @@
 
   var DEFAULT_FACE_TYPOGRAPHY = {
     stack: {
-      iconSize: 20, titleFontSize: 12, subtitleFontSize: 22,
-      titleFontWeight: 800, subtitleFontWeight: 800,
-      titleLineHeight: 1.15, subtitleLineHeight: 1.05,
+      iconSize: 28, titleFontSize: 14, subtitleFontSize: 10,
+      titleFontWeight: 800, subtitleFontWeight: 500,
+      titleLineHeight: 1.1, subtitleLineHeight: 1.15,
       contentGap: 4, iconGap: 4, textAlign: 'center',
-      titleMaxLines: 2, subtitleMaxLines: 1, overflow: 'clip'
+      titleMaxLines: 2, subtitleMaxLines: 2, overflow: 'clip'
     },
     mixed: {
-      iconSize: 16, titleFontSize: 12, subtitleFontSize: 10,
-      titleFontWeight: 800, subtitleFontWeight: 700,
+      iconSize: 28, titleFontSize: 14, subtitleFontSize: 10,
+      titleFontWeight: 800, subtitleFontWeight: 500,
       titleLineHeight: 1.1, subtitleLineHeight: 1.15,
-      contentGap: 2, iconGap: 4, textAlign: 'left',
-      titleMaxLines: 2, subtitleMaxLines: 1, overflow: 'clip'
+      contentGap: 4, iconGap: 4, textAlign: 'center',
+      titleMaxLines: 2, subtitleMaxLines: 2, overflow: 'clip'
     },
     stat: {
       iconSize: 20, titleFontSize: 9, subtitleFontSize: 24,
@@ -942,12 +988,24 @@
       : (parent.subFontSize != null && parent.subFontSize !== '' ? Number(parent.subFontSize) : defaults.subtitleFontSize);
     var titleFontFamily = face.titleFontFamily || parent.titleFontFamily || 'system';
     var subtitleFontFamily = face.subFontFamily || parent.subFontFamily || 'system';
+    var titleFontWeight = face.titleFontWeight != null && face.titleFontWeight !== ''
+      ? Number(face.titleFontWeight)
+      : (parent.titleFontWeight != null && parent.titleFontWeight !== '' ? Number(parent.titleFontWeight) : (defaults.titleFontWeight || 800));
+    var subtitleFontWeightRaw = face.subtitleFontWeight != null && face.subtitleFontWeight !== ''
+      ? face.subtitleFontWeight
+      : (face.subFontWeight != null && face.subFontWeight !== ''
+        ? face.subFontWeight
+        : (parent.subtitleFontWeight != null && parent.subtitleFontWeight !== ''
+          ? parent.subtitleFontWeight
+          : (parent.subFontWeight != null && parent.subFontWeight !== ''
+            ? parent.subFontWeight
+            : defaults.subtitleFontWeight)));
     var out = {
       iconSize: iconSize,
       titleFontSize: titleFontSize,
       subtitleFontSize: subtitleFontSize,
-      titleFontWeight: face.titleFontWeight != null ? Number(face.titleFontWeight) : (defaults.titleFontWeight || 800),
-      subtitleFontWeight: face.subtitleFontWeight != null ? Number(face.subtitleFontWeight) : (defaults.subtitleFontWeight || 700),
+      titleFontWeight: titleFontWeight,
+      subtitleFontWeight: subtitleFontWeightRaw != null ? Number(subtitleFontWeightRaw) : (defaults.subtitleFontWeight || 500),
       titleLineHeight: face.titleLineHeight != null ? Number(face.titleLineHeight) : (defaults.titleLineHeight || 1.12),
       subtitleLineHeight: face.subtitleLineHeight != null ? Number(face.subtitleLineHeight) : (defaults.subtitleLineHeight || 1.1),
       contentGap: face.contentGap != null ? Number(face.contentGap) : (defaults.contentGap != null ? defaults.contentGap : 4),
@@ -983,8 +1041,9 @@
     };
   }
 
-  function buildCubeGeometryContract(directionMeta) {
+  function buildCubeGeometryContract(directionMeta, theme) {
     directionMeta = directionMeta || resolveCardRotationDirection(null);
+    var faceGapPx = resolveCubeFaceGap(theme);
     var stepDeg = directionMeta.degreesPerFace != null
       ? directionMeta.degreesPerFace
       : ((directionMeta.rotationDir || 'rtl') === 'ltr' ? 90 : -90);
@@ -1004,10 +1063,11 @@
       visibleFacePolicy: 'front-face-by-angle',
       activeFaceBinding: 'faceIndex',
       activeFaceClass: 'ahp-cube-face-front',
-      // Real box: depth equals face width so left/right sides are true faces.
-      depthFormula: 'slotWidth',
+      // Closed solid box (demo.mp4): faces meet at the corner. faceGapPx defaults to 0.
+      faceGapPx: faceGapPx,
+      depthFormula: faceGapPx > 0 ? 'slotWidth + 2 * faceGapPx' : 'slotWidth',
       sizeFormula: 'slotWidth',
-      halfDepthFormula: 'slotWidth / 2',
+      halfDepthFormula: faceGapPx > 0 ? 'slotWidth / 2 + faceGapPx' : 'slotWidth / 2',
       parentCenteringTransform: 'translateZ(-halfDepth)',
       backfaceVisibility: 'hidden',
       forbiddenInterpretations: ['flatFlipCard', 'edgeFlipSwap', 'carousel', 'horizontalSlider', 'stackedCards', 'opacityFaceSwap'],
@@ -1021,7 +1081,7 @@
           translateZ: 'halfDepth'
         };
       }),
-      note: 'Four-sided box: faces on front/right/back/left. Parent uses translateZ(-half) rotateY(angle). Dwell then turn 90deg. NOT a flat flip card.'
+      note: 'Four-sided closed box (demo clone): halfDepth = slotWidth/2. Faces meet at edges. Parent translateZ(-halfDepth) rotateY. NOT a flat flip / exploded open gap.'
     };
   }
 
@@ -1054,6 +1114,7 @@
       transitionRatio: 1 - CUBE_HOLD_RATIO,
       holdMs: rotationDwellMs(durationMs),
       transitionMs: rotationTransitionMs(durationMs),
+      curve: 'ease-in-out-cubic',
       faceSwapAtFlipProgress: null,
       stepExpression: stepExpr,
       rotateSequence: [
@@ -1122,7 +1183,7 @@
       transitionMs: transitionMs,
       dwellRatio: CUBE_HOLD_RATIO,
       transitionRatio: 1 - CUBE_HOLD_RATIO,
-      geometry: buildCubeGeometryContract(directionMeta),
+      geometry: buildCubeGeometryContract(directionMeta, theme),
       animation: buildCubeAnimationContract(durationMs, phaseOffsetSec, directionMeta),
       cssDelayVar: '--ahp-cube-delay',
       cssDelayValueSec: phaseOffsetSec
@@ -1150,8 +1211,9 @@
         columnGap: gridGap,
         rowGap: gridGap,
         gap: gridGap,
-        rowHeightDp: resolveHomeGridRowHeight(theme),
-        minCardRowHeightDp: resolveHomeGridRowHeight(theme),
+        // Publish square phone cell height on existing rowHeightDp (app reads this).
+        rowHeightDp: resolveSquarePhoneRowHeight(theme),
+        minCardRowHeightDp: resolveSquarePhoneRowHeight(theme),
         sizeFormula: 'slotWidth',
         cardWidthFormula: '(cellWidth * columnSpan) + ((columnSpan - 1) * columnGap)',
         cardHeightFormula: '(rowHeight * rowSpan) + ((rowSpan - 1) * rowGap)',
@@ -1169,11 +1231,11 @@
           expanded: responsiveLayouts.expanded.columns
         }
       },
-      cubeGeometry: buildCubeGeometryContract(defaultRotation),
+      cubeGeometry: buildCubeGeometryContract(defaultRotation, theme),
       cubeAnimation: buildCubeAnimationContract(cycleMs, 0, defaultRotation),
       tileRotation: {
         model: 'fourFaceBoxRotation',
-        geometry: buildCubeGeometryContract(defaultRotation),
+        geometry: buildCubeGeometryContract(defaultRotation, theme),
         animation: buildCubeAnimationContract(cycleMs, 0, defaultRotation)
       },
       themeCssVariables: {
@@ -1254,7 +1316,12 @@
     c.image = resolveMediaUrl(c.image || '', cfg);
     c.faces = (c.faces || []).map(function (face, fi) {
       var f = cloneJson(face || {});
-      if (!f.color && c.color) f.color = c.color;
+      if (fi === 0 && !f.color && c.color) f.color = c.color;
+      if (fi > 0 && !f.color) {
+        f.color = c.sameFaceColor === true
+          ? (c.color || DISTINCT_FACE_COLORS[fi] || '')
+          : (DISTINCT_FACE_COLORS[fi] || c.color || '');
+      }
       if (!f.icon && c.icon) f.icon = c.icon;
       f.image = resolveMediaUrl(f.image || (fi === 0 ? c.image : ''), cfg);
       return {
@@ -1262,7 +1329,7 @@
         subtitle: f.subtitle || f.value || '',
         type: f.type || '',
         icon: f.icon || c.icon || '',
-        color: f.color || c.color || '',
+        color: f.color || (fi === 0 ? c.color : (DISTINCT_FACE_COLORS[fi] || c.color)) || '',
         image: f.image || '',
         imageFit: f.imageFit || c.imageFit || 'cover',
         imagePosition: f.imagePosition || c.imagePosition || 'center',
@@ -1394,9 +1461,10 @@
   };
 
   function publishedCardRadius(value) {
-    if (value == null || value === '') return 16;
+    // Default 0 = sharp square corners for every account.
+    if (value == null || value === '') return 0;
     var n = Number(value);
-    if (!isFinite(n) || n < 0) return 16;
+    if (!isFinite(n) || n < 0) return 0;
     if (n === 0) return 0;
     if (n > 72) return 72;
     return Math.round(n);
@@ -1463,7 +1531,11 @@
         staticUiTemplate: staticUiTemplate,
         showBottomNav: theme.showBottomNav !== false,
         showWelcome: theme.showWelcome !== false,
-        cardBorderRadius: publishedCardRadius(theme.cardBorderRadius)
+        squareTiles: true,
+        gridRowHeight: resolveSquarePhoneRowHeight(Object.assign({}, theme, { squareTiles: true })),
+        cardBorderRadius: publishedCardRadius(
+          theme.cardBorderRadius != null && theme.cardBorderRadius !== '' ? theme.cardBorderRadius : 0
+        )
       }),
       header: cloneJson(layout.header),
       welcome: cloneJson(layout.welcome),
@@ -1487,8 +1559,8 @@
         columnGap: resolveGridGap(theme),
         rowGap: resolveGridGap(theme),
         gap: resolveGridGap(theme),
-        rowHeightDp: resolveHomeGridRowHeight(theme),
-        minCardRowHeightDp: resolveHomeGridRowHeight(theme),
+        rowHeightDp: resolveSquarePhoneRowHeight(theme),
+        minCardRowHeightDp: resolveSquarePhoneRowHeight(theme),
         sizeFormula: 'slotWidth',
         defaultFaceSec: resolveCardFaceSec(null, theme, {}),
         defaultCycleDurationMs: (theme.cardSpeed != null ? Number(theme.cardSpeed) : 16) * 1000,
@@ -1604,12 +1676,12 @@
   }
 
   var FONT_FAMILY_CSS = {
-    system: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     inter: 'Inter, system-ui, sans-serif',
     roboto: 'Roboto, Arial, sans-serif',
     poppins: 'Poppins, sans-serif',
     montserrat: 'Montserrat, sans-serif',
-    'open-sans': '"Open Sans", sans-serif',
+    'open-sans': "'Open Sans', sans-serif",
     lato: 'Lato, sans-serif',
     nunito: 'Nunito, sans-serif',
     merriweather: 'Merriweather, Georgia, serif',
@@ -1635,17 +1707,26 @@
     appearance.subtitleFontFamilyCss = resolveFontFamily(typography.subtitleFontFamily);
     if (face.hideIcon === true) appearance.hideIcon = true;
     else appearance.showIcon = face.showIcon !== false;
-    appearance.iconPosition = 'center';
-    appearance.titlePosition = 'bottomLeft';
-    appearance.style = appearance.style || 'startTile';
+    if (faceType === 'image') {
+      appearance.iconPosition = 'center';
+      appearance.titlePosition = 'bottomLeft';
+      appearance.subtitlePosition = 'bottomLeft';
+      appearance.style = appearance.style || 'startTile';
+    } else {
+      appearance.iconPosition = 'top';
+      appearance.titlePosition = 'center';
+      appearance.subtitlePosition = 'center';
+      appearance.style = 'centeredStack';
+    }
     return appearance;
   }
 
   function resolveFaceImageFitSettings(face, card) {
     face = face || {};
     card = card || {};
-    var fit = String(face.imageFit || card.imageFit || 'contain').toLowerCase();
-    if (fit !== 'cover' && fit !== 'fill') fit = 'contain';
+    // Default cover so photo tiles fill edge-to-edge (no blank letterbox bars).
+    var fit = String(face.imageFit || card.imageFit || 'cover').toLowerCase();
+    if (fit !== 'contain' && fit !== 'fill') fit = 'cover';
     var pos = String(face.imagePosition || card.imagePosition || 'center').toLowerCase();
     if (['center', 'top', 'bottom', 'left', 'right'].indexOf(pos) === -1) pos = 'center';
     var scale = parseInt(face.imageScale != null ? face.imageScale : card.imageScale, 10);
@@ -1686,13 +1767,20 @@
 
     if (type === 'stack' || type === 'stat' || type === 'link' || type === 'action') {
       out.type = 'stack';
-      out.title = face.title || face.label || card.title || card.label || '';
-      var stackValue = face.value != null ? face.value : (type === 'stat' || face.value != null ? card.value : undefined);
+      // Face 0 may inherit card title; other faces must keep their own copy so rotation is visible.
+      out.title = fi === 0
+        ? (face.title || face.label || card.title || card.label || '')
+        : (face.title || face.label || '');
+      var stackValue = face.value != null
+        ? face.value
+        : (fi === 0 && (type === 'stat' || face.value != null) ? card.value : undefined);
       if (stackValue != null && stackValue !== '') {
         out.value = bind('dashboard.cards.' + card.id + '.faces.' + fi + '.value', stackValue);
       }
-      if (face.subtitle != null || card.subtitle) {
-        out.subtitle = face.subtitle != null ? staticVal(face.subtitle) : staticVal(card.subtitle);
+      if (face.subtitle != null && face.subtitle !== '') {
+        out.subtitle = staticVal(face.subtitle);
+      } else if (fi === 0 && card.subtitle) {
+        out.subtitle = staticVal(card.subtitle);
       }
       if (face.badge != null) out.badge = face.badge;
       if (face.status != null) out.status = face.status;
@@ -1756,17 +1844,27 @@
         }
       } else {
         out.type = 'stack';
-        out.title = face.title || face.label || card.title || card.label || '';
-        out.subtitle = face.subtitle != null ? staticVal(face.subtitle) : staticVal(card.subtitle);
+        out.title = fi === 0
+          ? (face.title || face.label || card.title || card.label || '')
+          : (face.title || face.label || '');
+        if (face.subtitle != null && face.subtitle !== '') {
+          out.subtitle = staticVal(face.subtitle);
+        } else if (fi === 0 && card.subtitle) {
+          out.subtitle = staticVal(card.subtitle);
+        }
       }
     } else if (type === 'mixed') {
       out.type = 'mixed';
       var mixedImg = face.image || (fi === 0 ? card.image : '') || '';
       var mixedFit = resolveFaceImageFitSettings(face, card);
       out.mixedLayout = face.mixedLayout || card.mixedLayout || 'startTile';
-      out.title = face.title || face.label || card.title || card.label || '';
-      if (face.subtitle != null || card.subtitle) {
-        out.subtitle = face.subtitle != null ? staticVal(face.subtitle) : staticVal(card.subtitle);
+      out.title = fi === 0
+        ? (face.title || face.label || card.title || card.label || '')
+        : (face.title || face.label || '');
+      if (face.subtitle != null && face.subtitle !== '') {
+        out.subtitle = staticVal(face.subtitle);
+      } else if (fi === 0 && card.subtitle) {
+        out.subtitle = staticVal(card.subtitle);
       }
       if (face.value != null && face.value !== '') {
         out.value = bind('dashboard.cards.' + card.id + '.faces.' + fi + '.value', face.value);
@@ -1787,8 +1885,14 @@
       }
     } else {
       out.type = 'stack';
-      out.title = face.title || face.label || card.title || card.label || '';
-      out.subtitle = face.subtitle != null ? staticVal(face.subtitle) : staticVal(card.subtitle);
+      out.title = fi === 0
+        ? (face.title || face.label || card.title || card.label || '')
+        : (face.title || face.label || '');
+      if (face.subtitle != null && face.subtitle !== '') {
+        out.subtitle = staticVal(face.subtitle);
+      } else if (fi === 0 && card.subtitle) {
+        out.subtitle = staticVal(card.subtitle);
+      }
     }
     return out;
   }
@@ -1883,15 +1987,88 @@
     device.faces = device.faces.slice(0, 4);
   }
 
+  // Distinct face accents so 4-face cubes never publish identical sides (purple/navy/teal/green).
+  var DISTINCT_FACE_COLORS = ['#7c3aed', '#1e3a8a', '#0d9488', '#16a34a'];
+  var DISTINCT_FACE_ICONS = ['fa-cube', 'fa-star', 'fa-bolt', 'fa-heart'];
+
+  function faceContentFingerprint(face) {
+    face = face || {};
+    return [
+      String(face.title || face.label || '').trim().toLowerCase(),
+      String(face.subtitle != null ? face.subtitle : '').trim().toLowerCase(),
+      String(face.value != null ? face.value : '').trim().toLowerCase(),
+      String(face.image || '').trim()
+    ].join('|');
+  }
+
+  function isBlankFaceContent(face) {
+    face = face || {};
+    return !String(face.title || face.label || '').trim()
+      && !String(face.subtitle != null ? face.subtitle : '').trim()
+      && (face.value == null || String(face.value).trim() === '')
+      && !String(face.image || '').trim();
+  }
+
+  /**
+   * Templates / legacy layouts sometimes cloned the same title+subtitle onto all 4 faces.
+   * Diversify duplicates so Flutter rotation is visibly distinct. Does not change schema keys.
+   */
+  function diversifyDuplicateFaces(card) {
+    if (!card || !Array.isArray(card.faces) || card.faces.length < 2) return;
+    var primaryKey = faceContentFingerprint(card.faces[0]);
+    for (var fi = 1; fi < card.faces.length; fi++) {
+      var face = card.faces[fi];
+      if (!face || typeof face !== 'object' || isBlankFaceContent(face) || faceContentFingerprint(face) === primaryKey) {
+        card.faces[fi] = {
+          type: (face && face.type) || card.type || 'link',
+          title: 'Face ' + (fi + 1),
+          label: 'Face ' + (fi + 1),
+          subtitle: '',
+          icon: DISTINCT_FACE_ICONS[fi] || (face && face.icon) || card.icon || 'fa-cube',
+          color: card.sameFaceColor === true
+            ? ((face && face.color) || card.color || DISTINCT_FACE_COLORS[fi])
+            : (DISTINCT_FACE_COLORS[fi] || card.color),
+          textColor: (face && face.textColor) || card.textColor || '#ffffff',
+          iconColor: (face && face.iconColor) || card.iconColor || '#ffffff'
+        };
+      }
+    }
+  }
+
   function ensureCard(card) {
     if (!card.faces || !card.faces.length) {
-      card.faces = [{ value: card.value, label: card.label || card.title, icon: card.icon, color: card.color }];
+      card.faces = [{
+        value: card.value,
+        label: card.label || card.title,
+        title: card.title || card.label,
+        subtitle: card.subtitle || '',
+        icon: card.icon,
+        color: card.color || DISTINCT_FACE_COLORS[0]
+      }];
     }
-    while (card.faces.length < 4) card.faces.push({ title: 'Face ' + (card.faces.length + 1), icon: card.icon || 'fa-cube', color: card.color });
+    while (card.faces.length < 4) {
+      var padFi = card.faces.length;
+      card.faces.push({
+        title: 'Face ' + (padFi + 1),
+        icon: DISTINCT_FACE_ICONS[padFi] || 'fa-cube',
+        color: card.sameFaceColor === true
+          ? (card.color || DISTINCT_FACE_COLORS[padFi])
+          : (DISTINCT_FACE_COLORS[padFi] || card.color)
+      });
+    }
+    // 2 meaningful faces are valid (Flutter mirrors them). Keep 4 slots for the box renderer;
+    // only pad blanks / clones — never invent a 3rd/4th content state beyond Face N labels.
     card.faces = card.faces.slice(0, 4);
-    /* Inherit card-level color/icon when face doesn't override */
-    card.faces.forEach(function (face) {
-      if (!face.color && card.color) face.color = card.color;
+    diversifyDuplicateFaces(card);
+    /* Inherit card-level color/icon when face doesn't override — face 0 only for color. */
+    card.faces.forEach(function (face, fi) {
+      if (!face || typeof face !== 'object') return;
+      if (fi === 0 && !face.color && card.color) face.color = card.color;
+      if (fi > 0 && !face.color) {
+        face.color = card.sameFaceColor === true
+          ? (card.color || DISTINCT_FACE_COLORS[fi])
+          : (DISTINCT_FACE_COLORS[fi] || card.color);
+      }
       if (!face.icon && card.icon) face.icon = card.icon;
     });
     card.colSpan = Math.max(1, Math.min(12, parseInt(card.colSpan, 10) || 1));
@@ -1901,17 +2078,28 @@
   function resolvePublicAvatarUrl(url) {
     var src = String(url || '').trim();
     if (!src || /^(data:|blob:)/i.test(src)) return '';
-    if (/\/assets\/images\/avatar\.jpg(\?|$)/i.test(src)) return '';
+    if (/\/assets\/images\/avatar\.jpg(\?|$)/i.test(src) || /(^|\/)avatar\.jpg(\?|$)/i.test(src)) return '';
     if (/^https?:\/\//i.test(src)) {
-      if (/^http:\/\//i.test(src) && !/localhost|127\.0\.0\.1|::1/i.test(src)) {
-        src = 'https://' + src.slice(7);
+      var host = (src.replace(/^https?:\/\//i, '').split('/')[0] || '').split(':')[0].toLowerCase();
+      if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+        var localPath = src.replace(/^https?:\/\/[^/]+/i, '').replace(/^\/app(?=\/)/i, '');
+        if (localPath.charAt(0) !== '/') localPath = '/' + localPath;
+        if (/\/avatar\.jpg(\?|$)/i.test(localPath)) return '';
+        return 'https://efactor.tech' + localPath;
       }
+      if (/^http:\/\//i.test(src)) src = 'https://' + src.slice(7);
       return src;
     }
     if (src.charAt(0) !== '/') {
       src = src.indexOf('/') === -1 ? ('/files/profile_images/' + src) : ('/' + src);
     }
+    src = src.replace(/^\/app(?=\/)/i, '');
     return 'https://efactor.tech' + src;
+  }
+
+  function avatarStateBinding(url) {
+    if (!url) return undefined;
+    return { '$state': 'session.user.avatarUrl', fallback: url };
   }
 
   function getProfileAvatarUrl(profile, cfg) {
@@ -2284,17 +2472,16 @@
           '$bind': 'session.user.initials',
           fallback: getProfileInitials(profile, cfg)
         },
-        imageUrl: avatarUrl,
-        imageUrlBinding: avatarUrl ? {
-          '$bind': 'session.user.avatarUrl',
-          fallback: avatarUrl
-        } : undefined,
+        imageUrl: avatarUrl || undefined,
+        imageUrlBinding: avatarStateBinding(avatarUrl),
         appearance: {
           width: 46,
           height: 46,
           borderRadius: 999,
           gradientStart: theme.welcomeStart || '#22c55e',
           gradientEnd: theme.welcomeEnd || '#0ea5e9',
+          imageUrl: avatarUrl || undefined,
+          objectFit: 'cover',
           fontSize: 15,
           fontWeight: 800,
           textColor: '#ffffff'
@@ -2385,6 +2572,7 @@
     usedIcons.alerts = true;
     usedIcons.appearance = true;
     usedIcons.shield = true;
+    usedIcons.star = true;
     usedIcons.logout = true;
     usedIcons['chevron-right'] = true;
 
@@ -2435,26 +2623,27 @@
       chip: phoneValue,
       phoneChip: phoneValue,
       avatarText: profileInitials,
-      avatarUrl: profileAvatarUrl,
-      imageUrl: profileAvatarUrl,
+      avatarUrl: profileAvatarUrl || undefined,
+      imageUrl: profileAvatarUrl || undefined,
       nameBinding: { '$state': 'session.user.displayName', fallback: displayName },
       titleBinding: { '$state': 'session.user.displayName', fallback: displayName },
       emailBinding: { '$state': 'session.user.email', fallback: displayEmail },
       phoneBinding: { '$state': 'session.user.phone', fallback: phoneValue },
       memberIdBinding: { '$state': 'session.user.memberId', fallback: memberIdValue },
       eyebrowBinding: { '$state': 'session.user.memberId', fallback: memberIdValue },
-      avatarUrlBinding: { '$bind': 'session.user.avatarUrl', fallback: profileAvatarUrl || '' },
-      imageUrlBinding: { '$bind': 'session.user.avatarUrl', fallback: profileAvatarUrl || '' },
+      avatarUrlBinding: avatarStateBinding(profileAvatarUrl),
+      imageUrlBinding: avatarStateBinding(profileAvatarUrl),
       avatarTextBinding: { '$state': 'session.user.initials', fallback: profileInitials },
       avatar: {
         initials: profileInitials,
-        imageUrl: profileAvatarUrl,
-        imageUrlBinding: { '$bind': 'session.user.avatarUrl', fallback: profileAvatarUrl || '' },
+        imageUrl: profileAvatarUrl || undefined,
+        imageUrlBinding: avatarStateBinding(profileAvatarUrl),
         appearance: {
           width: profileAppearance.avatarSize || 64,
           height: profileAppearance.avatarSize || 64,
           borderRadius: 999,
           objectFit: 'cover',
+          imageUrl: profileAvatarUrl || undefined,
           fontSize: profileAppearance.avatarFontSize || 22,
           fontWeight: profileAppearance.avatarFontWeight || 800,
           textColor: '#ffffff'
@@ -2534,6 +2723,14 @@
           subtitle: { '$i18n': 'profile.privacySubtitle' },
           trailingIconToken: 'chevron-right',
           actionId: 'profile-privacy'
+        },
+        {
+          id: 'rating',
+          iconToken: 'star',
+          label: { '$i18n': 'profile.rating' },
+          subtitle: { '$i18n': 'profile.ratingSubtitle' },
+          trailingIconToken: 'chevron-right',
+          actionId: 'profile-rating'
         }
       ]
     };
@@ -2579,7 +2776,7 @@
   }
 
   function ensureSchemaIconTokens(usedIcons) {
-    ['language', 'shield', 'logout', 'appearance', 'chevron-right', 'profile', 'home', 'devices', 'category', 'alerts', 'reports', 'rooms'].forEach(function (token) {
+    ['language', 'shield', 'logout', 'appearance', 'chevron-right', 'profile', 'home', 'devices', 'category', 'alerts', 'reports', 'rooms', 'help', 'star', 'check'].forEach(function (token) {
       usedIcons[token] = true;
     });
   }
@@ -3079,7 +3276,7 @@
     var gridGap = resolveGridGap(theme);
     var durationMs = cardSpeed * 1000;
     var homeGridColumns = resolveHomeGridColumns(theme);
-    var homeGridRowHeight = resolveHomeGridRowHeight(theme);
+    var homeGridRowHeight = resolveSquarePhoneRowHeight(theme);
     var usedIcons = {};
 
     var cards = (layout.cards || []).slice();
@@ -3406,17 +3603,15 @@
         },
         avatar: {
           initials: getProfileInitials(profile, cfg),
-          imageUrl: avatarUrl,
-          imageUrlBinding: avatarUrl ? {
-            '$bind': 'session.user.avatarUrl',
-            fallback: avatarUrl
-          } : undefined,
+          imageUrl: avatarUrl || undefined,
+          imageUrlBinding: avatarStateBinding(avatarUrl),
           appearance: {
             width: 52,
             height: 52,
             borderRadius: 999,
             borderWidth: 2,
             borderColor: 'rgba(255,255,255,.28)',
+            imageUrl: avatarUrl || undefined,
             fontSize: 18,
             fontWeight: 800,
             textColor: '#ffffff',
@@ -3968,7 +4163,7 @@
         },
         excludedPresets: ['applicationCubeRotation'],
         applicationCubeRotationScope: 'AppCube3D-only',
-        note: 'Flutter must use fourFaceBoxRotation: 4 faces on a real box (depth=slotWidth), parent translateZ(-half) rotateY. Do NOT flatFlipCard / mid-flip face swap. Do not use applicationCubeRotation for home/device tiles.'
+        note: 'Flutter must use fourFaceBoxRotation: closed box halfDepth = slotWidth/2 (faceGapPx defaults 0). Parent translateZ(-halfDepth) rotateY. Do NOT flatFlipCard / mid-flip face swap / exploded open gap. Do not use applicationCubeRotation for home/device tiles.'
       },
 
       designTokens: buildDesignTokens(theme),
@@ -4055,7 +4250,7 @@
           pauseWhenAppInactive: true,
           reducedMotionBehavior: 'default-face',
           faceSwapAtFlipProgress: null,
-          geometry: buildCubeGeometryContract(defaultRotation),
+          geometry: buildCubeGeometryContract(defaultRotation, theme),
           animation: buildCubeAnimationContract(durationMs, 0, defaultRotation)
         },
         'device-face-rotation': {
@@ -4081,7 +4276,7 @@
           pauseWhenAppInactive: true,
           reducedMotionBehavior: 'default-face',
           faceSwapAtFlipProgress: null,
-          geometry: buildCubeGeometryContract(defaultRotation),
+          geometry: buildCubeGeometryContract(defaultRotation, theme),
           animation: buildCubeAnimationContract(durationMs, 0, defaultRotation)
         }
         };
@@ -4102,7 +4297,7 @@
           rotation: {
             enabled: true,
             presetId: 'tile-face-rotation',
-            geometry: buildCubeGeometryContract(defaultRotation),
+            geometry: buildCubeGeometryContract(defaultRotation, theme),
             animation: buildCubeAnimationContract(durationMs, 0, defaultRotation)
           },
           dimensions: {
@@ -4120,7 +4315,7 @@
           rotation: {
             enabled: true,
             presetId: 'device-face-rotation',
-            geometry: buildCubeGeometryContract(defaultRotation),
+            geometry: buildCubeGeometryContract(defaultRotation, theme),
             animation: buildCubeAnimationContract(durationMs, 0, defaultRotation)
           },
           dimensions: {
@@ -4226,6 +4421,8 @@
     resolveHomeGridRows: resolveHomeGridRows,
     resolveHomeGridRowHeight: resolveHomeGridRowHeight,
     resolveGridGap: resolveGridGap,
+    resolveCubeFaceGap: resolveCubeFaceGap,
+    DEFAULT_CUBE_FACE_GAP: DEFAULT_CUBE_FACE_GAP,
     normalizeHomeBlockType: normalizeHomeBlockType,
     normalizeFaceContentType: normalizeFaceContentType,
     stableCardAnimOffsetSec: stableCardAnimOffsetSec,
@@ -4243,6 +4440,7 @@
     CUBE_HOLD_RATIO: CUBE_HOLD_RATIO,
     getProfileInitials: getProfileInitials,
     getProfileAvatarUrl: getProfileAvatarUrl,
+    avatarStateBinding: avatarStateBinding,
     getProfileGreetingName: getProfileGreetingName,
     getThemeModeLabel: getThemeModeLabel,
     buildHomeHeaderComponent: buildHomeHeaderComponent,
@@ -5135,6 +5333,13 @@
           'appearance.darkModeHint': 'Dark backgrounds and light text',
           'profile.privacy': 'Privacy Policy',
           'profile.privacySubtitle': 'Security and data controls',
+          'profile.rating': 'Rating',
+          'profile.ratingSubtitle': 'Rate with stars and describe the issue',
+          'profile.ratingPage': 'Rating',
+          'profile.ratingPageSubtitle': 'Select a star, then write what went wrong',
+          'profile.ratingComment': 'Comment',
+          'profile.ratingCommentHint': 'Describe the issue so it can be fixed',
+          'profile.ratingSend': 'Send rating',
           'profile.logout': 'Logout',
           'login.title': 'Sign in',
           'login.subtitle': 'Continue to your eFactor account',
@@ -5460,7 +5665,7 @@
         || (node.geometry && node.geometry.model)
         || (node.animation && node.animation.model)
         || node.model;
-      // Legacy flatFlipCard had no depth; fourFaceBoxRotation keeps full box depth (= slotWidth).
+      // Legacy flatFlipCard had no depth; fourFaceBoxRotation keeps closed-box depth (= slotWidth).
       var isLegacyFlatFlip = rotationModel === 'flatFlipCard';
       if (isLegacyFlatFlip && node.dimensions) {
         delete node.dimensions.cubeDepthFormula;
@@ -5553,6 +5758,31 @@
     { routeId: 'profile-appearance', titleKey: 'profile.appearance', subtitleKey: 'profile.appearanceSubtitle' },
     { routeId: 'profile-privacy', titleKey: 'profile.privacy', subtitleKey: 'profile.privacySubtitle' }
   ];
+
+  function sanitizeAppHomeWebUrl(url, fallbackPath) {
+    url = String(url || '').trim();
+    fallbackPath = String(fallbackPath || 'app-home-page/rating').replace(/^\/+/, '');
+    // Reject URLs rooted on the JSON schema API script (returns application/json).
+    if (!url || /\/(?:v8\/)?(?:api_creation|grid_api_creation|iot_api_creation)\.php(?=\/|\?|$)/i.test(url)) {
+      return '';
+    }
+    if (/app-home-page\/rating/i.test(url) || /app-home-page\/api/i.test(url)) {
+      return url;
+    }
+    return url;
+  }
+
+  function resolveRatingPageUrl(cfg) {
+    cfg = cfg || {};
+    var url = sanitizeAppHomeWebUrl(cfg.ratingPageUrl || '', 'app-home-page/rating');
+    if (url) return url;
+    var apiBase = sanitizeAppHomeWebUrl(String(cfg.apiBase || '').replace(/\/+$/, ''), 'app-home-page/api');
+    if (apiBase) {
+      var fromApi = apiBase.replace(/\/api$/i, '') + '/rating';
+      if (sanitizeAppHomeWebUrl(fromApi, 'app-home-page/rating')) return fromApi;
+    }
+    return '/index.php/app-home-page/rating';
+  }
 
   function buildScopedState(layout, cfg) {
     var theme = layout.theme || {};
@@ -5786,6 +6016,37 @@
     out['profile-notifications'] = { type: 'navigate', destination: { routeId: 'profile-notifications' } };
     out['profile-appearance'] = { type: 'navigate', destination: { routeId: 'profile-appearance' } };
     out['profile-privacy'] = { type: 'navigate', destination: { routeId: 'profile-privacy' } };
+    // Same UI as web Account → Rating (5 stars + comment + Send rating).
+    // Flutter home has no textInput / star-row widgets, so open that page in-app.
+    // ratingPageUrl may already include ?grid_sso= from PHP (session for the WebView).
+    (function () {
+      var ratingUrl = resolveRatingPageUrl(cfg);
+      out['profile-rating'] = {
+        type: 'open-url',
+        url: ratingUrl,
+        route: ratingUrl,
+        title: 'Rating',
+        openIn: 'inAppWebView',
+        webView: {
+          javaScriptEnabled: true,
+          sharedCookies: true,
+          clearCache: false,
+          showAppBar: false,
+          showToolbar: false,
+          hideAppBar: true,
+          displayMode: 'fullscreen'
+        },
+        destination: {
+          url: ratingUrl,
+          openIn: 'inAppWebView',
+          title: 'Rating',
+          sharedCookies: true,
+          showAppBar: false,
+          showToolbar: false,
+          hideAppBar: true
+        }
+      };
+    })();
 
     out['profile-edit-open'] = {
       type: 'host-action',
@@ -6420,11 +6681,8 @@
           },
           avatar: Object.assign({}, out['welcome-banner'].avatar || {}, {
             initials: v2.getProfileInitials ? v2.getProfileInitials(profile, cfg) : '',
-            imageUrl: avatarUrl,
-            imageUrlBinding: avatarUrl ? {
-              '$bind': 'session.user.avatarUrl',
-              fallback: avatarUrl
-            } : undefined
+            imageUrl: avatarUrl || undefined,
+            imageUrlBinding: (v2 && v2.avatarStateBinding) ? v2.avatarStateBinding(avatarUrl) : (avatarUrl ? { '$state': 'session.user.avatarUrl', fallback: avatarUrl } : undefined)
           })
         });
       })();

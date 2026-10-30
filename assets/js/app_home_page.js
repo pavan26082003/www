@@ -33,15 +33,71 @@
     'user-modules', 'grid', 'hrms', 'id-card', 'appid',
     'leads', 'recipe', 'efactor-grid', 'add-device'
   ];
+  /* Present studio mosaic — default for new users and Reset */
+  var STUDIO_CARD_POSITIONS = {
+    'user-modules': { col: 1, row: 1, colSpan: 1, rowSpan: 2 },
+    'grid': { col: 2, row: 1, colSpan: 1, rowSpan: 1 },
+    'appid': { col: 3, row: 1, colSpan: 1, rowSpan: 1 },
+    'recipe': { col: 2, row: 2, colSpan: 2, rowSpan: 1 },
+    'leads': { col: 1, row: 3, colSpan: 1, rowSpan: 1 },
+    'id-card': { col: 2, row: 3, colSpan: 1, rowSpan: 1 },
+    'hrms': { col: 3, row: 3, colSpan: 1, rowSpan: 1 },
+    'efactor-grid': { col: 1, row: 4, colSpan: 3, rowSpan: 1 },
+    'wifi': { col: 1, row: 5, colSpan: 1, rowSpan: 2 },
+    'biryani-banner': { col: 2, row: 5, colSpan: 2, rowSpan: 2 }
+  };
   var selectedNavEditId = null;
 
+  function restoreStudioMosaicPositions() {
+    // Never overwrite a layout the user already saved — that undoes Block size and placement on refresh.
+    if (hasSavedLayout) return false;
+    if (!layout.cards || !layout.cards.length) return false;
+    var byId = {};
+    layout.cards.forEach(function (card) {
+      if (card && card.id) byId[card.id] = card;
+    });
+    var present = 0;
+    var mismatched = 0;
+    Object.keys(STUDIO_CARD_POSITIONS).forEach(function (id) {
+      var card = byId[id];
+      if (!card) return;
+      present++;
+      var pos = STUDIO_CARD_POSITIONS[id];
+      if (
+        Number(card.col) !== pos.col ||
+        Number(card.row) !== pos.row ||
+        Number(card.colSpan || 1) !== pos.colSpan ||
+        Number(card.rowSpan || 1) !== pos.rowSpan
+      ) {
+        mismatched++;
+      }
+    });
+    if (present < 5 || mismatched === 0) return false;
+    layout.cards.forEach(function (card) {
+      if (!card || !card.id) return;
+      var pos = STUDIO_CARD_POSITIONS[card.id];
+      if (!pos) return;
+      card.col = pos.col;
+      card.row = pos.row;
+      card.colSpan = pos.colSpan;
+      card.rowSpan = pos.rowSpan;
+      if (card.id === 'user-modules') card.tall = true;
+    });
+    if ((getTheme().gridRows || 0) < 6) {
+      getTheme().gridRows = 6;
+    }
+    assignGridAreas();
+    return true;
+  }
+
+  /* Use single quotes in CSS stacks — double quotes break HTML style="..." attributes. */
   var FONT_FAMILIES = [
-    { id: 'system', label: 'System Default', css: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
+    { id: 'system', label: 'System Default', css: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" },
     { id: 'inter', label: 'Inter', css: 'Inter, system-ui, sans-serif' },
     { id: 'roboto', label: 'Roboto', css: 'Roboto, Arial, sans-serif' },
     { id: 'poppins', label: 'Poppins', css: 'Poppins, sans-serif' },
     { id: 'montserrat', label: 'Montserrat', css: 'Montserrat, sans-serif' },
-    { id: 'open-sans', label: 'Open Sans', css: '"Open Sans", sans-serif' },
+    { id: 'open-sans', label: 'Open Sans', css: "'Open Sans', sans-serif" },
     { id: 'lato', label: 'Lato', css: 'Lato, sans-serif' },
     { id: 'nunito', label: 'Nunito', css: 'Nunito, sans-serif' },
     { id: 'merriweather', label: 'Merriweather (Serif)', css: 'Merriweather, Georgia, serif' },
@@ -279,6 +335,10 @@
     lifestyle: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=500&fit=crop'
   };
 
+  // Distinct secondary-face accents (purple / navy / teal / green) so rotation is visible.
+  var TEMPLATE_FACE_COLORS = ['#7c3aed', '#1e3a8a', '#0d9488', '#16a34a'];
+  var TEMPLATE_FACE_ICONS = ['fa-cube', 'fa-star', 'fa-bolt', 'fa-heart'];
+
   function buildTemplateCard(spec) {
     var type = spec.type || 'link';
     var color = spec.color || '#334155';
@@ -286,19 +346,33 @@
     var title = spec.title || 'Efactor';
     var subtitle = spec.subtitle || '';
     var faces = (spec.faces || []).slice(0, 4);
+    // Never clone the same title/subtitle/image onto every side — that makes the cube look static.
     while (faces.length < 4) {
-      if (type === 'stat') {
-        faces.push({ value: spec.value || '0', label: title, icon: icon, color: color });
+      var fi = faces.length;
+      var faceColor = fi === 0 ? color : (TEMPLATE_FACE_COLORS[fi] || color);
+      var faceIcon = fi === 0 ? icon : (TEMPLATE_FACE_ICONS[fi] || 'fa-cube');
+      if (fi === 0) {
+        if (type === 'stat') {
+          faces.push({ value: spec.value || '0', label: title, icon: icon, color: color, textColor: '#ffffff', iconColor: '#ffffff' });
+        } else if (type === 'image') {
+          faces.push({
+            title: title,
+            subtitle: subtitle,
+            icon: icon,
+            color: color,
+            image: spec.image || '',
+            textColor: spec.textColor || '#ffffff',
+            iconColor: '#ffffff'
+          });
+        } else {
+          faces.push({ title: title, subtitle: subtitle, icon: icon, color: color, textColor: '#ffffff', iconColor: '#ffffff' });
+        }
+      } else if (type === 'stat') {
+        faces.push({ title: 'Face ' + (fi + 1), icon: faceIcon, color: faceColor, textColor: '#ffffff', iconColor: '#ffffff' });
       } else if (type === 'image') {
-        faces.push({
-          title: title,
-          subtitle: subtitle,
-          icon: icon,
-          color: color,
-          image: faces.length === 0 ? (spec.image || '') : (spec.image || '')
-        });
+        faces.push({ title: 'Face ' + (fi + 1), icon: faceIcon, color: faceColor, textColor: '#ffffff', iconColor: '#ffffff' });
       } else {
-        faces.push({ title: title, subtitle: subtitle, icon: icon, color: color });
+        faces.push({ title: 'Face ' + (fi + 1), subtitle: '', icon: faceIcon, color: faceColor, textColor: '#ffffff', iconColor: '#ffffff' });
       }
     }
     return {
@@ -318,6 +392,7 @@
       borderRadius: spec.borderRadius != null ? Number(spec.borderRadius) : 18,
       defaultFace: 0,
       rotationDir: spec.rotationDir || 'rtl',
+      sameFaceColor: false,
       faces: faces
     };
   }
@@ -626,6 +701,8 @@
   var hasSavedLayout = !!(cfg.hasSavedLayout || (cfg.settingsMeta && cfg.settingsMeta.has_layout));
   var layoutDirty = false;
   var saveDebounceTimer = null;
+  var layoutSaveEpoch = 0;
+  var saveInFlight = false;
   var cubeGeometryObserver = null;
   var layoutReady = false;
   var layoutHistory = [];
@@ -804,6 +881,7 @@
       if (!layout.welcome) layout.welcome = {};
       if (!layout.alerts) layout.alerts = {};
       if (!layout.theme || typeof layout.theme !== 'object') layout.theme = {};
+      layout.theme.squareTiles = true;
       syncLayoutThemeFromPublishedSchema();
       normalizeWelcomeBannerPreference();
       normalizeAlertsBannerPreference();
@@ -832,10 +910,15 @@
       layout.theme.gridColumns = 3;
     }
     if (layout.theme.gridRowHeight == null || isNaN(parseInt(layout.theme.gridRowHeight, 10))) {
-      layout.theme.gridRowHeight = 96;
+      layout.theme.gridRowHeight = 117;
+    }
+    // Every account: 1x1 cells stay square. Radius slider only changes corner roundness.
+    layout.theme.squareTiles = true;
+    if (layout.theme.cardBorderRadius == null || layout.theme.cardBorderRadius === '') {
+      layout.theme.cardBorderRadius = 16;
     }
     if (layout.theme.gridRows == null || isNaN(parseInt(layout.theme.gridRows, 10))) {
-      layout.theme.gridRows = 4;
+      layout.theme.gridRows = 6;
     }
     if (!layout.theme.homeTemplate) {
       layout.theme.homeTemplate = layout.homeTemplate || 'default';
@@ -874,6 +957,7 @@
     normalizeCardOrder();
     assignGridAreas();
     ensureAllCardPositions(false);
+    restoreStudioMosaicPositions();
     applyLoginUserProfileToLayout();
     layoutInitialized = true;
   }
@@ -890,11 +974,38 @@
     return layout.theme;
   }
 
+  function promotePhotoImageFitToCover(card) {
+    if (!card || card._imageFitUserSet) return;
+    var id = String(card.id || '');
+    // Logo-on-solid tiles keep Contain. Photo tiles upgrade legacy Contain → Cover (no blank bars).
+    var logoTileIds = { grid: 1, hrms: 1, appid: 1, 'id-card': 1, 'efactor-grid': 1 };
+    if (logoTileIds[id]) return;
+    var faceTypeHint = normalizeHomeBlockType(card.type);
+    if (faceTypeHint !== 'image' && faceTypeHint !== 'mixed' && id !== 'recipe' && id !== 'biryani-banner') return;
+    var hasImageFace = false;
+    (card.faces || []).forEach(function (face) {
+      if (!face) return;
+      var ft = String(face.type || card.type || '').toLowerCase();
+      if ((ft === 'image' || ft === 'mixed') && String(face.image || (face === (card.faces && card.faces[0]) ? card.image : '') || '').trim()) {
+        hasImageFace = true;
+      }
+    });
+    if (!hasImageFace && id !== 'recipe' && id !== 'biryani-banner') return;
+    if (!card.imageFit || card.imageFit === 'contain') card.imageFit = 'cover';
+    (card.faces || []).forEach(function (face) {
+      if (!face) return;
+      var ft = String(face.type || card.type || '').toLowerCase();
+      if (ft !== 'image' && ft !== 'mixed') return;
+      if (!face.imageFit || face.imageFit === 'contain') face.imageFit = 'cover';
+    });
+  }
+
   function ensureSavedCardsStructure() {
     if (!Array.isArray(layout.cards)) layout.cards = [];
     layout.cards.forEach(function (card) {
       if (!card || typeof card !== 'object') return;
       ensureFaces(card, { skipLegacyUpgrade: true });
+      promotePhotoImageFitToCover(card);
     });
   }
 
@@ -915,8 +1026,7 @@
   }
 
   /**
-   * The preview nav must match the generated schema exactly: Home, IoT, Grid, Profile.
-   * Older saved navs are rebuilt rather than merged.
+   * Keep the fixed 4 tabs (Home, IoT, Grid, Profile) but preserve studio label/icon edits.
    */
   function normalizeBottomNav() {
     var target = resolveNavCategoryTarget();
@@ -925,6 +1035,11 @@
     if (activeId === 'settings') activeId = 'profile';
     if (activeId === 'category') activeId = 'grid';
 
+    var byId = {};
+    (layout.bottomNav || []).forEach(function (item) {
+      if (item && item.id) byId[item.id] = item;
+    });
+
     layout.bottomNavCategoryTarget = target;
     layout.bottomNav = [
       { id: 'home', icon: 'fa-home', label: 'Home' },
@@ -932,6 +1047,11 @@
       { id: target, icon: targetMeta.icon, label: targetMeta.label },
       { id: 'profile', icon: 'fa-user', label: 'Profile' }
     ].map(function (item) {
+      var prev = byId[item.id];
+      if (prev) {
+        if (prev.label != null && String(prev.label).trim() !== '') item.label = String(prev.label).trim();
+        if (prev.icon != null && String(prev.icon).trim() !== '') item.icon = normalizeFaIcon(prev.icon);
+      }
       return Object.assign({}, item, { active: item.id === activeId });
     });
   }
@@ -2211,22 +2331,32 @@
     card.type = normalizeHomeBlockType(card.type);
     if (!card.faces || !card.faces.length) {
       card.faces = [
-        { type: card.type, value: card.value || '', label: card.label || card.title || '', icon: card.icon || 'fa-cube' },
-        { type: card.type, title: 'Face 2', icon: 'fa-star' },
-        { type: card.type, title: 'Face 3', icon: 'fa-bolt' },
-        { type: card.type, title: 'Face 4', icon: 'fa-heart' }
+        { type: card.type, value: card.value || '', label: card.label || card.title || '', icon: card.icon || 'fa-cube', color: card.color },
+        { type: card.type, title: 'Face 2', icon: 'fa-star', color: TEMPLATE_FACE_COLORS[1] },
+        { type: card.type, title: 'Face 3', icon: 'fa-bolt', color: TEMPLATE_FACE_COLORS[2] },
+        { type: card.type, title: 'Face 4', icon: 'fa-heart', color: TEMPLATE_FACE_COLORS[3] }
       ];
     }
     while (card.faces.length < 4) {
-      card.faces.push({ type: card.type, title: 'Face ' + (card.faces.length + 1), icon: 'fa-cube' });
+      var padFi = card.faces.length;
+      card.faces.push({
+        type: card.type,
+        title: 'Face ' + (padFi + 1),
+        icon: TEMPLATE_FACE_ICONS[padFi] || 'fa-cube',
+        color: TEMPLATE_FACE_COLORS[padFi] || card.color
+      });
     }
     card.faces = card.faces.slice(0, 4);
+    diversifyDuplicateCardFaces(card);
     card.faces.forEach(function (face, fi) {
       if (!face || typeof face !== 'object') return;
       // Only seed Face 1 from card.color — never overwrite other faces' colors.
       if (fi === 0 && !face.color && card.color) face.color = card.color;
       if (fi === 0 && !face.textColor && card.textColor) face.textColor = card.textColor;
       if (fi === 0 && !face.iconColor && card.iconColor) face.iconColor = card.iconColor;
+      if (fi > 0 && !face.color && card.sameFaceColor !== true) {
+        face.color = TEMPLATE_FACE_COLORS[fi] || card.color;
+      }
       if (!face.iconColor) face.iconColor = '#ffffff';
       if (!face.textColor && !face.titleTextColor) face.textColor = '#ffffff';
       face.type = normalizeFaceContentType(face, card);
@@ -2237,6 +2367,57 @@
     if (card.borderRadius == null) card.borderRadius = defaultCardRadius();
     if (!card.rotationDir) card.rotationDir = 'rtl';
     card.defaultFace = 0;
+    return card;
+  }
+
+  /** Fix template/legacy tiles that cloned the same title/subtitle onto every cube face. */
+  function diversifyDuplicateCardFaces(card) {
+    if (!card || !Array.isArray(card.faces) || card.faces.length < 2) return card;
+    var primary = card.faces[0] || {};
+    var primaryKey = [
+      String(primary.title || primary.label || '').trim().toLowerCase(),
+      String(primary.subtitle != null ? primary.subtitle : '').trim().toLowerCase(),
+      String(primary.value != null ? primary.value : '').trim().toLowerCase(),
+      String(primary.image || '').trim()
+    ].join('|');
+    for (var fi = 1; fi < card.faces.length; fi++) {
+      var face = card.faces[fi];
+      if (!face || typeof face !== 'object') {
+        card.faces[fi] = {
+          type: card.type,
+          title: 'Face ' + (fi + 1),
+          icon: TEMPLATE_FACE_ICONS[fi] || 'fa-cube',
+          color: TEMPLATE_FACE_COLORS[fi] || card.color,
+          textColor: '#ffffff',
+          iconColor: '#ffffff'
+        };
+        continue;
+      }
+      var key = [
+        String(face.title || face.label || '').trim().toLowerCase(),
+        String(face.subtitle != null ? face.subtitle : '').trim().toLowerCase(),
+        String(face.value != null ? face.value : '').trim().toLowerCase(),
+        String(face.image || '').trim()
+      ].join('|');
+      var empty = !String(face.title || face.label || '').trim()
+        && !String(face.subtitle != null ? face.subtitle : '').trim()
+        && (face.value == null || String(face.value).trim() === '')
+        && !String(face.image || '').trim();
+      if (key === primaryKey || empty) {
+        card.faces[fi] = {
+          type: face.type || card.type,
+          title: 'Face ' + (fi + 1),
+          label: 'Face ' + (fi + 1),
+          subtitle: '',
+          icon: TEMPLATE_FACE_ICONS[fi] || face.icon || 'fa-cube',
+          color: card.sameFaceColor === true
+            ? (face.color || card.color || TEMPLATE_FACE_COLORS[fi])
+            : (TEMPLATE_FACE_COLORS[fi] || face.color || card.color),
+          textColor: face.textColor || card.textColor || '#ffffff',
+          iconColor: face.iconColor || card.iconColor || '#ffffff'
+        };
+      }
+    }
     return card;
   }
 
@@ -2580,19 +2761,51 @@
   function defaultFaceIconSize(type) {
     if (type === 'stat') return 20;
     if (type === 'image') return 18;
-    return 20;
+    return 28;
   }
 
   function defaultFaceTitleSize(type) {
     if (type === 'stat') return 9;
     if (type === 'image') return 13;
-    return 11;
+    return 14;
   }
 
   function defaultFaceSubSize(type) {
     if (type === 'stat') return 24;
     if (type === 'image') return 10;
-    return 8;
+    return 10;
+  }
+
+  function clampFontWeight(value, fallback) {
+    var n = parseInt(value, 10);
+    if (isNaN(n)) return fallback;
+    if (n < 100) return 100;
+    if (n > 900) return 900;
+    return Math.round(n / 100) * 100;
+  }
+
+  function faceTitleWeight(face, card, type) {
+    if (face && face.titleFontWeight != null && face.titleFontWeight !== '') {
+      return clampFontWeight(face.titleFontWeight, 800);
+    }
+    if (card && card.titleFontWeight != null && card.titleFontWeight !== '') {
+      return clampFontWeight(card.titleFontWeight, 800);
+    }
+    return type === 'stat' ? 800 : 800;
+  }
+
+  function faceSubWeight(face, card, type) {
+    var raw = null;
+    if (face) {
+      if (face.subFontWeight != null && face.subFontWeight !== '') raw = face.subFontWeight;
+      else if (face.subtitleFontWeight != null && face.subtitleFontWeight !== '') raw = face.subtitleFontWeight;
+    }
+    if (raw == null && card) {
+      if (card.subFontWeight != null && card.subFontWeight !== '') raw = card.subFontWeight;
+      else if (card.subtitleFontWeight != null && card.subtitleFontWeight !== '') raw = card.subtitleFontWeight;
+    }
+    if (raw != null) return clampFontWeight(raw, 500);
+    return type === 'stat' ? 900 : 500;
   }
 
   function faceIconSizeDisplay(face, card, type) {
@@ -2615,6 +2828,8 @@
     var iconSz = faceIconSizeDisplay(face, card, type);
     var titleSz = faceTitleSizeDisplay(face, card, type);
     var subSz = faceSubSizeDisplay(face, card, type);
+    var titleWt = faceTitleWeight(face, card, type);
+    var subWt = faceSubWeight(face, card, type);
     vars['--ahp-face-icon-size'] = iconSz + 'px';
     if (type === 'stat') {
       vars['--ahp-face-label-size'] = titleSz + 'px';
@@ -2623,6 +2838,8 @@
       vars['--ahp-face-title-size'] = titleSz + 'px';
       vars['--ahp-face-sub-size'] = subSz + 'px';
     }
+    vars['--ahp-face-title-weight'] = String(titleWt);
+    vars['--ahp-face-sub-weight'] = String(subWt);
     var titleFont = face.titleFontFamily || card.titleFontFamily || 'system';
     var subFont = face.subFontFamily || card.subFontFamily || 'system';
     vars['--ahp-face-title-font'] = resolveFontFamily(titleFont);
@@ -2649,8 +2866,8 @@
   }
 
   var IMAGE_FIT_OPTIONS = [
-    { value: 'contain', label: 'Contain (show full image, no crop)' },
-    { value: 'cover', label: 'Cover (fill block, may crop)' },
+    { value: 'cover', label: 'Cover (fill tile, no blank edges)' },
+    { value: 'contain', label: 'Contain (show full image, may letterbox)' },
     { value: 'fill', label: 'Fill (stretch to block)' }
   ];
 
@@ -2663,8 +2880,9 @@
   ];
 
   function normalizeImageFit(value) {
-    var fit = String(value || 'contain').toLowerCase();
-    return fit === 'cover' || fit === 'fill' ? fit : 'contain';
+    var fit = String(value || 'cover').toLowerCase();
+    if (fit === 'contain' || fit === 'fill') return fit;
+    return 'cover';
   }
 
   function normalizeImagePosition(value) {
@@ -2680,7 +2898,7 @@
 
   function ensureFaceImageDisplayDefaults(face, card) {
     if (!face || typeof face !== 'object') return face;
-    if (!face.imageFit) face.imageFit = (card && card.imageFit) || 'contain';
+    if (!face.imageFit) face.imageFit = (card && card.imageFit) || 'cover';
     if (!face.imagePosition) face.imagePosition = (card && card.imagePosition) || 'center';
     if (face.imageScale == null || face.imageScale === '') {
       face.imageScale = (card && card.imageScale != null) ? card.imageScale : 100;
@@ -2748,11 +2966,90 @@
     return '<div class="ahp-start-tile-media ahp-start-tile-media-empty" aria-hidden="true"></div>';
   }
 
-  function renderStartTileCaption(title, titleColor) {
+  function faceTextInlineStyle(kind, face, card, type, color) {
+    // !important so these beat stylesheet rules; font-family uses single quotes only.
+    var parts = ['color:' + esc(color || '#ffffff')];
+    if (kind === 'title') {
+      parts.push('font-size:' + faceTitleSizeDisplay(face, card, type) + 'px !important');
+      parts.push('font-weight:' + faceTitleWeight(face, card, type) + ' !important');
+      parts.push('font-family:' + resolveFontFamily(face.titleFontFamily || card.titleFontFamily || 'system'));
+    } else {
+      parts.push('font-size:' + faceSubSizeDisplay(face, card, type) + 'px !important');
+      parts.push('font-weight:' + faceSubWeight(face, card, type) + ' !important');
+      parts.push('font-family:' + resolveFontFamily(face.subFontFamily || card.subFontFamily || 'system'));
+    }
+    return parts.join(';') + ';';
+  }
+
+  function applyFaceTypographyToElement(faceEl, face, card, type) {
+    if (!faceEl) return;
+    face = face || {};
+    card = card || {};
+    type = type || 'stack';
+    var vars = faceTypographyVars(face, card, type);
+    Object.keys(vars).forEach(function (key) {
+      faceEl.style.setProperty(key, vars[key]);
+    });
+    var titleEl = faceEl.querySelector('.face-title, .face-label, .face-value');
+    var subEl = faceEl.querySelector('.face-sub, .face-label');
+    if (type === 'stat') {
+      titleEl = faceEl.querySelector('.face-value') || titleEl;
+      subEl = faceEl.querySelector('.face-label') || subEl;
+      if (titleEl) {
+        titleEl.style.setProperty('font-size', faceSubSizeDisplay(face, card, type) + 'px', 'important');
+        titleEl.style.setProperty('font-weight', String(faceSubWeight(face, card, type)), 'important');
+      }
+      if (subEl && subEl !== titleEl) {
+        subEl.style.setProperty('font-size', faceTitleSizeDisplay(face, card, type) + 'px', 'important');
+        subEl.style.setProperty('font-weight', String(faceTitleWeight(face, card, type)), 'important');
+      }
+      return;
+    }
+    if (titleEl) {
+      titleEl.style.setProperty('font-size', faceTitleSizeDisplay(face, card, type) + 'px', 'important');
+      titleEl.style.setProperty('font-weight', String(faceTitleWeight(face, card, type)), 'important');
+      titleEl.style.setProperty('font-family', resolveFontFamily(face.titleFontFamily || card.titleFontFamily || 'system'));
+    }
+    if (subEl && subEl !== titleEl) {
+      subEl.style.setProperty('font-size', faceSubSizeDisplay(face, card, type) + 'px', 'important');
+      subEl.style.setProperty('font-weight', String(faceSubWeight(face, card, type)), 'important');
+      subEl.style.setProperty('font-family', resolveFontFamily(face.subFontFamily || card.subFontFamily || 'system'));
+    }
+    var iconEl = faceEl.querySelector('.face-icon');
+    if (iconEl) {
+      iconEl.style.setProperty('font-size', faceIconSizeDisplay(face, card, type) + 'px', 'important');
+    }
+  }
+
+  function syncCardTypographyDom(card, root) {
+    if (!card) return;
+    card = ensureFaces(card);
+    var scope = root || document;
+    var nodes = [];
+    if (scope.querySelectorAll) {
+      scope.querySelectorAll('.ahp-cube-face[data-face-index], .ahp-face-preview[data-face]').forEach(function (node) {
+        nodes.push(node);
+      });
+    }
+    nodes.forEach(function (node) {
+      var idx = parseInt(node.getAttribute('data-face-index') || node.getAttribute('data-face'), 10);
+      if (isNaN(idx)) return;
+      var face = card.faces[idx] || {};
+      var type = normalizeFaceContentType(face, card) || 'stack';
+      applyFaceTypographyToElement(node, face, card, type === 'mixed' ? 'mixed' : (type === 'image' ? 'image' : 'stack'));
+    });
+  }
+
+  function renderStartTileCaption(title, titleColor, subtitle, subColor, face, card, type) {
     title = String(title || '').trim();
-    if (!title) return '';
+    subtitle = String(subtitle || '').trim();
+    if (!title && !subtitle) return '';
+    face = face || {};
+    card = card || {};
+    type = type || 'stack';
     return '<div class="ahp-start-tile-caption">' +
-      '<div class="face-title" style="color:' + esc(titleColor || '#ffffff') + '">' + esc(title) + '</div>' +
+      (title ? '<div class="face-title" style="' + faceTextInlineStyle('title', face, card, type, titleColor) + '">' + esc(title) + '</div>' : '') +
+      (subtitle ? '<div class="face-sub" style="' + faceTextInlineStyle('sub', face, card, type, subColor || titleColor) + '">' + esc(subtitle) + '</div>' : '') +
       '</div>';
   }
 
@@ -2764,7 +3061,7 @@
     var posNode = document.getElementById('ceFaceImagePosition');
     var scaleNode = document.getElementById('ceFaceImageScale');
     var display = resolveFaceImageDisplay({
-      imageFit: fitNode ? fitNode.value : 'contain',
+      imageFit: fitNode ? fitNode.value : 'cover',
       imagePosition: posNode ? posNode.value : 'center',
       imageScale: scaleNode ? scaleNode.value : 100
     }, {});
@@ -2787,9 +3084,13 @@
 
   function imageFaceShellStyle(face, card, type, img) {
     var bg = faceImageBackground(img, face, card);
+    var display = resolveFaceImageDisplay(face || {}, card || {});
     return styleAttr(Object.assign({
       background: bg,
       '--ahp-face-bg': bg,
+      '--ahp-image-object-fit': display.fit,
+      '--ahp-image-bg-size': display.backgroundSize || display.fit,
+      '--ahp-image-position': display.objectPosition,
       'border-radius': faceRadius(face, card) + 'px',
       '--ahp-face-title-color': faceTitleColor(face, card),
       '--ahp-face-sub-color': faceSubColor(face, card),
@@ -2817,15 +3118,12 @@
   function ensureImageBlockDefaults(card) {
     if (!card || card.type !== 'image') return card;
     ensureFaces(card);
-    if (!card._imageFitUserSet) {
-      card.imageFit = 'contain';
-    } else if (!card.imageFit) {
-      card.imageFit = 'contain';
-    }
+    // Photo tiles default to cover (edge-to-edge). Explicit contain stays for logos.
+    if (!card.imageFit) card.imageFit = 'cover';
     if (!card.imagePosition) card.imagePosition = 'center';
     if (card.imageScale == null || card.imageScale === '') card.imageScale = 100;
     card.faces.forEach(function (face) {
-      if (!card._imageFitUserSet) face.imageFit = 'contain';
+      if (!face.imageFit) face.imageFit = card.imageFit || 'cover';
       ensureFaceImageDisplayDefaults(face, card);
     });
     clearImagePlaceholderOverlayTitles(card);
@@ -3012,10 +3310,37 @@
     return Math.max(0, Math.min(24, n));
   }
 
+  function resolveSquareGridRowHeight() {
+    var t = getTheme();
+    var cols = getGridColumns();
+    var gap = normalizeGridGap(t.gridGap, 4);
+    var grid = el.grid || document.getElementById('ahpGrid');
+    // Prefer a real 1x1 card width — matches painted columns, not the phone chrome.
+    var probe = grid && grid.querySelector('.ahp-card[data-col-span="1"], .ahp-card[data-col-span="1"]');
+    if (probe && probe.offsetWidth > 20) {
+      return normalizeGridRowHeight(probe.offsetWidth, 96);
+    }
+    var width = grid && (grid.clientWidth || grid.offsetWidth) ? (grid.clientWidth || grid.offsetWidth) : 0;
+    if (width < 60 && el.phone) {
+      var screen = el.phone.querySelector('.ahp-phone-scroll, .ahp-home-page, .ahp-phone-screen') || el.phone;
+      width = screen.clientWidth || screen.offsetWidth || 0;
+      if (width > 32) width -= 32;
+    }
+    if (width >= 60 && cols > 0) {
+      var cell = Math.floor((width - gap * Math.max(0, cols - 1)) / cols);
+      return normalizeGridRowHeight(cell, 96);
+    }
+    return defaultGridRowHeight();
+  }
+
   function syncGridLayoutVars() {
     var t = getTheme();
+    // Always square 1x1 cells for every account (row track = column width).
+    t.squareTiles = true;
+    t.gridRowHeight = resolveSquareGridRowHeight();
     var gapPx = normalizeGridGap(t.gridGap, 4) + 'px';
-    var rowHeightPx = defaultGridRowHeight() + 'px';
+    var rowHeight = defaultGridRowHeight();
+    var rowHeightPx = rowHeight + 'px';
     var cols = String(getGridColumns());
     var nodes = [
       el.phone,
@@ -3031,6 +3356,7 @@
       node.style.setProperty('--ahp-grid-columns', cols);
       node.style.setProperty('--ahp-grid-rows', String(getGridRows()));
       node.style.setProperty('--ahp-grid-row-height', rowHeightPx);
+      node.style.setProperty('--ahp-cell-size', rowHeightPx);
     });
     if (el.grid) {
       el.grid.style.gap = gapPx;
@@ -3038,6 +3364,11 @@
       el.grid.style.rowGap = gapPx;
       el.grid.style.gridAutoRows = rowHeightPx;
       el.grid.style.gridTemplateRows = 'repeat(' + getGridRows() + ', ' + rowHeightPx + ')';
+    }
+    var rowHeightInput = document.getElementById('toolGridRowHeight');
+    if (rowHeightInput) {
+      rowHeightInput.value = String(rowHeight);
+      if (typeof updateRangeUi === 'function') updateRangeUi(rowHeightInput, 'px');
     }
   }
 
@@ -3184,20 +3515,23 @@
     var iconColor = faceIconColor(face, card);
     var showIcon = face.hideIcon !== true;
     var iconClass = 'fas ' + esc(normalizeFaIcon(face.icon || card.icon || (type === 'stack' ? 'fa-layer-group' : type === 'mixed' ? 'fa-th-large' : 'fa-image')));
-    var iconHtml = showIcon ? '<i class="' + iconClass + ' face-icon" style="color:#ffffff"></i>' : '';
+    var iconType = type === 'image' ? 'image' : (type === 'mixed' ? 'mixed' : 'stack');
+    var iconHtml = showIcon
+      ? '<i class="' + iconClass + ' face-icon" style="color:' + esc(iconColor || '#ffffff') + ';font-size:' + faceIconSizeDisplay(face, card, iconType) + 'px"></i>'
+      : '';
     var faceText = readFaceEditorText(card, face);
     var title = faceText.label || face.title || face.label || card.title || card.label || '';
     var subtitle = faceText.subtitle || face.subtitle || card.subtitle || '';
     var value = face.value != null && face.value !== '' ? face.value : (card.value || '');
     var faceImg = String(face.image || ((idx === 0) ? card.image : '') || '').trim();
-    var imageFit = normalizeImageFit(face.imageFit || card.imageFit || 'contain');
+    var imageFit = normalizeImageFit(face.imageFit || card.imageFit || 'cover');
 
-    // Image block: fill entire face, never crop by default (contain). Title sits bottom-left.
+    // Image block: full-bleed photo background (cover) so the tile has no blank bars. Title bottom-left.
     if (type === 'image') {
       if (!faceImg) {
         return '<div class="ahp-cube-face face-' + idx + ' ahp-start-tile ahp-face-image" data-face-index="' + idx + '"' + routeAttr + ' style="' + shell + '">' +
           renderStartTileMedia(face, card, '', iconHtml, showIcon) +
-          renderStartTileCaption(title || 'Add image', '#ffffff') +
+          renderStartTileCaption(title || 'Add image', '#ffffff', subtitle, '#ffffff', face, card, 'image') +
           '</div>';
       }
       var displayFace = Object.assign({}, face, {
@@ -3206,34 +3540,41 @@
         imageScale: face.imageScale != null ? face.imageScale : (card.imageScale != null ? card.imageScale : 100)
       });
       var imgDisplay = resolveFaceImageDisplay(displayFace, card);
-      var imageShell = styleAttr({
-        background: faceBg(face, card),
-        '--ahp-face-bg': faceBg(face, card),
+      // Neutral underlay only — the photo itself is the tile background (cover = no blank bars).
+      var imageShell = styleAttr(Object.assign({
+        background: '#0b1220',
+        '--ahp-face-bg': '#0b1220',
         '--ahp-image-object-fit': imgDisplay.fit,
+        '--ahp-image-bg-size': imgDisplay.backgroundSize || imgDisplay.fit,
         '--ahp-image-position': imgDisplay.objectPosition,
         'border-radius': faceRadius(face, card) + 'px',
         '--ahp-face-title-color': '#ffffff',
+        '--ahp-face-sub-color': '#ffffff',
         color: '#ffffff'
-      });
+      }, faceTypographyVars(face, card, 'image')));
       return '<div class="ahp-cube-face face-' + idx + ' ahp-cube-image ahp-face-image ahp-image-fit-' + esc(imgDisplay.fit) + '" data-face-index="' + idx + '"' + routeAttr + ' style="' + imageShell + '">' +
         renderFaceImageMedia(faceImg, 'ahp-cube-face-img ahp-face-fill-img', displayFace, card) +
-        renderStartTileCaption(title, '#ffffff') +
+        renderStartTileCaption(title, '#ffffff', subtitle, '#ffffff', face, card, 'image') +
         '</div>';
     }
 
-    // Mixed / Stack: Windows Start tile — logo centered (full logo, no crop), title bottom-left
+    // Mixed / Stack: centered vertical stack — icon/logo → title → subtitle
     if (value !== '' && value != null && String(title).trim() === String(value).trim()) {
       title = face.label || card.label || card.title || '';
     }
-    var startShell = styleAttr({
+    if ((!title || !String(title).trim()) && value !== '' && value != null) {
+      title = String(value);
+    }
+    var stackType = type === 'mixed' ? 'mixed' : 'stack';
+    var startShell = styleAttr(Object.assign({
       background: faceBg(face, card),
       '--ahp-face-bg': faceBg(face, card),
       'border-radius': faceRadius(face, card) + 'px',
-      '--ahp-face-title-color': '#ffffff',
-      '--ahp-face-sub-color': '#ffffff',
-      '--ahp-face-icon-color': '#ffffff',
+      '--ahp-face-title-color': titleColor || '#ffffff',
+      '--ahp-face-sub-color': subColor || '#ffffff',
+      '--ahp-face-icon-color': iconColor || '#ffffff',
       color: '#ffffff'
-    });
+    }, faceTypographyVars(face, card, stackType)));
     var logoFace = Object.assign({}, face, {
       imageFit: 'contain',
       imagePosition: 'center',
@@ -3241,7 +3582,7 @@
     });
     return '<div class="ahp-cube-face face-' + idx + ' ahp-start-tile ahp-face-' + esc(type) + (faceImg ? ' ahp-start-tile-has-logo' : '') + '" data-face-index="' + idx + '"' + routeAttr + ' style="' + startShell + '">' +
       renderStartTileMedia(logoFace, card, faceImg, iconHtml, !faceImg && showIcon) +
-      renderStartTileCaption(title, '#ffffff') +
+      renderStartTileCaption(title, titleColor || '#ffffff', subtitle, subColor || '#ffffff', face, card, stackType) +
       '</div>';
   }
 
@@ -3278,7 +3619,7 @@
   }
 
   function renderFacePreview(card, face, idx) {
-    var type = card.type || 'link';
+    var type = normalizeFaceContentType(face, card) || normalizeHomeBlockType(card.type) || 'stack';
     var text = readFaceEditorText(card, face);
     var label = text.label || ('Face ' + (idx + 1));
     var sub = text.subtitle || '';
@@ -3287,7 +3628,10 @@
     var previewClass = 'ahp-face-preview' + (idx === activeFaceIndex ? ' active' : '') +
       (type === 'stat' ? ' ahp-face-preview-stat' : '') +
       (type === 'image' ? ' ahp-face-preview-image' : '');
-    var iconHtml = showIcon ? '<i class="fas ' + esc(normalizeFaIcon(face.icon || card.icon || 'fa-cube')) + ' face-icon"></i>' : '';
+    var iconSize = faceIconSizeDisplay(face, card, type);
+    var iconHtml = showIcon
+      ? '<i class="fas ' + esc(normalizeFaIcon(face.icon || card.icon || 'fa-cube')) + ' face-icon" style="font-size:' + iconSize + 'px;color:' + esc(faceIconColor(face, card)) + '"></i>'
+      : '';
     if (type === 'image') {
       var img = String(face.image || card.image || '').trim();
       var imageShell = imageFaceShellStyle(face, card, type, img);
@@ -3295,8 +3639,8 @@
         renderFaceImageMedia(img, 'ahp-face-preview-img', face, card) +
         '<span class="ahp-face-drag-handle" title="Drag to reorder" aria-label="Drag to reorder"><i class="fas fa-grip-lines"></i></span>' +
         (img ? '' : iconHtml) +
-        '<strong class="face-title">' + esc(label) + '</strong>' +
-        (sub ? '<span class="face-sub">' + esc(sub) + '</span>' : '') +
+        '<strong class="face-title" style="' + faceTextInlineStyle('title', face, card, 'image', faceTitleColor(face, card)) + '">' + esc(label) + '</strong>' +
+        (sub ? '<span class="face-sub" style="' + faceTextInlineStyle('sub', face, card, 'image', faceSubColor(face, card)) + '">' + esc(sub) + '</span>' : '') +
         (!img ? '<span class="ahp-face-image-hint">No image URL</span>' : '') +
         '</button>';
     }
@@ -3304,15 +3648,15 @@
       return '<button type="button" class="' + previewClass + '" data-face="' + idx + '" style="' + shell + '">' +
         '<span class="ahp-face-drag-handle" title="Drag to reorder" aria-label="Drag to reorder"><i class="fas fa-grip-lines"></i></span>' +
         iconHtml +
-        '<strong class="face-value">' + esc(label) + '</strong>' +
-        (sub ? '<span class="face-label">' + esc(sub) + '</span>' : '') +
+        '<strong class="face-value" style="' + faceTextInlineStyle('sub', face, card, 'stat', faceSubColor(face, card)) + '">' + esc(label) + '</strong>' +
+        (sub ? '<span class="face-label" style="' + faceTextInlineStyle('title', face, card, 'stat', faceTitleColor(face, card)) + '">' + esc(sub) + '</span>' : '') +
         '</button>';
     }
     return '<button type="button" class="' + previewClass + '" data-face="' + idx + '" style="' + shell + '">' +
       '<span class="ahp-face-drag-handle" title="Drag to reorder" aria-label="Drag to reorder"><i class="fas fa-grip-lines"></i></span>' +
       iconHtml +
-      '<strong class="face-title">' + esc(label) + '</strong>' +
-      (sub ? '<span class="face-sub">' + esc(sub) + '</span>' : '') +
+      '<strong class="face-title" style="' + faceTextInlineStyle('title', face, card, type, faceTitleColor(face, card)) + '">' + esc(label) + '</strong>' +
+      (sub ? '<span class="face-sub" style="' + faceTextInlineStyle('sub', face, card, type, faceSubColor(face, card)) + '">' + esc(sub) + '</span>' : '') +
       '</button>';
   }
 
@@ -3431,6 +3775,7 @@
       grid.innerHTML = card.faces.map(function (face, i) {
         return renderFacePreview(card, face, i);
       }).join('');
+      syncCardTypographyDom(card, grid);
       bindFacePreviewClicks(panel);
       initFacePreviewSortable(panel);
       return;
@@ -3441,6 +3786,7 @@
     tmp.innerHTML = renderCardPreviewStrip(card);
     var fresh = tmp.querySelector('.ahp-card-face-preview-wrap') || tmp.firstElementChild;
     if (fresh) old.replaceWith(fresh);
+    syncCardTypographyDom(card, panel);
     bindFacePreviewClicks(panel);
     initFacePreviewSortable(panel);
   }
@@ -3538,6 +3884,7 @@
     var cubeTarget = slot.querySelector('.ahp-cube:not(.ahp-application-cube), .ahp-edit-face-board');
     if (cubeTarget) cubeTarget.outerHTML = renderCubeCard(card, idx);
     else slot.insertAdjacentHTML('beforeend', renderCubeCard(card, idx));
+    syncCardTypographyDom(card, slot);
     lockSelectedCardCubeFace(slot, cardId);
     scheduleCubeGeometry(el.grid);
     refreshCubePlayback(el.grid);
@@ -3786,6 +4133,7 @@
         img.alt = '';
         btn.insertBefore(img, btn.firstChild);
       }
+      img.onerror = function () { showAvatarInitials(btn, img, initialsEl, initials); };
       img.src = url;
       if (initialsEl) {
         initialsEl.textContent = initials;
@@ -4424,14 +4772,21 @@
   function resolveStudioAvatarUrl(url) {
     var src = String(url || '').trim();
     if (!src || /^(data:|blob:)/i.test(src)) return '';
-    if (/\/assets\/images\/avatar\.jpg(\?|$)/i.test(src)) return '';
-    if (/^https?:\/\//i.test(src)) return src;
+    if (/\/assets\/images\/avatar\.jpg(\?|$)/i.test(src) || /(^|\/)avatar\.jpg(\?|$)/i.test(src)) return '';
+    var localStudio = window.location && /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname || '');
+    if (/^https?:\/\//i.test(src)) {
+      // The file is stored on this machine. efactor.tech does not have it, so the preview 404s.
+      if (localStudio && /\/files\/profile_images\//i.test(src)) {
+        return window.location.origin.replace(/\/+$/, '') + src.replace(/^https?:\/\/[^/]+/i, '');
+      }
+      return src;
+    }
     if (src.charAt(0) !== '/') {
       src = src.indexOf('/') === -1 ? ('/files/profile_images/' + src) : ('/' + src);
     }
-    var origin = (window.location && window.location.origin && !/localhost|127\.0\.0\.1/i.test(window.location.origin))
+    var origin = localStudio
       ? window.location.origin
-      : 'https://efactor.tech';
+      : ((window.location && window.location.origin) || 'https://efactor.tech');
     return origin.replace(/\/+$/, '') + src;
   }
 
@@ -4456,6 +4811,7 @@
         img.alt = '';
         btn.insertBefore(img, btn.firstChild);
       }
+      img.onerror = function () { showAvatarInitials(btn, img, initialsEl, initials); };
       img.src = url;
       if (initialsEl) {
         initialsEl.textContent = initials;
@@ -4472,12 +4828,23 @@
     }
   }
 
+  function showAvatarInitials(parent, img, initialsEl, initials) {
+    if (img) img.remove();
+    if (parent) parent.classList.remove('ahp-has-photo');
+    if (initialsEl) {
+      initialsEl.textContent = initials || initialsEl.textContent;
+      initialsEl.classList.remove('ahp-is-hidden');
+    }
+  }
+
   function buildProfileAvatarHtml(profile) {
     var url = getProfileAvatarUrl(profile);
+    var initials = esc(getProfileInitials(profile));
     if (url) {
-      return '<img class="ahp-avatar-photo" src="' + esc(url) + '" alt="">';
+      return '<img class="ahp-avatar-photo" src="' + esc(url) + '" alt="" onerror="var box=this.parentNode;this.remove();if(box){box.classList.remove(\'ahp-has-photo\');var n=box.querySelector(\'.ahp-avatar-initials\');if(n)n.classList.remove(\'ahp-is-hidden\');}">' +
+        '<span class="ahp-avatar-initials ahp-is-hidden">' + initials + '</span>';
     }
-    return esc(getProfileInitials(profile));
+    return initials;
   }
 
   function getProfilePage() {
@@ -4546,12 +4913,41 @@
     return getTheme().bgStyle === 'light' ? 'Light' : 'Dark';
   }
 
+  var ratingDraft = { stars: 0, comment: '' };
+
+  function profileRowHtml(icon, title, subtitle, action, selected) {
+    return '<button type="button" class="ahp-profile-row' + (selected ? ' is-selected' : '') + '" data-profile-action="' + esc(action) + '">' +
+      '<i class="fas ' + icon + '"></i>' +
+      '<span><strong>' + esc(title) + '</strong><small>' + esc(subtitle) + '</small></span>' +
+      '<i class="fas fa-chevron-right"></i>' +
+    '</button>';
+  }
+
+  function profileSectionHtml(title, subtitle) {
+    return '<div class="ahp-profile-section"><strong>' + esc(title) + '</strong><small>' + esc(subtitle) + '</small></div>';
+  }
+
+  function mountProfileHtml(color, innerHtml) {
+    var titleEl = document.getElementById('ahpPlaceholderTitle');
+    var iconEl = document.getElementById('ahpPlaceholderIcon');
+    var hintEl = document.getElementById('ahpPlaceholderHint');
+    var box = document.querySelector('#ahpPlaceholderPage .ahp-page-placeholder');
+    if (titleEl) titleEl.textContent = '';
+    if (iconEl) iconEl.className = 'fas fa-user ahp-is-hidden';
+    if (!hintEl || !box) return;
+    box.classList.add('ahp-profile-page');
+    box.style.setProperty('--ahp-detail-color', color || '#202940');
+    hintEl.innerHTML = innerHtml;
+    bindProfileInteractions();
+  }
+
   function bindProfileInteractions() {
-    var list = document.querySelector('.ahp-profile-list');
-    if (!list) return;
-    list.querySelectorAll('.ahp-profile-row').forEach(function (btn) {
+    var root = document.querySelector('#ahpPlaceholderPage .ahp-page-placeholder');
+    if (!root) return;
+    root.querySelectorAll('[data-profile-action]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var action = btn.getAttribute('data-profile-action') || '';
+        var color = getTheme().accentColor || '#202940';
         if (action === 'edit') {
           setEditMode(true);
           setActiveMenu('profile');
@@ -4563,7 +4959,7 @@
           p.notificationsEnabled = !p.notificationsEnabled;
           setCheck('toolProfileNotifications', p.notificationsEnabled);
           showToast(p.notificationsEnabled ? 'Notifications enabled' : 'Notifications disabled');
-          renderProfilePage(getTheme().accentColor || '#202940');
+          renderProfilePage(color);
           return;
         }
         if (action === 'appearance') {
@@ -4574,9 +4970,93 @@
         }
         if (action === 'privacy') {
           showToast('Privacy policy opens in the mobile app');
+          return;
+        }
+        if (action === 'rating') {
+          ratingDraft = { stars: 0, comment: '' };
+          renderRatingPage(color);
+          return;
+        }
+        if (action.indexOf('rate-star:') === 0) {
+          readRatingComment();
+          ratingDraft.stars = parseInt(action.slice('rate-star:'.length), 10) || 0;
+          renderRatingPage(color);
+          return;
+        }
+        if (action === 'rating-send') {
+          submitRating(color);
         }
       });
     });
+  }
+
+  function readRatingComment() {
+    var box = document.getElementById('ahpRatingComment');
+    if (box) ratingDraft.comment = box.value || '';
+  }
+
+  function starRowHtml() {
+    var html = '<div class="ahp-star-row" role="group" aria-label="Star rating">';
+    var i;
+    for (i = 1; i <= 5; i++) {
+      html += '<button type="button" class="ahp-star' + (i <= ratingDraft.stars ? ' is-on' : '') + '" data-profile-action="rate-star:' + i + '" aria-label="' + i + (i === 1 ? ' star' : ' stars') + '"><i class="fas fa-star"></i></button>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function submitRating(color) {
+    readRatingComment();
+    var comment = (ratingDraft.comment || '').trim();
+    if (!ratingDraft.stars) {
+      showToast('Select a star rating.');
+      return;
+    }
+    if (!comment) {
+      showToast('Write a comment about the issue.');
+      return;
+    }
+    var sendBtn = document.querySelector('[data-profile-action="rating-send"]');
+    if (sendBtn) sendBtn.disabled = true;
+    fetch((cfg.apiBase || '/index.php/app-home-page/api') + '/rating-feedback', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify({
+        rating: ratingDraft.stars,
+        comment: comment
+      })
+    })
+      .then(function (r) { return r.json().catch(function () { return { success: false, message: 'Could not send rating.' }; }); })
+      .then(function (res) {
+        showToast((res && res.message) || (res && res.success ? 'Thanks. Your rating was sent.' : 'Could not send rating.'));
+        if (res && res.success) {
+          ratingDraft = { stars: 0, comment: '' };
+          renderProfilePage(color);
+          return;
+        }
+        if (sendBtn) sendBtn.disabled = false;
+      })
+      .catch(function () {
+        showToast('Could not send rating. Please try again.');
+        if (sendBtn) sendBtn.disabled = false;
+      });
+  }
+
+  function renderRatingPage(color) {
+    mountProfileHtml(color,
+      brandBarHtml('Account') +
+      profileSectionHtml('Rating', 'Select a star, then write what went wrong') +
+      starRowHtml() +
+      '<label class="ahp-rating-comment"><span>Comment</span>' +
+        '<textarea id="ahpRatingComment" maxlength="2000" placeholder="Describe the issue so it can be fixed">' + esc(ratingDraft.comment) + '</textarea>' +
+      '</label>' +
+      '<button type="button" class="ahp-profile-logout" data-profile-action="rating-send"><i class="fas fa-paper-plane"></i> Send rating</button>'
+    );
   }
 
   function renderProfilePage(color) {
@@ -4593,7 +5073,8 @@
       ['fa-user-pen', 'Edit profile', 'Manage account details', 'edit'],
       ['fa-bell', 'Notifications', notifOn ? 'Alerts and reminders enabled' : 'Alerts and reminders disabled', 'notifications'],
       ['fa-moon', 'Appearance', getThemeModeLabel() + ' mode', 'appearance'],
-      ['fa-shield-halved', 'Privacy Policy', 'Security and data controls', 'privacy']
+      ['fa-shield-halved', 'Privacy Policy', 'Security and data controls', 'privacy'],
+      ['fa-star', 'Rating', 'Rate with stars and describe the issue', 'rating']
     ];
     var titleEl = document.getElementById('ahpPlaceholderTitle');
     var iconEl = document.getElementById('ahpPlaceholderIcon');
@@ -4614,11 +5095,7 @@
         '<div class="ahp-profile-meta"><span>' + esc(phone) + '</span></div>' +
       '</div>' +
       '<div class="ahp-profile-list">' + rows.map(function (row) {
-        return '<button type="button" class="ahp-profile-row" data-profile-action="' + esc(row[3]) + '">' +
-          '<i class="fas ' + row[0] + '"></i>' +
-          '<span><strong>' + esc(row[1]) + '</strong><small>' + esc(row[2]) + '</small></span>' +
-          '<i class="fas fa-chevron-right"></i>' +
-        '</button>';
+        return profileRowHtml(row[0], row[1], row[2], row[3], false);
       }).join('') + '</div>' +
       '<form class="ahp-profile-logout-form" method="post" action="' + esc(cfg.logoutUrl || '/index.php/sd-logout') + '">' +
         csrfInput +
@@ -4629,7 +5106,7 @@
   /* ── FOUR-FACE BOX ENGINE ──────────────────────────────────────────────
      Each tile is a real 3D box: front / right / back / left.
      Parent: translateZ(-half) rotateY(angle). Faces: rotateY(n*90) translateZ(half).
-     Depth = face width. No flat flip / mid-turn content swap.
+     half = slotWidth/2 (closed solid cube — demo.mp4 clone). No flat flip.
      ──────────────────────────────────────────────────────────────────── */
   var _faceSwapRaf = null;
   var _faceSwapActive = false;
@@ -4668,8 +5145,21 @@
     if (_faceSwapRaf) { cancelAnimationFrame(_faceSwapRaf); _faceSwapRaf = null; }
   }
 
+  function resolveCubeFaceGapPx() {
+    var t = getTheme() || {};
+    if (window.AhpSchemaV2 && typeof window.AhpSchemaV2.resolveCubeFaceGap === 'function') {
+      return window.AhpSchemaV2.resolveCubeFaceGap(t);
+    }
+    if (t.cubeFaceGap != null && t.cubeFaceGap !== '') {
+      var custom = parseInt(t.cubeFaceGap, 10);
+      if (!isNaN(custom)) return Math.max(0, Math.min(24, custom));
+    }
+    return 0;
+  }
+
   function syncCubeGeometry(scope) {
     var root = scope || el.phone || document;
+    var faceGap = resolveCubeFaceGapPx();
     root.querySelectorAll('.ahp-card[data-card-id], .ahp-cube-wrap, .ahp-dev-cube-wrap').forEach(function (host) {
       if (host.querySelector('.ahp-application-cube')) return;
       var cube = host.querySelector('.ahp-cube:not(.ahp-application-cube)');
@@ -4680,12 +5170,15 @@
       var width = host.offsetWidth || host.clientWidth || 0;
       var height = host.offsetHeight || host.clientHeight || 0;
       if (!width || !height) return;
-      var half = Math.max(4, width / 2);
+      // Closed solid cube (demo.mp4): halfDepth = slotWidth/2 (+ optional faceGap override).
+      var half = Math.max(4, width / 2) + faceGap;
       var depth = half * 2;
       var vars = {
         '--ahp-cube-width': width + 'px',
         '--ahp-cube-height': height + 'px',
         '--ahp-cube-half': half + 'px',
+        '--ahp-cube-face-z': half + 'px',
+        '--ahp-cube-face-gap': faceGap + 'px',
         '--ahp-cube-size': depth + 'px'
       };
       Object.keys(vars).forEach(function (key) {
@@ -4716,7 +5209,7 @@
         if (slot) {
           // offsetWidth = layout px (ignores preview scale transform)
           var w = slot.offsetWidth || slot.clientWidth || 0;
-          half = w > 0 ? w / 2 : 0;
+          half = w > 0 ? (w / 2) + resolveCubeFaceGapPx() : 0; // faceGap defaults 0 (closed cube)
         }
       }
     }
@@ -5087,7 +5580,8 @@
     if (resetFace) resetFace.addEventListener('click', resetSelectedDeviceFace);
   }
 
-  function applyDeviceEditor() {
+  function applyDeviceEditor(opts) {
+    opts = opts || {};
     var page = getDevicesPage();
     var device = (page.devices || []).find(function (d) { return d.id === selectedDeviceId; });
     if (!device) return;
@@ -5183,7 +5677,7 @@
     if (defaultFaceNode && getDeviceDefaultFace(device) !== prevDefault) {
       activeDeviceFaceIndex = device.defaultFace;
     }
-    markLayoutDirty();
+    if (!opts.skipDirty) markLayoutDirty();
   }
 
   function duplicateDevice() {
@@ -5362,6 +5856,8 @@
     t.gridColumns = normalizeGridColumns(getVal('toolGridColumns'), t.gridColumns || 3);
     t.gridRows = normalizeGridRows(getVal('toolGridRows'), t.gridRows || 3);
     t.gridRowHeight = normalizeGridRowHeight(getVal('toolGridRowHeight'), t.gridRowHeight || 96);
+    // Square cells for every account; radius alone changes corner style.
+    t.squareTiles = true;
     t.cardBorderRadius = parseInt(getVal('toolCardBorderRadius'), 10);
     if (isNaN(t.cardBorderRadius)) t.cardBorderRadius = 0;
     t.cardBorderRadius = Math.max(0, Math.min(72, t.cardBorderRadius));
@@ -5394,7 +5890,7 @@
   }
 
   function flushAllCardsBeforeSave() {
-    applyCardEditor();
+    applyCardEditor({ skipDirty: true });
     (layout.cards || []).forEach(function (card) {
       ensureFaces(card);
     });
@@ -5984,9 +6480,11 @@
     var labelVal = faceText.label;
     var subtitleVal = faceText.subtitle;
     var faceBgColor = face.color || card.color || '#7c3aed';
-    var iconSizeDefault = face.iconSize != null ? face.iconSize : (card.iconSize != null ? card.iconSize : (type === 'stat' ? 18 : 20));
-    var titleSizeDefault = face.titleFontSize != null ? face.titleFontSize : (card.titleFontSize != null ? card.titleFontSize : (type === 'stat' ? 9 : 12));
-    var subSizeDefault = face.subFontSize != null ? face.subFontSize : (card.subFontSize != null ? card.subFontSize : (type === 'stat' ? 22 : 9));
+    var iconSizeDefault = face.iconSize != null ? face.iconSize : (card.iconSize != null ? card.iconSize : (type === 'stat' ? 18 : 28));
+    var titleSizeDefault = face.titleFontSize != null ? face.titleFontSize : (card.titleFontSize != null ? card.titleFontSize : (type === 'stat' ? 9 : 14));
+    var subSizeDefault = face.subFontSize != null ? face.subFontSize : (card.subFontSize != null ? card.subFontSize : (type === 'stat' ? 22 : 10));
+    var titleWeightDefault = faceTitleWeight(face, card, type);
+    var subWeightDefault = faceSubWeight(face, card, type);
     var cardRadiusVal = card.borderRadius != null ? card.borderRadius : defaultCardRadius();
     var rotationDir = card.rotationDir === 'ltr' ? 'ltr' : 'rtl';
     var globalFaceSec = faceSecondsFromCardSpeed(getTheme().cardSpeed || 16);
@@ -6081,6 +6579,7 @@
           (normalizeFaceContentType(face, card) === 'mixed'
             ? '<div class="ahp-field"><label for="ceMixedLayout">Mixed layout</label><select id="ceMixedLayout">' +
               [
+                { value: 'centeredStack', label: 'Centered stack (icon → title → subtitle)' },
                 { value: 'startTile', label: 'Start tile (logo center, title bottom)' },
                 { value: 'imageTop', label: 'imageTop' },
                 { value: 'imageBottom', label: 'imageBottom' },
@@ -6088,11 +6587,11 @@
                 { value: 'imageRight', label: 'imageRight' },
                 { value: 'imageBackground', label: 'imageBackground' }
               ].map(function (opt) {
-                var cur = face.mixedLayout || card.mixedLayout || 'startTile';
+                var cur = face.mixedLayout || card.mixedLayout || 'centeredStack';
                 return '<option value="' + opt.value + '"' + (cur === opt.value ? ' selected' : '') + '>' + esc(opt.label) + '</option>';
               }).join('') + '</select></div>'
             : '') +
-          '<p class="ahp-tool-hint" style="margin-top:6px">Start tile: logo centered (~⅓), title bottom-left. Use Cover with no title for full-bleed photos.</p></div>'
+          '<p class="ahp-tool-hint" style="margin-top:6px">Centered stack matches the home mosaic. Use Cover with no title for full-bleed photos.</p></div>'
         : '') +
       '<div class="ahp-face-text-row">' +
       '<div class="ahp-field"><label for="ceLabel">' + (normalizeFaceContentType(face, card) === 'image' ? 'Overlay label' : 'Title') + '</label><input id="ceLabel" value="' + esc(labelVal) + '" placeholder="' + (normalizeFaceContentType(face, card) === 'image' ? 'Title on image' : 'Main text') + '"></div>' +
@@ -6111,15 +6610,22 @@
       '<div class="ahp-field ahp-check-field"><label for="ceFaceTextColorAllFaces"><input type="checkbox" id="ceFaceTextColorAllFaces"' + (card.sameFaceTextColor === true ? ' checked' : '') + '> Same text + icon color on all faces</label></div>' +
       iconPickerHtml('ceFaceIcon', 'Icon', face.icon || card.icon || 'fa-cube') +
       '<div class="ahp-field ahp-check-field"><label for="ceFaceShowIcon"><input type="checkbox" id="ceFaceShowIcon"' + (face.hideIcon === true ? '' : ' checked') + '> Show icon on this face</label></div>' +
-      rangeFieldHtml('ceFaceIconSize', 'Icon size', iconSizeDefault, 6, 40, 'px') +
-      rangeFieldHtml('ceFaceTitleSize', 'Label font size', titleSizeDefault, 5, 28, 'px') +
-      fontFamilySelectHtml('ceFaceTitleFont', 'Label font family', face.titleFontFamily || card.titleFontFamily || 'system') +
+      rangeFieldHtml('ceFaceIconSize', 'Icon / logo size', iconSizeDefault, 6, 48, 'px') +
+      rangeFieldHtml('ceFaceTitleSize', 'Title font size', titleSizeDefault, 5, 36, 'px') +
+      rangeFieldHtml('ceFaceTitleWeight', 'Title boldness', titleWeightDefault, 300, 900, '') +
+      fontFamilySelectHtml('ceFaceTitleFont', 'Title font family', face.titleFontFamily || card.titleFontFamily || 'system') +
       rangeFieldHtml('ceFaceSubSize', 'Subtitle font size', subSizeDefault, 6, 32, 'px') +
+      rangeFieldHtml('ceFaceSubWeight', 'Subtitle boldness', subWeightDefault, 300, 900, '') +
       fontFamilySelectHtml('ceFaceSubFont', 'Subtitle font family', face.subFontFamily || card.subFontFamily || 'system') +
       '</div></div>';
 
     panel.innerHTML = html;
     if (type === 'image') applyEditorImagePreviewStyles();
+    syncCardTypographyDom(card, panel);
+    if (selectedCardId) {
+      var liveSlot = el.grid && el.grid.querySelector('[data-card-id="' + selectedCardId + '"]');
+      if (liveSlot) syncCardTypographyDom(card, liveSlot);
+    }
 
     var delBtn = document.getElementById('ahpDeleteCardBtn');
     if (delBtn) delBtn.addEventListener('click', function () { deleteCard(selectedCardId); });
@@ -6172,13 +6678,15 @@
         applyCardEditor();
       });
     });
-    var rangeIds = ['ceCardWidth', 'ceCardHeight', 'ceCardRadius', 'ceFaceSec', 'ceFaceIconSize', 'ceFaceTitleSize', 'ceFaceSubSize', 'ceFaceImageScale'];
+    var rangeIds = ['ceCardWidth', 'ceCardHeight', 'ceCardRadius', 'ceFaceSec', 'ceStartDelay', 'ceFaceIconSize', 'ceFaceTitleSize', 'ceFaceTitleWeight', 'ceFaceSubSize', 'ceFaceSubWeight', 'ceFaceImageScale'];
     rangeIds.forEach(function (id) {
       var node = document.getElementById(id);
       if (!node) return;
       syncRangeThumb(node);
       var updateLabel = function () {
-        var unit = (id === 'ceCardWidth' || id === 'ceCardHeight') ? '' : (id === 'ceFaceImageScale' ? '%' : 'px');
+        var unit = (id === 'ceCardWidth' || id === 'ceCardHeight' || id === 'ceFaceTitleWeight' || id === 'ceFaceSubWeight')
+          ? ''
+          : (id === 'ceFaceImageScale' ? '%' : (id === 'ceFaceSec' || id === 'ceStartDelay' ? ' sec' : 'px'));
         updateRangeUi(node, unit);
         if (id === 'ceCardWidth' || id === 'ceCardHeight') {
           var orient = document.getElementById('ceOrientation');
@@ -6199,12 +6707,13 @@
       node.addEventListener('input', updateLabel);
       node.addEventListener('change', updateLabel);
     });
-    ['ceFaceTitleFont', 'ceFaceSubFont', 'ceOrientation', 'ceFaceShowIcon', 'ceFaceSecGlobal'].forEach(function (id) {
+    ['ceFaceTitleFont', 'ceFaceSubFont', 'ceOrientation', 'ceFaceShowIcon', 'ceFaceSecGlobal', 'ceMixedLayout'].forEach(function (id) {
       var node = document.getElementById(id);
       if (node) node.addEventListener('change', function () {
         if (id === 'ceFaceSecGlobal') syncCardFaceSecUi();
         applyCardEditor();
         if (id === 'ceOrientation' && node.value !== 'custom') syncCardEditor(true);
+        if (id === 'ceMixedLayout') syncCardEditor(true);
       });
     });
     syncCardFaceSecUi();
@@ -6304,8 +6813,6 @@
     var typeNode = document.getElementById('ceType');
     if (typeNode) card.type = normalizeHomeBlockType(typeNode.value);
     var type = normalizeHomeBlockType(card.type);
-
-    card.defaultFace = 0;
 
     var rotationEnabledNode = document.getElementById('ceRotationEnabled');
     if (rotationEnabledNode) card.rotationEnabled = !!rotationEnabledNode.checked;
@@ -6423,26 +6930,59 @@
       var iconSizeNode = document.getElementById('ceFaceIconSize');
       if (iconSizeNode) {
         var iconSizeVal = parseInt(iconSizeNode.value, 10);
-        if (!isNaN(iconSizeVal)) face.iconSize = iconSizeVal;
+        if (!isNaN(iconSizeVal)) {
+          face.iconSize = iconSizeVal;
+          if (targetFaceIndex === 0) card.iconSize = iconSizeVal;
+        }
       }
 
       var titleSizeNode = document.getElementById('ceFaceTitleSize');
       if (titleSizeNode) {
         var titleSizeVal = parseInt(titleSizeNode.value, 10);
-        if (!isNaN(titleSizeVal)) face.titleFontSize = titleSizeVal;
+        if (!isNaN(titleSizeVal)) {
+          face.titleFontSize = titleSizeVal;
+          if (targetFaceIndex === 0) card.titleFontSize = titleSizeVal;
+        }
+      }
+
+      var titleWeightNode = document.getElementById('ceFaceTitleWeight');
+      if (titleWeightNode) {
+        var titleWeightVal = clampFontWeight(titleWeightNode.value, 800);
+        face.titleFontWeight = titleWeightVal;
+        if (targetFaceIndex === 0) card.titleFontWeight = titleWeightVal;
       }
 
       var subSizeNode = document.getElementById('ceFaceSubSize');
       if (subSizeNode) {
         var subSizeVal = parseInt(subSizeNode.value, 10);
-        if (!isNaN(subSizeVal)) face.subFontSize = subSizeVal;
+        if (!isNaN(subSizeVal)) {
+          face.subFontSize = subSizeVal;
+          if (targetFaceIndex === 0) card.subFontSize = subSizeVal;
+        }
+      }
+
+      var subWeightNode = document.getElementById('ceFaceSubWeight');
+      if (subWeightNode) {
+        var subWeightVal = clampFontWeight(subWeightNode.value, 500);
+        face.subFontWeight = subWeightVal;
+        face.subtitleFontWeight = subWeightVal;
+        if (targetFaceIndex === 0) {
+          card.subFontWeight = subWeightVal;
+          card.subtitleFontWeight = subWeightVal;
+        }
       }
 
       var titleFontNode = document.getElementById('ceFaceTitleFont');
-      if (titleFontNode) face.titleFontFamily = titleFontNode.value;
+      if (titleFontNode) {
+        face.titleFontFamily = titleFontNode.value;
+        if (targetFaceIndex === 0) card.titleFontFamily = titleFontNode.value;
+      }
 
       var subFontNode = document.getElementById('ceFaceSubFont');
-      if (subFontNode) face.subFontFamily = subFontNode.value;
+      if (subFontNode) {
+        face.subFontFamily = subFontNode.value;
+        if (targetFaceIndex === 0) card.subFontFamily = subFontNode.value;
+      }
 
       var faceRouteNode = document.getElementById('ceFaceRoute');
       if (faceRouteNode) {
@@ -6467,7 +7007,7 @@
         if (posNode) face.imagePosition = normalizeImagePosition(posNode.value);
         var mixedLayoutNode = document.getElementById('ceMixedLayout');
         if (mixedLayoutNode && faceType === 'mixed') {
-          face.mixedLayout = mixedLayoutNode.value || 'startTile';
+          face.mixedLayout = mixedLayoutNode.value || 'centeredStack';
           card.mixedLayout = face.mixedLayout;
         }
         var scaleNode = document.getElementById('ceFaceImageScale');
@@ -6496,7 +7036,7 @@
     updateSelectedCardHighlight();
     refreshCubePlayback(el.grid);
     syncCubeRotation(el.grid);
-    markLayoutDirty();
+    if (!opts.skipDirty) markLayoutDirty();
   }
 
   function deleteCard(cardId) {
@@ -6713,6 +7253,7 @@
         btn.classList.toggle('selected', btn.getAttribute('data-nav-icon') === navItem.icon);
       });
     }
+    markLayoutDirty();
   }
 
   function setNavActive(navId, skipRenderPage) {
@@ -7176,11 +7717,12 @@
       colSpan: 1,
       rowSpan: 1,
       orientation: 'square',
+      tall: false,
       faces: [
         { type: type, title: type === 'image' ? '' : (type === 'mixed' ? 'New Mixed' : 'New Stack'), icon: icon, color: color, textColor: '#ffffff', iconColor: '#ffffff' },
-        { type: type, title: 'Face 2', icon: 'fa-star', color: color, textColor: '#ffffff', iconColor: '#ffffff' },
-        { type: type, title: 'Face 3', icon: 'fa-bolt', color: color, textColor: '#ffffff', iconColor: '#ffffff' },
-        { type: type, title: 'Face 4', icon: 'fa-heart', color: color, textColor: '#ffffff', iconColor: '#ffffff' }
+        { type: type, title: 'Face 2', icon: 'fa-star', color: TEMPLATE_FACE_COLORS[1], textColor: '#ffffff', iconColor: '#ffffff' },
+        { type: type, title: 'Face 3', icon: 'fa-bolt', color: TEMPLATE_FACE_COLORS[2], textColor: '#ffffff', iconColor: '#ffffff' },
+        { type: type, title: 'Face 4', icon: 'fa-heart', color: TEMPLATE_FACE_COLORS[3], textColor: '#ffffff', iconColor: '#ffffff' }
       ]
     };
     if (type === 'stack') {
@@ -7199,13 +7741,13 @@
       });
       ensureImageBlockDefaults(block);
     } else if (type === 'mixed') {
-      block.mixedLayout = 'startTile';
+      block.mixedLayout = 'centeredStack';
       block.image = '';
       block.imageFit = 'contain';
       block.imagePosition = 'center';
       block.faces.forEach(function (face) {
         face.type = 'mixed';
-        face.mixedLayout = 'startTile';
+        face.mixedLayout = 'centeredStack';
         face.imageFit = 'contain';
         face.imagePosition = 'center';
       });
@@ -7712,7 +8254,7 @@
 
   function flushLayoutBeforeSave() {
     flushAllCardsBeforeSave();
-    applyDeviceEditor();
+    applyDeviceEditor({ skipDirty: true });
 
     if (!layout.header) layout.header = {};
     layout.header.title = getVal('toolHeaderTitle');
@@ -7817,6 +8359,7 @@
     options = options || {};
     if (!layoutReady) return;
     layoutDirty = true;
+    layoutSaveEpoch += 1;
     if (canRecordLayoutHistory()) {
       if (options.historyNow) {
         recordLayoutHistoryNow();
@@ -7828,6 +8371,7 @@
   }
 
   function scheduleAutoSave() {
+    if (saveInFlight) return;
     if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
     saveDebounceTimer = setTimeout(function () {
       if (layoutDirty) saveLayout({ auto: true });
@@ -7836,11 +8380,16 @@
 
   function saveLayout(options) {
     options = options || {};
+    if (saveInFlight) {
+      layoutDirty = true;
+      return;
+    }
     if (saveDebounceTimer) {
       clearTimeout(saveDebounceTimer);
       saveDebounceTimer = null;
     }
     flushLayoutBeforeSave();
+    var epochAtStart = layoutSaveEpoch;
     var layoutToSave = JSON.parse(JSON.stringify(layout));
     var schema = generateSchema();
     if (!schema) {
@@ -7853,6 +8402,7 @@
       payload[cfg.csrfName] = cfg.csrfHash;
     }
 
+    saveInFlight = true;
     fetch(cfg.apiBase + '/layout', {
       method: 'POST',
       credentials: 'same-origin',
@@ -7872,51 +8422,61 @@
         return r.json();
       })
       .then(function (res) {
-        if (res.success) {
-          layoutDirty = false;
-          hasSavedLayout = true;
-          cfg.hasSavedLayout = true;
-          if (res.layout && typeof res.layout === 'object') {
-            applyLayoutFromServer(res.layout);
-            cfg.layout = JSON.parse(JSON.stringify(layout));
-          } else {
-            layout = layoutToSave;
-            cfg.layout = JSON.parse(JSON.stringify(layoutToSave));
-            ensureSavedCardsStructure();
-            assignGridAreas();
-          }
-          if (res.profile && typeof res.profile === 'object') {
-            cfg.loginUserProfile = res.profile;
-            applyLoginUserProfileToLayout(res.profile);
-          }
-          if (res.csrfHash && cfg.csrfName) {
-            cfg.csrfHash = res.csrfHash;
-          }
-          if (!options.auto) {
-            showToast('Layout and settings saved');
-          }
-          if (res.schemaApiUrl) {
-            syncSchemaApiUrl(res.schemaApiUrl);
-          }
-          if (res.schema && typeof res.schema === 'object') {
-            cfg.schema = res.schema;
-          }
-          refreshPreviewAfterSave({ skipEditor: !!options.auto });
-          if (options.auto) {
-            var savedSnap = captureLayoutSnapshot();
-            if (layoutHistoryIndex >= 0 && layoutHistory[layoutHistoryIndex] !== savedSnap) {
-              pushLayoutHistorySnapshot(true);
-            }
-          } else {
-            resetLayoutHistory();
+        if (res.csrfHash && cfg.csrfName) {
+          cfg.csrfHash = res.csrfHash;
+        }
+        if (!res.success) {
+          showToast(res.message || 'Save failed');
+          return;
+        }
+        hasSavedLayout = true;
+        cfg.hasSavedLayout = true;
+        if (res.schemaApiUrl) {
+          syncSchemaApiUrl(res.schemaApiUrl);
+        }
+        if (res.schema && typeof res.schema === 'object') {
+          cfg.schema = res.schema;
+        }
+        // Newer edits landed while this save was in flight — keep local layout and save again.
+        if (epochAtStart !== layoutSaveEpoch) {
+          layoutDirty = true;
+          if (!options.auto) showToast('Layout and settings saved');
+          return;
+        }
+        layoutDirty = false;
+        if (res.layout && typeof res.layout === 'object') {
+          applyLayoutFromServer(res.layout);
+          cfg.layout = JSON.parse(JSON.stringify(layout));
+        } else {
+          layout = layoutToSave;
+          cfg.layout = JSON.parse(JSON.stringify(layoutToSave));
+          ensureSavedCardsStructure();
+          assignGridAreas();
+        }
+        if (res.profile && typeof res.profile === 'object') {
+          cfg.loginUserProfile = res.profile;
+          applyLoginUserProfileToLayout(res.profile);
+        }
+        if (!options.auto) {
+          showToast('Layout and settings saved');
+        }
+        refreshPreviewAfterSave({ skipEditor: !!options.auto });
+        if (options.auto) {
+          var savedSnap = captureLayoutSnapshot();
+          if (layoutHistoryIndex >= 0 && layoutHistory[layoutHistoryIndex] !== savedSnap) {
+            pushLayoutHistorySnapshot(true);
           }
         } else {
-          showToast(res.message || 'Save failed');
+          resetLayoutHistory();
         }
       })
       .catch(function (err) {
         console.error('Save failed:', err);
         showToast('Save failed - check connection or sign in again');
+      })
+      .then(function () {
+        saveInFlight = false;
+        if (layoutDirty) scheduleAutoSave();
       });
   }
 
@@ -8017,10 +8577,9 @@
       markLayoutDirty();
     });
     bindField('toolGridRowHeight', function () {
-      var rowNode = document.getElementById('toolGridRowHeight');
-      var rowH = rowNode ? normalizeGridRowHeight(rowNode.value, 96) : 96;
-      getTheme().gridRowHeight = rowH;
-      if (rowNode) updateRangeUi(rowNode, 'px');
+      // Cell height is derived from column width so 1x1 tiles stay square.
+      // Slider is informational — syncGridLayoutVars restores the square size.
+      getTheme().squareTiles = true;
       syncGridLayoutVars();
       applyTheme();
       renderGrid();
@@ -8338,31 +8897,6 @@
     renderLegacyCardGrid();
   }
 
-  function updateCardSlot(cardId) {
-    if (!el.grid) return;
-    var card = (layout.cards || []).find(function (c) { return c.id === cardId; });
-    var slot = el.grid.querySelector('[data-card-id="' + cardId + '"]');
-    if (!card || !slot) return;
-    ensureCardSize(card);
-    clampCardPosition(card);
-    var idx = layout.cards.findIndex(function (c) { return c.id === cardId; });
-    var radius = cardRadius(card);
-    slot.style.setProperty('--ahp-card-radius', radius + 'px');
-    slot.style.borderRadius = radius + 'px';
-    slot.style.gridColumn = card.col + ' / span ' + card.colSpan;
-    slot.style.gridRow = card.row + ' / span ' + card.rowSpan;
-    slot.setAttribute('data-col', String(card.col));
-    slot.setAttribute('data-row', String(card.row));
-    slot.setAttribute('data-col-span', String(card.colSpan));
-    slot.setAttribute('data-row-span', String(card.rowSpan));
-    var cubeTarget = slot.querySelector('.ahp-cube:not(.ahp-application-cube), .ahp-edit-face-board');
-    if (cubeTarget) cubeTarget.outerHTML = renderCubeCard(card, idx);
-    else slot.insertAdjacentHTML('beforeend', renderCubeCard(card, idx));
-    lockSelectedCardCubeFace(slot, cardId);
-    scheduleCubeGeometry(el.grid);
-    refreshCubePlayback(el.grid);
-  }
-
   function refreshThemedPreview() {
     if (layout.activePage === 'home' && el.grid) {
       refreshLegacyCardThemedPreview();
@@ -8561,14 +9095,23 @@
     /* Initial zoom + speed sync after first paint */
     requestAnimationFrame(function () {
       applyPreviewZoom();
+      syncGridLayoutVars();
       var phone = el.phone || document.getElementById('ahpPhone');
       if (phone) phone.style.setProperty('--ahp-card-speed', (getTheme().cardSpeed || 16) + 's');
-      requestAnimationFrame(applyPreviewZoom);
+      requestAnimationFrame(function () {
+        syncGridLayoutVars();
+        applyPreviewZoom();
+        if (layout.activePage === 'home') renderGrid();
+      });
     });
 
     window.addEventListener('resize', function () {
-      requestAnimationFrame(applyPreviewZoom);
-      scheduleCubeGeometry(el.phone);
+      requestAnimationFrame(function () {
+        syncGridLayoutVars();
+        applyPreviewZoom();
+        scheduleCubeGeometry(el.phone);
+        if (layout.activePage === 'home' && getTheme().squareTiles !== false) renderGrid();
+      });
     });
 
     layoutReady = true;

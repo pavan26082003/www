@@ -108,6 +108,7 @@ public $globals = [
                 'grid_chat',
                 'grid_chat/*',
                 'app-web-entry/open',
+                'app-home-page/rating',
             ],
         ],
         'mobilepush' => [

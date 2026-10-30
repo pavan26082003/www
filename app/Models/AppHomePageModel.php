@@ -34,7 +34,37 @@ class AppHomePageModel
             $active = $layout['activePage'];
         }
         $layout['bottomNavCategoryTarget'] = self::BOTTOM_NAV_CATEGORY_DEFAULT;
-        $layout['bottomNav'] = self::buildCanonicalBottomNav(self::BOTTOM_NAV_CATEGORY_DEFAULT, $active);
+        $canonical = self::buildCanonicalBottomNav(self::BOTTOM_NAV_CATEGORY_DEFAULT, $active);
+
+        // Keep the fixed 4 tabs, but preserve user label/icon edits from the studio.
+        $byId = array();
+        if (!empty($layout['bottomNav']) && is_array($layout['bottomNav'])) {
+            foreach ($layout['bottomNav'] as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $id = trim((string) ($item['id'] ?? ''));
+                if ($id !== '') {
+                    $byId[$id] = $item;
+                }
+            }
+        }
+        foreach ($canonical as $i => $slot) {
+            $id = (string) ($slot['id'] ?? '');
+            if ($id === '' || empty($byId[$id]) || !is_array($byId[$id])) {
+                continue;
+            }
+            $label = trim((string) ($byId[$id]['label'] ?? ''));
+            if ($label !== '') {
+                $canonical[$i]['label'] = $label;
+            }
+            $icon = trim((string) ($byId[$id]['icon'] ?? ''));
+            if ($icon !== '') {
+                $canonical[$i]['icon'] = $icon;
+            }
+        }
+
+        $layout['bottomNav'] = $canonical;
 
         return $layout;
     }
@@ -103,9 +133,10 @@ class AppHomePageModel
                 'bgStyle' => 'dark',
                 'gridGap' => 4,
                 'gridColumns' => 3,
-                'gridRows' => 7,
-                'gridRowHeight' => 96,
-                'cardBorderRadius' => 20,
+                'gridRows' => 6,
+                'gridRowHeight' => 117,
+                'squareTiles' => true,
+                'cardBorderRadius' => 16,
                 'cardSpeed' => 16,
                 'logoIcon' => 'fa-crosshairs',
                 'showWelcome' => true,
@@ -255,64 +286,118 @@ class AppHomePageModel
     }
 
     /**
+     * Public https photo for the account header.
+     * Grid profile photo first, then users.image.
+     * Empty means the app should show initials, not a placeholder image.
+     */
+    private function resolveAccountAvatarUrl(int $userId, string $usersImage): string
+    {
+        $candidates = array(
+            $this->readGridProfileAvatar($userId),
+            trim($usersImage),
+        );
+        foreach ($candidates as $raw) {
+            $url = $this->publicAvatarUrl($raw);
+            if ($url !== '') {
+                return $url;
+            }
+        }
+
+        return '';
+    }
+
+    private function readGridProfileAvatar(int $userId): string
+    {
+        if ($userId <= 0) {
+            return '';
+        }
+        try {
+            if (!$this->db->tableExists('grid_profiles') || !$this->db->fieldExists('avatar', 'grid_profiles')) {
+                return '';
+            }
+            $row = $this->db->table('grid_profiles')
+                ->select('avatar')
+                ->where('user_id', $userId)
+                ->get()
+                ->getRowArray();
+
+            return trim((string) ($row['avatar'] ?? ''));
+        } catch (\Throwable $e) {
+            return '';
+        }
+    }
+
+    /**
      * Absolute avatar URL, or empty so the app shows initials.
-     * A missing or relative photo was rendering as a broken icon on some accounts.
+     * A missing, relative, or localhost photo was rendering as a broken icon.
      */
     private function publicAvatarUrl(string $image): string
     {
         $image = trim($image);
-        if ($image === '') {
+        if ($image === '' || strcasecmp($image, 'system_bot') === 0) {
             return '';
-        }
-
-        helper('general');
-        $url = trim((string) get_avatar($image));
-        $absolute = $this->toPublicHttpsUrl($url);
-        if ($absolute !== '' && !preg_match('#/assets/images/avatar\.jpg(\?|$)#i', $absolute)) {
-            return $absolute;
         }
 
         $fileName = '';
-        $decoded = @unserialize($image);
-        if (is_array($decoded) && !empty($decoded['file_name'])) {
-            $fileName = trim((string) $decoded['file_name']);
-        } elseif (strpos(ltrim($image), 'a:') !== 0) {
-            $fileName = $image;
+        if ($image[0] === '{' || $image[0] === '[') {
+            $json = json_decode($image, true);
+            if (is_array($json) && !empty($json['file_name'])) {
+                $fileName = trim((string) $json['file_name']);
+            }
         }
         if ($fileName === '') {
-            return '';
+            $decoded = @unserialize($image);
+            if (is_array($decoded) && !empty($decoded['file_name'])) {
+                $fileName = trim((string) $decoded['file_name']);
+            }
         }
-        if (preg_match('#^https?://#i', $fileName)) {
-            return $this->toPublicHttpsUrl($fileName);
-        }
-        $fileName = ltrim(str_replace('\\', '/', $fileName), '/');
-        if (strpos($fileName, '/') === false) {
-            $fileName = 'files/profile_images/' . $fileName;
+        if ($fileName === '' && strpos(ltrim($image), 'a:') !== 0) {
+            $fileName = $image;
         }
 
-        return 'https://efactor.tech/' . $fileName;
+        return $this->canonicalizeProfileImageUrl($fileName);
     }
 
-    private function toPublicHttpsUrl(string $url): string
+    private function canonicalizeProfileImageUrl(string $fileName): string
     {
-        $url = trim(html_entity_decode($url, ENT_QUOTES));
-        if ($url === '' || preg_match('#^(data:|blob:)#i', $url)) {
+        $fileName = trim(html_entity_decode($fileName, ENT_QUOTES));
+        if ($fileName === '' || preg_match('#^(data:|blob:)#i', $fileName)) {
             return '';
         }
-        if (preg_match('#^https?://#i', $url)) {
-            if (stripos($url, 'http://') === 0) {
-                $host = strtolower((string) parse_url($url, PHP_URL_HOST));
-                if ($host !== '' && !in_array($host, array('localhost', '127.0.0.1', '::1'), true)) {
-                    $url = 'https://' . substr($url, 7);
-                }
-            }
-            return $url;
-        }
-        if ($url[0] !== '/') {
-            $url = '/' . $url;
+        if (preg_match('#(^|/)avatar\.jpg(\?|$)#i', $fileName) || preg_match('#/assets/images/avatar\.jpg(\?|$)#i', $fileName)) {
+            return '';
         }
 
-        return 'https://efactor.tech' . $url;
+        if (preg_match('#^https?://#i', $fileName)) {
+            $host = strtolower((string) parse_url($fileName, PHP_URL_HOST));
+            $path = (string) parse_url($fileName, PHP_URL_PATH);
+            if ($host === '' || in_array($host, array('localhost', '127.0.0.1', '::1'), true)) {
+                return $this->publicFilesUrl($path);
+            }
+            if (stripos($fileName, 'http://') === 0) {
+                return 'https://' . substr($fileName, 7);
+            }
+
+            return $fileName;
+        }
+
+        return $this->publicFilesUrl($fileName);
+    }
+
+    private function publicFilesUrl(string $path): string
+    {
+        $path = str_replace('\\', '/', trim($path));
+        $path = preg_replace('#^https?://[^/]+#i', '', $path) ?? $path;
+        $path = preg_replace('#^/app(?=/)#i', '', $path) ?? $path;
+        $path = ltrim($path, '/');
+        if ($path === '' || preg_match('#(^|/)avatar\.jpg$#i', $path)) {
+            return '';
+        }
+        if (strpos($path, '/') === false) {
+            $path = 'files/profile_images/' . $path;
+        }
+
+        return 'https://efactor.tech/' . $path;
     }
 
     /**
@@ -532,7 +617,7 @@ class AppHomePageModel
             'phone' => trim((string) ($row['phone'] ?? '')),
             'memberId' => $gridId !== '' ? $gridId : ('EF-' . (int) ($row['id'] ?? $userId)),
             'gridId' => $gridId,
-            'avatarUrl' => $this->publicAvatarUrl($image),
+            'avatarUrl' => $this->resolveAccountAvatarUrl($userId, $image),
         );
     }
 
@@ -638,31 +723,24 @@ class AppHomePageModel
 
     /**
      * Factory home mosaic for new accounts and Reset.
-     * Same boxes, same face order, same grid positions as the studio phone.
+     * Loaded from Config/app_home_default_cards.json (present studio UI).
      */
     private function getDefaultStarterCards(): array
     {
-        $gridLogo = 'https://efactor.tech/assets/images/GRID_Logo.png';
-        $efactorLogo = 'https://efactor.tech/assets/images/efactor-logo.jpg';
-        $hrmsImage = 'https://www.shutterstock.com/image-vector/hrms-human-resource-management-system-260nw-2283105665.jpg';
-        $cardImage = 'https://www.spiderworks.in/uploads/media/digital-business-card-maker-in-kerala64fee92edc3a8.jpg';
-        $recipeImage = '/assets/images/app_home_default/recipe-biryani.jpg';
-        $recipeIngredients = '/assets/images/app_home_default/recipe-ingredients.jpg';
-        $recipeSteps = '/assets/images/app_home_default/recipe-steps.webp';
-        $recipeTimer = '/assets/images/app_home_default/recipe-timer.jpg';
-        $ingredientsImage = 'https://www.thehighereducationreview.com/newsimagespl/0b5zEPRZ.jpeg';
-        $bannerImage = '/assets/images/app_home_default/biryani-banner.jpg';
-        $stepsImage = '/assets/images/app_home_default/biryani-steps.jpg';
-        $timerImage = '/assets/images/app_home_default/biryani-timer.jpg';
+        $fromFile = $this->loadDefaultStarterCardsFromFile();
+        if ($fromFile !== array()) {
+            return $fromFile;
+        }
 
+        // Fallback if the JSON file is missing — keep a minimal mosaic.
         return array(
             array(
                 'id' => 'user-modules',
                 'type' => 'stack',
                 'gridArea' => 'user-modules',
-                'title' => 'Online',
-                'label' => 'Online',
-                'icon' => 'fa-fingerprint',
+                'title' => '67',
+                'label' => '67',
+                'icon' => 'fa-th-large',
                 'color' => '#7c3aed',
                 'textColor' => '#ffffff',
                 'iconColor' => '#ffffff',
@@ -676,285 +754,67 @@ class AppHomePageModel
                 'orientation' => 'vertical',
                 'sameFaceColor' => true,
                 'faces' => array(
-                    array('type' => 'stack', 'title' => 'Online', 'label' => 'Online', 'icon' => 'fa-fingerprint', 'color' => '#7c3aed', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => '67', 'label' => '67', 'subtitle' => 'User Modules', 'icon' => 'fa-th-large', 'color' => '#7c3aed', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
+                    array('type' => 'stack', 'title' => 'Online', 'icon' => 'fa-chart-bar', 'color' => '#7c3aed', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
                     array('type' => 'stack', 'title' => 'Active', 'icon' => 'fa-chart-line', 'color' => '#7c3aed', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Modules', 'icon' => 'fa-th-large', 'color' => '#7c3aed', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Users', 'label' => 'Users', 'icon' => 'fa-th', 'color' => '#7c3aed', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                ),
-            ),
-            array(
-                'id' => 'grid',
-                'type' => 'stack',
-                'gridArea' => 'grid',
-                'title' => 'Share',
-                'label' => 'Share',
-                'icon' => 'fa-share-alt',
-                'color' => '#ea580c',
-                'textColor' => '#ffffff',
-                'iconColor' => '#ffffff',
-                'col' => 2,
-                'row' => 1,
-                'colSpan' => 1,
-                'rowSpan' => 1,
-                'borderRadius' => 0,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'orientation' => 'square',
-                'sameFaceColor' => true,
-                'faces' => array(
-                    array('type' => 'stack', 'title' => 'Share', 'label' => 'Share', 'icon' => 'fa-share-alt', 'color' => '#ea580c', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'GRID', 'label' => 'GRID', 'subtitle' => 'Share & connect', 'icon' => 'fa-border-all', 'color' => '#ea580c', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Network', 'subtitle' => '12 nodes', 'icon' => 'fa-project-diagram', 'color' => '#ea580c', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Connect', 'subtitle' => 'Peers online', 'icon' => 'fa-link', 'color' => '#ea580c', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                ),
-            ),
-            array(
-                'id' => 'hrms',
-                'type' => 'stack',
-                'gridArea' => 'hrms',
-                'title' => 'Leave',
-                'label' => 'Leave',
-                'icon' => 'fa-calendar',
-                'color' => '#2dd4bf',
-                'textColor' => '#ffffff',
-                'iconColor' => '#ffffff',
-                'col' => 3,
-                'row' => 1,
-                'colSpan' => 1,
-                'rowSpan' => 1,
-                'borderRadius' => 0,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'orientation' => 'square',
-                'sameFaceColor' => true,
-                'faces' => array(
-                    array('type' => 'stack', 'title' => 'Leave', 'label' => 'Leave', 'icon' => 'fa-calendar', 'color' => '#2dd4bf', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'HRMS', 'label' => 'HRMS', 'subtitle' => 'Employees & payroll', 'icon' => 'fa-user-tie', 'color' => '#2dd4bf', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Payroll', 'subtitle' => 'This month', 'icon' => 'fa-money-bill', 'color' => '#2dd4bf', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Team', 'label' => 'Team', 'subtitle' => '24 active', 'icon' => 'fa-users', 'color' => '#2dd4bf', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                ),
-            ),
-            array(
-                'id' => 'id-card',
-                'type' => 'stack',
-                'gridArea' => 'id-card',
-                'title' => 'Verify',
-                'label' => 'Verify',
-                'icon' => 'fa-braille',
-                'color' => '#db2777',
-                'textColor' => '#ffffff',
-                'iconColor' => '#ffffff',
-                'col' => 2,
-                'row' => 2,
-                'colSpan' => 1,
-                'rowSpan' => 1,
-                'borderRadius' => 0,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'orientation' => 'square',
-                'sameFaceColor' => true,
-                'faces' => array(
-                    array('type' => 'stack', 'title' => 'Verify', 'label' => 'Verify', 'icon' => 'fa-braille', 'color' => '#db2777', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'ID', 'label' => 'ID', 'subtitle' => 'Efactor ID', 'icon' => 'fa-fingerprint', 'color' => '#db2777', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Profile', 'subtitle' => 'Your card', 'icon' => 'fa-id-card', 'color' => '#db2777', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Badge', 'subtitle' => 'Access pass', 'icon' => 'fa-shield-alt', 'color' => '#db2777', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                ),
-            ),
-            array(
-                'id' => 'appid',
-                'type' => 'stack',
-                'gridArea' => 'appid',
-                'title' => 'New',
-                'label' => 'New',
-                'icon' => 'fa-plus',
-                'color' => '#3b82f6',
-                'textColor' => '#ffffff',
-                'iconColor' => '#ffffff',
-                'col' => 3,
-                'row' => 2,
-                'colSpan' => 1,
-                'rowSpan' => 1,
-                'borderRadius' => 0,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'orientation' => 'square',
-                'sameFaceColor' => false,
-                'faces' => array(
-                    array('type' => 'stack', 'title' => 'New', 'label' => 'New', 'icon' => 'fa-plus', 'color' => '#3b82f6', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'AppID', 'subtitle' => 'Generation', 'icon' => 'fa-key', 'color' => '#2563eb', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Active', 'subtitle' => '8 apps', 'icon' => 'fa-mobile-alt', 'color' => '#60a5fa', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Keys', 'subtitle' => 'Manage', 'icon' => 'fa-lock', 'color' => '#1d4ed8', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                ),
-            ),
-            array(
-                'id' => 'leads',
-                'type' => 'stack',
-                'gridArea' => 'leads',
-                'title' => 'Hot',
-                'label' => 'Hot',
-                'icon' => 'fa-th',
-                'color' => '#22c55e',
-                'textColor' => '#ffffff',
-                'iconColor' => '#ffffff',
-                'col' => 1,
-                'row' => 3,
-                'colSpan' => 1,
-                'rowSpan' => 1,
-                'borderRadius' => 0,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'orientation' => 'square',
-                'sameFaceColor' => true,
-                'faces' => array(
-                    array('type' => 'stack', 'title' => 'Hot', 'label' => 'Hot', 'icon' => 'fa-th', 'color' => '#22c55e', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Leads', 'icon' => 'fa-users', 'color' => '#22c55e', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Converted', 'icon' => 'fa-check', 'color' => '#22c55e', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Follow-up', 'icon' => 'fa-phone', 'color' => '#22c55e', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                ),
-            ),
-            array(
-                'id' => 'efactor-grid',
-                'type' => 'image',
-                'gridArea' => 'efactor-grid',
-                'title' => '',
-                'label' => '',
-                'icon' => 'fa-cube',
-                'color' => '#ffffff',
-                'textColor' => '#111827',
-                'iconColor' => '#ffffff',
-                'image' => $gridLogo,
-                'col' => 2,
-                'row' => 3,
-                'colSpan' => 2,
-                'rowSpan' => 1,
-                'borderRadius' => 0,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'orientation' => 'custom',
-                'sameFaceColor' => false,
-                'imageFit' => 'contain',
-                'imagePosition' => 'center',
-                'imageScale' => 91,
-                'faces' => array(
-                    array('type' => 'image', 'icon' => 'fa-cube', 'color' => '#ffffff', 'textColor' => '#111827', 'iconColor' => '#ffffff', 'image' => $gridLogo, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 91),
-                    array('type' => 'image', 'title' => 'GRID', 'label' => 'GRID', 'icon' => 'fa-border-all', 'color' => '#111827', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $efactorLogo, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 86),
-                    array('type' => 'image', 'title' => '', 'label' => '', 'icon' => 'fa-star', 'color' => '#ffffff', 'textColor' => '#111827', 'iconColor' => '#111827', 'image' => $hrmsImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100, 'hideIcon' => true),
-                    array('type' => 'image', 'title' => 'Explore', 'label' => 'Explore', 'icon' => 'fa-compass', 'color' => '#475569', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $cardImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 189),
-                ),
-            ),
-            array(
-                'id' => 'signal',
-                'type' => 'stack',
-                'gridArea' => 'signal',
-                'title' => '',
-                'label' => '',
-                'icon' => 'fa-signal',
-                'color' => '#6d28d9',
-                'textColor' => '#ffffff',
-                'iconColor' => '#ffffff',
-                'col' => 1,
-                'row' => 4,
-                'colSpan' => 2,
-                'rowSpan' => 2,
-                'borderRadius' => 0,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'orientation' => 'custom',
-                'sameFaceColor' => true,
-                'faces' => array(
-                    array('type' => 'stack', 'icon' => 'fa-signal', 'color' => '#6d28d9', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Signal', 'icon' => 'fa-wifi', 'color' => '#6d28d9', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Network', 'icon' => 'fa-broadcast-tower', 'color' => '#6d28d9', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Status', 'icon' => 'fa-chart-bar', 'color' => '#6d28d9', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                ),
-            ),
-            array(
-                'id' => 'recipe',
-                'type' => 'image',
-                'gridArea' => 'recipe',
-                'title' => 'Biryani',
-                'label' => 'Biryani',
-                'icon' => 'fa-cube',
-                'color' => '#78350f',
-                'textColor' => '#ffffff',
-                'iconColor' => '#ffffff',
-                'image' => $recipeImage,
-                'col' => 3,
-                'row' => 4,
-                'colSpan' => 1,
-                'rowSpan' => 1,
-                'borderRadius' => 0,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'orientation' => 'square',
-                'sameFaceColor' => false,
-                'imageFit' => 'contain',
-                'imagePosition' => 'center',
-                'imageScale' => 100,
-                'faces' => array(
-                    array('type' => 'image', 'title' => 'Biryani', 'label' => 'Biryani', 'icon' => 'fa-cube', 'color' => '#78350f', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $recipeImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
-                    array('type' => 'image', 'title' => 'Ingredients', 'icon' => 'fa-list', 'color' => '#92400e', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $recipeIngredients, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
-                    array('type' => 'image', 'title' => 'Steps', 'icon' => 'fa-clipboard-list', 'color' => '#a16207', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $recipeSteps, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
-                    array('type' => 'image', 'title' => 'Timer', 'icon' => 'fa-hourglass-half', 'color' => '#b45309', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $recipeTimer, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
-                ),
-            ),
-            array(
-                'id' => 'wifi',
-                'type' => 'stack',
-                'gridArea' => 'wifi',
-                'title' => 'WIFI',
-                'label' => 'WIFI',
-                'icon' => 'fa-wifi',
-                'color' => '#0f172a',
-                'textColor' => '#ffffff',
-                'iconColor' => '#ffffff',
-                'col' => 3,
-                'row' => 5,
-                'colSpan' => 1,
-                'rowSpan' => 1,
-                'borderRadius' => 12,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'orientation' => 'square',
-                'sameFaceColor' => false,
-                'faces' => array(
-                    array('type' => 'stack', 'title' => 'WIFI', 'label' => 'WIFI', 'icon' => 'fa-wifi', 'color' => '#0f172a', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Network', 'icon' => 'fa-signal', 'color' => '#1e293b', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Devices', 'icon' => 'fa-broadcast-tower', 'color' => '#334155', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                    array('type' => 'stack', 'title' => 'Setup', 'icon' => 'fa-plus', 'color' => '#475569', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
-                ),
-            ),
-            array(
-                'id' => 'biryani-banner',
-                'type' => 'mixed',
-                'gridArea' => 'biryani-banner',
-                'title' => 'Biryani',
-                'label' => 'Biryani',
-                'icon' => 'fa-cube',
-                'color' => '#ffa238',
-                'textColor' => '#ffffff',
-                'iconColor' => '#ffffff',
-                'image' => $bannerImage,
-                'col' => 1,
-                'row' => 6,
-                'colSpan' => 3,
-                'rowSpan' => 2,
-                'borderRadius' => 0,
-                'defaultFace' => 0,
-                'rotationDir' => 'ltr',
-                'orientation' => 'custom',
-                'sameFaceColor' => false,
-                'imageFit' => 'contain',
-                'imagePosition' => 'center',
-                'imageScale' => 100,
-                'faces' => array(
-                    array('type' => 'image', 'title' => 'Biryani', 'label' => 'Biryani', 'icon' => 'fa-cube', 'color' => '#ffa238', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $bannerImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
-                    array('type' => 'image', 'title' => 'Ingredients', 'label' => 'Ingredients', 'icon' => 'fa-list', 'color' => '#ea8c53', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $ingredientsImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
-                    array('type' => 'image', 'title' => 'Steps', 'label' => 'Steps', 'icon' => 'fa-clipboard-list', 'color' => '#a16207', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $stepsImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 100),
-                    array('type' => 'image', 'title' => 'Timer', 'label' => 'Timer', 'icon' => 'fa-hourglass-half', 'color' => '#b45309', 'textColor' => '#ffffff', 'iconColor' => '#ffffff', 'image' => $timerImage, 'imageFit' => 'contain', 'imagePosition' => 'center', 'imageScale' => 154),
+                    array('type' => 'stack', 'title' => 'Users', 'icon' => 'fa-th', 'color' => '#7c3aed', 'textColor' => '#ffffff', 'iconColor' => '#ffffff'),
                 ),
             ),
         );
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function loadDefaultStarterCardsFromFile(): array
+    {
+        $candidates = array();
+        if (defined('APPPATH')) {
+            $candidates[] = rtrim(APPPATH, '/\\') . DIRECTORY_SEPARATOR . 'Config' . DIRECTORY_SEPARATOR . 'app_home_default_cards.json';
+        }
+        $candidates[] = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'Config' . DIRECTORY_SEPARATOR . 'app_home_default_cards.json';
+
+        $path = null;
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                $path = $candidate;
+                break;
+            }
+        }
+        if ($path === null) {
+            log_message('error', 'App home default cards JSON not found.');
+            return array();
+        }
+
+        $raw = @file_get_contents($path);
+        if (!is_string($raw) || trim($raw) === '') {
+            log_message('error', 'App home default cards JSON empty: ' . $path);
+            return array();
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded) || $decoded === array()) {
+            log_message('error', 'App home default cards JSON invalid: ' . $path);
+            return array();
+        }
+
+        // File may be a bare cards array or { "cards": [...] }.
+        if (isset($decoded['cards']) && is_array($decoded['cards'])) {
+            $decoded = $decoded['cards'];
+        }
+
+        $cards = array();
+        foreach ($decoded as $card) {
+            if (!is_array($card) || empty($card['id'])) {
+                continue;
+            }
+            if (empty($card['gridArea'])) {
+                $card['gridArea'] = (string) $card['id'];
+            }
+            $cards[] = $card;
+        }
+
+        return $cards;
     }
 
     /**
@@ -980,11 +840,16 @@ class AppHomePageModel
                 $card['faces'] = $this->emptyFacesForCard($card);
             } else {
                 $faces = array();
+                $padFaces = $this->emptyFacesForCard($card);
                 for ($fi = 0; $fi < 4; $fi++) {
                     $sf = (isset($savedFaces[$fi]) && is_array($savedFaces[$fi])) ? $savedFaces[$fi] : array();
+                    // Empty slots get distinct placeholders — never blank {} that inherits card title on every side.
+                    if ($this->isBlankHomeFace($sf)) {
+                        $sf = isset($padFaces[$fi]) && is_array($padFaces[$fi]) ? $padFaces[$fi] : $sf;
+                    }
                     $faces[] = $sf;
                 }
-                $card['faces'] = $faces;
+                $card['faces'] = $this->diversifyDuplicateHomeFaces($card, $faces);
             }
 
             $merged[] = $card;
@@ -993,37 +858,113 @@ class AppHomePageModel
         return $merged;
     }
 
+    /**
+     * Distinct accent colors for cube faces (purple / navy / teal / green).
+     *
+     * @return array<int, string>
+     */
+    private function distinctHomeFaceColors(): array
+    {
+        return array('#7c3aed', '#1e3a8a', '#0d9488', '#16a34a');
+    }
+
+    private function isBlankHomeFace(array $face): bool
+    {
+        $title = trim((string) ($face['title'] ?? $face['label'] ?? ''));
+        $subtitle = trim((string) ($face['subtitle'] ?? ''));
+        $value = array_key_exists('value', $face) ? trim((string) $face['value']) : '';
+        $image = trim((string) ($face['image'] ?? ''));
+
+        return $title === '' && $subtitle === '' && $value === '' && $image === '';
+    }
+
+    private function homeFaceContentKey(array $face): string
+    {
+        return strtolower(trim((string) ($face['title'] ?? $face['label'] ?? '')))
+            . '|' . strtolower(trim((string) ($face['subtitle'] ?? '')))
+            . '|' . strtolower(trim((string) (array_key_exists('value', $face) ? $face['value'] : '')))
+            . '|' . trim((string) ($face['image'] ?? ''));
+    }
+
+    /**
+     * Repair faces that were cloned identically across all 4 sides (looks static while rotating).
+     *
+     * @param array<string, mixed> $card
+     * @param array<int, array<string, mixed>> $faces
+     * @return array<int, array<string, mixed>>
+     */
+    private function diversifyDuplicateHomeFaces(array $card, array $faces): array
+    {
+        if (count($faces) < 2) {
+            return $faces;
+        }
+
+        $palette = $this->distinctHomeFaceColors();
+        $icons = array('fa-cube', 'fa-star', 'fa-bolt', 'fa-heart');
+        $sameFaceColor = !empty($card['sameFaceColor']);
+        $primaryKey = $this->homeFaceContentKey(isset($faces[0]) && is_array($faces[0]) ? $faces[0] : array());
+
+        for ($fi = 1; $fi < 4; $fi++) {
+            $face = (isset($faces[$fi]) && is_array($faces[$fi])) ? $faces[$fi] : array();
+            if ($this->isBlankHomeFace($face) || $this->homeFaceContentKey($face) === $primaryKey) {
+                $faces[$fi] = array(
+                    'type' => $face['type'] ?? ($card['type'] ?? 'link'),
+                    'title' => 'Face ' . ($fi + 1),
+                    'label' => 'Face ' . ($fi + 1),
+                    'subtitle' => '',
+                    'icon' => $icons[$fi] ?? ($face['icon'] ?? ($card['icon'] ?? 'fa-cube')),
+                    'color' => $sameFaceColor
+                        ? ($face['color'] ?? ($card['color'] ?? ($palette[$fi] ?? '#6366f1')))
+                        : ($palette[$fi] ?? ($card['color'] ?? '#6366f1')),
+                    'textColor' => $face['textColor'] ?? ($card['textColor'] ?? '#ffffff'),
+                    'iconColor' => $face['iconColor'] ?? ($card['iconColor'] ?? '#ffffff'),
+                );
+            }
+        }
+
+        return $faces;
+    }
+
     private function emptyFacesForCard(array $card): array
     {
         $label = $card['label'] ?? $card['title'] ?? 'Face 1';
         $icon = $card['icon'] ?? 'fa-cube';
         $color = $card['color'] ?? '#6366f1';
         $type = $card['type'] ?? 'link';
+        $palette = $this->distinctHomeFaceColors();
+        $sameFaceColor = !empty($card['sameFaceColor']);
+        $faceColor = static function (int $fi) use ($sameFaceColor, $color, $palette): string {
+            if ($fi === 0) {
+                return $color;
+            }
+            return $sameFaceColor ? $color : ($palette[$fi] ?? $color);
+        };
 
         if ($type === 'stat') {
             return array(
-                array('value' => $card['value'] ?? '0', 'label' => $label, 'icon' => $icon, 'color' => $color),
-                array('title' => 'Face 2', 'icon' => 'fa-star', 'color' => $color),
-                array('title' => 'Face 3', 'icon' => 'fa-bolt', 'color' => $color),
-                array('title' => 'Face 4', 'icon' => 'fa-heart', 'color' => $color),
+                array('value' => $card['value'] ?? '0', 'label' => $label, 'icon' => $icon, 'color' => $faceColor(0)),
+                array('title' => 'Face 2', 'icon' => 'fa-star', 'color' => $faceColor(1)),
+                array('title' => 'Face 3', 'icon' => 'fa-bolt', 'color' => $faceColor(2)),
+                array('title' => 'Face 4', 'icon' => 'fa-heart', 'color' => $faceColor(3)),
             );
         }
 
         if ($type === 'image') {
             $image = trim((string) ($card['image'] ?? ''));
             return array(
-                array('title' => $label, 'subtitle' => $card['subtitle'] ?? '', 'image' => $image, 'color' => $color),
-                array('title' => 'Face 2', 'icon' => 'fa-star', 'color' => $color, 'image' => $image),
-                array('title' => 'Face 3', 'icon' => 'fa-bolt', 'color' => $color, 'image' => $image),
-                array('title' => 'Face 4', 'icon' => 'fa-heart', 'color' => $color, 'image' => $image),
+                array('title' => $label, 'subtitle' => $card['subtitle'] ?? '', 'image' => $image, 'color' => $faceColor(0)),
+                // Secondary faces stay distinct — do not clone the same image onto every side.
+                array('title' => 'Face 2', 'icon' => 'fa-star', 'color' => $faceColor(1)),
+                array('title' => 'Face 3', 'icon' => 'fa-bolt', 'color' => $faceColor(2)),
+                array('title' => 'Face 4', 'icon' => 'fa-heart', 'color' => $faceColor(3)),
             );
         }
 
         return array(
-            array('title' => $label, 'subtitle' => $card['subtitle'] ?? '', 'icon' => $icon, 'color' => $color),
-            array('title' => 'Face 2', 'icon' => 'fa-star', 'color' => $color),
-            array('title' => 'Face 3', 'icon' => 'fa-bolt', 'color' => $color),
-            array('title' => 'Face 4', 'icon' => 'fa-heart', 'color' => $color),
+            array('title' => $label, 'subtitle' => $card['subtitle'] ?? '', 'icon' => $icon, 'color' => $faceColor(0)),
+            array('title' => 'Face 2', 'icon' => 'fa-star', 'color' => $faceColor(1)),
+            array('title' => 'Face 3', 'icon' => 'fa-bolt', 'color' => $faceColor(2)),
+            array('title' => 'Face 4', 'icon' => 'fa-heart', 'color' => $faceColor(3)),
         );
     }
 
@@ -1054,7 +995,172 @@ class AppHomePageModel
             return array();
         }
 
-        return $this->attachGridDataSource($this->normalizeSmartphoneBreakpoints($data), $userId);
+        $schema = $this->attachGridDataSource($this->normalizeSmartphoneBreakpoints($data), $userId);
+        $schema = $this->prepareRatingOpenUrlForClient($schema, $userId);
+
+        return \App\Libraries\AppHomeSchemaSigner::attachSignature($schema);
+    }
+
+    /**
+     * Keep profile-rating as open-url (same keys). Refresh ?grid_sso= so the
+     * phone WebView can open the web Rating UI (stars + comment) signed in.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    public function prepareRatingOpenUrlForClient(array $schema, int $userId): array
+    {
+        if ($userId < 1) {
+            return $schema;
+        }
+
+        if (!isset($schema['actionRegistry']) || !is_array($schema['actionRegistry'])) {
+            return $schema;
+        }
+
+        $action = $schema['actionRegistry']['profile-rating'] ?? null;
+        if (!is_array($action)) {
+            return $schema;
+        }
+
+        // Always rebuild a clean public HTML URL — never reuse a path that was
+        // accidentally joined onto /v8/api_creation.php during schema serve/build.
+        $ratingUrl = $this->publicRatingPageUrl($userId);
+
+        // Same open-url shape the app already handles — only refresh url values.
+        $action['type'] = 'open-url';
+        $action['url'] = $ratingUrl;
+        $action['route'] = $ratingUrl;
+        $action['title'] = $action['title'] ?? 'Rating';
+        $action['openIn'] = $action['openIn'] ?? 'inAppWebView';
+        if (!isset($action['webView']) || !is_array($action['webView'])) {
+            $action['webView'] = array();
+        }
+        $action['webView'] = array_merge(array(
+            'javaScriptEnabled' => true,
+            'sharedCookies' => true,
+            'clearCache' => false,
+            'showAppBar' => false,
+            'showToolbar' => false,
+            'hideAppBar' => true,
+            'displayMode' => 'fullscreen',
+        ), $action['webView']);
+        if (!isset($action['destination']) || !is_array($action['destination'])) {
+            $action['destination'] = array();
+        }
+        $action['destination']['url'] = $ratingUrl;
+        $action['destination']['openIn'] = $action['destination']['openIn'] ?? 'inAppWebView';
+        $action['destination']['title'] = $action['destination']['title'] ?? 'Rating';
+        $action['destination']['sharedCookies'] = true;
+        $action['destination']['showAppBar'] = false;
+        $action['destination']['showToolbar'] = false;
+        $action['destination']['hideAppBar'] = true;
+
+        $schema['actionRegistry']['profile-rating'] = $action;
+
+        return $schema;
+    }
+
+    /**
+     * Absolute HTML Rating page for in-app WebView.
+     * Always /index.php/app-home-page/rating — never /v8/api_creation.php/...
+     */
+    public function publicRatingPageUrl(int $userId = 0): string
+    {
+        $url = $this->publicAppHomeWebUrl('app-home-page/rating');
+        if ($userId > 0 && class_exists(\App\Libraries\GridWebSso::class)) {
+            $sso = \App\Libraries\GridWebSso::issue($userId);
+            if ($sso !== '') {
+                $url = \App\Libraries\GridWebSso::appendToken($url, $sso);
+            }
+        }
+
+        return $url;
+    }
+
+    /**
+     * Absolute App Home JSON API base (.../index.php/app-home-page/api).
+     */
+    public function publicAppHomeApiBaseUrl(): string
+    {
+        return $this->publicAppHomeWebUrl('app-home-page/api');
+    }
+
+    /**
+     * Build a public app-home web URL that cannot be rooted on a v8 API script.
+     */
+    public function publicAppHomeWebUrl(string $path): string
+    {
+        $path = trim(str_replace('\\', '/', $path), '/');
+        if ($path === '') {
+            $path = 'app-home-page';
+        }
+
+        $url = '';
+        if (class_exists(\App\Libraries\GridWebSso::class)) {
+            $url = \App\Libraries\GridWebSso::publicWebUrl($path);
+        } elseif (function_exists('site_url')) {
+            helper('url');
+            $url = (string) site_url($path);
+        }
+
+        $url = $this->sanitizeAppHomePublicUrl($url, $path);
+        if (class_exists(\App\Libraries\GridWebSso::class)) {
+            $url = \App\Libraries\GridWebSso::canonicalizePublicUrl($url);
+        }
+
+        return rtrim($url, '/');
+    }
+
+    /**
+     * Drop accidental /v8/api_creation.php (etc.) prefixes from app-home URLs.
+     */
+    public function sanitizeAppHomePublicUrl(string $url, string $path): string
+    {
+        $url = trim($url);
+        $path = trim(str_replace('\\', '/', $path), '/');
+        $poison = '#/(?:v8/)?(?:api_creation|grid_api_creation|iot_api_creation)\.php(?=/|\?|$)#i';
+
+        if ($url !== '' && !preg_match($poison, $url) && stripos($url, $path) !== false) {
+            return $url;
+        }
+
+        $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || ((int) ($_SERVER['SERVER_PORT'] ?? 0) === 443)
+            || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+        $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+        if ($host === '') {
+            $host = 'efactor.tech';
+            $https = true;
+        }
+        $hostName = preg_replace('/:\d+$/', '', $host) ?: $host;
+        if (!in_array($hostName, array('localhost', '127.0.0.1', '::1'), true)) {
+            $https = true;
+        }
+
+        // If we had a usable host from a poisoned URL, keep that host.
+        if ($url !== '') {
+            $parts = parse_url($url);
+            if (is_array($parts) && !empty($parts['host'])) {
+                $host = (string) $parts['host'];
+                if (!empty($parts['port'])) {
+                    $host .= ':' . (int) $parts['port'];
+                }
+                $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+                if ($scheme === 'https') {
+                    $https = true;
+                } elseif ($scheme === 'http') {
+                    $hostOnly = preg_replace('/:\d+$/', '', strtolower((string) $parts['host'])) ?: '';
+                    if (!in_array($hostOnly, array('localhost', '127.0.0.1', '::1'), true)) {
+                        $https = true;
+                    } else {
+                        $https = false;
+                    }
+                }
+            }
+        }
+
+        return ($https ? 'https' : 'http') . '://' . $host . '/index.php/' . $path;
     }
 
     /**
@@ -1170,6 +1276,8 @@ class AppHomePageModel
                 'cardBorderRadius' => $layout['theme']['cardBorderRadius'] ?? null,
                 'showWelcome' => $layout['theme']['showWelcome'] ?? null,
                 'themeHomeTemplate' => $layout['theme']['homeTemplate'] ?? null,
+                'squareTiles' => $layout['theme']['squareTiles'] ?? null,
+                'gridRowHeight' => $layout['theme']['gridRowHeight'] ?? null,
             ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $layout = $this->applyUserProfileToLayout($layout, $userId);
             $layout = $this->sanitizeLayoutForSchema($layout);
@@ -1179,8 +1287,18 @@ class AppHomePageModel
                 'cardBorderRadius' => $layout['theme']['cardBorderRadius'] ?? null,
                 'showWelcome' => $layout['theme']['showWelcome'] ?? null,
                 'themeHomeTemplate' => $layout['theme']['homeTemplate'] ?? null,
+                'squareTiles' => $layout['theme']['squareTiles'] ?? null,
+                'gridRowHeight' => $layout['theme']['gridRowHeight'] ?? null,
             ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             if ($headerBefore !== $headerAfter) {
+                $persistLayout = json_decode(json_encode($layout), true);
+                if (!is_array($persistLayout)) {
+                    $persistLayout = null;
+                }
+            }
+            $positionsBefore = $this->cardPositionFingerprint($layout);
+            $layout = $this->alignAccountCardPositions($userId, $layout);
+            if ($positionsBefore !== $this->cardPositionFingerprint($layout)) {
                 $persistLayout = json_decode(json_encode($layout), true);
                 if (!is_array($persistLayout)) {
                     $persistLayout = null;
@@ -1452,12 +1570,18 @@ class AppHomePageModel
             $circleConnectUrl = \App\Libraries\GridWebSso::publicWebUrl('grid-chat');
         }
 
+        // Same web Rating UI (stars + comment). Clean public URL + optional SSO.
+        // Never join onto /v8/api_creation.php (that returns JSON, not HTML).
+        $ratingPageUrl = $this->publicRatingPageUrl($userId);
+
         return array(
             'userId' => $userId,
             'userEmail' => $userEmail,
             'loginUserProfile' => $profile,
             'logoUrl' => 'https://efactor.tech/files/home/Logo_new.png',
             'schemaApiUrl' => $this->getSchemaApiUrl($userId),
+            'apiBase' => $this->publicAppHomeApiBaseUrl(),
+            'ratingPageUrl' => $ratingPageUrl,
             'filesBase' => rtrim(base_url('files'), '/'),
             'iotApiUrl' => $iotApiUrl,
             'circleConnectUrl' => $circleConnectUrl,
@@ -1582,16 +1706,80 @@ class AppHomePageModel
     }
 
     /**
-     * Same range as the studio slider (0–72). 0 stays square.
+     * Present studio mosaic coordinates (default + Reset).
+     * Values are col, row, colSpan, rowSpan.
+     *
+     * @return array<string, array{0:int,1:int,2:int,3:int}>
+     */
+    private function studioPreviewCardPositions(): array
+    {
+        return array(
+            'user-modules' => array(1, 1, 1, 2),
+            'grid' => array(2, 1, 1, 1),
+            'appid' => array(3, 1, 1, 1),
+            'recipe' => array(2, 2, 2, 1),
+            'leads' => array(1, 3, 1, 1),
+            'id-card' => array(2, 3, 1, 1),
+            'hrms' => array(3, 3, 1, 1),
+            'efactor-grid' => array(1, 4, 3, 1),
+            'wifi' => array(1, 5, 1, 2),
+            'biryani-banner' => array(2, 5, 2, 2),
+        );
+    }
+
+    /**
+     * Keep the studio mosaic coordinates on published layouts.
+     * Top row: tall user-modules + GRID/HRMS, second row ID/AppID.
+     *
+     * @param array<string, mixed> $layout
+     * @return array<string, mixed>
+     */
+    private function alignAccountCardPositions(int $userId, array $layout): array
+    {
+        // Do not force studio mosaic coordinates over user edits.
+        // Re-snapping on sync/save was undoing Block size, placement, and related settings on refresh.
+        // Fresh accounts already get the correct mosaic from getDefaultStarterCards(); Reset restores it.
+        return $layout;
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     */
+    private function cardPositionFingerprint(array $layout): string
+    {
+        $cards = array();
+        foreach ($layout['cards'] ?? array() as $card) {
+            if (!is_array($card)) {
+                continue;
+            }
+            $cards[] = array(
+                (string) ($card['id'] ?? ''),
+                (int) ($card['col'] ?? 0),
+                (int) ($card['row'] ?? 0),
+                (int) ($card['colSpan'] ?? 0),
+                (int) ($card['rowSpan'] ?? 0),
+            );
+        }
+
+        $encoded = json_encode(array(
+            'cards' => $cards,
+            'gridRows' => (int) ($layout['theme']['gridRows'] ?? 0),
+        ));
+
+        return $encoded === false ? '' : $encoded;
+    }
+
+    /**
+     * Same range as the studio slider (0–72). Default 0 = sharp square corners.
      */
     private function publishedCardRadius($value): int
     {
         if ($value === null || $value === '') {
-            return 16;
+            return 0;
         }
         $radius = (int) $value;
         if ($radius < 0) {
-            return 16;
+            return 0;
         }
         if ($radius === 0) {
             return 0;
@@ -1637,35 +1825,84 @@ class AppHomePageModel
         if ($staticUi === '' && !array_key_exists('showWelcome', $theme)) {
             $theme['showWelcome'] = true;
         }
+
+        // Every account: 1x1 cells are square. Radius only changes corner roundness.
+        $theme = $this->applySquareTilesTheme($theme);
+
         $explicitRadii = array();
         if (isset($layout['cards']) && is_array($layout['cards'])) {
-            foreach ($layout['cards'] as $card) {
-                if (!is_array($card) || !array_key_exists('borderRadius', $card)) {
+            foreach ($layout['cards'] as $i => $card) {
+                if (!is_array($card)) {
                     continue;
                 }
-                if ($card['borderRadius'] === null || $card['borderRadius'] === '') {
+                // New / missing radius defaults to sharp square corners (0).
+                if (!array_key_exists('borderRadius', $card) || $card['borderRadius'] === null || $card['borderRadius'] === '') {
+                    $layout['cards'][$i]['borderRadius'] = $this->publishedCardRadius($theme['cardBorderRadius'] ?? 0);
+                    $explicitRadii[] = (int) $layout['cards'][$i]['borderRadius'];
                     continue;
                 }
                 $explicitRadii[] = $this->publishedCardRadius($card['borderRadius']);
+                $layout['cards'][$i]['borderRadius'] = $explicitRadii[count($explicitRadii) - 1];
             }
         }
-        $allSquare = $explicitRadii !== array();
+        $allSharp = $explicitRadii !== array();
         foreach ($explicitRadii as $radius) {
             if ($radius !== 0) {
-                $allSquare = false;
+                $allSharp = false;
                 break;
             }
         }
-        // Tile radius 0 must win over the theme default of 16/20.
-        $theme['cardBorderRadius'] = $allSquare
+        // Sharp corners (0) win; otherwise keep theme radius (default 0 for all accounts).
+        $theme['cardBorderRadius'] = $allSharp
             ? 0
-            : $this->publishedCardRadius($theme['cardBorderRadius'] ?? 16);
+            : $this->publishedCardRadius($theme['cardBorderRadius'] ?? 0);
         $layout['theme'] = $theme;
         if ($staticUi === '') {
             $layout['homeTemplate'] = (string) ($theme['homeTemplate'] ?? ($layout['homeTemplate'] ?? 'default'));
         }
 
         return $layout;
+    }
+
+    /**
+     * Force square 1x1 phone cells for every account (column width ≈ row height).
+     * Corner roundness is controlled only by cardBorderRadius / per-card borderRadius.
+     *
+     * @param array<string, mixed> $theme
+     * @return array<string, mixed>
+     */
+    private function applySquareTilesTheme(array $theme): array
+    {
+        // Always on for every account — 1x1 cells stay square; radius only changes corners.
+        $theme['squareTiles'] = true;
+        $cols = (int) ($theme['gridColumns'] ?? 3);
+        if ($cols < 1) {
+            $cols = 1;
+        }
+        if ($cols > 12) {
+            $cols = 12;
+        }
+        $gap = (int) ($theme['gridGap'] ?? 4);
+        if ($gap < 0) {
+            $gap = 0;
+        }
+        if ($gap > 24) {
+            $gap = 24;
+        }
+        // Match Flutter phone design width used in schema (~360dp).
+        $square = (int) round((360 - ($gap * max(0, $cols - 1))) / $cols);
+        if ($square < 40) {
+            $square = 40;
+        }
+        if ($square > 160) {
+            $square = 160;
+        }
+        $theme['gridRowHeight'] = $square;
+        if (!array_key_exists('cardBorderRadius', $theme) || $theme['cardBorderRadius'] === null || $theme['cardBorderRadius'] === '') {
+            $theme['cardBorderRadius'] = 0;
+        }
+
+        return $theme;
     }
 
     public function saveSchema(int $userId, array $schema): bool
@@ -2008,25 +2245,26 @@ class AppHomePageModel
 
     private function ensureTable(): void
     {
-        $sql = "
-            CREATE TABLE IF NOT EXISTS `app_home_page_settings` (
-                `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-                `user_id` INT UNSIGNED NOT NULL,
-                `layout_json` LONGTEXT NULL,
-                `schema_json` LONGTEXT NULL,
-                `schema_version` VARCHAR(32) NOT NULL DEFAULT '1.0.0',
-                `created_at` DATETIME NULL,
-                `updated_at` DATETIME NULL,
-                PRIMARY KEY (`id`),
-                UNIQUE KEY `user_id` (`user_id`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        ";
+        $sql = <<<'SQL'
+CREATE TABLE IF NOT EXISTS `app_home_page_settings` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `user_id` INT UNSIGNED NOT NULL,
+    `layout_json` LONGTEXT NULL,
+    `schema_json` LONGTEXT NULL,
+    `schema_version` VARCHAR(32) NOT NULL DEFAULT '1.0.0',
+    `created_at` DATETIME NULL,
+    `updated_at` DATETIME NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+SQL;
 
         if (!$this->db->query($sql)) {
             log_message('error', 'Failed to ensure app_home_page_settings table exists.');
         }
 
         $this->ensureMediaTable();
+        $this->ensureHelpFeedbackTable();
     }
 
     public function recordFaceImage(
@@ -2066,22 +2304,22 @@ class AppHomePageModel
 
     private function ensureMediaTable(): void
     {
-        $sql = "
-            CREATE TABLE IF NOT EXISTS `app_home_page_media` (
-                `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-                `user_id` INT UNSIGNED NOT NULL,
-                `card_id` VARCHAR(128) NULL,
-                `face_index` TINYINT UNSIGNED NULL,
-                `file_name` VARCHAR(255) NOT NULL,
-                `file_path` VARCHAR(512) NOT NULL,
-                `public_url` VARCHAR(512) NOT NULL,
-                `mime_type` VARCHAR(64) NULL,
-                `file_size` INT UNSIGNED NULL,
-                `created_at` DATETIME NULL,
-                PRIMARY KEY (`id`),
-                KEY `idx_user_id` (`user_id`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        ";
+        $sql = <<<'SQL'
+CREATE TABLE IF NOT EXISTS `app_home_page_media` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `user_id` INT UNSIGNED NOT NULL,
+    `card_id` VARCHAR(128) NULL,
+    `face_index` TINYINT UNSIGNED NULL,
+    `file_name` VARCHAR(255) NOT NULL,
+    `file_path` VARCHAR(512) NOT NULL,
+    `public_url` VARCHAR(512) NOT NULL,
+    `mime_type` VARCHAR(64) NULL,
+    `file_size` INT UNSIGNED NULL,
+    `created_at` DATETIME NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+SQL;
 
         if (!$this->db->query($sql)) {
             log_message('error', 'Failed to ensure app_home_page_media table exists.');
@@ -2119,5 +2357,175 @@ class AppHomePageModel
             'mime_type' => $row['mime_type'] ?? '',
             'file_data' => $fileData,
         );
+    }
+
+    /**
+     * Star labels stored with an Account rating.
+     * The typed comment is saved as the user wrote it.
+     *
+     * @return array
+     */
+    public function helpFeedbackCatalog(): array
+    {
+        return array(
+            'areas' => array(
+                'home' => 'Home screen',
+                'profile' => 'Profile and account',
+                'photo' => 'Profile photo',
+                'devices' => 'IoT devices',
+                'grid' => 'Grid',
+                'notifications' => 'Notifications',
+                'appearance' => 'Appearance',
+                'login' => 'Login and security',
+                'performance' => 'Speed or crashes',
+                'other' => 'Something else',
+            ),
+            'comments' => array(
+                'blank' => 'The screen does not load. It stays blank, on a spinner, or shows an error.',
+                'tap' => 'I tap a button, menu, or card and nothing happens.',
+                'wrong' => 'The information is wrong. The name, photo, number, or status is not correct.',
+                'photo' => 'My profile photo does not appear, or it is an old or placeholder image.',
+                'crash' => 'The app is slow, freezes, or closes by itself.',
+                'other' => 'Something else is wrong in this area and needs a closer look.',
+            ),
+            'when' => array(
+                'now' => 'It just happened for the first time.',
+                'today' => 'It started today. It was working before.',
+                'always' => 'It happens every time I open this.',
+                'sometimes' => 'It happens sometimes, then it works again.',
+            ),
+            'ratings' => array(
+                1 => 'Blocked - I cannot complete what I came to do.',
+                2 => 'Poor - Hard to use. I had to stop.',
+                3 => 'Okay - I can continue, but something is wrong.',
+                4 => 'Good - Usable, with a minor issue.',
+                5 => 'Excellent - Only a small note.',
+            ),
+        );
+    }
+
+    /**
+     * @param array $input
+     * @param array $profile
+     * @return array
+     */
+    public function saveHelpFeedback(int $userId, array $input, array $profile): array
+    {
+        if ($userId <= 0) {
+            return array('success' => false, 'message' => 'Not signed in');
+        }
+
+        $catalog = $this->helpFeedbackCatalog();
+        $ratings = isset($catalog['ratings']) && is_array($catalog['ratings']) ? $catalog['ratings'] : array();
+        $rating = (int) ($input['rating'] ?? 0);
+        $comment = trim(strip_tags((string) ($input['comment'] ?? $input['note'] ?? '')));
+        if (function_exists('mb_substr')) {
+            $comment = mb_substr($comment, 0, 2000);
+        } else {
+            $comment = substr($comment, 0, 2000);
+        }
+
+        if ($rating < 1 || $rating > 5 || !isset($ratings[$rating])) {
+            return array('success' => false, 'message' => 'Select a star rating from 1 to 5.');
+        }
+        if ($comment === '') {
+            return array('success' => false, 'message' => 'Write a comment about the issue.');
+        }
+
+        $this->ensureHelpFeedbackTable();
+        $since = date('Y-m-d H:i:s', time() - 86400);
+        $recent = $this->db->table('app_home_help_feedback')
+            ->where('user_id', $userId)
+            ->where('created_at >=', $since)
+            ->countAllResults();
+        if ($recent >= 20) {
+            return array(
+                'success' => false,
+                'message' => 'You have already sent several reports today. Please try again tomorrow.',
+            );
+        }
+
+        $ratingLabel = (string) $ratings[$rating];
+        $reportText = 'Rating: ' . $rating . '/5 (' . $ratingLabel . ')' . "\n" . 'Comment: ' . $comment;
+
+        $now = date('Y-m-d H:i:s');
+        $memberId = isset($profile['memberId']) ? trim((string) $profile['memberId']) : '';
+        $userName = isset($profile['name']) ? trim((string) $profile['name']) : '';
+        $email = isset($profile['email']) ? trim((string) $profile['email']) : '';
+        $phone = isset($profile['phone']) ? trim((string) $profile['phone']) : '';
+        if (function_exists('mb_substr')) {
+            $memberId = mb_substr($memberId, 0, 64);
+            $userName = mb_substr($userName, 0, 191);
+            $email = mb_substr($email, 0, 191);
+            $phone = mb_substr($phone, 0, 32);
+        } else {
+            $memberId = substr($memberId, 0, 64);
+            $userName = substr($userName, 0, 191);
+            $email = substr($email, 0, 191);
+            $phone = substr($phone, 0, 32);
+        }
+
+        $inserted = $this->db->table('app_home_help_feedback')->insert(array(
+            'user_id' => $userId,
+            'member_id' => $memberId,
+            'user_name' => $userName,
+            'email' => $email,
+            'phone' => $phone,
+            'issue_area' => 'rating',
+            'issue_label' => 'App rating',
+            'rating' => $rating,
+            'comment_id' => 'message',
+            'comment' => $comment,
+            'happened_when' => 'unspecified',
+            'when_label' => '',
+            'note' => $comment,
+            'report_text' => $reportText,
+            'created_at' => $now,
+        ));
+        if (!$inserted) {
+            $error = $this->db->error();
+            log_message('error', 'Help feedback insert failed: ' . ($error['message'] ?? 'unknown'));
+
+            return array('success' => false, 'message' => 'Could not save your report. Please try again.');
+        }
+
+        return array(
+            'success' => true,
+            'message' => 'Thanks. Your rating was sent.',
+            'id' => (int) $this->db->insertID(),
+        );
+    }
+
+    private function ensureHelpFeedbackTable(): void
+    {
+        $sql = <<<'SQL'
+CREATE TABLE IF NOT EXISTS `app_home_help_feedback` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `user_id` INT UNSIGNED NOT NULL,
+    `member_id` VARCHAR(64) NULL,
+    `user_name` VARCHAR(191) NULL,
+    `email` VARCHAR(191) NULL,
+    `phone` VARCHAR(32) NULL,
+    `issue_area` VARCHAR(64) NOT NULL,
+    `issue_label` VARCHAR(191) NOT NULL,
+    `rating` TINYINT UNSIGNED NOT NULL,
+    `comment_id` VARCHAR(64) NOT NULL,
+    `comment` TEXT NOT NULL,
+    `happened_when` VARCHAR(64) NOT NULL,
+    `when_label` VARCHAR(255) NOT NULL,
+    `note` TEXT NULL,
+    `report_text` TEXT NOT NULL,
+    `created_at` DATETIME NOT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_help_user` (`user_id`),
+    KEY `idx_help_area` (`issue_area`),
+    KEY `idx_help_rating` (`rating`),
+    KEY `idx_help_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+SQL;
+
+        if (!$this->db->query($sql)) {
+            log_message('error', 'Failed to ensure app_home_help_feedback table exists.');
+        }
     }
 }

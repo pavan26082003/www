@@ -437,7 +437,7 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
                             <label><input type="checkbox" id="toolShowAlerts" <?= ($layout['theme']['showAlerts'] ?? true) !== false ? 'checked' : '' ?>> Show alerts strip</label>
                         </div>
                         <div class="ahp-field ahp-check-field">
-                            <label><input type="checkbox" id="toolShowBottomNav" <?= !empty($layout['theme']['showBottomNav']) ? 'checked' : '' ?>> Show bottom navigation</label>
+                            <label><input type="checkbox" id="toolShowBottomNav" <?= ($layout['theme']['showBottomNav'] ?? true) !== false ? 'checked' : '' ?>> Show bottom navigation</label>
                         </div>
                         <div class="ahp-style-section-title" style="margin-top:14px">Alerts strip</div>
                         <div class="ahp-field">

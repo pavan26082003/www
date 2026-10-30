@@ -33,7 +33,11 @@ class GridWebSso
                 helper('url');
                 $url = site_url($path);
                 if (is_string($url) && trim($url) !== '') {
-                    return self::canonicalizePublicUrl(rtrim($url, '/'));
+                    $url = self::canonicalizePublicUrl(rtrim($url, '/'));
+                    // Reject URLs rooted on standalone API scripts (JSON, not HTML pages).
+                    if (!preg_match('#/(?:v8/)?(?:api_creation|grid_api_creation|iot_api_creation)\.php(?=/|\?|$)#i', $url)) {
+                        return $url;
+                    }
                 }
             } catch (\Throwable $e) {
                 // fall through to host-based URL
