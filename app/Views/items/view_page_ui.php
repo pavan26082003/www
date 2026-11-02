@@ -183,24 +183,25 @@ unset($page);
 
 $pages = array_values($pages);
 
+// Default matches Design Studio "Dark" preset (aligned with App Home dark UI).
 $default_ui_theme = [
-    'themeMode' => 'pro',
+    'themeMode' => 'dark',
     'backgroundType' => 'gradient',
-    'backgroundColor' => '#F8FAFC',
-    'gradientColor' => '#EEF2F7',
-    'shellColor' => '#F8FAFC',
-    'cardColor' => '#FFFFFF',
-    'textColor' => '#0F172A',
-    'mutedTextColor' => '#64748B',
-    'topbarColor' => '#0F172A',
-    'accentColor' => '#2563EB',
-    'secondaryColor' => '#94A3B8',
-    'toggleOnColor' => '#2563EB',
-    'toggleOffColor' => '#CBD5E1',
+    'backgroundColor' => '#0B1220',
+    'gradientColor' => '#111827',
+    'shellColor' => '#0F172A',
+    'cardColor' => '#1E293B',
+    'textColor' => '#F8FAFC',
+    'mutedTextColor' => '#94A3B8',
+    'topbarColor' => '#020617',
+    'accentColor' => '#60A5FA',
+    'secondaryColor' => '#64748B',
+    'toggleOnColor' => '#60A5FA',
+    'toggleOffColor' => '#475569',
     'iconStyle' => 'signal',
     'parameterIcon' => 'gauge',
     'parameterIcons' => [],
-    'fontFamily' => 'Inter',
+    'fontFamily' => 'Plus Jakarta Sans',
     'fontSize' => 15,
     'fontWeight' => 500,
     'letterSpacing' => -0.2,
@@ -211,17 +212,17 @@ $default_ui_theme = [
     'successColor' => '#10B981',
     'warningColor' => '#F59E0B',
     'errorColor' => '#EF4444',
-    'iconSize' => 18,
-    'iconColor' => '#2563EB',
+    'iconSize' => 22,
+    'iconColor' => '#60A5FA',
     'headerHeight' => 72,
     'headerText' => '',
     'headerAlignment' => 'left',
     'showHeaderIcons' => '1',
     'showStatus' => '1',
     'borderSize' => 1,
-    'borderColor' => '#E2E8F0',
+    'borderColor' => '#334155',
     'borderRadius' => 16,
-    'shadowStrength' => 42,
+    'shadowStrength' => 50,
     'cardBlur' => 0,
     'pagePadding' => 16,
     'cardPadding' => 14,
@@ -248,12 +249,101 @@ $default_ui_theme = [
 ];
 
 $saved_ui_theme = !empty($ui_theme['theme']) && is_array($ui_theme['theme']) ? $ui_theme['theme'] : [];
-$active_ui_theme = array_merge($default_ui_theme, $saved_ui_theme);
+$saved_theme_mode = strtolower(trim((string) ($saved_ui_theme['themeMode'] ?? '')));
+// Light palette used when an explicit Light theme is saved (does not affect Dark).
+$light_ui_theme_defaults = [
+    'themeMode' => 'light',
+    'backgroundType' => 'gradient',
+    'backgroundColor' => '#F8FAFC',
+    'gradientColor' => '#EEF2F7',
+    'shellColor' => '#F8FAFC',
+    'cardColor' => '#FFFFFF',
+    'textColor' => '#0F172A',
+    'mutedTextColor' => '#64748B',
+    'topbarColor' => '#FFFFFF',
+    'accentColor' => '#2563EB',
+    'secondaryColor' => '#94A3B8',
+    'toggleOnColor' => '#2563EB',
+    'toggleOffColor' => '#CBD5E1',
+    'buttonBgColor' => '#2563EB',
+    'buttonTextColor' => '#FFFFFF',
+    'iconColor' => '#2563EB',
+    'borderColor' => '#E2E8F0',
+    'shadowStrength' => 42,
+];
+// Legacy Factory Pro (`pro` / empty) stays migrated to Dark.
+// Explicit `light` now persists so Studio Light survives reload without touching Dark/Ocean/Nature/Glass.
+if ($saved_theme_mode === '' || $saved_theme_mode === 'pro') {
+    $preserve_keys = [
+        'parameterIcons', 'componentOverrides', 'controlOrder', 'pageTypography',
+        'nodeId', 'headerText', 'headerAlignment', 'showHeaderIcons', 'showStatus',
+        'brandVisible', 'heroVisible', 'footerVisible', 'pageNavigatorVisible',
+        'nameCardVisible', 'deviceMode', 'pageType', 'headerStyle', 'iconStyle',
+        'parameterIcon', 'fontFamily', 'fontSize', 'fontWeight', 'letterSpacing',
+        'lineHeight', 'textAlign', 'buttonText', 'buttonSize', 'buttonRadius',
+        'buttonHover', 'buttonIconPosition', 'buttonTarget', 'pagePadding',
+        'cardPadding', 'cardMargin', 'cardSpacing', 'borderRadius', 'borderSize',
+        'headerHeight', 'cardBlur', 'shadowStrength',
+    ];
+    $active_ui_theme = $default_ui_theme;
+    foreach ($preserve_keys as $preserve_key) {
+        if (array_key_exists($preserve_key, $saved_ui_theme)) {
+            $active_ui_theme[$preserve_key] = $saved_ui_theme[$preserve_key];
+        }
+    }
+} elseif ($saved_theme_mode === 'light') {
+    $active_ui_theme = array_merge($default_ui_theme, $light_ui_theme_defaults, $saved_ui_theme);
+    $active_ui_theme['themeMode'] = 'light';
+} else {
+    $active_ui_theme = array_merge($default_ui_theme, $saved_ui_theme);
+}
+// Soft-upgrade undersized icons so older themes look clearer without a Studio resave.
+if ((int) ($active_ui_theme['iconSize'] ?? 0) > 0 && (int) $active_ui_theme['iconSize'] <= 18) {
+    $active_ui_theme['iconSize'] = 22;
+}
+// Soft-upgrade legacy preview fonts to Plus Jakarta Sans for the full view-page UI.
+$legacy_ui_fonts = ['inter', 'poppins', 'dm sans', 'roboto', 'segoe ui', 'arial', ''];
+$active_font_family = strtolower(trim((string) ($active_ui_theme['fontFamily'] ?? '')));
+if (in_array($active_font_family, $legacy_ui_fonts, true)) {
+    $active_ui_theme['fontFamily'] = 'Plus Jakarta Sans';
+}
 $is_dark_ui_theme = strtolower((string) ($active_ui_theme['themeMode'] ?? '')) === 'dark';
 $ui_input_bg = $is_dark_ui_theme ? (string) ($active_ui_theme['backgroundColor'] ?? '#0B1220') : '#FFFFFF';
 $ui_input_text = $is_dark_ui_theme ? '#FFFFFF' : '#0F172A';
 $ui_input_border = $is_dark_ui_theme ? (string) ($active_ui_theme['borderColor'] ?? '#334155') : (string) ($active_ui_theme['borderColor'] ?? '#E2E8F0');
 $ui_well_bg = $is_dark_ui_theme ? '#111827' : '#F1F5F9';
+// Header chrome for first paint (matches Light/Dark mock; JS applyTheme keeps it in sync).
+$ui_theme_mode = strtolower(trim((string) ($active_ui_theme['themeMode'] ?? '')));
+$ui_page_bg = (string) ($active_ui_theme['backgroundColor'] ?? '#F8FAFC');
+$ui_prefer_light_header = in_array($ui_theme_mode, ['light', 'pro', 'ocean'], true) || !$is_dark_ui_theme;
+$ui_configured_topbar = (string) ($active_ui_theme['topbarColor'] ?? '#0F172A');
+$ui_header_bg = $ui_configured_topbar;
+$ui_topbar_hex = strtoupper(preg_replace('/[^0-9A-F]/i', '', $ui_configured_topbar));
+if (strlen($ui_topbar_hex) === 6) {
+    $ui_topbar_lum = (0.299 * hexdec(substr($ui_topbar_hex, 0, 2)))
+        + (0.587 * hexdec(substr($ui_topbar_hex, 2, 2)))
+        + (0.114 * hexdec(substr($ui_topbar_hex, 4, 2)));
+    if ($ui_prefer_light_header && $ui_topbar_lum < 160) {
+        $ui_header_bg = (string) ($active_ui_theme['shellColor'] ?? ($ui_page_bg !== '' ? $ui_page_bg : '#FFFFFF'));
+    } else {
+        $ui_header_bg = '#' . $ui_topbar_hex;
+    }
+}
+$ui_header_hex = strtoupper(preg_replace('/[^0-9A-F]/i', '', $ui_header_bg));
+$ui_header_is_dark = true;
+if (strlen($ui_header_hex) === 6) {
+    $ui_header_lum = (0.299 * hexdec(substr($ui_header_hex, 0, 2)))
+        + (0.587 * hexdec(substr($ui_header_hex, 2, 2)))
+        + (0.114 * hexdec(substr($ui_header_hex, 4, 2)));
+    $ui_header_is_dark = $ui_header_lum < 160;
+} elseif ($ui_prefer_light_header) {
+    $ui_header_is_dark = false;
+}
+$ui_header_fg = $ui_header_is_dark ? '#FFFFFF' : (string) ($active_ui_theme['textColor'] ?? '#0F172A');
+$ui_header_device = (string) ($active_ui_theme['accentColor'] ?? ($ui_header_is_dark ? '#60A5FA' : '#3B82F6'));
+$ui_header_chip_bg = $ui_header_is_dark ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.06)';
+$ui_header_chip_bg_hover = $ui_header_is_dark ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.10)';
+$ui_header_chip_fg = $ui_header_fg;
 $saved_ui_schema = !empty($ui_theme['schema']) && is_array($ui_theme['schema']) ? $ui_theme['schema'] : [];
 
 $saved_schema_node_id = '';
@@ -271,40 +361,104 @@ if ($saved_schema_node_id !== '' && strcasecmp($saved_schema_node_id, (string) (
 $v8_schema_api_base = base_url('v8/api_schema.php');
 $legacy_v8_scan_api_base = 'https://efactor.tech/v8/api_scan.php';
 
-$incoming_brand_logo = (isset($brand_logo_asset) && is_array($brand_logo_asset)) ? $brand_logo_asset : [];
-if (!empty($incoming_brand_logo['url'])) {
-    $brand_logo_asset = $incoming_brand_logo;
-    if (empty($brand_logo_asset['previewUrl'])) {
-        $brand_logo_asset['previewUrl'] = $brand_logo_asset['url'];
-    }
-    if (empty($brand_logo_asset['alt'])) {
-        $brand_logo_asset['alt'] = 'Brand';
-    }
-    $brand_logo_preview_url = $brand_logo_asset['previewUrl'];
-} else {
-    $brand_logo_file = 'Logo_new.png';
-    $brand_logo_dir = rtrim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''), '/\\') . DIRECTORY_SEPARATOR . 'files' . DIRECTORY_SEPARATOR . 'home';
-    foreach (['Logo_new.png', 'Logo_new.jpeg', 'logo_new.png', 'logo_new.jpeg'] as $brand_logo_candidate) {
-        if (is_file($brand_logo_dir . DIRECTORY_SEPARATOR . $brand_logo_candidate)) {
-            $brand_logo_file = $brand_logo_candidate;
-            break;
+if (!function_exists('view_ui_brand_logo_local_file_exists')) {
+    /**
+     * True when a brand logo URL/path maps to a readable file under DOCUMENT_ROOT.
+     * Remote absolute URLs (other hosts) are treated as available.
+     */
+    function view_ui_brand_logo_local_file_exists($urlOrPath)
+    {
+        $value = trim((string) $urlOrPath);
+        if ($value === '') {
+            return false;
         }
+        $docRoot = rtrim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''), '/\\');
+        $path = $value;
+        if (preg_match('#^https?://#i', $value)) {
+            $host = strtolower((string) (parse_url($value, PHP_URL_HOST) ?: ''));
+            $path = (string) (parse_url($value, PHP_URL_PATH) ?: '');
+            $localHost = strtolower((string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+            $isLocalHost = $host === ''
+                || $host === 'localhost'
+                || $host === '127.0.0.1'
+                || $host === strtolower(preg_replace('/:\\d+$/', '', $localHost));
+            if (!$isLocalHost) {
+                return true;
+            }
+        }
+        $rel = ltrim(str_replace('\\', '/', $path), '/');
+        if ($rel === '' || $docRoot === '') {
+            return false;
+        }
+        // Strip a leading app/ segment when DOCUMENT_ROOT already is the web root.
+        $candidates = [$docRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $rel)];
+        if (stripos($rel, 'app/') === 0) {
+            $candidates[] = $docRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, substr($rel, 4));
+        }
+
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate)) {
+                return true;
+            }
+        }
+
+        return false;
     }
-    $brand_logo_path = 'files/home/' . $brand_logo_file;
-    $brand_logo_url = rtrim((string) base_url(), '/') . '/' . $brand_logo_path;
-    $brand_logo_mtime = is_file($brand_logo_dir . DIRECTORY_SEPARATOR . $brand_logo_file)
-        ? (int) filemtime($brand_logo_dir . DIRECTORY_SEPARATOR . $brand_logo_file)
-        : 0;
-    $brand_logo_preview_url = $brand_logo_url . ($brand_logo_mtime ? ('?v=' . $brand_logo_mtime) : '');
-    $brand_logo_asset = [
-        'fileName' => $brand_logo_file,
-        'path' => '/' . $brand_logo_path,
-        'url' => $brand_logo_url,
-        'previewUrl' => $brand_logo_preview_url,
-        'alt' => 'Efactor',
-        'source' => 'files/home',
-    ];
 }
+
+if (!function_exists('view_ui_resolve_brand_logo_asset')) {
+    /**
+     * Brand strip uses the official E-FACTOR logo URL (local + server).
+     * Product-specific brand logos from API/vendor still win when present and valid.
+     */
+    function view_ui_resolve_brand_logo_asset(array $incoming = [])
+    {
+        $efactorLogo = 'https://efactor.tech/assets/images/efactor-logo.jpg';
+        $incomingUrl = trim((string) ($incoming['url'] ?? ($incoming['previewUrl'] ?? '')));
+        $incomingName = strtolower((string) ($incoming['fileName'] ?? basename(parse_url($incomingUrl, PHP_URL_PATH) ?: '')));
+        $isGenericPlaceholder = $incomingUrl === ''
+            || stripos($incomingUrl, 'Logo_new') !== false
+            || stripos($incomingUrl, 'logo_new') !== false
+            || stripos($incomingUrl, 'efactor_brand') !== false
+            || stripos($incomingUrl, 'efactIMG') !== false
+            || $incomingName === 'logo_new.png'
+            || $incomingName === 'logo_new.jpeg'
+            || $incomingName === 'logo_new.jpg'
+            || $incomingName === 'efactor-logo.jpg'
+            || $incomingName === 'efactor_brand.jpg'
+            || $incomingName === 'efactimg.png';
+
+        // Keep a real product/vendor brand when it is not the generic E-FACTOR placeholder.
+        if (!$isGenericPlaceholder && $incomingUrl !== '' && view_ui_brand_logo_local_file_exists($incomingUrl)) {
+            $asset = $incoming;
+            if (empty($asset['previewUrl'])) {
+                $asset['previewUrl'] = $incomingUrl;
+            }
+            if (empty($asset['url'])) {
+                $asset['url'] = $incomingUrl;
+            }
+            if (empty($asset['alt'])) {
+                $asset['alt'] = 'Brand';
+            }
+
+            return $asset;
+        }
+
+        return [
+            'fileName' => 'efactor-logo.jpg',
+            'path' => '/assets/images/efactor-logo.jpg',
+            'url' => $efactorLogo,
+            'previewUrl' => $efactorLogo,
+            'alt' => 'Efactor',
+            'source' => 'cdn',
+        ];
+    }
+}
+
+$brand_logo_asset = view_ui_resolve_brand_logo_asset(
+    (isset($brand_logo_asset) && is_array($brand_logo_asset)) ? $brand_logo_asset : []
+);
+$brand_logo_preview_url = (string) ($brand_logo_asset['previewUrl'] ?? ($brand_logo_asset['url'] ?? ''));
 $request_for_view = service('request');
 $active_scan_username = trim((string) ($request_for_view ? $request_for_view->getGet('username') : ''));
 if ($active_scan_username === '') {
@@ -1046,49 +1200,305 @@ if (!function_exists('view_ui_resolve_component_value')) {
     }
 }
 
+if (!function_exists('view_ui_match_icon_keyword_rules')) {
+    /**
+     * Match FontAwesome catalog icons from a keyword haystack.
+     * Returns '' when nothing matched (caller may try another haystack / type fallback).
+     */
+    function view_ui_match_icon_keyword_rules($name)
+    {
+        $raw = strtolower(trim((string) $name));
+        $hay = preg_replace('/[^a-z0-9]+/', ' ', $raw);
+        $hay = trim(preg_replace('/\s+/', ' ', (string) $hay));
+        $compact = str_replace(' ', '', $hay);
+        if ($hay === '') {
+            return '';
+        }
+
+        // Field/value keywords first. Keep "power" last so a parent group named
+        // POWER does not stamp every child (speed/led/name) with bolt.
+        $rules = [
+            ['icon' => 'check-circle', 'needles' => ['get status', 'getstatus', 'command get']],
+            ['icon' => 'info', 'needles' => ['health', 'diagnostics'], 'word' => ['status', 'info']],
+            // Fan / airflow before generic "speed" so "Fan Speed" does not become gauge.
+            ['icon' => 'fan', 'needles' => ['fan', 'blower', 'ventilat']],
+            ['icon' => 'air-flow', 'needles' => ['airflow', 'air flow', 'air speed']],
+            ['icon' => 'gauge', 'needles' => ['speed', 'pwm', 'rpm', 'throttle']],
+            ['icon' => 'move', 'needles' => ['direction', 'forward', 'backward', 'clockwise', 'anticlock']],
+            ['icon' => 'palette', 'needles' => ['led color', 'led colour', 'color', 'colour', 'hue', 'color wheel']],
+            ['icon' => 'lightbulb', 'needles' => ['light', 'lamp', 'bulb'], 'word' => ['led']],
+            ['icon' => 'motor', 'needles' => ['motor', 'drive', 'actuator']],
+            ['icon' => 'sliders', 'needles' => ['preset', 'level', 'range']],
+            ['icon' => 'refresh-cw', 'needles' => ['cycle', 'rotate', 'oscillat', 'reverse', 'auto rev', 'autorev', 'mode reg']],
+            ['icon' => 'clock', 'needles' => ['timeout', 'timer', 'delay', 'schedule', 'duration', 'countdown']],
+            ['icon' => 'sun', 'needles' => ['brightness', 'dimmer', 'lumen']],
+            ['icon' => 'thermometer', 'needles' => ['cct', 'color temp', 'colortemp', 'temp', 'thermal', 'heat']],
+            ['icon' => 'aperture', 'needles' => ['saturation', 'chroma']],
+            ['icon' => 'snow-flake', 'needles' => ['cool', 'cold', 'freeze']],
+            ['icon' => 'humidity', 'needles' => ['humid', 'moisture']],
+            ['icon' => 'droplet', 'needles' => ['water', 'liquid', 'fluid']],
+            ['icon' => 'wifi', 'needles' => ['wifi', 'wlan', 'ssid', 'rssi']],
+            ['icon' => 'signal', 'needles' => ['network', 'signal', 'connectivity']],
+            ['icon' => 'bluetooth', 'needles' => ['bluetooth', 'ble']],
+            ['icon' => 'lock', 'needles' => ['lock', 'password', 'secure', 'pin']],
+            ['icon' => 'settings', 'needles' => ['setting', 'config', 'setup', 'calibrat']],
+            ['icon' => 'cpu', 'needles' => ['device name', 'node name', 'device id', 'smart fan', 'device'], 'word' => ['name'], 'exact' => ['name', 'device']],
+            ['icon' => 'file', 'needles' => ['parameter', 'register', 'hex addr', 'hex', 'addr', 'frame'], 'word' => ['param', 'reg']],
+            ['icon' => 'code', 'needles' => ['cmd', 'console', 'terminal']],
+            ['icon' => 'edit', 'needles' => ['enter text', 'textbox', 'input']],
+            ['icon' => 'play', 'needles' => ['execute', 'run', 'start']],
+            ['icon' => 'zap', 'needles' => ['command', 'trigger']],
+            ['icon' => 'bell', 'needles' => ['notification', 'alarm', 'alert', 'toast']],
+            ['icon' => 'menu', 'needles' => ['dropdown', 'drop down', 'select', 'option']],
+            ['icon' => 'eye', 'needles' => ['display', 'monitor', 'view', 'readout']],
+            ['icon' => 'plug', 'needles' => ['plug', 'socket', 'outlet']],
+            ['icon' => 'volume-2', 'needles' => ['volume', 'sound', 'audio', 'mute']],
+            ['icon' => 'battery', 'needles' => ['battery', 'charge']],
+            ['icon' => 'radio', 'needles' => ['sensor', 'probe', 'telemetry']],
+            ['icon' => 'target', 'needles' => ['target', 'focus', 'aim']],
+            ['icon' => 'bolt', 'needles' => ['system power', 'power supply', 'mains power', 'electric', 'voltage', 'watt', 'energy', 'relay'], 'word' => ['power']],
+        ];
+
+        foreach ($rules as $rule) {
+            foreach ($rule['needles'] as $needle) {
+                if ($needle !== '' && strpos($hay, $needle) !== false) {
+                    return $rule['icon'];
+                }
+            }
+            if (!empty($rule['exact']) && is_array($rule['exact'])) {
+                foreach ($rule['exact'] as $exact) {
+                    if ($hay === $exact || $compact === str_replace(' ', '', $exact)) {
+                        return $rule['icon'];
+                    }
+                }
+            }
+            if (!empty($rule['word']) && is_array($rule['word'])) {
+                foreach ($rule['word'] as $word) {
+                    if ($word !== '' && preg_match('/\b' . preg_quote($word, '/') . '\b/', $hay)) {
+                        return $rule['icon'];
+                    }
+                }
+            }
+        }
+
+        return '';
+    }
+}
+
+if (!function_exists('view_ui_icon_hint_is_noise')) {
+    /**
+     * True when a hint is only UI-type / numeric noise (e.g. "Text 00 button").
+     */
+    function view_ui_icon_hint_is_noise($name)
+    {
+        $raw = strtolower(trim((string) $name));
+        $hay = preg_replace('/[^a-z0-9]+/', ' ', $raw);
+        $hay = trim(preg_replace('/\s+/', ' ', (string) $hay));
+        if ($hay === '') {
+            return true;
+        }
+        $noise = [
+            'text', 'button', 'push', 'toggle', 'switch', 'slider', 'dropdown', 'select',
+            'display', 'trigger', 'command', 'response', 'error', 'data', 'cmd', 'console',
+            'entertext', 'textfield', 'notification', 'auto', 'ui', 'api', 'value', 'none',
+            'read', 'write', 'readonly', 'hex', 'byte', 'frame',
+        ];
+        $tokens = preg_split('/\s+/', $hay) ?: [];
+        foreach ($tokens as $token) {
+            if ($token === '') {
+                continue;
+            }
+            if (preg_match('/^[0-9]+$/', $token) || preg_match('/^[0-9a-f]{1,4}$/', $token)) {
+                continue;
+            }
+            if (in_array($token, $noise, true)) {
+                continue;
+            }
+            return false;
+        }
+
+        return true;
+    }
+}
+
+if (!function_exists('view_ui_suggest_param_icon')) {
+    /**
+     * Pick a distinct FontAwesome catalog icon from API / parameter keywords.
+     * Field/parameter names win over UI-type noise and parent group names (e.g. POWER).
+     * Does not change control types or protocol — UI mapping only.
+     *
+     * @param string|array $name Field hint string or prioritized hint parts.
+     */
+    function view_ui_suggest_param_icon($name, $componentType = '', $fallback = 'gauge', $groupName = '', $allowGroupFallback = true)
+    {
+        $type = strtolower(trim((string) $componentType));
+
+        // Leading/meta icons must never reuse the trailing action glyph (`power` /
+        // `power-off`). That duplicate makes users unsure which control to press.
+        $typeFallback = static function ($type, $fallback) {
+            $t = strtolower((string) $type);
+            if (strpos($t, 'brightness') !== false) {
+                return 'sun';
+            }
+            if (strpos($t, 'airflow') !== false) {
+                return 'air-flow';
+            }
+            if (strpos($t, 'cct') !== false) {
+                return 'thermometer';
+            }
+            if (strpos($t, 'saturation') !== false) {
+                return 'aperture';
+            }
+            if (strpos($t, 'hue') !== false) {
+                return 'palette';
+            }
+            if (strpos($t, 'notification') !== false) {
+                return 'bell';
+            }
+            if (strpos($t, 'dropdown') !== false || strpos($t, 'select') !== false) {
+                return 'menu';
+            }
+            if (strpos($t, 'timer') !== false) {
+                return 'clock';
+            }
+            if (strpos($t, 'toggle') !== false || strpos($t, 'switch') !== false) {
+                return 'bolt';
+            }
+            // Push/button rows keep a distinct left icon; the right control owns `power-off`.
+            if (strpos($t, 'push') !== false) {
+                return 'zap';
+            }
+            if (strpos($t, 'button') !== false) {
+                return 'play';
+            }
+            if (strpos($t, 'trigger') !== false) {
+                return 'zap';
+            }
+            if (strpos($t, 'slider') !== false || strpos($t, 'gauge') !== false) {
+                return 'sliders';
+            }
+            if (strpos($t, 'cmd') !== false || strpos($t, 'console') !== false) {
+                return 'code';
+            }
+            if (strpos($t, 'enter') !== false || strpos($t, 'textfield') !== false) {
+                return 'edit';
+            }
+            if (strpos($t, 'display') !== false || $t === 'text') {
+                return 'eye';
+            }
+            if (strpos($t, 'text') !== false) {
+                return 'file';
+            }
+            return $fallback !== '' ? $fallback : 'cpu';
+        };
+
+        $parts = is_array($name) ? $name : [$name];
+        foreach ($parts as $part) {
+            $part = trim((string) $part);
+            if ($part === '' || view_ui_icon_hint_is_noise($part)) {
+                continue;
+            }
+            $hit = view_ui_match_icon_keyword_rules($part);
+            if ($hit !== '') {
+                return $hit;
+            }
+        }
+
+        // Combined leftover (non-noise) tokens as a last field pass.
+        $combined = trim(implode(' ', array_filter(array_map('strval', $parts), static function ($part) {
+            return trim((string) $part) !== '' && !view_ui_icon_hint_is_noise($part);
+        })));
+        if ($combined !== '') {
+            $combinedHit = view_ui_match_icon_keyword_rules($combined);
+            if ($combinedHit !== '') {
+                return $combinedHit;
+            }
+        }
+
+        // Parent group names like POWER only apply when this card has no field identity
+        // (standalone / noise-only hints). Multi-field groups must not all inherit bolt.
+        if ($allowGroupFallback) {
+            $groupHit = view_ui_match_icon_keyword_rules($groupName);
+            $powerishType = strpos($type, 'toggle') !== false
+                || strpos($type, 'switch') !== false
+                || strpos($type, 'power') !== false;
+            if ($groupHit === 'bolt' && !$powerishType) {
+                $groupHit = '';
+            }
+            if ($groupHit !== '') {
+                return $groupHit;
+            }
+        }
+
+        return $typeFallback($type, $fallback);
+    }
+}
+
 if (!function_exists('view_ui_icon')) {
     function view_ui_icon($name)
     {
         $icons = [
+            'air-flow' => '<path d="M3 8h10a3 3 0 1 0-3-3"></path><path d="M3 12h16"></path><path d="M3 16h10a3 3 0 1 1-3 3"></path>',
+            'aperture' => '<circle cx="12" cy="12" r="10"></circle><path d="M14.31 8l5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="M7.38 12.5l5.74-9.94"></path><path d="M13.69 16l-5.74 9.94"></path><path d="M14.31 16h-11.48"></path><path d="M16.62 11.5l-5.74 9.94"></path>',
             'arrow-left' => '<path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path>',
             'arrow-right' => '<path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>',
-            'bolt' => '<path d="M13 2 3 14h8l-1 8 11-14h-8l1-6z"></path>',
-            'code' => '<path d="m16 18 6-6-6-6"></path><path d="m8 6-6 6 6 6"></path>',
+            'battery' => '<rect width="16" height="10" x="2" y="7" rx="2" ry="2"></rect><line x1="22" x2="20" y1="11" y2="11"></line>',
+            'bell' => '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>',
+            'bluetooth' => '<path d="m7 7 10 10-5 5V2l5 5L7 17"></path>',
+            'bolt' => '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path>',
+            'check-circle' => '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><path d="M22 4 12 14.01l-3-3"></path>',
             'chevron-left' => '<path d="m15 18-6-6 6-6"></path>',
             'chevron-right' => '<path d="m9 18 6-6-6-6"></path>',
-            'clock' => '<circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path>',
+            'clock' => '<circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>',
+            'code' => '<path d="m16 18 6-6-6-6"></path><path d="m8 6-6 6 6 6"></path>',
+            'cpu' => '<rect width="16" height="16" x="4" y="4" rx="2"></rect><path d="M9 9h6v6H9z"></path><path d="M9 1v3"></path><path d="M15 1v3"></path><path d="M9 20v3"></path><path d="M15 20v3"></path><path d="M20 9h3"></path><path d="M20 14h3"></path><path d="M1 9h3"></path><path d="M1 14h3"></path>',
             'droplet' => '<path d="M12 2.69 5.66 9.03a9 9 0 1 0 12.68 0L12 2.69z"></path>',
             'edit' => '<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>',
-            'fan' => '<path d="M10.8 14.8a3 3 0 1 0 2.4-5.6"></path><path d="M12 12c-2-4-2-7 0-9 3 2 3 5 0 9Z"></path><path d="M12 12c4-2 7-2 9 0-2 3-5 3-9 0Z"></path><path d="M12 12c2 4 2 7 0 9-3-2-3-5 0-9Z"></path><path d="M12 12c-4 2-7 2-9 0 2-3 5-3 9 0Z"></path>',
-            'file' => '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path>',
+            'eye' => '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>',
+            'fan' => '<path d="M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0"></path><path d="M12 10c-1.6-3.8-.8-6.7 2.4-8 2.1 3.1 1.3 5.8-2.4 8Z"></path><path d="M14 12c3.8-1.6 6.7-.8 8 2.4-3.1 2.1-5.8 1.3-8-2.4Z"></path><path d="M12 14c1.6 3.8.8 6.7-2.4 8-2.1-3.1-1.3-5.8 2.4-8Z"></path><path d="M10 12c-3.8 1.6-6.7.8-8-2.4 3.1-2.1 5.8-1.3 8 2.4Z"></path>',
+            'file' => '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path>',
             'gauge' => '<path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path>',
             'heart' => '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>',
+            'humidity' => '<path d="M12 2s6 7 6 12a6 6 0 0 1-12 0c0-5 6-12 6-12Z"></path><path d="M8 14a4 4 0 0 0 8 0"></path>',
             'info' => '<circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path>',
-            'scan' => '<path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><path d="M7 12h10"></path>',
             'layers' => '<path d="m12 2 10 5-10 5L2 7l10-5z"></path><path d="m2 17 10 5 10-5"></path><path d="m2 12 10 5 10-5"></path>',
-            'link' => '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>',
             'lightbulb' => '<path d="M15 14c.2-1 .7-1.7 1.4-2.5A6 6 0 1 0 7.6 11.5C8.3 12.3 8.8 13 9 14"></path><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M10 14h4v4h-4z"></path>',
+            'link' => '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>',
             'lock' => '<rect width="18" height="11" x="3" y="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>',
-            'move' => '<path d="M12 2v20"></path><path d="m15 5-3-3-3 3"></path><path d="m15 19-3 3-3-3"></path><path d="M2 12h20"></path><path d="m5 9-3 3 3 3"></path><path d="m19 9 3 3-3 3"></path>',
-            'minus' => '<line x1="5" x2="19" y1="12" y2="12"></line>',
             'maximize' => '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>',
-            'plus' => '<line x1="12" x2="12" y1="5" y2="19"></line><line x1="5" x2="19" y1="12" y2="12"></line>',
+            'menu' => '<line x1="4" x2="20" y1="12" y2="12"></line><line x1="4" x2="20" y1="6" y2="6"></line><line x1="4" x2="20" y1="18" y2="18"></line>',
+            'minus' => '<line x1="5" x2="19" y1="12" y2="12"></line>',
+            'motor' => '<rect width="16" height="12" x="4" y="7" rx="2"></rect><path d="M8 7V5h8v2"></path><path d="M10 13h4"></path><path d="M2 11h2"></path><path d="M20 11h2"></path>',
+            'move' => '<path d="M12 2v20"></path><path d="m15 5-3-3-3 3"></path><path d="m15 19-3 3-3-3"></path><path d="M2 12h20"></path><path d="m5 9-3 3 3 3"></path><path d="m19 9 3 3-3 3"></path>',
             'palette' => '<circle cx="13.5" cy="6.5" r=".5"></circle><circle cx="17.5" cy="10.5" r=".5"></circle><circle cx="8.5" cy="7.5" r=".5"></circle><circle cx="6.5" cy="12.5" r=".5"></circle><path d="M12 2a10 10 0 0 0 0 20 2 2 0 0 0 2-2 1.5 1.5 0 0 1 1.5-1.5H17a5 5 0 0 0 5-5.3A10 10 0 0 0 12 2z"></path>',
+            'play' => '<polygon points="5 3 19 12 5 21 5 3"></polygon>',
+            'plug' => '<path d="M12 22v-5"></path><path d="M9 8V2"></path><path d="M15 8V2"></path><path d="M7 8h10v4a5 5 0 0 1-10 0V8Z"></path>',
+            'plus' => '<line x1="12" x2="12" y1="5" y2="19"></line><line x1="5" x2="19" y1="12" y2="12"></line>',
             'power' => '<path d="M12 2v10"></path><path d="M18.4 6.6a9 9 0 1 1-12.8 0"></path>',
-            'save' => '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8"></path><path d="M7 3v5h8"></path>',
-            'send' => '<line x1="22" x2="11" y1="2" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>',
-            'settings' => '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.52a2 2 0 0 1-1 1.72l-.15.1a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.52a2 2 0 0 1 1-1.72l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle>',
-            'signal' => '<path d="M2 20h.01"></path><path d="M7 20a5 5 0 0 1 10 0"></path><path d="M4 14a11 11 0 0 1 16 0"></path><path d="M2 8a16 16 0 0 1 20 0"></path>',
-            'smartphone' => '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect><path d="M12 18h.01"></path>',
-            'thermometer' => '<path d="M14 14.76V5a2 2 0 1 0-4 0v9.76a4 4 0 1 0 4 0Z"></path>',
-            'undo' => '<path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6.36 2.64L3 13"></path>',
+            'power-off' => '<path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" x2="12" y1="2" y2="12"></line>',
+            'radio' => '<circle cx="12" cy="12" r="2"></circle><path d="M4.93 19.07a10 10 0 0 1 0-14.14"></path><path d="M7.76 16.24a6 6 0 0 1 0-8.49"></path><path d="M16.24 7.76a6 6 0 0 1 0 8.49"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>',
             'redo' => '<path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64L21 13"></path>',
             'refresh' => '<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 16h5v5"></path>',
-            'wifi' => '<path d="M5 13a10 10 0 0 1 14 0"></path><path d="M8.5 16.5a5 5 0 0 1 7 0"></path><path d="M2 8.5a15 15 0 0 1 20 0"></path><path d="M12 20h.01"></path>',
+            'refresh-cw' => '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path>',
+            'save' => '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8"></path><path d="M7 3v5h8"></path>',
+            'scan' => '<path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><path d="M7 12h10"></path>',
+            'send' => '<path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path>',
+            'settings' => '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.52a2 2 0 0 1-1 1.72l-.15.1a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.52a2 2 0 0 1 1-1.72l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle>',
+            'signal' => '<path d="M2 20h.01"></path><path d="M7 20a5 5 0 0 1 10 0"></path><path d="M4 14a11 11 0 0 1 16 0"></path><path d="M2 8a16 16 0 0 1 20 0"></path>',
+            'sliders' => '<line x1="4" x2="4" y1="21" y2="14"></line><line x1="4" x2="4" y1="10" y2="3"></line><line x1="12" x2="12" y1="21" y2="12"></line><line x1="12" x2="12" y1="8" y2="3"></line><line x1="20" x2="20" y1="21" y2="16"></line><line x1="20" x2="20" y1="12" y2="3"></line><line x1="2" x2="6" y1="14" y2="14"></line><line x1="10" x2="14" y1="8" y2="8"></line><line x1="18" x2="22" y1="16" y2="16"></line>',
+            'smartphone' => '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect><path d="M12 18h.01"></path>',
+            'snow-flake' => '<path d="M12 2v20"></path><path d="m4.93 4.93 14.14 14.14"></path><path d="M2 12h20"></path><path d="m4.93 19.07 14.14-14.14"></path>',
+            'sun' => '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path>',
+            'target' => '<circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>',
+            'thermometer' => '<path d="M14 14.76V5a2 2 0 1 0-4 0v9.76a4 4 0 1 0 4 0Z"></path>',
+            'undo' => '<path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6.36 2.64L3 13"></path>',
+            'volume-2' => '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>',
+            'wifi' => '<path d="M12 20h.01"></path><path d="M2 8.82a15 15 0 0 1 20 0"></path><path d="M5 12.86a10 10 0 0 1 14 0"></path><path d="M8.5 16.43a5 5 0 0 1 7 0"></path>',
+            'zap' => '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>',
         ];
 
-        $svg = $icons[$name] ?? $icons['file'];
-        return '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' . $svg . '</svg>';
+        $svg = $icons[$name] ?? $icons['cpu'];
+        return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' . $svg . '</svg>';
     }
 }
 ?>
@@ -1100,7 +1510,7 @@ if (!function_exists('view_ui_icon')) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Inter:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap" rel="stylesheet">
 
   <style>
     :root {
@@ -1126,7 +1536,7 @@ if (!function_exists('view_ui_icon')) {
       --ui-shadow-alpha: .042;
       --ui-toggle-on: #2563EB;
       --ui-toggle-off: #CBD5E1;
-      --ui-font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+      --ui-font: "Plus Jakarta Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
       --ui-font-size: 15px;
       --ui-font-weight: 500;
       --ui-letter-spacing: -0.2px;
@@ -1137,7 +1547,7 @@ if (!function_exists('view_ui_icon')) {
       --ui-success: #10B981;
       --ui-warning: #F59E0B;
       --ui-error: #EF4444;
-      --ui-icon-size: 18px;
+      --ui-icon-size: 22px;
       --ui-icon-color: #2563EB;
       --ui-header-height: 72px;
       --ui-border-size: 1px;
@@ -1170,12 +1580,18 @@ if (!function_exists('view_ui_icon')) {
       --ui-green-dark: <?= esc($active_ui_theme['accentColor']) ?>;
       --ui-accent: <?= esc($active_ui_theme['accentColor']) ?>;
       --ui-graphite: <?= esc($active_ui_theme['topbarColor']) ?>;
+      --ui-header-bg: <?= esc($ui_header_bg) ?>;
+      --ui-header-fg: <?= esc($ui_header_fg) ?>;
+      --ui-header-device: <?= esc($ui_header_device) ?>;
+      --ui-header-chip-bg: <?= esc($ui_header_chip_bg) ?>;
+      --ui-header-chip-bg-hover: <?= esc($ui_header_chip_bg_hover) ?>;
+      --ui-header-chip-fg: <?= esc($ui_header_chip_fg) ?>;
       --ui-radius: <?= (int) $active_ui_theme['borderRadius'] ?>px;
       --ui-shadow-alpha: <?= max(0, min(100, (int) $active_ui_theme['shadowStrength'])) / 1000 ?>;
       --ui-card-shadow: <?= esc($ui_card_shadow_css) ?>;
       --ui-toggle-on: <?= esc($active_ui_theme['toggleOnColor']) ?>;
       --ui-toggle-off: <?= esc($active_ui_theme['toggleOffColor']) ?>;
-      --ui-font: "<?= esc($active_ui_theme['fontFamily']) ?>", "Segoe UI", Arial, sans-serif;
+      --ui-font: "<?= esc($active_ui_theme['fontFamily']) ?>", "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
       --ui-font-size: <?= (int) $active_ui_theme['fontSize'] ?>px;
       --ui-font-weight: <?= (int) $active_ui_theme['fontWeight'] ?>;
       --ui-letter-spacing: <?= (float) $active_ui_theme['letterSpacing'] ?>px;
@@ -1522,7 +1938,7 @@ if (!function_exists('view_ui_icon')) {
       --ui-success: #15803D;
       --ui-warning: #D97706;
       --ui-error: #DC2626;
-      --ui-font: "DM Sans", "Inter", "Segoe UI", system-ui, sans-serif;
+      --ui-font: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
       --ui-font-size: 13px;
       --ui-font-weight: 500;
       --ui-border-color: #E7E5E4;
@@ -1563,7 +1979,7 @@ if (!function_exists('view_ui_icon')) {
         radial-gradient(circle at 88% 12%, rgba(120, 113, 108, .14), transparent 30%),
         linear-gradient(135deg, #FAFAF9 0%, #F5F5F4 48%, #E7E5E4 100%);
       color: #292524;
-      font-family: "Poppins", "Segoe UI", Arial, sans-serif;
+      font-family: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
       font-size: 14px;
       font-weight: 600;
       letter-spacing: 0;
@@ -1598,30 +2014,31 @@ if (!function_exists('view_ui_icon')) {
       text-rendering: optimizeLegibility;
     }
 
-    /* Professional mobile app polish */
+    /* Professional mobile app polish — header matches Light/Dark mock */
     .phone-shell .app-topbar {
       min-height: var(--ui-header-height);
       padding: 10px 16px 10px;
-      border-bottom: 1px solid rgba(255, 255, 255, .08);
-      background:
-        linear-gradient(145deg, var(--ui-graphite), var(--ui-blue)),
-        var(--ui-graphite);
-      box-shadow: 0 1px 0 rgba(255, 255, 255, .05) inset, 0 8px 24px rgba(15, 23, 42, .14);
+      border-bottom: 1px solid color-mix(in srgb, var(--ui-border-color) 70%, transparent);
+      background: var(--ui-header-bg, var(--ui-shell));
+      color: var(--ui-header-fg, var(--ui-text));
+      box-shadow: none;
     }
 
     .phone-shell .top-title h1 {
-      font-size: 17px;
-      font-weight: 600;
-      letter-spacing: -0.025em;
-      line-height: 1.25;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      color: var(--ui-header-fg, var(--ui-text));
     }
 
-    .phone-shell .top-title p {
-      margin: 1px 0 0;
-      font-size: 11px;
+    .phone-shell .top-title p,
+    .phone-shell .top-title .top-title-device {
+      margin: 2px 0 0;
+      font-size: 12px;
       font-weight: 500;
       letter-spacing: 0.01em;
-      color: rgba(255, 255, 255, .62);
+      color: var(--ui-header-device, var(--ui-accent));
     }
 
     .phone-shell .app-back-btn {
@@ -1632,24 +2049,24 @@ if (!function_exists('view_ui_icon')) {
       gap: 2px;
       width: auto;
       min-width: 42px;
-      height: 42px;
+      height: 36px;
       padding: 0 12px;
       border: 0;
       border-radius: 999px;
-      background: rgba(255, 255, 255, .1);
-      color: #fff;
+      background: var(--ui-header-chip-bg, rgba(15, 23, 42, .06));
+      color: var(--ui-header-chip-fg, var(--ui-text));
       font-family: inherit;
       font-size: 13px;
       font-weight: 600;
       letter-spacing: -0.01em;
       cursor: pointer;
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12);
+      box-shadow: none;
       transition: background .18s ease, transform .14s ease;
     }
 
     .phone-shell .app-back-btn:hover,
     .phone-shell .app-back-btn:focus {
-      background: rgba(255, 255, 255, .16);
+      background: var(--ui-header-chip-bg-hover, rgba(15, 23, 42, .1));
       outline: none;
     }
 
@@ -1658,8 +2075,8 @@ if (!function_exists('view_ui_icon')) {
     }
 
     .phone-shell .app-back-btn .icon {
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
       stroke-width: 2.5;
     }
 
@@ -1670,17 +2087,24 @@ if (!function_exists('view_ui_icon')) {
     .phone-shell .icon-btn {
       width: 40px;
       height: 40px;
-      background: rgba(255, 255, 255, .08);
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+      background: var(--ui-header-chip-bg, rgba(15, 23, 42, .06));
+      color: var(--ui-header-chip-fg, var(--ui-text));
+      box-shadow: none;
       transition: background .18s ease, transform .14s ease;
     }
 
     .phone-shell .icon-btn:hover {
-      background: rgba(255, 255, 255, .14);
+      background: var(--ui-header-chip-bg-hover, rgba(15, 23, 42, .1));
     }
 
     .phone-shell .icon-btn:active {
       transform: scale(.96);
+    }
+
+    .phone-shell .icon-btn .icon {
+      width: 20px;
+      height: 20px;
+      stroke-width: 2.1;
     }
 
     .phone-shell .brand-strip {
@@ -1903,10 +2327,16 @@ if (!function_exists('view_ui_icon')) {
     }
 
     .phone-shell .param-icon {
-      width: 36px;
-      height: 36px;
+      width: 44px;
+      height: 44px;
       background: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-surface));
       box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent) 14%, transparent);
+    }
+
+    .phone-shell .param-icon .icon {
+      width: 22px;
+      height: 22px;
+      stroke-width: 2.15;
     }
 
     .phone-shell .param-meta {
@@ -1953,22 +2383,27 @@ if (!function_exists('view_ui_icon')) {
     }
 
     .phone-shell .page-button {
-      min-width: 34px;
-      height: 34px;
-      padding: 0 10px;
-      margin: 8px;
-      font-size: 12px;
-      font-weight: 600;
+      min-width: 36px;
+      height: 36px;
+      padding: 0;
+      margin: 6px;
+      font-size: 13px;
+      font-weight: 700;
       border: 1px solid var(--ui-border-color);
+      border-radius: 50%;
       background: var(--ui-surface);
+      color: var(--ui-muted);
       box-shadow: none;
     }
 
     .phone-shell .page-button.is-active {
       border-color: var(--ui-accent);
       background: var(--ui-accent);
-      color: #fff;
-      box-shadow: 0 4px 12px color-mix(in srgb, var(--ui-accent) 28%, transparent);
+      color: #FFFFFF;
+      font-weight: 800;
+      box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--ui-accent) 22%, transparent),
+        0 6px 16px color-mix(in srgb, var(--ui-accent) 36%, transparent);
     }
 
     .phone-shell .save-btn {
@@ -2166,14 +2601,13 @@ if (!function_exists('view_ui_icon')) {
       grid-template-areas: "back title actions";
       gap: 10px;
       align-items: center;
-      min-height: 84px;
+      min-height: 72px;
       min-height: var(--ui-header-height);
-      padding: 14px 16px 12px;
-      background:
-        linear-gradient(145deg, var(--ui-graphite), var(--ui-blue)),
-        var(--ui-graphite);
-      color: #fff;
-      box-shadow: var(--ui-shadow);
+      padding: 12px 16px;
+      background: var(--ui-header-bg, var(--ui-shell, #F8FAFC));
+      color: var(--ui-header-fg, var(--ui-text, #0F172A));
+      box-shadow: none;
+      border-bottom: 1px solid color-mix(in srgb, var(--ui-border-color, #E2E8F0) 80%, transparent);
     }
 
     .icon-btn,
@@ -2182,19 +2616,19 @@ if (!function_exists('view_ui_icon')) {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 42px;
-      height: 42px;
+      width: 36px;
+      height: 36px;
       border: 0;
       border-radius: 50%;
-      background: rgba(255, 255, 255, .1);
-      color: #fff;
+      background: var(--ui-header-chip-bg, rgba(15, 23, 42, .06));
+      color: var(--ui-header-chip-fg, var(--ui-text, #0F172A));
       cursor: pointer;
       text-decoration: none;
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12);
+      box-shadow: none;
     }
 
     .icon-btn:hover {
-      background: rgba(255, 255, 255, .18);
+      background: var(--ui-header-chip-bg-hover, rgba(15, 23, 42, .1));
     }
 
     .back-btn,
@@ -2202,7 +2636,7 @@ if (!function_exists('view_ui_icon')) {
       grid-area: back;
       width: auto;
       min-width: 42px;
-      height: 42px;
+      height: 36px;
       padding: 0 12px;
       border-radius: 999px;
       gap: 2px;
@@ -2236,10 +2670,10 @@ if (!function_exists('view_ui_icon')) {
 
     .top-title h1 {
       margin: 0;
-      color: #fff;
-      font-size: 18px;
+      color: var(--ui-header-fg, var(--ui-text, #0F172A));
+      font-size: 16px;
       line-height: 1.2;
-      font-weight: 800;
+      font-weight: 700;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: normal;
@@ -2248,12 +2682,13 @@ if (!function_exists('view_ui_icon')) {
       -webkit-box-orient: vertical;
     }
 
-    .top-title p {
+    .top-title p,
+    .top-title .top-title-device {
       margin: 2px 0 0;
-      color: rgba(255, 255, 255, .68);
+      color: var(--ui-header-device, var(--ui-accent, #3B82F6));
       font-size: 12px;
       line-height: 1.25;
-      font-weight: 600;
+      font-weight: 500;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -2263,7 +2698,7 @@ if (!function_exists('view_ui_icon')) {
       grid-area: actions;
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
     }
 
     .brand-strip {
@@ -2308,8 +2743,13 @@ if (!function_exists('view_ui_icon')) {
       align-items: center;
       gap: 7px;
       color: var(--ui-success);
-      font-size: 12px;
-      font-weight: 900;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--ui-success) 12%, var(--ui-surface));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-success) 22%, transparent);
     }
 
     .online-state::before {
@@ -2318,16 +2758,18 @@ if (!function_exists('view_ui_icon')) {
       height: 8px;
       border-radius: 50%;
       background: var(--ui-success);
-      box-shadow: 0 0 0 5px color-mix(in srgb, var(--ui-success) 18%, transparent);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--ui-success) 18%, transparent);
     }
 
     .online-state.is-offline {
       color: var(--ui-error);
+      background: color-mix(in srgb, var(--ui-error) 12%, var(--ui-surface));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-error) 22%, transparent);
     }
 
     .online-state.is-offline::before {
       background: var(--ui-error);
-      box-shadow: 0 0 0 5px color-mix(in srgb, var(--ui-error) 16%, transparent);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--ui-error) 16%, transparent);
     }
 
     .brand-copy {
@@ -2644,6 +3086,70 @@ if (!function_exists('view_ui_icon')) {
       gap: 8px;
       padding: 2px 4px 8px;
       min-width: 0;
+      overflow: visible;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Soft circular pulse on API names — no clipped square glow / extra bg. */
+    .param-group-header .field-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      overflow: visible;
+    }
+
+    .param-group-header .param-group-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .param-group-header .param-group-dot {
+      position: relative;
+      width: 8px;
+      height: 8px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--ui-accent);
+      box-shadow: 0 0 6px color-mix(in srgb, var(--ui-accent) 45%, transparent);
+    }
+
+    .param-group-header .param-group-dot::after {
+      content: "";
+      position: absolute;
+      inset: -5px;
+      border-radius: 50%;
+      border: 1.5px solid color-mix(in srgb, var(--ui-accent) 40%, transparent);
+      background: transparent;
+      box-shadow: none;
+      animation: param-group-dot-pulse 1.8s ease-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes param-group-dot-pulse {
+      0% {
+        transform: scale(0.72);
+        opacity: 0.65;
+      }
+      70% {
+        transform: scale(1.55);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(1.55);
+        opacity: 0;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .param-group-header .param-group-dot::after {
+        animation: none;
+        opacity: 0.35;
+        transform: scale(1.15);
+      }
     }
 
     .get-status-response-panel {
@@ -2759,8 +3265,13 @@ if (!function_exists('view_ui_icon')) {
     }
 
     .param-card.is-grouped-component .param-icon {
-      width: 26px;
-      height: 26px;
+      width: 42px;
+      height: 42px;
+    }
+
+    .param-card.is-grouped-component .param-icon .icon {
+      width: 22px;
+      height: 22px;
     }
 
     .param-component-stack .range-visual,
@@ -2897,21 +3408,56 @@ if (!function_exists('view_ui_icon')) {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 38px;
-      height: 38px;
+      width: 48px;
+      height: 48px;
       border-radius: 50%;
-      background: color-mix(in srgb, var(--ui-accent) 14%, var(--ui-surface));
-      color: var(--ui-accent);
-      color: var(--ui-icon-color);
+      background: color-mix(in srgb, var(--ui-accent) 12%, var(--ui-surface));
+      color: var(--ui-icon-color, var(--ui-accent));
       cursor: pointer;
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent) 18%, transparent);
+      box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--ui-accent) 16%, transparent),
+        0 2px 8px rgba(15, 23, 42, .06);
+      transition: background .16s ease, box-shadow .16s ease, transform .14s ease;
+    }
+
+    .param-icon .icon {
+      width: 24px;
+      height: 24px;
+      stroke-width: 2.15;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     .param-icon:hover,
     .param-icon:focus {
-      background: color-mix(in srgb, var(--ui-accent) 22%, var(--ui-surface));
-      outline: 2px solid color-mix(in srgb, var(--ui-accent) 34%, transparent);
+      background: color-mix(in srgb, var(--ui-accent) 20%, var(--ui-surface));
+      outline: 2px solid color-mix(in srgb, var(--ui-accent) 30%, transparent);
       outline-offset: 2px;
+      transform: translateY(-1px);
+    }
+
+    /* Leading icon is metadata only when a real action control sits on the right. */
+    .param-card:has(.power-button-ui, .toggle-visual, .param-send-btn) > .param-main-row > .param-icon,
+    .param-card:has(.power-button-ui, .toggle-visual, .param-send-btn) > .param-icon {
+      cursor: default;
+      pointer-events: none;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .param-card:has(.power-button-ui, .toggle-visual, .param-send-btn) > .param-main-row > .param-icon:hover,
+    .param-card:has(.power-button-ui, .toggle-visual, .param-send-btn) > .param-main-row > .param-icon:focus,
+    .param-card:has(.power-button-ui, .toggle-visual, .param-send-btn) > .param-icon:hover,
+    .param-card:has(.power-button-ui, .toggle-visual, .param-send-btn) > .param-icon:focus {
+      outline: none;
+      transform: none;
+      background: color-mix(in srgb, var(--ui-accent) 12%, var(--ui-surface));
+    }
+
+    body.studio-open .param-card:has(.power-button-ui, .toggle-visual, .param-send-btn) > .param-main-row > .param-icon,
+    body.studio-open .param-card:has(.power-button-ui, .toggle-visual, .param-send-btn) > .param-icon {
+      pointer-events: auto;
+      cursor: pointer;
     }
 
     .param-card::before {
@@ -3703,8 +4249,30 @@ if (!function_exists('view_ui_icon')) {
     body[data-studio-theme-mode="dark"] .phone-shell .linear-gauge-label,
     body[data-studio-theme-mode="dark"] .phone-shell .registered-visual-kicker,
     body[data-studio-theme-mode="dark"] .phone-shell .registered-interactive-kicker,
-    body[data-studio-theme-mode="dark"] .phone-shell .segmented-option {
-      color: var(--ui-muted);
+    body[data-studio-theme-mode="dark"] .phone-shell .segmented-option:not(.is-active) {
+      background: transparent;
+      color: #94A3B8;
+      box-shadow: none;
+    }
+
+    body[data-studio-theme-mode="dark"] .phone-shell .segmented-option:not(.is-active) svg,
+    body[data-studio-theme-mode="dark"] .phone-shell .segmented-option:not(.is-active) .icon,
+    body[data-studio-theme-mode="dark"] .phone-shell .segmented-option:not(.is-active) span {
+      color: #94A3B8;
+      stroke: currentColor;
+    }
+
+    body[data-studio-theme-mode="dark"] .phone-shell .segmented-option.is-active {
+      background: var(--ui-accent);
+      color: #FFFFFF;
+      box-shadow: 0 6px 16px color-mix(in srgb, var(--ui-accent) 40%, transparent);
+    }
+
+    body[data-studio-theme-mode="dark"] .phone-shell .segmented-option.is-active svg,
+    body[data-studio-theme-mode="dark"] .phone-shell .segmented-option.is-active .icon,
+    body[data-studio-theme-mode="dark"] .phone-shell .segmented-option.is-active span {
+      color: #FFFFFF;
+      stroke: #FFFFFF;
     }
 
     body[data-studio-theme-mode="dark"] .phone-shell .field-value,
@@ -3714,6 +4282,31 @@ if (!function_exists('view_ui_icon')) {
     body[data-studio-theme-mode="dark"] .phone-shell .registered-interactive-value,
     body[data-studio-theme-mode="dark"] .phone-shell .range-values {
       color: var(--ui-text);
+    }
+
+    body[data-studio-theme-mode="dark"] .phone-shell .param-group-header .param-group-dot {
+      box-shadow: 0 0 8px color-mix(in srgb, var(--ui-accent) 55%, transparent);
+    }
+
+    body[data-studio-theme-mode="dark"] .phone-shell .param-group-header .param-group-dot::after {
+      border-color: color-mix(in srgb, var(--ui-accent) 50%, transparent);
+    }
+
+    body[data-studio-theme-mode="dark"] .phone-shell .online-state {
+      background: color-mix(in srgb, var(--ui-success) 18%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-success) 28%, transparent);
+    }
+
+    body[data-studio-theme-mode="dark"] .phone-shell .online-state.is-offline {
+      background: color-mix(in srgb, var(--ui-error) 18%, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-error) 28%, transparent);
+    }
+
+    body[data-studio-theme-mode="dark"] .phone-shell .param-icon {
+      background: color-mix(in srgb, var(--ui-accent) 18%, transparent);
+      box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--ui-accent) 28%, transparent),
+        0 0 14px color-mix(in srgb, var(--ui-accent) 18%, transparent);
     }
 
     body[data-studio-theme-mode="dark"] .phone-shell .brand-strip {
@@ -3815,9 +4408,13 @@ if (!function_exists('view_ui_icon')) {
       border-color: #7F1D1D;
     }
 
-    body[data-studio-theme-mode="dark"] .phone-shell .registered-group-btn {
+    body[data-studio-theme-mode="dark"] .phone-shell .registered-group-btn:not(.is-active) {
       background: #1E293B;
       color: #E2E8F0;
+    }
+
+    body[data-studio-theme-mode="dark"] .phone-shell .registered-group-btn.is-active {
+      color: #FFFFFF;
     }
 
     body[data-studio-theme-mode="dark"] .phone-shell .power-button-ui .power-button-ring,
@@ -3848,10 +4445,20 @@ if (!function_exists('view_ui_icon')) {
       color: var(--ui-text);
     }
 
-    body[data-studio-theme-mode="dark"] .phone-shell .page-button {
-      background: var(--ui-surface);
-      color: var(--ui-text);
-      border-color: var(--ui-border-color);
+    body[data-studio-theme-mode="dark"] .phone-shell .page-button:not(.is-active) {
+      background: color-mix(in srgb, var(--ui-surface) 88%, transparent);
+      color: #CBD5E1;
+      border-color: color-mix(in srgb, var(--ui-border-color) 90%, transparent);
+    }
+
+    /* Keep active page solid accent — dark base rule must not override .is-active. */
+    body[data-studio-theme-mode="dark"] .phone-shell .page-button.is-active {
+      background: var(--ui-accent);
+      border-color: var(--ui-accent);
+      color: #FFFFFF;
+      box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--ui-accent) 28%, transparent),
+        0 8px 18px color-mix(in srgb, var(--ui-accent) 42%, transparent);
     }
 
     .needle-gauge-visual,
@@ -4020,13 +4627,34 @@ if (!function_exists('view_ui_icon')) {
       color: var(--ui-muted);
       font-size: 12px;
       font-weight: 800;
+      box-shadow: none;
       transition: background .18s ease, color .18s ease, box-shadow .18s ease, transform .12s ease;
+    }
+
+    .segmented-option:not(.is-active) {
+      background: transparent;
+      color: var(--ui-muted);
+      box-shadow: none;
+    }
+
+    .segmented-option:not(.is-active) svg,
+    .segmented-option:not(.is-active) .icon,
+    .segmented-option:not(.is-active) span {
+      color: inherit;
+      stroke: currentColor;
     }
 
     .segmented-option.is-active {
       background: var(--ui-accent);
       color: #FFFFFF;
       box-shadow: 0 6px 16px color-mix(in srgb, var(--ui-accent) 34%, transparent);
+    }
+
+    .segmented-option.is-active svg,
+    .segmented-option.is-active .icon,
+    .segmented-option.is-active span {
+      color: #FFFFFF;
+      stroke: currentColor;
     }
 
     .segmented-option:active {
@@ -4047,6 +4675,7 @@ if (!function_exists('view_ui_icon')) {
       stroke: currentColor;
       fill: none;
       flex: 0 0 auto;
+      color: inherit;
     }
 
     .param-card.is-registered-component {
@@ -4228,24 +4857,29 @@ if (!function_exists('view_ui_icon')) {
       align-items: center;
       justify-content: center;
       flex: 0 0 auto;
-      min-width: 34px;
-      height: 34px;
-      padding: 0 10px;
-      margin: 8px;
+      min-width: 36px;
+      height: 36px;
+      padding: 0;
+      margin: 6px;
       border: 1px solid var(--ui-border);
-      border-radius: 999px;
+      border-radius: 50%;
       background: var(--ui-surface);
-      color: var(--ui-text);
+      color: var(--ui-muted, #64748B);
       font-size: 13px;
-      font-weight: 900;
+      font-weight: 700;
       cursor: pointer;
-      box-shadow: var(--ui-card-shadow);
+      box-shadow: none;
+      transition: background .16s ease, color .16s ease, border-color .16s ease, box-shadow .16s ease;
     }
 
     .page-button.is-active {
-      border-color: var(--ui-green-dark);
-      background: linear-gradient(135deg, var(--ui-green), var(--ui-green-dark));
-      color: #fff;
+      border-color: var(--ui-accent, var(--ui-green-dark));
+      background: var(--ui-accent, var(--ui-green-dark));
+      color: #FFFFFF;
+      font-weight: 800;
+      box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--ui-accent, var(--ui-green-dark)) 22%, transparent),
+        0 6px 16px color-mix(in srgb, var(--ui-accent, var(--ui-green-dark)) 34%, transparent);
     }
 
     .footer-actions {
@@ -7090,10 +7724,11 @@ if (!function_exists('view_ui_icon')) {
       height: var(--ui-icon-size);
       flex: 0 0 var(--ui-icon-size);
       stroke: currentColor;
-      stroke-width: 2;
+      stroke-width: 1.9;
       stroke-linecap: round;
       stroke-linejoin: round;
       fill: none;
+      vector-effect: non-scaling-stroke;
     }
 
     .save-toast {
@@ -8417,7 +9052,7 @@ if (!function_exists('view_ui_icon')) {
   
 
 </head>
-<body data-studio-theme-mode="<?= esc(strtolower((string) ($active_ui_theme['themeMode'] ?? 'pro'))) ?>">
+<body data-studio-theme-mode="<?= esc(strtolower((string) ($active_ui_theme['themeMode'] ?? 'dark'))) ?>">
   <nav class="desktop-flow-actions" aria-label="Linked UI actions">
     <a href="#" class="desktop-flow-btn" id="view-page-ui-back"><?= view_ui_icon('chevron-left') ?> Back</a>
     <button type="button" class="desktop-flow-btn desktop-flow-studio" id="open-studio-btn" onclick="if (window.openViewPageStudio) { window.openViewPageStudio(event); }"><?= view_ui_icon('palette') ?> Studio</button>
@@ -8450,15 +9085,25 @@ if (!function_exists('view_ui_icon')) {
       </button>
 
       <div class="top-title">
-        <h1 id="active-page-title"><?= esc(!empty($pages[0]['page_name']) ? $pages[0]['page_name'] : ($modelno ?: 'Model UI')) ?></h1>
-        <p><?= esc($modelno ?: 'Model UI') ?></p>
-        <p id="active-page-subtitle"><?= $is_row_view ? 'Selected Row UI' : (!empty($pages[0]['page_no']) ? 'Page' . esc($pages[0]['page_no']) . '.Operation' : 'No pages') ?></p>
+        <?php
+        $header_page_no = trim((string) ($pages[0]['page_no'] ?? '1'));
+        if ($header_page_no === '') {
+            $header_page_no = '1';
+        }
+        $header_page_name = trim((string) ($pages[0]['page_name'] ?? ''));
+        if ($is_row_view) {
+            $header_page_title = 'Selected Row UI';
+        } elseif ($header_page_name !== '' && preg_match('/^page\s*\d+/i', $header_page_name)) {
+            $header_page_title = $header_page_name;
+        } else {
+            $header_page_title = 'Page ' . $header_page_no . '. ' . ($header_page_name !== '' ? $header_page_name : 'Operation');
+        }
+        ?>
+        <h1 id="active-page-title"><?= esc($header_page_title) ?></h1>
+        <p id="active-page-subtitle" class="top-title-device"><?= esc($modelno !== '' ? $modelno : 'Model UI') ?></p>
       </div>
 
       <div class="top-actions">
-        <button type="button" class="icon-btn" id="device-scan-btn" aria-label="Scan">
-          <?= view_ui_icon('scan') ?>
-        </button>
         <button type="button" class="icon-btn" id="device-wifi-btn" aria-label="WiFi">
           <?= view_ui_icon('wifi') ?>
         </button>
@@ -8517,7 +9162,7 @@ if (!function_exists('view_ui_icon')) {
                     ?>
                     <div class="param-group-card<?= $isGetStatusParam ? ' is-get-status-group' : '' ?>" data-get-status="<?= $isGetStatusParam ? '1' : '0' ?>" data-param-key="<?= esc($page['page_no'] . ':' . ($paramName ?: 'Parameter')) ?>" data-param-name="<?= esc($paramName ?: 'Parameter') ?>" data-sequence="<?= esc($param['sequence']) ?>">
                       <div class="param-group-header">
-                        <span class="field-label"><?= esc($paramName ?: 'Parameter') ?></span>
+                        <span class="field-label"><span class="param-group-dot" aria-hidden="true"></span><span class="param-group-title"><?= esc($paramName ?: 'Parameter') ?></span></span>
                         <span class="param-group-count"><?= esc((string) $previewVisibleCount) ?> UI</span>
                       </div>
                       <div class="param-component-stack">
@@ -8542,14 +9187,29 @@ if (!function_exists('view_ui_icon')) {
                             $uiTypeName = ucwords(strtolower($uiTypeName));
                         }
                         $fieldName = trim((string) ($apiMeta['field_description'] ?? ''));
+                        $fieldNameMeta = trim((string) ($apiMeta['field_name'] ?? ''));
                         $genericField = in_array(strtolower($fieldName), ['data', 'trigger', 'command', 'response', 'error', 'none', ''], true);
-                        $displayParamName = $uiTypeName !== ''
-                            ? $uiTypeName
-                            : ((!$genericField && strcasecmp($fieldName, $paramName) !== 0)
-                                ? $fieldName
-                                : ($apiSource !== '' ? ucfirst($apiSource) : ('UI ' . ($apiComponentIndex + 1))));
+                        $genericFieldMeta = in_array(strtolower($fieldNameMeta), ['data', 'trigger', 'command', 'response', 'error', 'none', ''], true);
+                        // Prefer semantic field names over raw UI-type labels (Text/Button).
+                        if (!$genericField && $fieldName !== '') {
+                            $displayParamName = $fieldName;
+                        } elseif (!$genericFieldMeta && $fieldNameMeta !== '' && strcasecmp($fieldNameMeta, $paramName) !== 0) {
+                            $displayParamName = $fieldNameMeta;
+                        } elseif ($uiTypeName !== '' && !view_ui_icon_hint_is_noise($uiTypeName)) {
+                            $displayParamName = $uiTypeName;
+                        } elseif ($uiTypeName !== '') {
+                            $displayParamName = $apiSource !== '' ? ucfirst($apiSource) : $uiTypeName;
+                        } else {
+                            $displayParamName = $apiSource !== '' ? ucfirst($apiSource) : ('UI ' . ($apiComponentIndex + 1));
+                        }
                     } elseif ($hasRelatedApiComponents) {
-                        $displayParamName = $apiSource !== '' ? ucfirst($apiSource) : ('API ' . ($apiComponentIndex + 1));
+                        $fieldName = trim((string) ($apiMeta['field_description'] ?? ''));
+                        $genericField = in_array(strtolower($fieldName), ['data', 'trigger', 'command', 'response', 'error', 'none', ''], true);
+                        if (!$genericField && $fieldName !== '' && strcasecmp($fieldName, $paramName) !== 0) {
+                            $displayParamName = $fieldName;
+                        } else {
+                            $displayParamName = $apiSource !== '' ? ucfirst($apiSource) : ('API ' . ($apiComponentIndex + 1));
+                        }
                     }
                     $displayParamValue = view_ui_resolve_component_value($apiMeta, $componentType, '');
                     if ($componentType === 'segmented' && view_ui_is_direction_parameter($paramName)) {
@@ -8584,7 +9244,53 @@ if (!function_exists('view_ui_icon')) {
                     if (!is_array($parameterIcons)) {
                         $parameterIcons = [];
                     }
-                    $paramIcon = !empty($parameterIcons[$paramKey]) ? $parameterIcons[$paramKey] : $active_ui_theme['parameterIcon'];
+                    // Prefer an explicit Studio override. Theme-default icons and leftover
+                    // generic glyphs are treated as unset so each API field can get its own
+                    // keyword icon. Field/parameter names are matched before UI-type noise;
+                    // parent groups like POWER only apply when the card has no field identity.
+                    $fieldDescForIcon = trim((string) ($apiMeta['field_description'] ?? ''));
+                    $fieldNameForIcon = trim((string) ($apiMeta['field_name'] ?? ''));
+                    $genericDescForIcon = in_array(strtolower($fieldDescForIcon), ['data', 'trigger', 'command', 'response', 'error', 'none', ''], true);
+                    $genericNameForIcon = in_array(strtolower($fieldNameForIcon), ['data', 'trigger', 'command', 'response', 'error', 'none', ''], true);
+                    $iconHintParts = [];
+                    if (!$genericDescForIcon && $fieldDescForIcon !== '') {
+                        $iconHintParts[] = $fieldDescForIcon;
+                    }
+                    if (!$genericNameForIcon && $fieldNameForIcon !== '') {
+                        $iconHintParts[] = $fieldNameForIcon;
+                    }
+                    if (!view_ui_icon_hint_is_noise($displayParamName)) {
+                        $iconHintParts[] = $displayParamName;
+                    }
+                    if (!view_ui_icon_hint_is_noise($displayParamValue) && preg_match('/[a-z]/i', (string) $displayParamValue)) {
+                        $iconHintParts[] = $displayParamValue;
+                    }
+                    if ($isGetStatusParam) {
+                        $iconHintParts[] = 'get status';
+                    }
+                    if (!$hasMultipleApiComponents && $paramName !== '') {
+                        $iconHintParts[] = $paramName;
+                    }
+                    $themeDefaultIcon = trim((string) ($active_ui_theme['parameterIcon'] ?? 'gauge'));
+                    if ($themeDefaultIcon === '') {
+                        $themeDefaultIcon = 'gauge';
+                    }
+                    $allowGroupIconFallback = !$hasMultipleApiComponents
+                        || empty(array_filter($iconHintParts, static function ($part) {
+                            return !view_ui_icon_hint_is_noise($part);
+                        }));
+                    $suggestedParamIcon = view_ui_suggest_param_icon(
+                        $iconHintParts,
+                        $componentType,
+                        $themeDefaultIcon,
+                        $paramName,
+                        $allowGroupIconFallback
+                    );
+                    $savedParamIcon = !empty($parameterIcons[$paramKey]) ? trim((string) $parameterIcons[$paramKey]) : '';
+                    $savedIsGenericLeading = $savedParamIcon === ''
+                        || strcasecmp($savedParamIcon, $themeDefaultIcon) === 0
+                        || in_array(strtolower($savedParamIcon), ['gauge', 'power', 'power-off', 'bolt', 'zap', 'eye', 'file', 'cpu', 'play', 'info'], true);
+                    $paramIcon = (!$savedIsGenericLeading) ? $savedParamIcon : $suggestedParamIcon;
                     $apiSourceLower = strtolower($apiSource);
                     $isGetStatusResponse = $isGetStatusParam && $apiSourceLower === 'response';
                     $isGetStatusCommand = $isGetStatusParam && $apiSourceLower === 'command';
@@ -8803,23 +9509,23 @@ if (!function_exists('view_ui_icon')) {
               <div class="studio-color-grid">
                 <div class="studio-color-row">
                   <label for="theme-color-backgroundColor">Page background<span class="studio-color-hint">Main screen fill behind cards</span></label>
-                  <div class="studio-color-control"><input type="color" id="theme-color-backgroundColor" data-theme-key="backgroundColor"><input type="text" class="studio-color-hex" value="#F8FAFC" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
+                  <div class="studio-color-control"><input type="color" id="theme-color-backgroundColor" data-theme-key="backgroundColor"><input type="text" class="studio-color-hex" value="#0B1220" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
               </div>
                 <div class="studio-color-row">
                   <label for="theme-color-gradientColor">Gradient end<span class="studio-color-hint">Second background tone</span></label>
-                  <div class="studio-color-control"><input type="color" id="theme-color-gradientColor" data-theme-key="gradientColor"><input type="text" class="studio-color-hex" value="#EEF2F7" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
+                  <div class="studio-color-control"><input type="color" id="theme-color-gradientColor" data-theme-key="gradientColor"><input type="text" class="studio-color-hex" value="#111827" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
             </div>
                 <div class="studio-color-row">
                   <label for="theme-color-shellColor">Screen surface<span class="studio-color-hint">Base layer under page content</span></label>
-                  <div class="studio-color-control"><input type="color" id="theme-color-shellColor" data-theme-key="shellColor"><input type="text" class="studio-color-hex" value="#F8FAFC" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
+                  <div class="studio-color-control"><input type="color" id="theme-color-shellColor" data-theme-key="shellColor"><input type="text" class="studio-color-hex" value="#0F172A" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
                 </div>
                 <div class="studio-color-row">
                   <label for="theme-color-cardColor">Card background<span class="studio-color-hint">Parameter and name cards</span></label>
-                  <div class="studio-color-control"><input type="color" id="theme-color-cardColor" data-theme-key="cardColor"><input type="text" class="studio-color-hex" value="#FFFFFF" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
+                  <div class="studio-color-control"><input type="color" id="theme-color-cardColor" data-theme-key="cardColor"><input type="text" class="studio-color-hex" value="#1E293B" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
                 </div>
                 <div class="studio-color-row">
                   <label for="theme-color-borderColor">Card border<span class="studio-color-hint">Outline around cards</span></label>
-                  <div class="studio-color-control"><input type="color" id="theme-color-borderColor" data-theme-key="borderColor"><input type="text" class="studio-color-hex" value="#E2E8F0" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
+                  <div class="studio-color-control"><input type="color" id="theme-color-borderColor" data-theme-key="borderColor"><input type="text" class="studio-color-hex" value="#334155" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
                 </div>
               </div>
             </div>
@@ -8828,11 +9534,11 @@ if (!function_exists('view_ui_icon')) {
               <div class="studio-color-grid">
                 <div class="studio-color-row">
                   <label for="theme-color-textColor">Primary text<span class="studio-color-hint">Titles and main values</span></label>
-                  <div class="studio-color-control"><input type="color" id="theme-color-textColor" data-theme-key="textColor"><input type="text" class="studio-color-hex" value="#0F172A" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
+                  <div class="studio-color-control"><input type="color" id="theme-color-textColor" data-theme-key="textColor"><input type="text" class="studio-color-hex" value="#F8FAFC" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
                 </div>
                 <div class="studio-color-row">
                   <label for="theme-color-mutedTextColor">Secondary text<span class="studio-color-hint">Labels and helper text</span></label>
-                  <div class="studio-color-control"><input type="color" id="theme-color-mutedTextColor" data-theme-key="mutedTextColor"><input type="text" class="studio-color-hex" value="#64748B" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
+                  <div class="studio-color-control"><input type="color" id="theme-color-mutedTextColor" data-theme-key="mutedTextColor"><input type="text" class="studio-color-hex" value="#94A3B8" spellcheck="false" autocomplete="off" aria-label="Color value"></div>
                 </div>
               </div>
             </div>
@@ -8916,6 +9622,7 @@ if (!function_exists('view_ui_icon')) {
               <div class="studio-field">
                 <label for="studio-fontFamily">Font family</label>
                 <select id="studio-fontFamily" data-theme-key="fontFamily">
+                  <option value="Plus Jakarta Sans" selected>Plus Jakarta Sans</option>
                   <option value="Inter">Inter</option>
                   <option value="Poppins">Poppins</option>
                   <option value="Roboto">Roboto</option>
@@ -9109,7 +9816,7 @@ if (!function_exists('view_ui_icon')) {
               <div class="studio-range-field">
                 <div class="studio-range-top">
                   <label for="studio-iconSize">Icon size</label>
-                  <output class="studio-range-output" for="studio-iconSize">20px</output>
+                  <output class="studio-range-output" for="studio-iconSize">22px</output>
                 </div>
                 <div class="studio-range-track-wrap">
                   <input id="studio-iconSize" type="range" min="8" max="64" step="1" data-theme-key="iconSize">
@@ -9315,33 +10022,34 @@ if (!function_exists('view_ui_icon')) {
       'signal': '<path d="M2 20h.01"></path><path d="M7 20a5 5 0 0 1 10 0"></path><path d="M4 14a11 11 0 0 1 16 0"></path><path d="M2 8a16 16 0 0 1 20 0"></path>',
       'smartphone': '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect><path d="M12 18h.01"></path>',
       'layers': '<path d="m12 2 10 5-10 5L2 7l10-5z"></path><path d="m2 17 10 5 10-5"></path><path d="m2 12 10 5 10-5"></path>',
-      'bolt': '<path d="M13 2 3 14h8l-1 8 11-14h-8l1-6z"></path>',
+      'bolt': '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path>',
       'gauge': '<path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path>',
       'heart': '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>',
-      'clock': '<circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path>',
+      'clock': '<circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>',
       'droplet': '<path d="M12 2.69 5.66 9.03a9 9 0 1 0 12.68 0L12 2.69z"></path>',
-      'fan': '<path d="M10.8 14.8a3 3 0 1 0 2.4-5.6"></path><path d="M12 12c-2-4-2-7 0-9 3 2 3 5 0 9Z"></path><path d="M12 12c4-2 7-2 9 0-2 3-5 3-9 0Z"></path><path d="M12 12c2 4 2 7 0 9-3-2-3-5 0-9Z"></path><path d="M12 12c-4 2-7 2-9 0 2-3 5-3 9 0Z"></path>',
+      'fan': '<path d="M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0"></path><path d="M12 10c-1.6-3.8-.8-6.7 2.4-8 2.1 3.1 1.3 5.8-2.4 8Z"></path><path d="M14 12c3.8-1.6 6.7-.8 8 2.4-3.1 2.1-5.8 1.3-8-2.4Z"></path><path d="M12 14c1.6 3.8.8 6.7-2.4 8-2.1-3.1-1.3-5.8 2.4-8Z"></path><path d="M10 12c-3.8 1.6-6.7.8-8-2.4 3.1-2.1 5.8-1.3 8 2.4Z"></path>',
       'lightbulb': '<path d="M15 14c.2-1 .7-1.7 1.4-2.5A6 6 0 1 0 7.6 11.5C8.3 12.3 8.8 13 9 14"></path><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M10 14h4v4h-4z"></path>',
       'lock': '<rect width="18" height="11" x="3" y="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>',
       'power': '<path d="M12 2v10"></path><path d="M18.4 6.6a9 9 0 1 1-12.8 0"></path>',
       'settings': '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.52a2 2 0 0 1-1 1.72l-.15.1a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.52a2 2 0 0 1 1-1.72l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle>',
       'thermometer': '<path d="M14 14.76V5a2 2 0 1 0-4 0v9.76a4 4 0 1 0 4 0Z"></path>',
-      'wifi': '<path d="M5 13a10 10 0 0 1 14 0"></path><path d="M8.5 16.5a5 5 0 0 1 7 0"></path><path d="M2 8.5a15 15 0 0 1 20 0"></path><path d="M12 20h.01"></path>',
+      'wifi': '<path d="M12 20h.01"></path><path d="M2 8.82a15 15 0 0 1 20 0"></path><path d="M5 12.86a10 10 0 0 1 14 0"></path><path d="M8.5 16.43a5 5 0 0 1 7 0"></path>',
+      'target': '<circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>',
       'arrow-left': '<path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path>',
       'arrow-right': '<path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>',
       'chevron-left': '<path d="m15 18-6-6 6-6"></path>',
       'chevron-right': '<path d="m9 18 6-6-6-6"></path>',
       'code': '<path d="m16 18 6-6-6-6"></path><path d="m8 6-6 6 6 6"></path>',
       'edit': '<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>',
-      'file': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path>',
+      'file': '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path>',
       'info': '<circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path>',
       'scan': '<path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><path d="M7 12h10"></path>',
       'move': '<path d="M12 2v20"></path><path d="m15 5-3-3-3 3"></path><path d="m15 19-3 3-3-3"></path><path d="M2 12h20"></path><path d="m5 9-3 3 3 3"></path><path d="m19 9 3 3-3 3"></path>',
       'palette': '<circle cx="13.5" cy="6.5" r=".5"></circle><circle cx="17.5" cy="10.5" r=".5"></circle><circle cx="8.5" cy="7.5" r=".5"></circle><circle cx="6.5" cy="12.5" r=".5"></circle><path d="M12 2a10 10 0 0 0 0 20 2 2 0 0 0 2-2 1.5 1.5 0 0 1 1.5-1.5H17a5 5 0 0 0 5-5.3A10 10 0 0 0 12 2z"></path>',
       'save': '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8"></path><path d="M7 3v5h8"></path>',
-      'volume-2': '<path d="M9 9v6"></path><path d="M15 7.5a9 9 0 0 1 0 9M9 20H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2l9-5v19l-9-5Z"></path>',
+      'volume-2': '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>',
       'temperature': '<path d="M14 14.76V5a2 2 0 1 0-4 0v9.76a4 4 0 1 0 4 0Z"></path>',
-      'sliders': '<path d="M4 9h16"></path><path d="M4 9v2a2 2 0 0 0 2 2h1v5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-5h1a2 2 0 0 0 2-2V9"></path><path d="M9 20v-5"></path><path d="M20 9v2a2 2 0 0 1-2 2h-1v5a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-5H7a2 2 0 0 1-2-2v-2"></path><path d="M15 20v-5"></path>',
+      'sliders': '<line x1="4" x2="4" y1="21" y2="14"></line><line x1="4" x2="4" y1="10" y2="3"></line><line x1="12" x2="12" y1="21" y2="12"></line><line x1="12" x2="12" y1="8" y2="3"></line><line x1="20" x2="20" y1="21" y2="16"></line><line x1="20" x2="20" y1="12" y2="3"></line><line x1="2" x2="6" y1="14" y2="14"></line><line x1="10" x2="14" y1="8" y2="8"></line><line x1="18" x2="22" y1="16" y2="16"></line>',
       'aperture': '<circle cx="12" cy="12" r="10"></circle><path d="M14.31 8l5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="M7.38 12.5l5.74-9.94"></path><path d="M13.69 16l-5.74 9.94"></path><path d="M14.31 16h-11.48"></path><path d="M16.62 11.5l-5.74 9.94"></path>',
       'battery': '<rect width="16" height="10" x="2" y="7" rx="2" ry="2"></rect><line x1="22" x2="20" y1="11" y2="11"></line><line x1="4" x2="4" y1="4" y2="5"></line><line x1="12" x2="12" y1="4" y2="5"></line><line x1="20" x2="20" y1="4" y2="5"></line>',
       'bell': '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10 19c1 1 2 2 4 2s3-1 4-2"></path><path d="M9 12c-2-2-1-7-1-7"></path>',
@@ -9397,7 +10105,7 @@ if (!function_exists('view_ui_icon')) {
       'power-off': '<path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" x2="12" y1="2" y2="12"></line>',
       'printer': '<polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect width="12" height="8" x="6" y="14" rx="1" ry="1"></rect>',
       'radio': '<circle cx="12" cy="12" r="1"></circle><path d="M4.93 4.93a10 10 0 0 1 14.14 0m-2.12 2.12a6 6 0 0 1 0 8.49M2.81 2.81a14 14 0 0 1 19.78 0"></path>',
-      'refresh-cw': '<path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36M3.86 19a9 9 0 0 0 14.74 3.5"></path>',
+      'refresh-cw': '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path>',
       'refresh-ccw': '<path d="M1 4v6h6"></path><path d="M23 20v-6h-6"></path><path d="M20.49 9a9 9 0 0 0-14.85-3.36M20.13 19a9 9 0 0 1-14.73 3.5"></path>',
       'repeat': '<path d="M17 2l4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path>',
       'repeat-1': '<path d="M10 9V5l-7 7 7 7v-4a4 4 0 0 0 4-4v-1a4 4 0 0 0-4-4Z"></path><path d="M14 20l7-7-7-7v4a4 4 0 0 1-4 4v1a4 4 0 0 1 4 4Z"></path>',
@@ -9410,7 +10118,7 @@ if (!function_exists('view_ui_icon')) {
       'scale': '<path d="M12 3v18m8.5-9H3.5"></path><path d="M20 9v1a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V9a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1z"></path><path d="M4 9v1a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V9a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1z"></path>',
       'scissors': '<circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="18" r="3"></circle><line x1="20.88" x2="9.12" y1="20.88" y2="9.12"></line><line x1="8.88" x2="20.88" y1="9.12" y2="20.88"></line>',
       'search': '<circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path>',
-      'send': '<line x1="22" x2="11" y1="2" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>',
+      'send': '<path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path>',
       'server': '<rect width="20" height="8" x="2" y="2" rx="2" ry="2"></rect><rect width="20" height="8" x="2" y="14" rx="2" ry="2"></rect><line x1="6" x2="6.01" y1="6" y2="6"></line><line x1="6" x2="6.01" y1="18" y2="18"></line>',
       'settings-2': '<path d="M12 2c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9z"></path><circle cx="12" cy="12" r="3"></circle>',
       'share': '<circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line>',
@@ -9426,7 +10134,6 @@ if (!function_exists('view_ui_icon')) {
       'skip-forward': '<polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" x2="19" y1="4" y2="20"></line>',
       'slack': '<path d="M14 16a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v-7h1z"></path><path d="M15 0a2 2 0 0 0-2 2v5h7V2a2 2 0 0 0-5 0z"></path><path d="M8 7H1a2 2 0 0 0-2 2v1h7V7z"></path><path d="M0 8a2 2 0 0 0 2 2h5V5H0v3z"></path><path d="M10 7H3v7h7V7z"></path><path d="M7 0a2 2 0 0 1 2 2v5H2V2a2 2 0 0 1 5 0z"></path><path d="M0 16a2 2 0 0 0 2 2h1v3a2 2 0 0 0 2 2 2 2 0 0 0 2-2v-3h-7z"></path>',
       'slash': '<circle cx="12" cy="12" r="10"></circle><line x1="4.93" x2="19.07" y1="4.93" y2="19.07"></line>',
-      'sliders': '<path d="M4 9h16"></path><path d="M4 9v2a2 2 0 0 0 2 2h1v5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-5h1a2 2 0 0 0 2-2V9"></path><path d="M9 20v-5"></path><path d="M20 9v2a2 2 0 0 1-2 2h-1v5a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-5H7a2 2 0 0 1-2-2v-2"></path><path d="M15 20v-5"></path>',
       'smile': '<circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line>',
       'smartphone-2': '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect><path d="M12 18h.01"></path>',
       'snap': '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect><path d="M12 18h.01"></path>',
@@ -10057,14 +10764,14 @@ if (!function_exists('view_ui_icon')) {
       light: {
         id: 'light',
         label: 'Light',
-        themeMode: 'pro',
+        themeMode: 'light',
         backgroundColor: '#F8FAFC',
         gradientColor: '#EEF2F7',
         shellColor: '#F8FAFC',
         cardColor: '#FFFFFF',
         textColor: '#0F172A',
         mutedTextColor: '#64748B',
-        topbarColor: '#0F172A',
+        topbarColor: '#FFFFFF',
         accentColor: '#2563EB',
         secondaryColor: '#94A3B8',
         borderColor: '#E2E8F0',
@@ -10341,7 +11048,7 @@ if (!function_exists('view_ui_icon')) {
         overrideDeviceTheme: true,
         colors: colors,
         typography: {
-          fontFamily: 'Inter',
+          fontFamily: 'Plus Jakarta Sans',
           title: { fontSize: 20, fontWeight: 800, letterSpacing: -0.4, color: colors.text },
           heroEyebrow: { fontSize: 10, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: 'rgba(255,255,255,0.72)' },
           heroTitle: { fontSize: 22, fontWeight: 900, letterSpacing: -0.8, color: colors.onHero },
@@ -11495,7 +12202,7 @@ if (!function_exists('view_ui_icon')) {
           ticketsUrl: 'info.Track_Tickets|info.track_tickets|info.Auto_Test|info.auto_test'
         },
         theme: {
-          backgroundColor: currentTheme.backgroundColor || '#F8FAFC',
+          backgroundColor: currentTheme.backgroundColor || '#0B1220',
           surfaceColor: currentTheme.cardColor || '#FFFFFF',
           textColor: currentTheme.textColor || '#0F172A',
           mutedTextColor: currentTheme.mutedTextColor || '#64748B',
@@ -12075,7 +12782,7 @@ if (!function_exists('view_ui_icon')) {
           ]
         },
         themeVariants: {
-          active: currentTheme.themeMode || 'pro',
+          active: currentTheme.themeMode || 'dark',
           defaultVariant: 'light',
           variants: SCHEMA_THEME_VARIANTS
         }
@@ -12086,9 +12793,9 @@ if (!function_exists('view_ui_icon')) {
       version: '1.3.0',
       fontInheritance: {
         rule: 'If a component text style has no fontFamily, inherit theme.typography.fontFamily.',
-        defaultFamily: 'Inter',
-        fallbacks: ['Inter', 'Segoe UI', 'Arial', 'sans-serif'],
-        fontAsset: 'assets/fonts/Inter-Regular.ttf'
+        defaultFamily: 'Plus Jakarta Sans',
+        fallbacks: ['Plus Jakarta Sans', 'Segoe UI', 'Arial', 'sans-serif'],
+        fontAsset: 'assets/fonts/PlusJakartaSans-Regular.ttf'
       },
       supportedWidgets: [
         'Switch',
@@ -12252,12 +12959,12 @@ if (!function_exists('view_ui_icon')) {
                       {
                         type: 'text',
                         properties: { text: 'CUSTOM COMPONENT' },
-                        style: { textStyle: { fontFamily: 'Poppins', fontSize: 11, fontWeight: 800, color: '#5F7482' } }
+                        style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 11, fontWeight: 800, color: '#5F7482' } }
                       },
                       {
                         type: 'text',
                         properties: { text: 'Live value', textBinding: '{{binding}}' },
-                        style: { textStyle: { fontFamily: 'Poppins', fontSize: 16, fontWeight: 700, color: '#102A3A' } }
+                        style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 16, fontWeight: 700, color: '#102A3A' } }
                       }
                     ]
                   }
@@ -12317,7 +13024,7 @@ if (!function_exists('view_ui_icon')) {
                       {
                         type: 'text',
                         properties: { text: 'HEART RATE' },
-                        style: { textStyle: { fontFamily: 'Poppins', fontSize: 11, fontWeight: 800, color: '#9F1239' } }
+                        style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 11, fontWeight: 800, color: '#9F1239' } }
                       },
                       {
                         type: 'row',
@@ -12326,12 +13033,12 @@ if (!function_exists('view_ui_icon')) {
                           {
                             type: 'text',
                             properties: { textBinding: '{{binding}}' },
-                            style: { textStyle: { fontFamily: 'Poppins', fontSize: 32, fontWeight: 800, color: '#881337' } }
+                            style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 32, fontWeight: 800, color: '#881337' } }
                           },
                           {
                             type: 'text',
                             properties: { text: 'BPM' },
-                            style: { textStyle: { fontFamily: 'Poppins', fontSize: 14, fontWeight: 700, color: '#BE123C' } }
+                            style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 14, fontWeight: 700, color: '#BE123C' } }
                           }
                         ]
                       }
@@ -12371,7 +13078,7 @@ if (!function_exists('view_ui_icon')) {
                   {
                     type: 'text',
                     properties: { text: 'FIRE SYSTEM' },
-                    style: { textStyle: { fontFamily: 'Poppins', fontSize: 11, fontWeight: 800, color: '#9A3412' } }
+                    style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 11, fontWeight: 800, color: '#9A3412' } }
                   },
                   {
                     type: 'row',
@@ -12382,7 +13089,7 @@ if (!function_exists('view_ui_icon')) {
                         properties: { label: 'START', actionValue: 'START' },
                         style: { backgroundColor: '#16A34A', borderRadius: 10, padding: { top: 10, right: 14, bottom: 10, left: 14 } },
                         children: [
-                          { type: 'text', properties: { text: 'START' }, style: { textStyle: { fontFamily: 'Poppins', fontSize: 13, fontWeight: 800, color: '#FFFFFF' } } }
+                          { type: 'text', properties: { text: 'START' }, style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 13, fontWeight: 800, color: '#FFFFFF' } } }
                         ]
                       },
                       {
@@ -12390,13 +13097,13 @@ if (!function_exists('view_ui_icon')) {
                         properties: { label: 'STOP', actionValue: 'STOP' },
                         style: { backgroundColor: '#DC2626', borderRadius: 10, padding: { top: 10, right: 14, bottom: 10, left: 14 } },
                         children: [
-                          { type: 'text', properties: { text: 'STOP' }, style: { textStyle: { fontFamily: 'Poppins', fontSize: 13, fontWeight: 800, color: '#FFFFFF' } } }
+                          { type: 'text', properties: { text: 'STOP' }, style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 13, fontWeight: 800, color: '#FFFFFF' } } }
                         ]
                       },
                       {
                         type: 'text',
                         properties: { textBinding: '{{binding}}' },
-                        style: { textStyle: { fontFamily: 'Poppins', fontSize: 14, fontWeight: 800, color: '#9A3412' } }
+                        style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 14, fontWeight: 800, color: '#9A3412' } }
                       }
                     ]
                   }
@@ -12435,8 +13142,8 @@ if (!function_exists('view_ui_icon')) {
                     type: 'column',
                     properties: { crossAxisAlignment: 'start', spacing: 2 },
                     children: [
-                      { type: 'text', properties: { text: 'LOCK STATUS' }, style: { textStyle: { fontFamily: 'Poppins', fontSize: 11, fontWeight: 800, color: '#4338CA' } } },
-                      { type: 'text', properties: { textBinding: '{{binding}}' }, style: { textStyle: { fontFamily: 'Poppins', fontSize: 16, fontWeight: 700, color: '#1E1B4B' } } }
+                      { type: 'text', properties: { text: 'LOCK STATUS' }, style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 11, fontWeight: 800, color: '#4338CA' } } },
+                      { type: 'text', properties: { textBinding: '{{binding}}' }, style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 16, fontWeight: 700, color: '#1E1B4B' } } }
                     ]
                   }
                 ]
@@ -12474,8 +13181,8 @@ if (!function_exists('view_ui_icon')) {
                     type: 'column',
                     properties: { crossAxisAlignment: 'start', spacing: 2 },
                     children: [
-                      { type: 'text', properties: { text: 'CONFIGURE' }, style: { textStyle: { fontFamily: 'Poppins', fontSize: 11, fontWeight: 800, color: '#0369A1' } } },
-                      { type: 'text', properties: { text: 'Tap to open settings', textBinding: '{{binding}}' }, style: { textStyle: { fontFamily: 'Poppins', fontSize: 15, fontWeight: 700, color: '#0C4A6E' } } }
+                      { type: 'text', properties: { text: 'CONFIGURE' }, style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 11, fontWeight: 800, color: '#0369A1' } } },
+                      { type: 'text', properties: { text: 'Tap to open settings', textBinding: '{{binding}}' }, style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 15, fontWeight: 700, color: '#0C4A6E' } } }
                     ]
                   }
                 ]
@@ -12518,8 +13225,8 @@ if (!function_exists('view_ui_icon')) {
                     type: 'row',
                     properties: { crossAxisAlignment: 'center', spacing: 8 },
                     children: [
-                      { type: 'text', properties: { text: 'BRIGHTNESS' }, style: { textStyle: { fontFamily: 'Poppins', fontSize: 11, fontWeight: 800, color: '#64748B' } } },
-                      { type: 'text', properties: { textBinding: '{{binding}}' }, style: { textStyle: { fontFamily: 'Poppins', fontSize: 16, fontWeight: 800, color: '#0F172A' } } }
+                      { type: 'text', properties: { text: 'BRIGHTNESS' }, style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 11, fontWeight: 800, color: '#64748B' } } },
+                      { type: 'text', properties: { textBinding: '{{binding}}' }, style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 16, fontWeight: 800, color: '#0F172A' } } }
                     ]
                   },
                   {
@@ -12568,7 +13275,7 @@ if (!function_exists('view_ui_icon')) {
                   {
                     type: 'text',
                     properties: { text: 'MODE' },
-                    style: { textStyle: { fontFamily: 'Poppins', fontSize: 11, fontWeight: 800, color: '#6D28D9' } }
+                    style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: 11, fontWeight: 800, color: '#6D28D9' } }
                   },
                   {
                     type: 'row',
@@ -12581,7 +13288,7 @@ if (!function_exists('view_ui_icon')) {
                         children: [{
                           type: 'text',
                           properties: { text: label },
-                          style: { textStyle: { fontFamily: 'Poppins', fontSize: props.buttonFontSize, fontWeight: props.buttonFontWeight } }
+                          style: { textStyle: { fontFamily: 'Plus Jakarta Sans', fontSize: props.buttonFontSize, fontWeight: props.buttonFontWeight } }
                         }]
                       };
                     })
@@ -13811,7 +14518,7 @@ if (!function_exists('view_ui_icon')) {
         verticalPadding: 10,
         height: 44,
         minHeight: 44,
-        fontFamily: currentTheme.fontFamily || 'Inter',
+        fontFamily: currentTheme.fontFamily || 'Plus Jakarta Sans',
         fontSize: 14,
         fontWeight: 600,
         textColor: themeInputTextColor(colors.textColor),
@@ -13878,7 +14585,7 @@ if (!function_exists('view_ui_icon')) {
         hint: 'Choose',
         chevronIcon: 'chevron-down',
         selectedTextStyle: {
-          fontFamily: currentTheme.fontFamily || 'Inter',
+          fontFamily: currentTheme.fontFamily || 'Plus Jakarta Sans',
           fontSize: 14,
           fontWeight: 700,
           color: fieldText
@@ -13890,7 +14597,7 @@ if (!function_exists('view_ui_icon')) {
         optionRowHeight: 44,
         optionPadding: { top: 10, right: 12, bottom: 10, left: 12 },
         optionTextStyle: {
-          fontFamily: currentTheme.fontFamily || 'Inter',
+          fontFamily: currentTheme.fontFamily || 'Plus Jakarta Sans',
           fontSize: 14,
           fontWeight: 600,
           color: fieldText
@@ -15228,14 +15935,14 @@ if (!function_exists('view_ui_icon')) {
           iconColor: colors.iconColor
         },
         fieldLabel: {
-          fontFamily: currentTheme.fontFamily || 'Inter',
+          fontFamily: currentTheme.fontFamily || 'Plus Jakarta Sans',
           fontSize: 11,
           fontWeight: 800,
           color: currentTheme.mutedTextColor,
           uppercase: true
         },
         fieldValue: {
-          fontFamily: currentTheme.fontFamily || 'Inter',
+          fontFamily: currentTheme.fontFamily || 'Plus Jakarta Sans',
           fontSize: 16,
           fontWeight: 700,
           color: colors.textColor
@@ -16243,6 +16950,7 @@ if (!function_exists('view_ui_icon')) {
     function fontAssetForFamily(family) {
       const map = {
         Poppins: 'assets/fonts/Poppins-Regular.ttf',
+        'Plus Jakarta Sans': 'assets/fonts/PlusJakartaSans-Regular.ttf',
         Inter: 'assets/fonts/Inter-Regular.ttf',
         Roboto: 'assets/fonts/Roboto-Regular.ttf',
         'Open Sans': 'assets/fonts/OpenSans-Regular.ttf'
@@ -16591,6 +17299,8 @@ if (!function_exists('view_ui_icon')) {
               ui_type: meta.ui_type || null,
               ui_type_source: meta.ui_type_source || null,
               access: meta.access || null,
+              field_description: meta.field_description || meta.Field_description || null,
+              field_name: meta.field_name || meta.Field_name || null,
               items: Array.isArray(meta.items) ? meta.items : [],
               item_values: Array.isArray(meta.item_values) ? meta.item_values : [],
               sno_asperui: Array.isArray(meta.sno_asperui) ? meta.sno_asperui : [],
@@ -16618,7 +17328,7 @@ if (!function_exists('view_ui_icon')) {
               iconBubble: {
                 size: 38,
                 backgroundColor: 'rgba(37,99,235,0.14)',
-                iconSize: parseInt(currentTheme.iconSize || 20, 10),
+                iconSize: parseInt(currentTheme.iconSize || 22, 10),
                 iconColor: componentColors.iconColor
               }
             }
@@ -16907,6 +17617,9 @@ if (!function_exists('view_ui_icon')) {
     }
 
     let currentTheme = Object.assign({}, defaultTheme, savedTheme);
+    if (parseInt(currentTheme.iconSize, 10) > 0 && parseInt(currentTheme.iconSize, 10) <= 18) {
+      currentTheme.iconSize = 22;
+    }
     currentTheme.parameterIcons = normalizeParameterIcons(currentTheme.parameterIcons);
     currentTheme.componentOverrides = currentTheme.componentOverrides && typeof currentTheme.componentOverrides === 'object' && !Array.isArray(currentTheme.componentOverrides) ? currentTheme.componentOverrides : {};
     currentTheme.pageTypography = currentTheme.pageTypography && typeof currentTheme.pageTypography === 'object' && !Array.isArray(currentTheme.pageTypography) ? currentTheme.pageTypography : {};
@@ -17040,7 +17753,7 @@ if (!function_exists('view_ui_icon')) {
 
     // Helper Functions
     function iconSvg(name) {
-      return '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (FONTAWESOME_ICONS[name] || FONTAWESOME_ICONS.gauge) + '</svg>';
+      return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + (FONTAWESOME_ICONS[name] || FONTAWESOME_ICONS.cpu || FONTAWESOME_ICONS.gauge) + '</svg>';
     }
 
     function bindClick(id, handler) {
@@ -18998,6 +19711,53 @@ if (!function_exists('view_ui_icon')) {
       return String(value || '');
     }
 
+    /**
+     * Keep selected/unselected segment colors clean on toggle.
+     * Clears leftover inline accent fills so inactive options never keep
+     * the previous active background (muddy mixed colors).
+     */
+    function syncSegmentedOptionStyles(wrap, accentColor) {
+      if (!wrap) return;
+      const accent = String(accentColor || '').trim();
+      const isDark = String(document.body.getAttribute('data-studio-theme-mode') || '').toLowerCase() === 'dark';
+      const inactiveText = isDark ? '#94A3B8' : '';
+      wrap.querySelectorAll('.segmented-option').forEach(function(button) {
+        const active = button.classList.contains('is-active');
+        if (active) {
+          button.style.background = accent || '';
+          button.style.color = '#FFFFFF';
+          button.style.boxShadow = accent
+            ? ('0 6px 16px color-mix(in srgb, ' + accent + ' 34%, transparent)')
+            : '';
+          button.querySelectorAll('svg, .icon, span').forEach(function(node) {
+            node.style.color = '#FFFFFF';
+            if (node.tagName === 'svg' || (node.classList && node.classList.contains('icon'))) {
+              node.style.stroke = '#FFFFFF';
+            }
+          });
+          return;
+        }
+        button.style.background = 'transparent';
+        button.style.boxShadow = 'none';
+        if (inactiveText) {
+          button.style.color = inactiveText;
+        } else {
+          button.style.removeProperty('color');
+        }
+        button.querySelectorAll('svg, .icon, span').forEach(function(node) {
+          if (inactiveText) {
+            node.style.color = inactiveText;
+            if (node.tagName === 'svg' || (node.classList && node.classList.contains('icon'))) {
+              node.style.stroke = inactiveText;
+            }
+          } else {
+            node.style.removeProperty('color');
+            node.style.removeProperty('stroke');
+          }
+        });
+      });
+    }
+
     function buildSegmentedControlElement(card, meta, override) {
       const valueEl = card.querySelector('.field-value');
       const parsedOptions = parseOptionPairs(meta, card && card.dataset.paramName);
@@ -19026,17 +19786,19 @@ if (!function_exists('view_ui_icon')) {
           wrap.querySelectorAll('.segmented-option').forEach(function(node) {
             node.classList.toggle('is-active', node === btn);
           });
+          const paramOverride = getComponentOverride(card.dataset.paramKey);
+          syncSegmentedOptionStyles(wrap, getEffectiveComponentColors(paramOverride).accentColor);
           if (valueEl && !valueEl.querySelector('input, select, textarea')) {
             valueEl.textContent = isDirection ? option.label : option.value;
           }
           const metaValue = card.querySelector('.meta-value');
           if (metaValue) metaValue.textContent = option.label;
-          const paramOverride = getComponentOverride(card.dataset.paramKey);
           paramOverride.value = option.value;
           generateSchema();
         });
         wrap.appendChild(btn);
       });
+      syncSegmentedOptionStyles(wrap, getEffectiveComponentColors(override).accentColor);
       if (valueEl && !valueEl.querySelector('input, select, textarea')) {
         valueEl.textContent = isDirection ? optionLabelForValue(options, current) : current;
       }
@@ -19626,11 +20388,207 @@ if (!function_exists('view_ui_icon')) {
       return wrap;
     }
 
+    function matchIconKeywordRules(name) {
+      const raw = String(name || '').toLowerCase().trim();
+      const hay = raw.replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+      const compact = hay.replace(/\s+/g, '');
+      if (!hay) return '';
+      // Field/value keywords first. Parent group "POWER" must not stamp every child.
+      const rules = [
+        { icon: 'check-circle', needles: ['get status', 'getstatus', 'command get'] },
+        { icon: 'info', needles: ['health', 'diagnostics'], word: ['status', 'info'] },
+        // Fan / airflow before generic "speed" so "Fan Speed" does not become gauge.
+        { icon: 'fan', needles: ['fan', 'blower', 'ventilat'] },
+        { icon: 'air-flow', needles: ['airflow', 'air flow', 'air speed'] },
+        { icon: 'gauge', needles: ['speed', 'pwm', 'rpm', 'throttle'] },
+        { icon: 'move', needles: ['direction', 'forward', 'backward', 'clockwise', 'anticlock'] },
+        { icon: 'palette', needles: ['led color', 'led colour', 'color', 'colour', 'hue', 'color wheel'] },
+        { icon: 'lightbulb', needles: ['light', 'lamp', 'bulb'], word: ['led'] },
+        { icon: 'motor', needles: ['motor', 'drive', 'actuator'] },
+        { icon: 'sliders', needles: ['preset', 'level', 'range'] },
+        { icon: 'refresh-cw', needles: ['cycle', 'rotate', 'oscillat', 'reverse', 'auto rev', 'autorev', 'mode reg'] },
+        { icon: 'clock', needles: ['timeout', 'timer', 'delay', 'schedule', 'duration', 'countdown'] },
+        { icon: 'sun', needles: ['brightness', 'dimmer', 'lumen'] },
+        { icon: 'thermometer', needles: ['cct', 'color temp', 'colortemp', 'temp', 'thermal', 'heat'] },
+        { icon: 'aperture', needles: ['saturation', 'chroma'] },
+        { icon: 'snow-flake', needles: ['cool', 'cold', 'freeze'] },
+        { icon: 'humidity', needles: ['humid', 'moisture'] },
+        { icon: 'droplet', needles: ['water', 'liquid', 'fluid'] },
+        { icon: 'wifi', needles: ['wifi', 'wlan', 'ssid', 'rssi'] },
+        { icon: 'signal', needles: ['network', 'signal', 'connectivity'] },
+        { icon: 'bluetooth', needles: ['bluetooth', 'ble'] },
+        { icon: 'lock', needles: ['lock', 'password', 'secure', 'pin'] },
+        { icon: 'settings', needles: ['setting', 'config', 'setup', 'calibrat'] },
+        { icon: 'cpu', needles: ['device name', 'node name', 'device id', 'smart fan', 'device'], word: ['name'], exact: ['name', 'device'] },
+        { icon: 'file', needles: ['parameter', 'register', 'hex addr', 'hex', 'addr', 'frame'], word: ['param', 'reg'] },
+        { icon: 'code', needles: ['cmd', 'console', 'terminal'] },
+        { icon: 'edit', needles: ['enter text', 'textbox', 'input'] },
+        { icon: 'play', needles: ['execute', 'run', 'start'] },
+        { icon: 'zap', needles: ['command', 'trigger'] },
+        { icon: 'bell', needles: ['notification', 'alarm', 'alert', 'toast'] },
+        { icon: 'menu', needles: ['dropdown', 'drop down', 'select', 'option'] },
+        { icon: 'eye', needles: ['display', 'monitor', 'view', 'readout'] },
+        { icon: 'plug', needles: ['plug', 'socket', 'outlet'] },
+        { icon: 'volume-2', needles: ['volume', 'sound', 'audio', 'mute'] },
+        { icon: 'battery', needles: ['battery', 'charge'] },
+        { icon: 'radio', needles: ['sensor', 'probe', 'telemetry'] },
+        { icon: 'target', needles: ['target', 'focus', 'aim'] },
+        { icon: 'bolt', needles: ['system power', 'power supply', 'mains power', 'electric', 'voltage', 'watt', 'energy', 'relay'], word: ['power'] }
+      ];
+      for (let i = 0; i < rules.length; i += 1) {
+        const rule = rules[i];
+        for (let j = 0; j < rule.needles.length; j += 1) {
+          const needle = rule.needles[j];
+          if (needle && hay.indexOf(needle) !== -1) return rule.icon;
+        }
+        if (rule.exact && rule.exact.length) {
+          for (let e = 0; e < rule.exact.length; e += 1) {
+            const exact = String(rule.exact[e] || '');
+            if (hay === exact || compact === exact.replace(/\s+/g, '')) return rule.icon;
+          }
+        }
+        if (rule.word && rule.word.length) {
+          for (let w = 0; w < rule.word.length; w += 1) {
+            const word = String(rule.word[w] || '');
+            if (word && new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(hay)) {
+              return rule.icon;
+            }
+          }
+        }
+      }
+      return '';
+    }
+
+    function isIconHintNoise(name) {
+      const raw = String(name || '').toLowerCase().trim();
+      const hay = raw.replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!hay) return true;
+      const noise = {
+        text: 1, button: 1, push: 1, toggle: 1, switch: 1, slider: 1, dropdown: 1, select: 1,
+        display: 1, trigger: 1, command: 1, response: 1, error: 1, data: 1, cmd: 1, console: 1,
+        entertext: 1, textfield: 1, notification: 1, auto: 1, ui: 1, api: 1, value: 1, none: 1,
+        read: 1, write: 1, readonly: 1, hex: 1, byte: 1, frame: 1
+      };
+      const tokens = hay.split(/\s+/);
+      for (let i = 0; i < tokens.length; i += 1) {
+        const token = tokens[i];
+        if (!token) continue;
+        if (/^[0-9]+$/.test(token) || /^[0-9a-f]{1,4}$/.test(token)) continue;
+        if (noise[token]) continue;
+        return false;
+      }
+      return true;
+    }
+
+    function suggestParamIcon(name, componentType, fallback, groupName, allowGroupFallback) {
+      const type = String(componentType || '').toLowerCase().trim();
+      const def = fallback || currentTheme.parameterIcon || 'gauge';
+      function typeFallback() {
+        if (type.indexOf('brightness') !== -1) return 'sun';
+        if (type.indexOf('airflow') !== -1) return 'air-flow';
+        if (type.indexOf('cct') !== -1) return 'thermometer';
+        if (type.indexOf('saturation') !== -1) return 'aperture';
+        if (type.indexOf('hue') !== -1) return 'palette';
+        if (type.indexOf('notification') !== -1) return 'bell';
+        if (type.indexOf('dropdown') !== -1 || type.indexOf('select') !== -1) return 'menu';
+        if (type.indexOf('timer') !== -1) return 'clock';
+        if (type.indexOf('toggle') !== -1 || type.indexOf('switch') !== -1) return 'bolt';
+        // Never reuse trailing power-button glyph on the leading icon.
+        if (type.indexOf('push') !== -1) return 'zap';
+        if (type.indexOf('button') !== -1) return 'play';
+        if (type.indexOf('trigger') !== -1) return 'zap';
+        if (type.indexOf('slider') !== -1 || type.indexOf('gauge') !== -1) return 'sliders';
+        if (type.indexOf('cmd') !== -1 || type.indexOf('console') !== -1) return 'code';
+        if (type.indexOf('enter') !== -1 || type.indexOf('textfield') !== -1) return 'edit';
+        if (type.indexOf('display') !== -1 || type === 'text') return 'eye';
+        if (type.indexOf('text') !== -1) return 'file';
+        return def || 'cpu';
+      }
+      const parts = Array.isArray(name) ? name : [name];
+      for (let i = 0; i < parts.length; i += 1) {
+        const part = String(parts[i] || '').trim();
+        if (!part || isIconHintNoise(part)) continue;
+        const hit = matchIconKeywordRules(part);
+        if (hit) return hit;
+      }
+      const combined = parts
+        .map(function (part) { return String(part || '').trim(); })
+        .filter(function (part) { return part && !isIconHintNoise(part); })
+        .join(' ')
+        .trim();
+      if (combined) {
+        const combinedHit = matchIconKeywordRules(combined);
+        if (combinedHit) return combinedHit;
+      }
+      if (allowGroupFallback !== false) {
+        let groupHit = matchIconKeywordRules(groupName || '');
+        const powerishType = type.indexOf('toggle') !== -1
+          || type.indexOf('switch') !== -1
+          || type.indexOf('power') !== -1;
+        if (groupHit === 'bolt' && !powerishType) groupHit = '';
+        if (groupHit) return groupHit;
+      }
+      return typeFallback();
+    }
+
+    function isGenericLeadingIcon(iconName, themeDefault) {
+      const icon = String(iconName || '').trim().toLowerCase();
+      const def = String(themeDefault || 'gauge').trim().toLowerCase();
+      return !icon || icon === def || icon === 'gauge' || icon === 'power' || icon === 'power-off'
+        || icon === 'bolt' || icon === 'zap' || icon === 'eye' || icon === 'file' || icon === 'cpu'
+        || icon === 'play' || icon === 'info';
+    }
+
     function getParamIcon(card) {
       if (!card) return currentTheme.parameterIcon || 'gauge';
+      const themeDefault = String(currentTheme.parameterIcon || 'gauge').trim() || 'gauge';
+      const genericMeta = { data: 1, trigger: 1, command: 1, response: 1, error: 1, none: 1 };
+      const hintParts = [];
+      try {
+        const meta = card.dataset.apiMeta ? JSON.parse(card.dataset.apiMeta) : null;
+        if (meta && typeof meta === 'object') {
+          const fieldDesc = String(meta.field_description || '').trim();
+          const fieldName = String(meta.field_name || '').trim();
+          if (fieldDesc && !genericMeta[fieldDesc.toLowerCase()]) hintParts.push(fieldDesc);
+          if (fieldName && !genericMeta[fieldName.toLowerCase()]) hintParts.push(fieldName);
+        }
+      } catch (e) {}
+      const labelHint = String(card.dataset.componentLabel || '').trim();
+      if (labelHint && !isIconHintNoise(labelHint)) hintParts.push(labelHint);
+      const valueHint = String(card.dataset.componentValue || '').trim();
+      const labelEl = card.querySelector('.field-value');
+      const liveValueHint = labelEl && !labelEl.querySelector('input, select, textarea')
+        ? String(labelEl.textContent || '').trim()
+        : '';
+      [valueHint, liveValueHint].forEach(function (hint) {
+        if (hint && !isIconHintNoise(hint) && /[a-z]/i.test(hint)) hintParts.push(hint);
+      });
+      const getStatusHint = String(card.dataset.getStatusCommand || '') === '1' ||
+        (card.closest && card.closest('.param-group-card[data-get-status="1"]'))
+        ? 'get status'
+        : '';
+      if (getStatusHint) hintParts.push(getStatusHint);
+      const groupName = String(card.dataset.paramName || '').trim();
+      const isGroupedMulti = !!(card.classList && card.classList.contains('is-grouped-component')
+        && card.closest && card.closest('.param-group-card'));
+      if (!isGroupedMulti && groupName) hintParts.push(groupName);
+      const hasSemanticHint = hintParts.some(function (part) { return !isIconHintNoise(part); });
+      const suggested = suggestParamIcon(
+        hintParts,
+        card.dataset.componentType || '',
+        themeDefault,
+        groupName,
+        !isGroupedMulti || !hasSemanticHint
+      );
+      const saved = currentTheme.parameterIcons && currentTheme.parameterIcons[card.dataset.paramKey]
+        ? String(currentTheme.parameterIcons[card.dataset.paramKey]).trim()
+        : '';
+      // Explicit Studio picks win; leftover bolt/gauge/power yield to semantic icons.
+      if (saved && !isGenericLeadingIcon(saved, themeDefault)) return saved;
       const iconButton = card.querySelector('.param-icon');
       const domIcon = iconButton && iconButton.dataset.icon ? String(iconButton.dataset.icon).trim() : '';
-      return currentTheme.parameterIcons[card.dataset.paramKey] || domIcon || currentTheme.parameterIcon || 'gauge';
+      if (domIcon && !isGenericLeadingIcon(domIcon, themeDefault)) return domIcon;
+      return suggested;
     }
 
     function getParamMetaIcon(card) {
@@ -19884,6 +20842,7 @@ if (!function_exists('view_ui_icon')) {
           wrap.querySelectorAll('.segmented-option').forEach(function(node) {
             node.classList.toggle('is-active', String(node.dataset.value) === String(valueText));
           });
+          syncSegmentedOptionStyles(wrap, getEffectiveComponentColors(getComponentOverride(card.dataset.paramKey)).accentColor);
         }
         if (valueEl && !valueEl.querySelector('input, select, textarea')) valueEl.textContent = valueText;
         const metaValue = card.querySelector('.meta-value');
@@ -20045,14 +21004,8 @@ if (!function_exists('view_ui_icon')) {
           card.querySelectorAll('.param-range-input').forEach(function(input) {
             input.style.setProperty('--ui-accent', accentFill);
           });
-        card.querySelectorAll('.segmented-option').forEach(function(button) {
-          if (button.classList.contains('is-active')) {
-            button.style.background = override.accentColor ? accentFill : '';
-            button.style.color = override.accentColor ? '#FFFFFF' : '';
-          } else {
-            button.style.removeProperty('background');
-            button.style.removeProperty('color');
-          }
+        card.querySelectorAll('.segmented-visual').forEach(function(wrap) {
+          syncSegmentedOptionStyles(wrap, accentFill);
         });
         const linearFill = card.querySelector('.linear-gauge-fill');
         if (linearFill) {
@@ -20092,8 +21045,16 @@ if (!function_exists('view_ui_icon')) {
       if (progressBar) progressBar.style.width = (((activeIndex + 1) / slides.length) * 100) + '%';
 
       if (targetSlide) {
-        if (title) title.textContent = targetSlide.dataset.pageTitle || 'Model UI';
-        if (subtitle) subtitle.textContent = 'Page ' + (targetSlide.dataset.pageNo || (activeIndex + 1)) + '.Operation';
+        const pageNo = String(targetSlide.dataset.pageNo || (activeIndex + 1)).trim() || String(activeIndex + 1);
+        const pageName = String(targetSlide.dataset.pageTitle || '').trim();
+        if (title) {
+          if (/^page\s*\d+/i.test(pageName)) {
+            title.textContent = pageName;
+          } else {
+            title.textContent = 'Page ' + pageNo + '. ' + (pageName || 'Operation');
+          }
+        }
+        if (subtitle) subtitle.textContent = modelNo || 'Model UI';
         targetSlide.scrollTop = 0;
       }
     }
@@ -20321,7 +21282,7 @@ if (!function_exists('view_ui_icon')) {
 
     function applyTypographyVarsToElement(el, typography) {
       if (!el || !typography) return;
-      el.style.setProperty('--ui-font', '"' + typography.fontFamily + '", "Segoe UI", Arial, sans-serif');
+      el.style.setProperty('--ui-font', '"' + typography.fontFamily + '", "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif');
       el.style.setProperty('--ui-font-size', typography.fontSize + 'px');
       el.style.setProperty('--ui-font-weight', typography.fontWeight);
       el.style.setProperty('--ui-letter-spacing', typography.letterSpacing + 'px');
@@ -20458,7 +21419,7 @@ if (!function_exists('view_ui_icon')) {
     // Theme Application
     function applyTheme(theme, options) {
       const settings = options || {};
-      document.body.setAttribute('data-studio-theme-mode', String(theme.themeMode || 'pro').toLowerCase());
+      document.body.setAttribute('data-studio-theme-mode', String(theme.themeMode || 'dark').toLowerCase());
       const root = phoneShell;
       if (root) {
         root.style.setProperty('--ui-bg', theme.backgroundColor);
@@ -20487,7 +21448,7 @@ if (!function_exists('view_ui_icon')) {
         root.style.setProperty('--ui-success', theme.successColor || '#10B981');
         root.style.setProperty('--ui-warning', theme.warningColor || '#F59E0B');
         root.style.setProperty('--ui-error', theme.errorColor || '#EF4444');
-        root.style.setProperty('--ui-icon-size', parseInt(theme.iconSize || 20, 10) + 'px');
+        root.style.setProperty('--ui-icon-size', parseInt(theme.iconSize || 22, 10) + 'px');
         root.style.setProperty('--ui-icon-color', theme.iconColor || theme.accentColor);
         root.style.setProperty('--ui-header-height', parseInt(theme.headerHeight || 84, 10) + 'px');
         root.style.setProperty('--ui-border-size', parseInt(theme.borderSize || 1, 10) + 'px');
@@ -20548,6 +21509,15 @@ if (!function_exists('view_ui_icon')) {
         }
       }
 
+      const headerChrome = headerChromeFromTheme(theme);
+      if (root) {
+        root.style.setProperty('--ui-header-bg', headerChrome.backgroundColor);
+        root.style.setProperty('--ui-header-fg', headerChrome.titleColor);
+        root.style.setProperty('--ui-header-device', headerChrome.deviceColor || headerChrome.subtitleColor);
+        root.style.setProperty('--ui-header-chip-bg', headerChrome.backBackground);
+        root.style.setProperty('--ui-header-chip-bg-hover', headerChrome.backBackgroundHover || headerChrome.backBackground);
+        root.style.setProperty('--ui-header-chip-fg', headerChrome.backForeground);
+      }
       queryPreviewAll('.app-topbar').forEach(function(topbar) {
         topbar.classList.remove('is-align-center', 'is-align-right');
         const alignment = theme.headerAlignment || 'left';
@@ -20557,6 +21527,22 @@ if (!function_exists('view_ui_icon')) {
           topbar.classList.add('is-align-right');
         }
         topbar.style.background = topbarBackgroundCss(theme);
+        topbar.style.color = headerChrome.titleColor;
+        topbar.style.borderBottomColor = headerChrome.isDark ? 'rgba(255,255,255,0.08)' : '';
+        const titleEl = topbar.querySelector('.top-title h1');
+        if (titleEl) titleEl.style.color = headerChrome.titleColor;
+        const deviceEl = topbar.querySelector('.top-title-device, #active-page-subtitle');
+        if (deviceEl) deviceEl.style.color = headerChrome.deviceColor || headerChrome.subtitleColor;
+        topbar.querySelectorAll('.app-back-btn').forEach(function(btn) {
+          btn.style.background = headerChrome.backBackground;
+          btn.style.color = headerChrome.backForeground;
+          btn.style.boxShadow = 'none';
+        });
+        topbar.querySelectorAll('.icon-btn').forEach(function(btn) {
+          btn.style.background = headerChrome.actionBackground;
+          btn.style.color = headerChrome.actionForeground;
+          btn.style.boxShadow = 'none';
+        });
       });
 
       queryPreviewAll('.field-value').forEach(function(el) {
@@ -20824,24 +21810,41 @@ if (!function_exists('view_ui_icon')) {
     }
 
     function headerChromeFromTheme(theme) {
-      const topbarBg = (theme && theme.topbarColor) || '#0F172A';
+      const mode = String((theme && theme.themeMode) || '').toLowerCase();
+      const pageBg = (theme && theme.backgroundColor) || '#F8FAFC';
+      const configuredTopbar = (theme && theme.topbarColor) || '#0F172A';
+      // Light surfaces use a light app bar (mock); dark surfaces keep the topbar color.
+      const preferLightBar = mode === 'light' || mode === 'pro' || mode === 'ocean' || !cssColorIsDark(pageBg);
+      const topbarBg = (preferLightBar && cssColorIsDark(configuredTopbar))
+        ? ((theme && theme.shellColor) || pageBg || '#FFFFFF')
+        : configuredTopbar;
       const dark = cssColorIsDark(topbarBg);
+      const accent = (theme && theme.accentColor) || (dark ? '#60A5FA' : '#3B82F6');
       return {
         backgroundColor: topbarBg,
-        secondaryColor: (theme && theme.secondaryColor) || topbarBg,
+        secondaryColor: dark
+          ? ((theme && theme.secondaryColor) || topbarBg)
+          : topbarBg,
         titleColor: dark ? '#FFFFFF' : ((theme && theme.textColor) || '#0F172A'),
-        subtitleColor: dark ? 'rgba(255,255,255,0.72)' : ((theme && theme.mutedTextColor) || '#64748B'),
-        backBackground: dark ? 'rgba(255,255,255,0.10)' : '#FFFFFF',
+        // Device id under the page title stays accent blue in both themes.
+        subtitleColor: accent,
+        deviceColor: accent,
+        backBackground: dark ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.06)',
+        backBackgroundHover: dark ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.10)',
         backForeground: dark ? '#FFFFFF' : ((theme && theme.textColor) || '#0F172A'),
-        actionBackground: dark ? 'rgba(255,255,255,0.10)' : 'rgba(37,99,235,0.10)',
-        actionBorder: dark ? 'rgba(255,255,255,0.12)' : 'rgba(37,99,235,0.16)',
-        actionForeground: dark ? '#FFFFFF' : ((theme && theme.accentColor) || '#2563EB'),
+        actionBackground: dark ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.06)',
+        actionBackgroundHover: dark ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.10)',
+        actionBorder: dark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.08)',
+        actionForeground: dark ? '#FFFFFF' : ((theme && theme.textColor) || '#0F172A'),
         isDark: dark
       };
     }
 
     function topbarBackgroundCss(theme) {
       const chrome = headerChromeFromTheme(theme || currentTheme);
+      if (!chrome.isDark) {
+        return chrome.backgroundColor;
+      }
       return 'linear-gradient(145deg, ' + chrome.backgroundColor + ', ' + chrome.secondaryColor + '), ' + chrome.backgroundColor;
     }
 
@@ -22126,7 +23129,6 @@ if (!function_exists('view_ui_icon')) {
         'navigation.page.next': { id: 'navigation.page.next', type: 'pagerNext', target: 'mainPager', wrap: false },
         'navigation.page.select': { id: 'navigation.page.select', type: 'pagerSelect', target: 'mainPager', input: { pageIndex: 'integer', pageId: 'string' } },
         'ui.info': { id: 'ui.info', type: 'openDeviceInfo', value: 'openDeviceInfo', presentation: 'schema', schemaPath: 'infoPage', entryScreen: 'gatewayDetails', dataSource: 'deviceInfo' },
-        'ui.scan': { id: 'ui.scan', type: 'native', value: 'openScanner', feature: 'qrBarcodeScan', screen: 'qrScanner', schemaPath: 'wifiProvisioning.screens.qrScanner', resultBinding: 'state.scanResult.value' },
         'ui.wifi': { id: 'ui.wifi', type: 'openWifiConfig', value: 'openWifiConfig', presentation: 'schema', schemaPath: 'wifiProvisioning', entryScreen: 'wifiNetworkPicker', plugin: 'efactor.wifi' },
         'ui.edit': { id: 'ui.edit', type: 'navigate', route: '/ui/edit', parameters: { modelNo: modelNo } }
       }, parameterActions);
@@ -22201,7 +23203,7 @@ if (!function_exists('view_ui_icon')) {
           radii: { card: numberValue(currentTheme.borderRadius, 18), button: numberValue(currentTheme.buttonRadius, 16), pill: 999 },
           borders: { card: { width: numberValue(currentTheme.borderSize, 1), color: token('colors.border') } },
           shadows: { card: { enabled: numberValue(currentTheme.shadowStrength, 70) > 0, strength: numberValue(currentTheme.shadowStrength, 70) } },
-          icons: { library: 'semantic', default: currentTheme.parameterIcon || 'gauge', size: numberValue(currentTheme.iconSize, 20), overrides: currentTheme.parameterIcons || {} },
+          icons: { library: 'semantic', default: currentTheme.parameterIcon || 'gauge', size: numberValue(currentTheme.iconSize, 22), overrides: currentTheme.parameterIcons || {} },
           componentStyles: componentStyles
         },
         responsive: buildDeviceUiResponsiveContract(),
@@ -22227,7 +23229,6 @@ if (!function_exists('view_ui_icon')) {
                 style: componentStyles.appBar,
                 children: [
                   { id: 'back-button', type: 'Button', variant: 'textIcon', props: { text: 'Back', icon: 'chevron-left', accessibilityLabel: 'Back' }, events: { press: 'navigation.back' }, styleRef: 'backButton', style: componentStyles.backButton },
-                  { id: 'scan-button', type: 'IconButton', visible: boolValue(currentTheme.showHeaderIcons), props: { icon: 'scan', accessibilityLabel: 'Scan' }, events: { press: 'ui.scan' }, styleRef: 'headerIconButton', style: componentStyles.headerIconButton },
                   { id: 'wifi-button', type: 'IconButton', visible: boolValue(currentTheme.showHeaderIcons), props: { icon: 'wifi', accessibilityLabel: 'WiFi' }, events: { press: 'ui.wifi' }, styleRef: 'headerIconButton', style: componentStyles.headerIconButton },
                   { id: 'info-button', type: 'IconButton', visible: boolValue(currentTheme.showHeaderIcons), props: { icon: 'info', accessibilityLabel: 'Information' }, events: { press: 'ui.info' }, styleRef: 'headerIconButton', style: componentStyles.headerIconButton }
                 ]
@@ -22516,7 +23517,6 @@ if (!function_exists('view_ui_icon')) {
                   component: 'IconButtonGroup',
                   visible: toBool(currentTheme.showHeaderIcons),
                   actions: [
-                    { icon: 'scan', label: 'Scan', action: 'openScanner' },
                     { icon: 'wifi', label: 'WiFi', action: 'openWifiConfig', plugin: 'efactor.wifi', schemaPath: 'wifiProvisioning', entryScreen: 'wifiNetworkPicker' },
                     { icon: 'info', label: 'Information', action: 'openDeviceInfo', schemaPath: 'infoPage', entryScreen: 'gatewayDetails' }
                   ]
@@ -22650,11 +23650,11 @@ if (!function_exists('view_ui_icon')) {
             '</section>' +
           '</main>',
         css: [
-          '.phone-shell{width:min(100%,430px);height:100%;max-height:100%;margin:0 auto;background:' + currentTheme.backgroundColor + ';box-shadow:0 30px 80px rgba(34,40,60,.18);display:flex;flex-direction:column;overflow:hidden;color:' + currentTheme.textColor + ';font-family:"' + currentTheme.fontFamily + '","Segoe UI",Arial,sans-serif;font-size:' + px(currentTheme.fontSize, 14) + ';font-weight:' + parseInt(currentTheme.fontWeight || 700, 10) + ';letter-spacing:' + (parseFloat(currentTheme.letterSpacing || 0)) + 'px;line-height:' + parseFloat(currentTheme.lineHeight || 1.35) + ';text-align:' + (currentTheme.textAlign || 'left') + ';}.phone-shell>.app-topbar,.phone-shell>.brand-strip{flex:0 0 auto}.phone-shell>.slider-shell{flex:1 1 auto;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto auto;overflow:hidden}.phone-shell>.slider-shell>.slide-window{position:relative;min-height:0;overflow:hidden}.phone-shell>.slider-shell>.slide-window>.slide-track{position:absolute;inset:0;display:flex;min-height:0;align-items:stretch}.phone-shell>.slider-shell>.slide-window>.slide-track>.page-slide{flex:0 0 100%;width:100%;min-width:100%;height:100%;max-height:100%;min-height:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}.phone-shell>.slider-shell>.progress-shell,.phone-shell>.slider-shell>.slider-controls{flex:0 0 auto}.phone-shell>.empty-ui{flex:1 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}',
-          '.app-topbar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;min-height:' + px(currentTheme.headerHeight, 84) + ';padding:14px 16px 12px;background:linear-gradient(145deg,' + currentTheme.topbarColor + ',' + currentTheme.secondaryColor + '),' + currentTheme.topbarColor + ';color:#fff;box-shadow:0 18px 38px rgba(18,50,70,.16);}',
+          '.phone-shell{width:min(100%,430px);height:100%;max-height:100%;margin:0 auto;background:' + currentTheme.backgroundColor + ';box-shadow:0 30px 80px rgba(34,40,60,.18);display:flex;flex-direction:column;overflow:hidden;color:' + currentTheme.textColor + ';font-family:"' + currentTheme.fontFamily + '","Plus Jakarta Sans","Segoe UI",Arial,sans-serif;font-size:' + px(currentTheme.fontSize, 14) + ';font-weight:' + parseInt(currentTheme.fontWeight || 700, 10) + ';letter-spacing:' + (parseFloat(currentTheme.letterSpacing || 0)) + 'px;line-height:' + parseFloat(currentTheme.lineHeight || 1.35) + ';text-align:' + (currentTheme.textAlign || 'left') + ';}.phone-shell>.app-topbar,.phone-shell>.brand-strip{flex:0 0 auto}.phone-shell>.slider-shell{flex:1 1 auto;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto auto;overflow:hidden}.phone-shell>.slider-shell>.slide-window{position:relative;min-height:0;overflow:hidden}.phone-shell>.slider-shell>.slide-window>.slide-track{position:absolute;inset:0;display:flex;min-height:0;align-items:stretch}.phone-shell>.slider-shell>.slide-window>.slide-track>.page-slide{flex:0 0 100%;width:100%;min-width:100%;height:100%;max-height:100%;min-height:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}.phone-shell>.slider-shell>.progress-shell,.phone-shell>.slider-shell>.slider-controls{flex:0 0 auto}.phone-shell>.empty-ui{flex:1 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}',
+          '.app-topbar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;min-height:' + px(currentTheme.headerHeight, 72) + ';padding:12px 16px;background:' + topbarBackgroundCss(currentTheme) + ';color:' + headerChromeFromTheme(currentTheme).titleColor + ';border-bottom:1px solid ' + (headerChromeFromTheme(currentTheme).isDark ? 'rgba(255,255,255,.08)' : 'rgba(15,23,42,.06)') + ';box-shadow:none;}',
           '.param-cmd-console{display:flex;align-items:flex-start;gap:8px;width:100%;min-width:0;padding:8px 10px;border-radius:8px;border:1px solid #1F2937;background:#0B0F17}.param-cmd-prompt{flex:0 0 auto;color:#4ADE80;font-size:12px;font-weight:700;line-height:1.45}.param-cmd-input,.param-console-input{flex:1 1 auto;width:100%;min-width:0;min-height:1.45em;height:auto;border:0;background:transparent;color:#E5E7EB;font-family:ui-monospace,Consolas,monospace;font-size:12px;font-weight:600;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;resize:none}',
-          '.app-back-btn,.back-btn,.icon-btn{display:inline-flex;align-items:center;justify-content:center;height:42px;border:0;border-radius:999px;background:rgba(255,255,255,.1);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);}.app-back-btn,.back-btn{width:auto;min-width:42px;padding:0 12px;gap:2px;font-size:13px;font-weight:600;}.icon-btn{width:42px;border-radius:50%;}',
-          '.top-title h1{margin:0;color:#fff;font-size:18px;line-height:1.2;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.top-title p{margin:2px 0 0;color:rgba(255,255,255,.68);font-size:12px;line-height:1.25;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.top-actions{display:flex;align-items:center;gap:4px;}',
+          '.app-back-btn,.back-btn,.icon-btn{display:inline-flex;align-items:center;justify-content:center;height:36px;border:0;border-radius:999px;background:' + headerChromeFromTheme(currentTheme).backBackground + ';color:' + headerChromeFromTheme(currentTheme).backForeground + ';box-shadow:none;}.app-back-btn,.back-btn{width:auto;min-width:42px;padding:0 12px;gap:2px;font-size:13px;font-weight:600;}.icon-btn{width:36px;border-radius:50%;}',
+          '.top-title h1{margin:0;color:' + headerChromeFromTheme(currentTheme).titleColor + ';font-size:16px;line-height:1.2;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.top-title p,.top-title-device{margin:2px 0 0;color:' + headerChromeFromTheme(currentTheme).deviceColor + ';font-size:12px;line-height:1.25;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.top-actions{display:flex;align-items:center;gap:6px;}',
           '.brand-strip{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;margin:10px 16px 12px;padding:10px 16px;border:0;border-radius:999px;background:' + currentTheme.cardColor + ';box-shadow:0 10px 28px rgba(15,23,42,.12);color:' + currentTheme.textColor + ';}',
           '.brand-mark{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:2px 4px;border:0;border-radius:6px;background:#fff;overflow:hidden}.brand-mark img{display:block;height:28px;width:auto;max-width:118px;object-fit:contain}.brand-copy strong{display:block;color:' + currentTheme.textColor + ';font-size:14px;line-height:1.2;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.brand-copy span{display:block;margin-top:2px;color:' + currentTheme.mutedTextColor + ';font-size:11px;font-weight:700;}.online-state{display:inline-flex;align-items:center;gap:7px;color:' + currentTheme.successColor + ';font-size:12px;font-weight:900;}',
           '.page-slide{padding:' + px(currentTheme.pagePadding, 18) + ' ' + px(currentTheme.pagePadding, 18) + ' 4px}.slide-hero{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end;min-height:112px;margin-bottom:14px;padding:18px;border-radius:calc(' + px(currentTheme.borderRadius, 18) + ' + 6px);background:linear-gradient(145deg,' + currentTheme.topbarColor + ',' + currentTheme.secondaryColor + ');color:#fff;box-shadow:0 18px 38px rgba(18,50,70,.16);overflow:hidden;}.slide-hero:after{content:"";position:absolute;right:-36px;top:-36px;width:112px;height:112px;border-radius:50%;border:24px solid rgba(209,250,255,.16);}',
@@ -22664,7 +23664,7 @@ if (!function_exists('view_ui_icon')) {
           '.progress-shell{margin:0 18px 8px;height:5px;border-radius:999px;background:rgba(106,142,174,.18);overflow:hidden}.progress-bar{height:100%;border-radius:inherit;background:linear-gradient(90deg,' + currentTheme.secondaryColor + ',' + currentTheme.accentColor + ')}.slider-controls{display:grid;grid-template-columns:48px 1fr 48px;gap:10px;align-items:center;margin:6px 18px 0;padding:12px;border:1px solid rgba(106,142,174,.28);border-radius:20px;background:rgba(255,255,255,.72);box-shadow:0 12px 28px rgba(18,50,70,.1);}.slide-arrow{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:1px solid rgba(106,142,174,.28);border-radius:50%;background:' + currentTheme.topbarColor + ';color:#fff}.page-buttons{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.page-buttons::-webkit-scrollbar{display:none}.page-button{flex:0 0 auto;min-width:34px;height:34px;padding:0 10px;margin:8px;border:1px solid rgba(106,142,174,.28);border-radius:999px;background:#fff;color:' + currentTheme.textColor + ';font-size:13px;font-weight:900}.page-button.is-active{border-color:' + currentTheme.accentColor + ';background:linear-gradient(135deg,' + currentTheme.secondaryColor + ',' + currentTheme.accentColor + ');color:#fff;}'
         ].join('\n'),
         componentTemplates: {
-          appTopbar: '<button class="app-back-btn">{{icon:chevron-left}}<span class="app-back-label">Back</span></button><div class="top-title"><h1>{{page.pageName}}</h1><p>{{modelNo}}</p><p>Page {{page.pageNo}}.Operation</p></div><div class="top-actions">{{actionIcons}}</div>',
+          appTopbar: '<button class="app-back-btn">{{icon:chevron-left}}<span class="app-back-label">Back</span></button><div class="top-title"><h1>Page {{page.pageNo}}. {{page.pageName}}</h1><p class="top-title-device">{{modelNo}}</p></div><div class="top-actions">{{actionIcons}}</div>',
           brandStrip: '<div class="brand-mark"><img src="' + ((brandLogo && (brandLogo.previewUrl || brandLogo.url)) || '') + '" alt="' + ((brandLogo && brandLogo.alt) || 'Efactor') + '"></div><div class="brand-copy"><strong>{{modelNo}}</strong><span>{{linkedPagesText}}</span></div><div class="online-state ' + (getDeviceConnectivityState().online ? 'is-online' : 'is-offline') + '" data-online-state="' + (getDeviceConnectivityState().online ? '1' : '0') + '">' + getDeviceConnectivityState().label + '</div>',
           controlCard: '<article class="param-card{{stackedClass}}"><div class="param-main-row"><button class="param-icon">{{icon:control.icon}}</button><div><span class="field-label">{{control.name}}</span><span class="field-value">{{control.value}}</span></div>{{rightAccessory}}</div>{{rangeAccessory}}</article>',
           switchAccessory: '<span class="toggle-visual" aria-hidden="true"></span>',
@@ -22716,7 +23716,6 @@ if (!function_exists('view_ui_icon')) {
             showHeaderIcons: String(currentTheme.showHeaderIcons) !== '0',
             alignment: currentTheme.headerAlignment,
             actions: [
-              { id: 'scan', icon: 'scan', label: 'Scan', action: 'openScanner' },
               { id: 'wifi', icon: 'wifi', label: 'WiFi', action: 'openWifiConfig', plugin: 'efactor.wifi', schemaPath: 'wifiProvisioning', entryScreen: 'wifiNetworkPicker' },
               { id: 'info', icon: 'info', label: 'Information' }
             ]
@@ -22888,11 +23887,10 @@ if (!function_exists('view_ui_icon')) {
       };
 
       components.appBar = Object.assign(baseComponent('appBar', 'appBar', null, null, 'appBar', null, true), {
-        children: ['backButton', 'pageTitle', 'scanButton', 'wifiButton', 'infoButton']
+        children: ['backButton', 'pageTitle', 'wifiButton', 'infoButton']
       });
       components.backButton = Object.assign(baseComponent('backButton', 'iconButton', 'Back', null, 'headerButton', 'goBack', true), { icon: 'chevron-left' });
       components.pageTitle = baseComponent('pageTitle', 'title', null, 'navigation.activePage.title', 'pageTitle', null, true);
-      components.scanButton = Object.assign(baseComponent('scanButton', 'iconButton', 'Scan', null, 'headerButton', 'openScanner', true), { icon: 'scan', plugin: 'qrBarcodeScan' });
       components.wifiButton = Object.assign(baseComponent('wifiButton', 'iconButton', 'WiFi', null, 'headerButton', 'openWifiConfig', true), { icon: 'wifi' });
       components.infoButton = Object.assign(baseComponent('infoButton', 'iconButton', 'Information', null, 'headerButton', 'openInfo', true), { icon: 'info' });
       components.brandBar = baseComponent('brandBar', 'statusCard', null, 'device', 'brandBar', null, String(currentTheme.brandVisible) !== '0');
@@ -23026,7 +24024,7 @@ if (!function_exists('view_ui_icon')) {
           shell: { header: 'appBar', brand: 'brandBar', content: '$navigation.activePage', footer: 'pagePager' }
         },
         theme: {
-          mode: currentTheme.themeMode || 'light',
+          mode: currentTheme.themeMode || 'dark',
           tokens: {
             colors: {
               primary: currentTheme.accentColor,
@@ -23612,7 +24610,7 @@ if (!function_exists('view_ui_icon')) {
         return output;
       };
       const iconNode = function(id, name, color, size) {
-        return node('icon', id, { name: name || 'gauge', size: size || n(currentTheme.iconSize, 20) }, { color: color || currentTheme.iconColor }, []);
+        return node('icon', id, { name: name || 'gauge', size: size || n(currentTheme.iconSize, 22) }, { color: color || currentTheme.iconColor }, []);
       };
       const textNode = function(id, text, style, maxLines, extraProps) {
         return node('text', id, Object.assign({ text: text, maxLines: maxLines || 1, overflow: 'ellipsis' }, extraProps || {}), Object.assign({ textStyle: style }, {
@@ -23899,13 +24897,6 @@ if (!function_exists('view_ui_icon')) {
                 textNode('active_page_subtitle', activeSubtitle, textStyle(12, 600, headerChrome.subtitleColor, 1.25), 1, { textBinding: 'state.activePageSubtitle' })
               ]),
               node('row', 'top_actions', { spacing: 4, visibility: bool(currentTheme.showHeaderIcons) }, {}, [
-                buttonNode('device_scan_button', 'Scan', [action('onTap', 'openScanner', 'openScanner')], {
-                  width: 42,
-                  height: 42,
-                  backgroundColor: headerChrome.actionBackground,
-                  borderRadius: 999,
-                  border: border(1, headerChrome.actionBorder)
-                }, [iconNode('device_scan_icon', 'scan', headerChrome.actionForeground, 20)]),
                 buttonNode('device_wifi_button', 'WiFi', [{
                   event: 'onTap',
                   action: {
@@ -24170,7 +25161,7 @@ if (!function_exists('view_ui_icon')) {
         meta: {
           source: 'studio',
           // Keep in sync with View_page_model::DEVICE_UI_SCHEMA_BUILD_VERSION
-          schemaBuildVersion: '2026-10-08.1',
+          schemaBuildVersion: '2026-10-31.2',
           app: {
             id: 'efactor_' + slug(modelNo, 'device_ui'),
             name: (modelNo || 'Efactor Device') + ' Control',
@@ -24225,7 +25216,7 @@ if (!function_exists('view_ui_icon')) {
         },
         node_id: buildNodeIdSchemaSection(resolvedNodeId),
         theme: {
-          mode: currentTheme.themeMode || 'light',
+          mode: currentTheme.themeMode || 'dark',
           backgroundType: currentTheme.backgroundType || 'gradient',
           tokens: {
             topbarColor: currentTheme.topbarColor,
@@ -24290,7 +25281,7 @@ if (!function_exists('view_ui_icon')) {
         icons: {
           library: buildCompactIconLibrary(usedIconNames),
           default: currentTheme.parameterIcon || 'gauge',
-          size: parseInt(currentTheme.iconSize || 20, 10),
+          size: parseInt(currentTheme.iconSize || 22, 10),
           color: currentTheme.iconColor || currentTheme.accentColor || '#157145'
         },
         components: {
@@ -24582,7 +25573,6 @@ if (!function_exists('view_ui_icon')) {
               borderColor: headerChrome.actionBorder
             },
             actions: [
-              { id: 'scan', icon: 'scan', label: 'Scan', action: 'openScanner', plugin: 'qrBarcodeScan', iconColor: headerChrome.actionForeground },
               { id: 'wifi', icon: 'wifi', label: 'WiFi', action: 'openWifiConfig', plugin: 'efactor.wifi', schemaPath: 'wifiProvisioning', entryScreen: 'wifiNetworkPicker', iconColor: headerChrome.actionForeground },
               { id: 'info', icon: 'info', label: 'Information', action: 'openDeviceInfo', schemaPath: 'infoPage', entryScreen: 'gatewayDetails', iconColor: headerChrome.actionForeground }
             ]
@@ -24640,9 +25630,11 @@ if (!function_exists('view_ui_icon')) {
     };
 
     function markSchemaDirty() {
+      // Mark dirty only. Do not auto-rebuild the full Flutter schema on every UI tweak —
+      // that freezes Studio. Rebuild happens on Save / Skema / Copy / explicit generate.
       schemaCache.dirty = true;
-      scheduleAutoSchemaGenerate();
       schemaCache.pretty = '';
+      schemaCache.compact = '';
     }
 
     function stringifySchemaSafe(value, pretty) {
@@ -24678,9 +25670,26 @@ if (!function_exists('view_ui_icon')) {
 
     function scheduleAutoSchemaGenerate() {
       window.clearTimeout(autoSchemaGenerateTimer);
+      // Longer debounce kept for rare callers that still schedule a background rebuild.
       autoSchemaGenerateTimer = window.setTimeout(function() {
         generateSchema({ force: true });
-      }, 400);
+      }, 1200);
+    }
+
+    function schemaPayloadForSave(schema) {
+      if (!schema || typeof schema !== 'object') {
+        return schema;
+      }
+      // exactHtmlPreview is a diagnostic HTML snapshot only — drop it from the save
+      // POST to shrink upload/DB packaging. Studio can regenerate it locally anytime.
+      if (!schema.exactHtmlPreview && !(schema.extensions && schema.extensions.universalUi)) {
+        return schema;
+      }
+      const payload = Object.assign({}, schema);
+      if (Object.prototype.hasOwnProperty.call(payload, 'exactHtmlPreview')) {
+        delete payload.exactHtmlPreview;
+      }
+      return payload;
     }
 
     function generateSchema(options) {
@@ -24945,7 +25954,7 @@ if (!function_exists('view_ui_icon')) {
         });
       });
       const usedIconNames = collectUsedIconNames(visibleControls);
-      const fontFamily = currentTheme.fontFamily || 'Inter';
+      const fontFamily = currentTheme.fontFamily || 'Plus Jakarta Sans';
       const fontAsset = fontAssetForFamily(fontFamily) || ('assets/fonts/' + String(fontFamily).replace(/\s+/g, '') + '-Regular.ttf');
       const schemaDocsUrl = (window.location.origin || '') + '/assets/js/sdui/schema/server-driven-ui.schema.json';
 
@@ -25216,11 +26225,11 @@ if (!function_exists('view_ui_icon')) {
 
     const themePresets = {
       light: {
-        themeMode: 'pro', backgroundType: 'gradient', backgroundColor: '#F8FAFC', gradientColor: '#EEF2F7',
+        themeMode: 'light', backgroundType: 'gradient', backgroundColor: '#F8FAFC', gradientColor: '#EEF2F7',
         shellColor: '#F8FAFC', cardColor: '#FFFFFF', textColor: '#0F172A', mutedTextColor: '#64748B',
-        topbarColor: '#0F172A', accentColor: '#2563EB', secondaryColor: '#94A3B8', buttonBgColor: '#2563EB',
+        topbarColor: '#FFFFFF', accentColor: '#2563EB', secondaryColor: '#94A3B8', buttonBgColor: '#2563EB',
         buttonTextColor: '#FFFFFF', iconColor: '#2563EB', borderColor: '#E2E8F0', toggleOnColor: '#2563EB',
-        toggleOffColor: '#CBD5E1', fontFamily: 'Inter', fontSize: 15, fontWeight: 500, letterSpacing: -0.2,
+        toggleOffColor: '#CBD5E1', fontFamily: 'Plus Jakarta Sans', fontSize: 15, fontWeight: 500, letterSpacing: -0.2,
         lineHeight: 1.5, borderRadius: 16, shadowStrength: 42, headerHeight: 72, cardSpacing: 12, pagePadding: 16
       },
       dark: {
@@ -25228,26 +26237,26 @@ if (!function_exists('view_ui_icon')) {
         shellColor: '#0F172A', cardColor: '#1E293B', textColor: '#F8FAFC', mutedTextColor: '#94A3B8',
         topbarColor: '#020617', accentColor: '#60A5FA', secondaryColor: '#64748B', buttonBgColor: '#2563EB',
         buttonTextColor: '#FFFFFF', iconColor: '#60A5FA', borderColor: '#334155', toggleOnColor: '#60A5FA', toggleOffColor: '#475569',
-        fontFamily: 'Inter', fontWeight: 500, shadowStrength: 50
+        fontFamily: 'Plus Jakarta Sans', fontWeight: 500, shadowStrength: 50
       },
       ocean: {
         themeMode: 'ocean', backgroundType: 'gradient', backgroundColor: '#EFF6FF', gradientColor: '#DBEAFE',
         shellColor: '#F8FAFC', cardColor: '#FFFFFF', textColor: '#0F172A', mutedTextColor: '#64748B',
         topbarColor: '#1E3A8A', accentColor: '#2563EB', secondaryColor: '#93C5FD', buttonBgColor: '#2563EB',
-        buttonTextColor: '#FFFFFF', iconColor: '#2563EB', borderColor: '#BFDBFE', fontFamily: 'Inter', fontWeight: 500
+        buttonTextColor: '#FFFFFF', iconColor: '#2563EB', borderColor: '#BFDBFE', fontFamily: 'Plus Jakarta Sans', fontWeight: 500
       },
       nature: {
         themeMode: 'nature', backgroundType: 'gradient', backgroundColor: '#ECFDF5', gradientColor: '#D1FAE5',
         shellColor: '#F0FDF4', cardColor: '#FFFFFF', textColor: '#0F172A', mutedTextColor: '#64748B',
         topbarColor: '#064E3B', accentColor: '#2563EB', secondaryColor: '#6EE7B7', buttonBgColor: '#2563EB',
-        buttonTextColor: '#FFFFFF', iconColor: '#2563EB', borderColor: '#A7F3D0', fontFamily: 'Inter', fontWeight: 500
+        buttonTextColor: '#FFFFFF', iconColor: '#2563EB', borderColor: '#A7F3D0', fontFamily: 'Plus Jakarta Sans', fontWeight: 500
       },
       glass: {
         themeMode: 'glass', backgroundType: 'gradient', backgroundColor: '#F8FAFC', gradientColor: '#E2E8F0',
         shellColor: '#F8FAFC', cardColor: 'rgba(255,255,255,0.82)', textColor: '#0F172A', mutedTextColor: '#64748B',
         topbarColor: '#1E293B', accentColor: '#475569', secondaryColor: '#94A3B8', buttonBgColor: '#334155',
         buttonTextColor: '#FFFFFF', iconColor: '#334155', borderColor: '#CBD5E1', cardBlur: 12, shadowStrength: 36,
-        fontFamily: 'Inter', fontWeight: 500
+        fontFamily: 'Plus Jakarta Sans', fontWeight: 500
       }
     };
 
@@ -25390,7 +26399,6 @@ if (!function_exists('view_ui_icon')) {
       requestAnimationFrame(applyActivePreviewZoom);
     });
     bindClick('device-info-btn', openDeviceInfoFromSchema);
-    bindClick('device-scan-btn', openDeviceScannerFromSchema);
     bindClick('device-wifi-btn', openDeviceWifiFromSchema);
     bindClick('device-info-close-btn', handleDeviceOverlayBack);
     bindClick('device-wifi-header-scan-btn', openWifiQrScanner);
@@ -25554,9 +26562,10 @@ if (!function_exists('view_ui_icon')) {
         }
         const formData = new FormData();
         const themeForSave = buildThemePayloadForSave();
+        const saveSchema = schemaPayloadForSave(schema);
         formData.append('modelno', modelNo);
         formData.append('theme_json', JSON.stringify(themeForSave));
-        formData.append('schema_json', schemaCache.compact || stringifySchemaSafe(schema));
+        formData.append('schema_json', stringifySchemaSafe(saveSchema));
 
         fetch(saveThemeUrl, {
           method: 'POST',
@@ -25643,7 +26652,7 @@ if (!function_exists('view_ui_icon')) {
           const syncTheme = buildThemePayloadForSave();
           syncData.append('modelno', modelNo);
           syncData.append('theme_json', JSON.stringify(syncTheme));
-          syncData.append('schema_json', schemaCache.compact || JSON.stringify(initialSchema));
+          syncData.append('schema_json', stringifySchemaSafe(schemaPayloadForSave(initialSchema)));
           fetch(saveThemeUrl, {
             method: 'POST',
             body: syncData,

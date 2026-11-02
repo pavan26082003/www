@@ -24,7 +24,7 @@ class View_page_model extends Model
      * Bump when Device UI schema generator / normalizer output shape changes.
      * Stale models auto-rebuild on next getDeviceUiSchema / API fetch.
      */
-    private const DEVICE_UI_SCHEMA_BUILD_VERSION = '2026-10-08.1';
+    private const DEVICE_UI_SCHEMA_BUILD_VERSION = '2026-10-31.2';
 
     public function __construct()
     {
@@ -1209,6 +1209,8 @@ private function buildDeviceUiApiMetadataFromTree($configId)
         'cmd_fieldDescription' => [],
         'cmd_uiType' => [],
         'cmd_defaultvalue' => [],
+        'cmd_valueInHexMin' => [],
+        'cmd_valueInHexMax' => [],
         'cmd_displayValueMin' => [],
         'cmd_displayValueMax' => [],
         'cmd_sliderStepValue' => [],
@@ -1232,6 +1234,8 @@ private function buildDeviceUiApiMetadataFromTree($configId)
         'resp_fieldDescription' => [],
         'resp_uiType' => [],
         'resp_defaultvalue' => [],
+        'resp_valueInHexMin' => [],
+        'resp_valueInHexMax' => [],
         'resp_displayValueMin' => [],
         'resp_displayValueMax' => [],
         'resp_sliderStepValue' => [],
@@ -1255,6 +1259,8 @@ private function buildDeviceUiApiMetadataFromTree($configId)
         'error_fieldDescription' => [],
         'error_uiType' => [],
         'error_defaultvalue' => [],
+        'error_valueInHexMin' => [],
+        'error_valueInHexMax' => [],
         'error_displayValueMin' => [],
         'error_displayValueMax' => [],
         'error_sliderStepValue' => [],
@@ -1336,16 +1342,28 @@ private function appendDeviceUiTreeFieldToPseudoRow(array &$pseudoRow, $prefix, 
         return;
     }
 
+    // V2 stores wire hex in value_in_hex_min/max. Legacy product_api uses
+    // cmd_valueInHexMin. Without this map, CommandId/FunctionCode/ActionId/Data
+    // frames lose protocol bytes and app on/off controls cannot transmit.
+    $valueInHexMin = $field['value_in_hex_min']
+        ?? ($field['valueInHexMin'] ?? ($field['valueinhexmin'] ?? null));
+    $valueInHexMax = $field['value_in_hex_max']
+        ?? ($field['valueInHexMax'] ?? ($field['valueinhexmax'] ?? null));
+    $snoAsPerUi = $field['ui_serial_no']
+        ?? ($field['sno_as_per_ui'] ?? ($field['sno_asperui'] ?? ''));
+
     $pseudoRow[$prefix . '_fieldDescription'][] = $fieldDescription;
     $pseudoRow[$prefix . '_uiType'][] = $uiType;
     $pseudoRow[$prefix . '_defaultvalue'][] = $field['default_value'] ?? null;
+    $pseudoRow[$prefix . '_valueInHexMin'][] = $valueInHexMin;
+    $pseudoRow[$prefix . '_valueInHexMax'][] = $valueInHexMax;
     $pseudoRow[$prefix . '_displayValueMin'][] = $field['display_value_min'] ?? null;
     $pseudoRow[$prefix . '_displayValueMax'][] = $field['display_value_max'] ?? null;
     $pseudoRow[$prefix . '_sliderStepValue'][] = $field['slider_step_value'] ?? null;
     $pseudoRow[$prefix . '_uiDescriptionInOut'][] = $field['ui_description_in_out'] ?? null;
     $pseudoRow[$prefix . '_asperui'][] = $field['as_per_ui'] ?? '';
     $pseudoRow[$prefix . '_asperui_values'][] = $field['ui_values'] ?? '';
-    $pseudoRow[$prefix . '_sno_asperui'][] = $field['sno_as_per_ui'] ?? ($field['sno_asperui'] ?? '');
+    $pseudoRow[$prefix . '_sno_asperui'][] = $snoAsPerUi;
     $pseudoRow[$prefix . '_startBytePosition'][] = $field['start_byte_position'] ?? ($field['byte_start_position'] ?? ($field['start_byte'] ?? null));
     $pseudoRow[$prefix . '_numberOfBytes'][] = $field['number_of_bytes'] ?? ($field['no_of_bytes'] ?? null);
     $pseudoRow[$prefix . '_dataType'][] = $field['data_type'] ?? null;
@@ -2857,7 +2875,11 @@ public function saveDeviceUiSchema($modelno, array $schema)
     $nodeId = $this->resolveDeviceUiNodeId($modelno, $nodeId);
 
     try {
-        $schema = $this->refreshDeviceUiSchemaApiDetails($modelno, $schema, $nodeId);
+        // Studio save already sends node_details/deviceConfig. Skip remote test_nodes
+        // (up to ~4s) so Save Changes stays responsive; the app still refreshes live state.
+        $schema = $this->refreshDeviceUiSchemaApiDetails($modelno, $schema, $nodeId, [
+            'skipRemote' => true,
+        ]);
     } catch (\Throwable $exception) {
         log_message('error', 'Device UI schema refresh on save failed: ' . $exception->getMessage());
     }
@@ -3037,6 +3059,10 @@ public function getDeviceUiSchema($modelno, $nodeId = '')
  */
 private function normalizeDeviceUiSchemaForApp(array $schema, $modelno, $nodeId = '')
 {
+    if (isset($schema['theme']) && is_array($schema['theme'])) {
+        $schema['theme'] = $this->migrateDeviceUiSchemaThemeToDarkDefault($schema['theme']);
+    }
+
     try {
         if (!class_exists(\App\Services\DeviceUiSchemaNormalizer::class, false)) {
             $normalizerCandidates = [
@@ -3261,6 +3287,106 @@ private function deviceUiSchemaBuildVersion(): string
 }
 
 /**
+ * Promote legacy factory Pro Light theme values to Dark.
+ * Only rewrites theme color/mode values; does not add/remove schema keys.
+ */
+private function migrateDeviceUiSchemaThemeToDarkDefault(array $theme): array
+{
+    $mode = strtolower(trim((string) ($theme['mode'] ?? ($theme['themeMode'] ?? ''))));
+    if ($mode !== '' && $mode !== 'light' && $mode !== 'pro') {
+        return $theme;
+    }
+
+    $theme['mode'] = 'dark';
+    if (array_key_exists('themeMode', $theme)) {
+        $theme['themeMode'] = 'dark';
+    }
+    if (array_key_exists('backgroundType', $theme) && trim((string) $theme['backgroundType']) === '') {
+        $theme['backgroundType'] = 'gradient';
+    }
+
+    $colorMap = [
+        'background' => '#0B1220',
+        'gradientEnd' => '#111827',
+        'shell' => '#0F172A',
+        'surface' => '#1E293B',
+        'card' => '#1E293B',
+        'text' => '#F8FAFC',
+        'mutedText' => '#94A3B8',
+        'muted' => '#94A3B8',
+        'accent' => '#60A5FA',
+        'primary' => '#60A5FA',
+        'secondary' => '#64748B',
+        'border' => '#334155',
+        'topbar' => '#020617',
+        'toggleOn' => '#60A5FA',
+        'toggleOff' => '#475569',
+        'icon' => '#60A5FA',
+    ];
+
+    if (isset($theme['colors']) && is_array($theme['colors'])) {
+        foreach ($colorMap as $key => $value) {
+            if (array_key_exists($key, $theme['colors'])) {
+                $theme['colors'][$key] = $value;
+            }
+        }
+    }
+
+    if (isset($theme['tokens']) && is_array($theme['tokens'])) {
+        $tokenFlat = [
+            'topbarColor' => '#020617',
+            'secondaryColor' => '#64748B',
+            'accentColor' => '#60A5FA',
+            'iconColor' => '#60A5FA',
+            'textColor' => '#F8FAFC',
+            'backgroundColor' => '#0B1220',
+            'cardColor' => '#1E293B',
+            'shellColor' => '#0F172A',
+            'borderColor' => '#334155',
+            'mutedTextColor' => '#94A3B8',
+        ];
+        foreach ($tokenFlat as $key => $value) {
+            if (array_key_exists($key, $theme['tokens'])) {
+                $theme['tokens'][$key] = $value;
+            }
+        }
+        if (isset($theme['tokens']['colors']) && is_array($theme['tokens']['colors'])) {
+            foreach ($colorMap as $key => $value) {
+                if (array_key_exists($key, $theme['tokens']['colors'])) {
+                    $theme['tokens']['colors'][$key] = $value;
+                }
+            }
+        }
+    }
+
+    // Flat theme keys used by some studio/schema payloads.
+    $flatKeys = [
+        'backgroundColor' => '#0B1220',
+        'gradientColor' => '#111827',
+        'shellColor' => '#0F172A',
+        'cardColor' => '#1E293B',
+        'textColor' => '#F8FAFC',
+        'mutedTextColor' => '#94A3B8',
+        'topbarColor' => '#020617',
+        'accentColor' => '#60A5FA',
+        'secondaryColor' => '#64748B',
+        'borderColor' => '#334155',
+        'toggleOnColor' => '#60A5FA',
+        'toggleOffColor' => '#475569',
+        'iconColor' => '#60A5FA',
+        'buttonBgColor' => '#2563EB',
+        'buttonTextColor' => '#FFFFFF',
+    ];
+    foreach ($flatKeys as $key => $value) {
+        if (array_key_exists($key, $theme)) {
+            $theme[$key] = $value;
+        }
+    }
+
+    return $theme;
+}
+
+/**
  * True when stored schema was produced by an older generator build.
  */
 private function deviceUiSchemaNeedsBuildRefresh($schema): bool
@@ -3326,6 +3452,11 @@ private function rebuildDeviceUiSchemaPreservingCustomizations($modelno, $nodeId
         if (isset($existing[$preserveKey]) && is_array($existing[$preserveKey]) && $existing[$preserveKey] !== array()) {
             $fresh[$preserveKey] = $existing[$preserveKey];
         }
+    }
+    // Old factory default was Pro Light. Promote preserved light/pro theme values to Dark
+    // without changing schema keys/structure (App Home is dark).
+    if (isset($fresh['theme']) && is_array($fresh['theme'])) {
+        $fresh['theme'] = $this->migrateDeviceUiSchemaThemeToDarkDefault($fresh['theme']);
     }
 
     if (isset($existing['settings']) && is_array($existing['settings'])) {
@@ -4305,13 +4436,13 @@ public function generateInitialDeviceUiSchema($modelno, $nodeId = '')
             'schemaApi' => $schemaApiUrl,
         ],
         'theme' => [
-            'mode' => 'light',
+            'mode' => 'dark',
             'colors' => [
-                'background' => '#F8FAFC',
-                'surface' => '#FFFFFF',
-                'text' => '#0F172A',
-                'accent' => '#2563EB',
-                'border' => '#E2E8F0',
+                'background' => '#0B1220',
+                'surface' => '#1E293B',
+                'text' => '#F8FAFC',
+                'accent' => '#60A5FA',
+                'border' => '#334155',
             ],
         ],
         'icons' => [
@@ -4693,10 +4824,11 @@ public function getDeviceUiNodeId($modelno, $nodeId = '')
     return $resolved;
 }
 
-private function refreshDeviceUiSchemaApiDetails($modelno, array $schema, $nodeId = '')
+private function refreshDeviceUiSchemaApiDetails($modelno, array $schema, $nodeId = '', array $options = [])
 {
     $modelno = trim((string) $modelno);
     $nodeId = trim((string) $nodeId);
+    $skipRemote = !empty($options['skipRemote']);
     if ($modelno === '') {
         return $schema;
     }
@@ -4731,7 +4863,9 @@ private function refreshDeviceUiSchemaApiDetails($modelno, array $schema, $nodeI
     }
 
     $nodeId = $this->resolveDeviceUiNodeId($modelno, $nodeId);
-    $infoPayload = $this->getDeviceUiInfo($modelno, $nodeId);
+    $infoPayload = $this->getDeviceUiInfo($modelno, $nodeId, [
+        'skipRemote' => $skipRemote,
+    ]);
     $liveConfig = is_array($infoPayload) && isset($infoPayload['deviceConfig']) && is_array($infoPayload['deviceConfig'])
         ? $infoPayload['deviceConfig']
         : [];
@@ -4751,8 +4885,11 @@ private function refreshDeviceUiSchemaApiDetails($modelno, array $schema, $nodeI
         }
     }
 
-    $live = $this->loadDeviceUiLiveProductContext($modelno, $nodeId);
+    $live = $skipRemote ? [] : $this->loadDeviceUiLiveProductContext($modelno, $nodeId);
     $connected = !empty($live['connected']);
+    if ($skipRemote && isset($existingStatus['connectivity']['connected'])) {
+        $connected = !empty($existingStatus['connectivity']['connected']);
+    }
     $liveNodeId = $nodeId;
     $outputNodeId = !empty($live['output_node_id']) ? $live['output_node_id'] : $liveNodeId;
     $schema['deviceConfig'] = $deviceConfig;
@@ -4769,7 +4906,10 @@ private function refreshDeviceUiSchemaApiDetails($modelno, array $schema, $nodeI
         $schema['state']['node_id'] = $outputNodeId;
     }
 
-    $testNodes = $this->fetchDeviceUiTestNodes($nodeId);
+    $testNodes = [];
+    if (!$skipRemote) {
+        $testNodes = $this->fetchDeviceUiTestNodes($nodeId);
+    }
     if ($this->isDeviceUiTestNodesPayload($testNodes, $nodeId)) {
         $schema = $this->applyDeviceUiTestNodesToSchema($schema, $testNodes, $nodeId);
         $outputNodeId = isset($schema['nodes']) && $schema['nodes'] !== ''
@@ -10875,23 +11015,15 @@ private function buildDeviceUiBrandLogoAsset($fileOrUrl, $alt = 'Brand')
 
 private function fallbackDeviceUiBrandLogoAsset($alt = 'Efactor')
 {
-    $fileName = 'Logo_new.png';
-    $dir = rtrim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''), '/\\') . DIRECTORY_SEPARATOR . 'files' . DIRECTORY_SEPARATOR . 'home';
-    foreach (['Logo_new.png', 'Logo_new.jpeg', 'logo_new.png', 'logo_new.jpeg'] as $candidate) {
-        if (is_file($dir . DIRECTORY_SEPARATOR . $candidate)) {
-            $fileName = $candidate;
-            break;
-        }
-    }
-    $path = '/files/home/' . $fileName;
-    $url = $this->deviceUiPublicOrigin() . $path;
+    // Official E-FACTOR brand mark — same on local and server.
+    $cdn = 'https://efactor.tech/assets/images/efactor-logo.jpg';
     return [
-        'fileName' => $fileName,
-        'path' => $path,
-        'url' => $url,
-        'previewUrl' => $url,
+        'fileName' => 'efactor-logo.jpg',
+        'path' => '/assets/images/efactor-logo.jpg',
+        'url' => $cdn,
+        'previewUrl' => $cdn,
         'alt' => $alt !== '' ? $alt : 'Efactor',
-        'source' => 'files/home',
+        'source' => 'cdn',
         'usage' => 'brandMark',
     ];
 }

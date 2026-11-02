@@ -113,7 +113,16 @@ public function view_page_ui($id = 0)
     $resolvedNodeId = method_exists($this->View_page_ui_model, 'getDeviceUiNodeId')
         ? $this->View_page_ui_model->getDeviceUiNodeId($modelno, $requestNodeId)
         : '';
-    $deviceUiInfo = $this->View_page_ui_model->getDeviceUiInfo($modelno, $requestNodeId !== '' ? $requestNodeId : $resolvedNodeId);
+    // Studio open must stay fast: reuse mapping already loaded above and skip remote
+    // test_nodes / live product HTTP (up to ~4s each). App/schema API still loads live state.
+    $deviceUiInfo = $this->View_page_ui_model->getDeviceUiInfo(
+        $modelno,
+        $requestNodeId !== '' ? $requestNodeId : $resolvedNodeId,
+        [
+            'skipRemote' => true,
+            'mapping' => is_array($model_data) ? $model_data : [],
+        ]
+    );
 
     $schemaApiUrl = base_url('v8/api_schema.php') . '?model_no=' . rawurlencode((string) $modelno);
     $schemaNodeId = $resolvedNodeId !== '' ? $resolvedNodeId : $requestNodeId;
@@ -124,9 +133,9 @@ public function view_page_ui($id = 0)
     $iotDashboardModel = new IotDashboardModel();
     $userId = (int) ($this->login_user->id ?? 0);
     $isAdmin = !empty($this->login_user->is_admin);
-    $devices = $userId > 0 ? $iotDashboardModel->getDevicesForUser($userId, $isAdmin) : [];
+    // Avoid loading the full device list on every Studio open; token resolves from profile tables.
     $studioAccessToken = $userId > 0
-        ? $iotDashboardModel->getSavedAccessToken($userId, $isAdmin, $devices)
+        ? $iotDashboardModel->getSavedAccessToken($userId, $isAdmin, [])
         : '';
 
     return view('items/view_page_ui', [

@@ -51,6 +51,16 @@ class DeviceUiSchemaNormalizer
         'sensors'             => 'radio',
         'timer'               => 'clock',
         'schedule'            => 'clock',
+        'refresh'             => 'refresh-cw',
+        'sync'                => 'refresh-cw',
+        'autorenew'           => 'refresh-cw',
+        'loop'                => 'refresh-cw',
+        'description'         => 'file',
+        'article'             => 'file',
+        'list_alt'            => 'file',
+        'fan'                 => 'fan',
+        'toys'                => 'fan',
+        'mode_fan'            => 'fan',
     ];
 
     /**
@@ -1815,22 +1825,60 @@ class DeviceUiSchemaNormalizer
     private static function ensureRequiredIcons(array $schema)
     {
         $required = [
-            'send' => '<line x1="22" x2="11" y1="2" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>',
+            'send' => '<path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path>',
             'gauge' => '<path d="m12 14 4-4"></path><path d="M3.34 19a10 10 0 1 1 17.32 0"></path>',
             'bolt' => '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path>',
             'power' => '<path d="M12 2v10"></path><path d="M18.4 6.6a9 9 0 1 1-12.77.04"></path>',
             'timer' => '<circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2 2"></path><path d="M5 3 2 6"></path><path d="m22 6-3-3"></path><path d="M6.38 18.7 4 21"></path><path d="M17.64 18.67 20 21"></path>',
-            'clock' => '<circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path>',
+            'clock' => '<circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>',
             'settings' => '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.52a2 2 0 0 1-1 1.72l-.15.1a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.52a2 2 0 0 1 1-1.72l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle>',
             'key' => '<path d="M21 2 9 14m12 4-8.5-8.5a1.5 1.5 0 0 1 0-2.12L6.5 2.5a1.5 1.5 0 0 1 2.12 0l11.38 11.38a1.5 1.5 0 0 1 0 2.12Z"></path><circle cx="6" cy="16" r="2"></circle>',
             'trash-2' => '<path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m4 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>',
-            'file' => '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path>',
+            'file' => '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path>',
             'help-circle' => '<circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path>',
             'inbox' => '<rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="M2 6h3a6 6 0 0 1 6-6 6 6 0 0 1 6 6h3"></path>',
             'info' => '<circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path>',
             'chevron-left' => '<path d="m15 18-6-6 6-6"></path>',
             'arrow-left' => '<path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path>',
             'arrow-right' => '<path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>',
+            'fan' => '<path d="M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0"></path><path d="M12 10c-1.6-3.8-.8-6.7 2.4-8 2.1 3.1 1.3 5.8-2.4 8Z"></path><path d="M14 12c3.8-1.6 6.7-.8 8 2.4-3.1 2.1-5.8 1.3-8-2.4Z"></path><path d="M12 14c1.6 3.8.8 6.7-2.4 8-2.1-3.1-1.3-5.8 2.4-8Z"></path><path d="M10 12c-3.8 1.6-6.7.8-8-2.4 3.1-2.1 5.8-1.3 8 2.4Z"></path>',
+            'refresh-cw' => '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path>',
+            'lightbulb' => '<path d="M15 14c.2-1 .7-1.7 1.4-2.5A6 6 0 1 0 7.6 11.5C8.3 12.3 8.8 13 9 14"></path><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M10 14h4v4h-4z"></path>',
+            'thermometer' => '<path d="M14 14.76V5a2 2 0 1 0-4 0v9.76a4 4 0 1 0 4 0Z"></path>',
+            'droplet' => '<path d="M12 2.69 5.66 9.03a9 9 0 1 0 12.68 0L12 2.69z"></path>',
+            'wifi' => '<path d="M12 20h.01"></path><path d="M2 8.82a15 15 0 0 1 20 0"></path><path d="M5 12.86a10 10 0 0 1 14 0"></path><path d="M8.5 16.43a5 5 0 0 1 7 0"></path>',
+            'signal' => '<path d="M2 20h.01"></path><path d="M7 20a5 5 0 0 1 10 0"></path><path d="M4 14a11 11 0 0 1 16 0"></path><path d="M2 8a16 16 0 0 1 20 0"></path>',
+            'target' => '<circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>',
+            'lock' => '<rect width="18" height="11" x="3" y="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>',
+            'radio' => '<circle cx="12" cy="12" r="2"></circle><path d="M4.93 19.07a10 10 0 0 1 0-14.14"></path><path d="M7.76 16.24a6 6 0 0 1 0-8.49"></path><path d="M16.24 7.76a6 6 0 0 1 0 8.49"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>',
+            'battery' => '<rect width="16" height="10" x="2" y="7" rx="2" ry="2"></rect><line x1="22" x2="20" y1="11" y2="11"></line>',
+            'volume-2' => '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>',
+            'zap' => '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>',
+            'check-circle' => '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><path d="M22 4 12 14.01l-3-3"></path>',
+            'cpu' => '<rect width="16" height="16" x="4" y="4" rx="2"></rect><path d="M9 9h6v6H9z"></path><path d="M9 1v3"></path><path d="M15 1v3"></path><path d="M9 20v3"></path><path d="M15 20v3"></path><path d="M20 9h3"></path><path d="M20 14h3"></path><path d="M1 9h3"></path><path d="M1 14h3"></path>',
+            'air-flow' => '<path d="M3 8h10a3 3 0 1 0-3-3"></path><path d="M3 12h16"></path><path d="M3 16h10a3 3 0 1 1-3 3"></path>',
+            'motor' => '<rect width="16" height="12" x="4" y="7" rx="2"></rect><path d="M8 7V5h8v2"></path><path d="M10 13h4"></path><path d="M2 11h2"></path><path d="M20 11h2"></path>',
+            'sliders' => '<line x1="4" x2="4" y1="21" y2="14"></line><line x1="4" x2="4" y1="10" y2="3"></line><line x1="12" x2="12" y1="21" y2="12"></line><line x1="12" x2="12" y1="8" y2="3"></line><line x1="20" x2="20" y1="21" y2="16"></line><line x1="20" x2="20" y1="12" y2="3"></line><line x1="2" x2="6" y1="14" y2="14"></line><line x1="10" x2="14" y1="8" y2="8"></line><line x1="18" x2="22" y1="16" y2="16"></line>',
+            'sun' => '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path>',
+            'palette' => '<circle cx="13.5" cy="6.5" r=".5"></circle><circle cx="17.5" cy="10.5" r=".5"></circle><circle cx="8.5" cy="7.5" r=".5"></circle><circle cx="6.5" cy="12.5" r=".5"></circle><path d="M12 2a10 10 0 0 0 0 20 2 2 0 0 0 2-2 1.5 1.5 0 0 1 1.5-1.5H17a5 5 0 0 0 5-5.3A10 10 0 0 0 12 2z"></path>',
+            'aperture' => '<circle cx="12" cy="12" r="10"></circle><path d="M14.31 8l5.74 9.94"></path><path d="M9.69 8h11.48"></path><path d="M7.38 12.5l5.74-9.94"></path><path d="M13.69 16l-5.74 9.94"></path><path d="M14.31 16h-11.48"></path><path d="M16.62 11.5l-5.74 9.94"></path>',
+            'humidity' => '<path d="M12 2s6 7 6 12a6 6 0 0 1-12 0c0-5 6-12 6-12Z"></path><path d="M8 14a4 4 0 0 0 8 0"></path>',
+            'snow-flake' => '<path d="M12 2v20"></path><path d="m4.93 4.93 14.14 14.14"></path><path d="M2 12h20"></path><path d="m4.93 19.07 14.14-14.14"></path>',
+            'bluetooth' => '<path d="m7 7 10 10-5 5V2l5 5L7 17"></path>',
+            'bell' => '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>',
+            'menu' => '<line x1="4" x2="20" y1="12" y2="12"></line><line x1="4" x2="20" y1="6" y2="6"></line><line x1="4" x2="20" y1="18" y2="18"></line>',
+            'code' => '<path d="m16 18 6-6-6-6"></path><path d="m8 6-6 6 6 6"></path>',
+            'edit' => '<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>',
+            'play' => '<polygon points="5 3 19 12 5 21 5 3"></polygon>',
+            'eye' => '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>',
+            'plug' => '<path d="M12 22v-5"></path><path d="M9 8V2"></path><path d="M15 8V2"></path><path d="M7 8h10v4a5 5 0 0 1-10 0V8Z"></path>',
+        ];
+        // Always refresh these redesigned outline paths so Flutter picks up the new look.
+        $refreshPaths = [
+            'send', 'gauge', 'bolt', 'clock', 'file', 'fan', 'refresh-cw', 'wifi',
+            'target', 'zap', 'radio', 'info', 'power', 'check-circle', 'cpu', 'air-flow',
+            'motor', 'sliders', 'sun', 'palette', 'aperture', 'humidity', 'snow-flake',
+            'bluetooth', 'bell', 'menu', 'code', 'edit', 'play', 'eye', 'plug', 'volume-2',
         ];
         if (!isset($schema['icons']) || !is_array($schema['icons'])) {
             $schema['icons'] = [];
@@ -1851,7 +1899,7 @@ class DeviceUiSchemaNormalizer
             if (!in_array($name, $schema['icons']['library']['icons'], true)) {
                 $schema['icons']['library']['icons'][] = $name;
             }
-            if (empty($schema['icons']['library']['paths'][$name])) {
+            if (empty($schema['icons']['library']['paths'][$name]) || in_array($name, $refreshPaths, true)) {
                 $schema['icons']['library']['paths'][$name] = $path;
             }
         }
@@ -1983,7 +2031,10 @@ class DeviceUiSchemaNormalizer
             $schema['mobileView']['header']['foregroundColor'] = $fg;
             $schema['mobileView']['header']['titleColor'] = $fg;
             $schema['mobileView']['header']['className'] = 'app-topbar';
+            $schema['mobileView']['header'] = self::stripHeaderScanAction($schema['mobileView']['header']);
         }
+        // Drop the retired header scan control from every known schema surface.
+        $schema = self::stripHeaderScanEverywhere($schema);
         if (isset($schema['designSystem']['componentStyles']['appBar']) && is_array($schema['designSystem']['componentStyles']['appBar'])) {
             $schema['designSystem']['componentStyles']['appBar']['backgroundColor'] = $bg;
             $schema['designSystem']['componentStyles']['appBar']['foregroundColor'] = $fg;
@@ -2011,6 +2062,138 @@ class DeviceUiSchemaNormalizer
         }
 
         return $schema;
+    }
+
+    /**
+     * Remove the header scan/QR button from published device UI schemas.
+     * WiFi-flow QR scanner actions are left alone.
+     */
+    private static function stripHeaderScanEverywhere(array $schema)
+    {
+        if (isset($schema['mobileView']['header']) && is_array($schema['mobileView']['header'])) {
+            $schema['mobileView']['header'] = self::stripHeaderScanAction($schema['mobileView']['header']);
+        }
+        if (isset($schema['document']['mobileView']['header']) && is_array($schema['document']['mobileView']['header'])) {
+            $schema['document']['mobileView']['header'] = self::stripHeaderScanAction($schema['document']['mobileView']['header']);
+        }
+        if (isset($schema['actions']['ui.scan'])) {
+            unset($schema['actions']['ui.scan']);
+        }
+        if (isset($schema['document']['actions']['ui.scan'])) {
+            unset($schema['document']['actions']['ui.scan']);
+        }
+        if (isset($schema['components']) && is_array($schema['components'])) {
+            unset($schema['components']['scanButton']);
+            if (isset($schema['components']['appBar']) && is_array($schema['components']['appBar'])
+                && isset($schema['components']['appBar']['children']) && is_array($schema['components']['appBar']['children'])) {
+                $schema['components']['appBar']['children'] = array_values(array_filter(
+                    $schema['components']['appBar']['children'],
+                    static function ($child) {
+                        return strcasecmp(trim((string) $child), 'scanButton') !== 0;
+                    }
+                ));
+            }
+        }
+        if (isset($schema['ui']['widgetTree']) && is_array($schema['ui']['widgetTree'])) {
+            self::stripHeaderScanFromWidgetTree($schema['ui']['widgetTree']);
+        }
+        if (isset($schema['extensions']['serverDrivenUi']['page']['body']) && is_array($schema['extensions']['serverDrivenUi']['page']['body'])) {
+            foreach ($schema['extensions']['serverDrivenUi']['page']['body'] as $index => $node) {
+                if (!is_array($node)) {
+                    continue;
+                }
+                if (self::isHeaderScanNode($node)) {
+                    unset($schema['extensions']['serverDrivenUi']['page']['body'][$index]);
+                    continue;
+                }
+                if (isset($node['children']) && is_array($node['children'])) {
+                    self::stripHeaderScanFromWidgetTree($schema['extensions']['serverDrivenUi']['page']['body'][$index]);
+                }
+            }
+            $schema['extensions']['serverDrivenUi']['page']['body'] = array_values($schema['extensions']['serverDrivenUi']['page']['body']);
+        }
+
+        return $schema;
+    }
+
+    private static function stripHeaderScanAction(array $header)
+    {
+        if (!isset($header['actions']) || !is_array($header['actions'])) {
+            return $header;
+        }
+        $header['actions'] = array_values(array_filter($header['actions'], static function ($action) {
+            if (!is_array($action)) {
+                return true;
+            }
+            $id = strtolower(trim((string) (isset($action['id']) ? $action['id'] : '')));
+            $icon = strtolower(trim((string) (isset($action['icon']) ? $action['icon'] : '')));
+            $label = strtolower(trim((string) (isset($action['label']) ? $action['label'] : '')));
+            $act = strtolower(trim((string) (isset($action['action']) ? $action['action'] : '')));
+
+            return !($id === 'scan'
+                || $icon === 'scan'
+                || $label === 'scan'
+                || $act === 'openscanner'
+                || $act === 'ui.scan');
+        }));
+
+        return $header;
+    }
+
+    private static function isHeaderScanNode(array $node)
+    {
+        $id = strtolower(trim((string) (isset($node['id']) ? $node['id'] : '')));
+        // Only the app-topbar scan control — never wifiProvisioning QR scan UI.
+        return in_array($id, [
+            'scan-button',
+            'scanbutton',
+            'device_scan_button',
+            'device_scan_icon',
+            'scan',
+        ], true);
+    }
+
+    private static function stripHeaderScanFromWidgetTree(&$node, $depth = 0)
+    {
+        if (!is_array($node) || $depth > 60) {
+            return;
+        }
+        $id = strtolower(trim((string) (isset($node['id']) ? $node['id'] : '')));
+        $inHeaderActions = in_array($id, [
+            'top_actions',
+            'headeractions',
+            'header-actions',
+            'app_topbar',
+            'app-bar',
+            'appbar',
+            'app_topbar_row',
+        ], true);
+
+        foreach (['children', 'body', 'items', 'nodes'] as $listKey) {
+            if (!isset($node[$listKey]) || !is_array($node[$listKey])) {
+                continue;
+            }
+            $kept = [];
+            foreach ($node[$listKey] as $child) {
+                if (!is_array($child)) {
+                    $kept[] = $child;
+                    continue;
+                }
+                if (self::isHeaderScanNode($child)) {
+                    continue;
+                }
+                self::stripHeaderScanFromWidgetTree($child, $depth + 1);
+                // Strip scan entries only from header action groups.
+                if ($inHeaderActions && isset($child['actions']) && is_array($child['actions'])) {
+                    $child = self::stripHeaderScanAction($child);
+                }
+                $kept[] = $child;
+            }
+            $node[$listKey] = array_values($kept);
+        }
+        if ($inHeaderActions && isset($node['actions']) && is_array($node['actions'])) {
+            $node = self::stripHeaderScanAction($node);
+        }
     }
 
     private static function rewriteWidgetTreeHeader(&$node, $bg, $fg, $muted, $secondary = null, $depth = 0)
@@ -2522,9 +2705,17 @@ class DeviceUiSchemaNormalizer
             }
         }
 
-        $icon = isset($control['icon']) ? $control['icon'] : null;
-        if ($icon === null || $icon === '') {
-            $control['icon'] = self::defaultIconForControl($control);
+        $icon = isset($control['icon']) ? trim((string) $control['icon']) : '';
+        $suggestedIcon = self::defaultIconForControl($control);
+        // Fill missing icons, soft-upgrade leftover "gauge", and replace leading
+        // power glyphs that duplicate the trailing action button.
+        $iconLower = strtolower($icon);
+        if ($icon === '') {
+            $control['icon'] = $suggestedIcon;
+        } elseif (in_array($iconLower, ['gauge', 'power', 'power-off', 'bolt', 'zap', 'file', 'eye', 'cpu', 'play', 'info'], true)
+            && strcasecmp($suggestedIcon, $icon) !== 0) {
+            // Soft-upgrade leftover generic glyphs when keyword mapping found a better match.
+            $control['icon'] = $suggestedIcon;
         }
 
         return $control;
@@ -2574,33 +2765,243 @@ class DeviceUiSchemaNormalizer
         return $raw;
     }
 
+    private static function matchIconKeywordRules($name, $id = '')
+    {
+        $hay = trim(preg_replace('/\s+/', ' ', preg_replace('/[^a-z0-9]+/', ' ', strtolower(trim((string) $name)))));
+        $compact = str_replace(' ', '', $hay);
+        $id = strtolower(trim((string) $id));
+        if ($hay === '' && $id === '') {
+            return '';
+        }
+
+        // Field/value keywords first. Parent group POWER must not stamp every child.
+        $rules = [
+            ['icon' => 'check-circle', 'needles' => ['get status', 'getstatus', 'command get']],
+            ['icon' => 'info', 'needles' => ['health', 'diagnostics'], 'word' => ['status', 'info']],
+            // Fan / airflow before generic "speed" so "Fan Speed" does not become gauge.
+            ['icon' => 'fan', 'needles' => ['fan', 'blower', 'ventilat']],
+            ['icon' => 'air-flow', 'needles' => ['airflow', 'air flow', 'air speed']],
+            ['icon' => 'gauge', 'needles' => ['speed', 'pwm', 'rpm', 'throttle']],
+            ['icon' => 'move', 'needles' => ['direction', 'forward', 'backward', 'clockwise', 'anticlock']],
+            ['icon' => 'palette', 'needles' => ['led color', 'led colour', 'color', 'colour', 'hue', 'color wheel']],
+            ['icon' => 'lightbulb', 'needles' => ['light', 'lamp', 'bulb'], 'word' => ['led']],
+            ['icon' => 'motor', 'needles' => ['motor', 'drive', 'actuator']],
+            ['icon' => 'sliders', 'needles' => ['preset', 'level', 'range']],
+            ['icon' => 'refresh-cw', 'needles' => ['cycle', 'rotate', 'oscillat', 'reverse', 'auto rev', 'autorev', 'mode reg']],
+            ['icon' => 'clock', 'needles' => ['timeout', 'timer', 'delay', 'schedule', 'duration', 'countdown']],
+            ['icon' => 'sun', 'needles' => ['brightness', 'dimmer', 'lumen']],
+            ['icon' => 'thermometer', 'needles' => ['cct', 'color temp', 'colortemp', 'temp', 'thermal', 'heat']],
+            ['icon' => 'aperture', 'needles' => ['saturation', 'chroma']],
+            ['icon' => 'snow-flake', 'needles' => ['cool', 'cold', 'freeze']],
+            ['icon' => 'humidity', 'needles' => ['humid', 'moisture']],
+            ['icon' => 'droplet', 'needles' => ['water', 'liquid', 'fluid']],
+            ['icon' => 'wifi', 'needles' => ['wifi', 'wlan', 'ssid', 'rssi']],
+            ['icon' => 'signal', 'needles' => ['network', 'signal', 'connectivity']],
+            ['icon' => 'bluetooth', 'needles' => ['bluetooth', 'ble']],
+            ['icon' => 'lock', 'needles' => ['lock', 'password', 'secure', 'pin']],
+            ['icon' => 'settings', 'needles' => ['setting', 'config', 'setup', 'calibrat']],
+            ['icon' => 'cpu', 'needles' => ['device name', 'node name', 'device id', 'smart fan', 'device'], 'word' => ['name'], 'exact' => ['name', 'device']],
+            ['icon' => 'file', 'needles' => ['parameter', 'register', 'hex addr', 'hex', 'addr', 'frame'], 'word' => ['param', 'reg']],
+            ['icon' => 'code', 'needles' => ['cmd', 'console', 'terminal']],
+            ['icon' => 'edit', 'needles' => ['enter text', 'textbox', 'input']],
+            ['icon' => 'play', 'needles' => ['execute', 'run', 'start']],
+            ['icon' => 'zap', 'needles' => ['command', 'trigger']],
+            ['icon' => 'bell', 'needles' => ['notification', 'alarm', 'alert', 'toast']],
+            ['icon' => 'menu', 'needles' => ['dropdown', 'drop down', 'select', 'option']],
+            ['icon' => 'eye', 'needles' => ['display', 'monitor', 'view', 'readout']],
+            ['icon' => 'plug', 'needles' => ['plug', 'socket', 'outlet']],
+            ['icon' => 'volume-2', 'needles' => ['volume', 'sound', 'audio', 'mute']],
+            ['icon' => 'battery', 'needles' => ['battery', 'charge']],
+            ['icon' => 'radio', 'needles' => ['sensor', 'probe', 'telemetry']],
+            ['icon' => 'target', 'needles' => ['target', 'focus', 'aim']],
+            ['icon' => 'bolt', 'needles' => ['system power', 'power supply', 'mains power', 'electric', 'voltage', 'watt', 'energy', 'relay'], 'word' => ['power']],
+        ];
+        foreach ($rules as $rule) {
+            foreach ($rule['needles'] as $needle) {
+                if ($needle !== '' && (strpos($hay, $needle) !== false || ($id !== '' && strpos($id, str_replace(' ', '', $needle)) !== false))) {
+                    return $rule['icon'];
+                }
+            }
+            if (!empty($rule['exact']) && is_array($rule['exact'])) {
+                foreach ($rule['exact'] as $exact) {
+                    $exactCompact = str_replace(' ', '', (string) $exact);
+                    if ($hay === $exact || $compact === $exactCompact) {
+                        return $rule['icon'];
+                    }
+                }
+            }
+            if (!empty($rule['word']) && is_array($rule['word'])) {
+                foreach ($rule['word'] as $word) {
+                    if ($word !== '' && preg_match('/\b' . preg_quote($word, '/') . '\b/', $hay)) {
+                        return $rule['icon'];
+                    }
+                }
+            }
+        }
+
+        return '';
+    }
+
+    private static function isIconHintNoise($name)
+    {
+        $raw = strtolower(trim((string) $name));
+        $hay = trim(preg_replace('/\s+/', ' ', preg_replace('/[^a-z0-9]+/', ' ', $raw)));
+        if ($hay === '') {
+            return true;
+        }
+        $noise = [
+            'text', 'button', 'push', 'toggle', 'switch', 'slider', 'dropdown', 'select',
+            'display', 'trigger', 'command', 'response', 'error', 'data', 'cmd', 'console',
+            'entertext', 'textfield', 'notification', 'auto', 'ui', 'api', 'value', 'none',
+            'read', 'write', 'readonly', 'hex', 'byte', 'frame',
+        ];
+        $tokens = preg_split('/\s+/', $hay) ?: [];
+        foreach ($tokens as $token) {
+            if ($token === '') {
+                continue;
+            }
+            if (preg_match('/^[0-9]+$/', $token) || preg_match('/^[0-9a-f]{1,4}$/', $token)) {
+                continue;
+            }
+            if (in_array($token, $noise, true)) {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
     private static function defaultIconForControl(array $control)
     {
         $type = strtolower((string) self::canonicalControlTypeToken($control));
         $id = strtolower((string) (isset($control['id']) ? $control['id'] : ''));
-        $name = strtolower((string) self::firstNonEmpty(
-            isset($control['parameterName']) ? $control['parameterName'] : null,
-            isset($control['name']) ? $control['name'] : null,
-            isset($control['label']) ? $control['label'] : null
-        ));
 
+        // Field/parameter names first so parent groups like POWER do not stamp every child.
+        $genericMeta = ['data' => true, 'trigger' => true, 'command' => true, 'response' => true, 'error' => true, 'none' => true, '' => true];
+        $fieldDesc = trim((string) (isset($control['protocolMeta']['field_description']) ? $control['protocolMeta']['field_description'] : ''));
+        $fieldName = trim((string) (isset($control['protocolMeta']['field_name']) ? $control['protocolMeta']['field_name'] : ''));
+        $parts = [];
+        if ($fieldDesc !== '' && empty($genericMeta[strtolower($fieldDesc)])) {
+            $parts[] = $fieldDesc;
+        }
+        if ($fieldName !== '' && empty($genericMeta[strtolower($fieldName)])) {
+            $parts[] = $fieldName;
+        }
+        foreach ([
+            isset($control['label']) ? (string) $control['label'] : '',
+            isset($control['fieldLabel']) ? (string) $control['fieldLabel'] : '',
+            isset($control['displayValue']) ? (string) $control['displayValue'] : '',
+            isset($control['value']) ? (string) $control['value'] : '',
+        ] as $candidate) {
+            $candidate = trim((string) $candidate);
+            if ($candidate === '' || self::isIconHintNoise($candidate)) {
+                continue;
+            }
+            if ((isset($control['displayValue']) && $candidate === trim((string) $control['displayValue']))
+                || (isset($control['value']) && $candidate === trim((string) $control['value']))) {
+                if (!preg_match('/[a-z]/i', $candidate)) {
+                    continue;
+                }
+            }
+            $parts[] = $candidate;
+        }
+
+        $groupName = (string) self::firstNonEmpty(
+            isset($control['parameterName']) ? $control['parameterName'] : null,
+            isset($control['name']) ? $control['name'] : null
+        );
+        $hasSemantic = false;
+        foreach ($parts as $part) {
+            if (!self::isIconHintNoise($part)) {
+                $hasSemantic = true;
+                break;
+            }
+        }
+
+        foreach ($parts as $part) {
+            $hit = self::matchIconKeywordRules($part, $id);
+            if ($hit !== '') {
+                return $hit;
+            }
+        }
+        $combined = trim(implode(' ', array_filter($parts, static function ($part) {
+            return trim((string) $part) !== '' && !self::isIconHintNoise($part);
+        })));
+        if ($combined !== '') {
+            $combinedHit = self::matchIconKeywordRules($combined, $id);
+            if ($combinedHit !== '') {
+                return $combinedHit;
+            }
+        }
+        if (!$hasSemantic) {
+            $groupHit = self::matchIconKeywordRules($groupName, '');
+            // Parent group POWER must not stamp bolt onto text/button/slider children.
+            $powerishType = strpos($type, 'toggle') !== false
+                || strpos($type, 'switch') !== false
+                || strpos($type, 'power') !== false;
+            if ($groupHit === 'bolt' && !$powerishType) {
+                $groupHit = '';
+            }
+            if ($groupHit !== '') {
+                return $groupHit;
+            }
+        }
+
+        if (strpos($type, 'brightness') !== false) {
+            return 'sun';
+        }
+        if (strpos($type, 'airflow') !== false) {
+            return 'air-flow';
+        }
+        if (strpos($type, 'cct') !== false) {
+            return 'thermometer';
+        }
+        if (strpos($type, 'saturation') !== false) {
+            return 'aperture';
+        }
+        if (strpos($type, 'hue') !== false) {
+            return 'palette';
+        }
+        if (strpos($type, 'notification') !== false) {
+            return 'bell';
+        }
+        if (strpos($type, 'dropdown') !== false || strpos($type, 'select') !== false) {
+            return 'menu';
+        }
         if (strpos($type, 'timer') !== false || strpos($id, 'timer') !== false) {
-            return 'timer';
+            return 'clock';
         }
-        if (strpos($type, 'slider') !== false) {
-            return 'gauge';
+        if (strpos($type, 'slider') !== false || strpos($type, 'gauge') !== false) {
+            return 'sliders';
         }
-        if (strpos($type, 'toggle') !== false || strpos($type, 'switch') !== false || strpos($name, 'power') !== false) {
+        if (strpos($type, 'toggle') !== false || strpos($type, 'switch') !== false) {
             return 'bolt';
         }
-        if (strpos($type, 'button') !== false) {
-            return 'power';
+        if (strpos($type, 'push') !== false) {
+            return 'zap';
         }
-        if (strpos($name, 'status') !== false || strpos($id, 'get_status') !== false) {
-            return 'gauge';
+        if (strpos($type, 'button') !== false) {
+            return 'play';
+        }
+        if (strpos($type, 'trigger') !== false) {
+            return 'zap';
+        }
+        if (strpos($type, 'cmd') !== false || strpos($type, 'console') !== false) {
+            return 'code';
+        }
+        if (strpos($type, 'enter') !== false || strpos($type, 'textfield') !== false) {
+            return 'edit';
+        }
+        if (strpos($type, 'display') !== false || $type === 'text') {
+            return 'eye';
+        }
+        if (strpos($type, 'text') !== false) {
+            return 'file';
         }
 
-        return 'gauge';
+        return 'cpu';
     }
 
     // ------------------------------------------------------------ validation
