@@ -13,16 +13,35 @@ class App extends BaseConfig {
 
     private function set_base_url() {
         if (!$this->baseURL) {
+            $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+            $script = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
 
-            $domain = $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME'];
-
-            $domain = preg_replace('/index.php.*/', '', $domain);
-            $domain = strtolower($domain);
-            if (!empty($_SERVER['HTTPS'])) {
-                $this->baseURL = 'https://' . $domain;
+            // Standalone front controllers (/v8/api_creation.php, iot/grid APIs) must
+            // not become baseURL — that produced URLs like:
+            // https://host/v8/api_creation.php/index.php/app-home-page/rating
+            if (preg_match('#/(?:v8/)?(?:api_creation|grid_api_creation|iot_api_creation)\.php$#i', $script)) {
+                $basePath = '/';
             } else {
-                $this->baseURL = 'http://' . $domain;
+                $basePath = preg_replace('#/index\.php(?:/.*)?$#i', '/', $script);
+                if (!is_string($basePath) || $basePath === '') {
+                    $basePath = '/';
+                }
+                // Any other *.php front controller → its directory
+                if (preg_match('#\.php$#i', $basePath)) {
+                    $basePath = preg_replace('#/[^/]+\.php$#i', '/', $basePath) ?: '/';
+                }
             }
+
+            $basePath = '/' . trim(str_replace('\\', '/', $basePath), '/') . '/';
+            if ($basePath === '//') {
+                $basePath = '/';
+            }
+
+            $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+            if (strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https') {
+                $https = true;
+            }
+            $this->baseURL = ($https ? 'https://' : 'http://') . $host . $basePath;
         }
     }
 

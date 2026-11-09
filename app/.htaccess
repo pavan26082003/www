@@ -1,0 +1,11 @@
+Options -Indexes
+
+# Dumps, captures, archives and internal reports must not be downloadable.
+<FilesMatch "(?i)\.(sql|pcap|jsonl|md|zip|log|bak)$">
+	<IfModule mod_authz_core.c>
+		Require all denied
+	</IfModule>
+	<IfModule !mod_authz_core.c>
+		Deny from all
+	</IfModule>
+</FilesMatch>

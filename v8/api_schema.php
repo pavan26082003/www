@@ -5,6 +5,7 @@ ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 @ini_set('memory_limit', '2048M');
 
+
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, If-None-Match, If-Modified-Since, Cache-Control');
@@ -55,6 +56,10 @@ foreach ($slicerCandidates as $slicerFile) {
 }
 
 $model_no = isset($_GET['model_no']) ? trim((string) $_GET['model_no']) : '';
+// Accept the mobile client's alias without changing canonical model_no precedence.
+if ($model_no === '' && isset($_GET['model_id']) && is_scalar($_GET['model_id'])) {
+    $model_no = trim((string) $_GET['model_id']);
+}
 $node_id = isset($_GET['node_id']) ? trim((string) $_GET['node_id']) : '';
 // Optional SDUI optimization (ignored by older apps):
 //   part=meta  -> shell + page list, no control trees
@@ -368,7 +373,28 @@ if ($body === false) {
     exit();
 }
 
-$etag = '"' . substr(hash('sha256', $body), 0, 32) . '"';
+// ETag must be stable for identical schema content. Every request re-stamps
+// generation/sync times (normalizedAt, generatedAt, generatedAtIso, updatedAt,
+// mappingSyncedAt, row updated_at, connectivity timestamp) even when nothing
+// else changed, so hashing the raw body produced a new ETag each call and 304
+// never matched. Hash with only those timestamp values blanked; the body sent
+// is unchanged, and any real schema change still alters the hash.
+$etagSource = preg_replace(
+    [
+        '/"(normalizedAt|generatedAt|generatedAtIso|updatedAt|updated_at|mappingSyncedAt)":"[^"]*"/',
+        '/"timestamp":\d+/',
+    ],
+    [
+        '"$1":""',
+        '"timestamp":0',
+    ],
+    $body
+);
+if (!is_string($etagSource)) {
+    $etagSource = $body;
+}
+$etag = '"' . substr(hash('sha256', $etagSource), 0, 32) . '"';
+unset($etagSource);
 header('ETag: ' . $etag);
 if ($schemaUpdatedAt !== '') {
     $modified = strtotime($schemaUpdatedAt);
@@ -384,7 +410,11 @@ if ($ifNoneMatch !== '') {
         if (stripos($candidate, 'W/') === 0) {
             $candidate = trim(substr($candidate, 2));
         }
-        if ($candidate === $etag || $candidate === '*') {
+        // Apache mod_deflate/mod_brotli append -gzip/-br to the ETag it forwards;
+        // clients echo that suffixed value back, so accept it as the same tag.
+        $candidate = trim((string) $candidate, '"');
+        $candidate = preg_replace('/-(gzip|br|deflate)$/', '', $candidate);
+        if ($candidate === trim($etag, '"') || $candidate === '*') {
             http_response_code(304);
             exit();
         }

@@ -975,7 +975,8 @@ private function loadDeviceUiApiMetadataByParameter($modelno, ?array $apiRows = 
             ->getResultArray();
         foreach ($relatedRows as $apiRow) {
             $parameterName = trim((string) ($apiRow['parameter_name'] ?? ''));
-            if ($parameterName === '' || !empty($this->resolveDeviceUiApiMetadata($apiByParameter, $parameterName))) {
+            // [2026-11-07] ownOnly: a field alias from another API must not block the real API.
+            if ($parameterName === '' || !empty($this->resolveDeviceUiApiMetadata($apiByParameter, $parameterName, true))) {
                 continue;
             }
             $this->indexDeviceUiApiMetadata($apiByParameter, $parameterName, $this->buildDeviceUiApiMetadata($apiRow));
@@ -1013,7 +1014,8 @@ private function loadDeviceUiApiMetadataByParameter($modelno, ?array $apiRows = 
             continue;
         }
         $sameModel = strcasecmp((string) ($config['model_name'] ?? ''), (string) $modelno) === 0;
-        if ($sameModel || empty($this->resolveDeviceUiApiMetadata($apiByParameter, $parameterName))) {
+        // [2026-11-07] ownOnly: a field alias from another API must not block the real API.
+        if ($sameModel || empty($this->resolveDeviceUiApiMetadata($apiByParameter, $parameterName, true))) {
             $this->indexDeviceUiApiMetadata($apiByParameter, $parameterName, $metadata);
         }
     }
@@ -1148,13 +1150,27 @@ private function deviceUiLookupKeys($name)
     })));
 }
 
+/**
+ * Index an API under its own name, and under the names of its usable fields
+ * as fallback aliases.
+ *
+ * [2026-11-07 fix] An alias must never replace an API that owns the key.
+ * Status APIs ("Get status", "Command Get status") report Speed, Led,
+ * Voltage... as response fields. Last-write-wins made those slots resolve to
+ * the status API, whose response multiple-UI flag then rendered every
+ * telemetry field as a separate component on Speed/Led/Voltage, with the
+ * status frame instead of the API's own command frame.
+ * Own names still overwrite (unchanged); aliases still replace other aliases
+ * (unchanged); only alias-over-own is now skipped.
+ */
 private function indexDeviceUiApiMetadata(array &$apiByParameter, $parameterName, array $metadata)
 {
-    $names = [
+    $ownNames = [
         $parameterName,
         $metadata['parameter_name'] ?? '',
         $metadata['frame']['name'] ?? '',
     ];
+    $aliasNames = [];
 
     $frame = is_array($metadata['frame'] ?? null) ? $metadata['frame'] : [];
     foreach (['commands', 'response', 'error'] as $group) {
@@ -1164,26 +1180,60 @@ private function indexDeviceUiApiMetadata(array &$apiByParameter, $parameterName
                 continue;
             }
 
-            $names[] = $field['default_name'] ?? '';
+            $aliasNames[] = $field['default_name'] ?? '';
             $description = trim((string) ($field['Field_description'] ?? $field['field_description'] ?? ''));
             $descriptionKey = strtolower($description);
             if ($description !== '' && !in_array($descriptionKey, ['data', 'trigger', 'commandid', 'command id', 'function code', 'functioncode', 'actionid', 'action id', 'terminator', 'header'], true)) {
-                $names[] = $description;
+                $aliasNames[] = $description;
             }
         }
     }
 
-    foreach ($names as $name) {
+    $ownKeys = [];
+    foreach ($ownNames as $name) {
         foreach ($this->deviceUiLookupKeys($name) as $key) {
+            $apiByParameter[$key] = $metadata;
+            $ownKeys[$key] = true;
+        }
+    }
+
+    foreach ($aliasNames as $name) {
+        foreach ($this->deviceUiLookupKeys($name) as $key) {
+            if (isset($ownKeys[$key])) {
+                continue;
+            }
+            if (isset($apiByParameter[$key]) && is_array($apiByParameter[$key])
+                && $this->deviceUiApiMetadataOwnsKey($apiByParameter[$key], $key)
+            ) {
+                continue;
+            }
             $apiByParameter[$key] = $metadata;
         }
     }
 }
 
-private function resolveDeviceUiApiMetadata(array $apiByParameter, $parameterName)
+/**
+ * True when $key is the API's own name (parameter_name / frame name),
+ * not just one of its field aliases.
+ */
+private function deviceUiApiMetadataOwnsKey(array $metadata, $key)
+{
+    foreach ([$metadata['parameter_name'] ?? '', $metadata['frame']['name'] ?? ''] as $name) {
+        if (in_array($key, $this->deviceUiLookupKeys($name), true)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+private function resolveDeviceUiApiMetadata(array $apiByParameter, $parameterName, $ownOnly = false)
 {
     foreach ($this->deviceUiLookupKeys($parameterName) as $key) {
         if (isset($apiByParameter[$key]) && is_array($apiByParameter[$key])) {
+            if ($ownOnly && !$this->deviceUiApiMetadataOwnsKey($apiByParameter[$key], $key)) {
+                continue;
+            }
             return $apiByParameter[$key];
         }
     }

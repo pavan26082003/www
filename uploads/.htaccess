@@ -1,0 +1,19 @@
+Options -Indexes
+
+# User uploads must never run on the server, including names like x.php.jpg.
+<FilesMatch "(?i)\.(php[0-9]?|phtml|phar|pht|phps|shtml|cgi|pl|py|sh|bash|asp|aspx|jsp)(\.|$)">
+	<IfModule mod_authz_core.c>
+		Require all denied
+	</IfModule>
+	<IfModule !mod_authz_core.c>
+		Deny from all
+	</IfModule>
+</FilesMatch>
+
+# Uploaded HTML and SVG must not run scripts on the site's own origin.
+<IfModule mod_headers.c>
+	Header set X-Content-Type-Options "nosniff"
+	<FilesMatch "(?i)\.(html?|svg|xml)$">
+		Header set Content-Disposition "attachment"
+	</FilesMatch>
+</IfModule>

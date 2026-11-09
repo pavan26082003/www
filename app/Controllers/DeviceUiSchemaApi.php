@@ -29,8 +29,12 @@ class DeviceUiSchemaApi extends Controller
             }
 
             $itemsModel = new View_page_model();
-            // Always create/refresh incomplete auto schemas here — never require Items.php or Design Studio.
-            if (method_exists($itemsModel, 'autoPersistDeviceUiSchema')) {
+            $part = trim((string) ($this->request->getGet('part') ?? ''));
+            $pageNo = trim((string) ($this->request->getGet('page_no') ?? $this->request->getGet('pageNo') ?? ''));
+            $isPartialDelivery = ($part !== '' || $pageNo !== '');
+
+            // Full schema GET may auto-create incomplete schemas. Page/meta GETs must stay read-only/fast.
+            if (!$isPartialDelivery && method_exists($itemsModel, 'autoPersistDeviceUiSchema')) {
                 $itemsModel->autoPersistDeviceUiSchema($modelno, $nodeId);
             }
             $schema = $itemsModel->getDeviceUiSchema($modelno, $nodeId);
@@ -58,6 +62,61 @@ class DeviceUiSchemaApi extends Controller
             $schema = $this->applyNodeIdToSchema($schema, $modelno, $resolvedNodeId, $nodeId !== '');
             $schema = $this->applyStoredScanResultToSchema($itemsModel, $schema, $modelno, $resolvedNodeId);
 
+            // Optional SDUI optimization — default (no part/page_no) returns the complete schema.
+            $pagingHeaders = [];
+            if ($isPartialDelivery) {
+                if (!class_exists('\\App\\Services\\DeviceUiSchemaPageSlicer', false)) {
+                    $slicerFile = APPPATH . 'services/DeviceUiSchemaPageSlicer.php';
+                    if (!is_file($slicerFile)) {
+                        $slicerFile = APPPATH . 'Services/DeviceUiSchemaPageSlicer.php';
+                    }
+                    if (is_file($slicerFile)) {
+                        require_once $slicerFile;
+                    }
+                }
+            }
+            if ($isPartialDelivery && class_exists('\\App\\Services\\DeviceUiSchemaPageSlicer', false)) {
+                $sliced = \App\Services\DeviceUiSchemaPageSlicer::apply(
+                    $schema,
+                    $part,
+                    $pageNo,
+                    [
+                        'model_no' => $modelno,
+                        'node_id' => $resolvedNodeId,
+                        'base_url' => base_url('v8/api_schema.php'),
+                        'updated_at' => (string) ($schema['updatedAt'] ?? ''),
+                    ]
+                );
+                if (empty($sliced['ok'])) {
+                    return $this->apiErrorResponse(
+                        $sliced['error'] ?? 'PAGE_NOT_FOUND',
+                        $sliced['message'] ?? 'Page not found in schema',
+                        404,
+                        [
+                            'model_no' => $modelno,
+                            'node_id' => $resolvedNodeId,
+                            'page_no' => $pageNo,
+                            'paging' => $sliced['paging'] ?? null,
+                        ]
+                    );
+                }
+                $schema = $sliced['schema'];
+                $paging = is_array($sliced['paging'] ?? null) ? $sliced['paging'] : [];
+                if ($paging !== []) {
+                    $schema['paging'] = $paging;
+                }
+                $pagingHeaders = [
+                    'X-Schema-Part' => (string) ($sliced['mode'] ?? 'page'),
+                    'X-Schema-Page-Count' => (string) ($paging['pageCount'] ?? ''),
+                    'X-Schema-Next-Page-Api' => (string) ($paging['nextPageApi'] ?? ''),
+                    'X-Schema-Prev-Page-Api' => (string) ($paging['prevPageApi'] ?? ''),
+                    'X-Schema-Meta-Api' => (string) ($paging['metaApi'] ?? ''),
+                    'X-Schema-Revision' => (string) ($paging['revision'] ?? ''),
+                ];
+                // Paging is part of the JSON body (paging.pageCount / pageApi). Headers stay for older clients.
+                unset($paging);
+            }
+
             $json = json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             if ($json === false) {
                 return $this->apiErrorResponse(
@@ -70,10 +129,16 @@ class DeviceUiSchemaApi extends Controller
 
             $this->response->removeHeader('Cache-Control');
 
-            return $this->response
+            $response = $this->response
                 ->setHeader('Cache-Control', 'no-store, max-age=0')
-                ->setContentType('application/json', 'utf-8')
-                ->setBody($json);
+                ->setContentType('application/json', 'utf-8');
+            foreach ($pagingHeaders as $headerName => $headerValue) {
+                if ($headerValue !== '') {
+                    $response = $response->setHeader($headerName, $headerValue);
+                }
+            }
+
+            return $response->setBody($json);
         } catch (Throwable $e) {
             log_message('error', 'Device UI schema API failed: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
 
