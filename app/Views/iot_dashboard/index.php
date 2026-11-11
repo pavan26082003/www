@@ -29,6 +29,48 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
   font-family:Inter,Arial,sans-serif;
   color:var(--iot-ink);overflow:hidden;
 }
+.iot-shell.is-dark{
+  background:linear-gradient(140deg,#050b16,#0b1220 55%,#111827);
+  color:#e2e8f0;
+}
+.iot-shell.is-dark .iot-toolbar,
+.iot-shell.is-dark .glass-panel,
+.iot-shell.is-dark .iot-detail-panel,
+.iot-shell.is-dark .iot-panel-card{
+  background:rgba(15,23,42,.92);
+  border-color:rgba(148,163,184,.22);
+  color:#e2e8f0;
+}
+.iot-shell.is-dark .iot-title-block h1,
+.iot-shell.is-dark .iot-detail-panel strong,
+.iot-shell.is-dark .iot-stats-card-title{color:#f8fafc}
+.iot-shell.is-dark .iot-title-block p,
+.iot-shell.is-dark .iot-detail-panel p,
+.iot-shell.is-dark .iot-phone-header p,
+.iot-shell.is-dark .iot-phone-header .iot-eyebrow{color:#94a3b8}
+.iot-shell.is-dark .iot-icon-btn,
+.iot-shell.is-dark .iot-token-input,
+.iot-shell.is-dark .iot-copy-btn{
+  background:#0f172a;color:#e2e8f0;border-color:rgba(148,163,184,.28);
+}
+.iot-shell.is-dark .iot-theme-btn.is-on{
+  background:#111827;color:#f8fafc;border-color:#334155;
+}
+.iot-shell.is-dark .iot-phone-screen{background:#0b0f1a;color:#f8fafc}
+.iot-shell.is-dark .iot-phone-header h2{color:#f8fafc}
+.iot-shell.is-dark .iot-device-search,
+.iot-shell.is-dark .iot-header-search-btn,
+.iot-shell.is-dark .iot-stats-card{background:#151b2e;color:#f8fafc}
+.iot-shell.is-dark .iot-device-search input{color:#f8fafc}
+.iot-shell.is-dark .iot-device-card.is-offline{
+  background:#1e293b;color:#f8fafc;border-color:#334155;
+}
+.iot-shell.is-dark .is-offline .iot-device-name,
+.iot-shell.is-dark .is-offline .iot-card-signal svg{color:#f8fafc;stroke:#f8fafc}
+.iot-shell.is-dark .is-offline .iot-brand-name,
+.iot-shell.is-dark .is-offline .iot-device-type{color:#94a3b8}
+.iot-shell.is-dark .iot-panel-card code{color:#cbd5e1}
+.iot-shell.is-dark .iot-detail-row dd{color:#f8fafc}
 
 /* ── toolbar ─────────────────────────────────────────────────── */
 .iot-toolbar{
@@ -647,6 +689,7 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
         <h1>IoT Dashboard</h1>
         <p>Live profile devices with production mobile schema.</p>
       </div>
+      <button type="button" class="iot-icon-btn iot-theme-btn" id="iotThemeBtn" aria-pressed="false">Dark</button>
       <button type="button" class="iot-icon-btn" id="iotRefreshBtn">&#8635; Refresh</button>
     </div>
 
@@ -1765,6 +1808,27 @@ window.IOT_DASHBOARD_BOOT = {
     copyApiUrl('iotDeviceApiUrl', this);
   });
   document.getElementById('iotGenerateSchemaBtn')?.addEventListener('click', generateSchema);
+  var iotThemeBtn = document.getElementById('iotThemeBtn');
+  var iotShell = document.querySelector('.iot-shell');
+  function applyIotDarkTheme(on) {
+    if (!iotShell) return;
+    iotShell.classList.toggle('is-dark', !!on);
+    if (iotThemeBtn) {
+      iotThemeBtn.classList.toggle('is-on', !!on);
+      iotThemeBtn.textContent = on ? 'Light' : 'Dark';
+      iotThemeBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      iotThemeBtn.setAttribute('aria-label', on ? 'Switch to light theme' : 'Switch to dark theme');
+    }
+    try { sessionStorage.setItem('iotDashboardTheme', on ? 'dark' : 'light'); } catch (e) {}
+  }
+  var savedIotTheme = '';
+  try { savedIotTheme = sessionStorage.getItem('iotDashboardTheme') || ''; } catch (e) {}
+  applyIotDarkTheme(savedIotTheme !== 'light');
+  if (iotThemeBtn) {
+    iotThemeBtn.addEventListener('click', function () {
+      applyIotDarkTheme(!iotShell.classList.contains('is-dark'));
+    });
+  }
   document.getElementById('iotRefreshBtn')?.addEventListener('click', refresh);
   addDeviceBtn?.addEventListener('click', openQrModal);
   qrCloseBtn?.addEventListener('click', closeQrModal);

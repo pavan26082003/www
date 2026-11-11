@@ -200,11 +200,7 @@ class AppHomePageModel
                         'actionId' => 'grid-open-circle-connect',
                     ),
                 ),
-                'stats' => array(
-                    array('id' => 'professionals', 'label' => 'Professionals', 'value' => 248),
-                    array('id' => 'opportunities', 'label' => 'Opportunities', 'value' => 36),
-                    array('id' => 'active-circles', 'label' => 'Active Circles', 'value' => 12),
-                ),
+                'stats' => array(),
                 'shareQr' => array(
                     'title' => 'Share Profile QR',
                     'subtitle' => 'Share your professional or circle profile with anyone.',
@@ -287,8 +283,8 @@ class AppHomePageModel
             }
         }
 
-        return '';
-    }
+            return '';
+        }
 
     private function readGridProfileAvatar(int $userId): string
     {
@@ -330,9 +326,9 @@ class AppHomePageModel
             }
         }
         if ($fileName === '') {
-            $decoded = @unserialize($image);
-            if (is_array($decoded) && !empty($decoded['file_name'])) {
-                $fileName = trim((string) $decoded['file_name']);
+        $decoded = @unserialize($image);
+        if (is_array($decoded) && !empty($decoded['file_name'])) {
+            $fileName = trim((string) $decoded['file_name']);
             }
         }
         if ($fileName === '' && strpos(ltrim($image), 'a:') !== 0) {
@@ -1381,7 +1377,7 @@ class AppHomePageModel
             'method' => 'GET',
             'queryParameters' => array(
                 'user_id' => $userId,
-                'schema_rev' => 'scanner-qr-7',
+                'schema_rev' => 'grid-theme-system-1',
             ),
             'headers' => array('Accept' => 'application/json'),
             'responseMapping' => array(
@@ -2435,17 +2431,17 @@ class AppHomePageModel
     private function ensureTable(): void
     {
         $sql = <<<'SQL'
-CREATE TABLE IF NOT EXISTS `app_home_page_settings` (
-    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `user_id` INT UNSIGNED NOT NULL,
-    `layout_json` LONGTEXT NULL,
-    `schema_json` LONGTEXT NULL,
-    `schema_version` VARCHAR(32) NOT NULL DEFAULT '1.0.0',
-    `created_at` DATETIME NULL,
-    `updated_at` DATETIME NULL,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `user_id` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            CREATE TABLE IF NOT EXISTS `app_home_page_settings` (
+                `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `user_id` INT UNSIGNED NOT NULL,
+                `layout_json` LONGTEXT NULL,
+                `schema_json` LONGTEXT NULL,
+                `schema_version` VARCHAR(32) NOT NULL DEFAULT '1.0.0',
+                `created_at` DATETIME NULL,
+                `updated_at` DATETIME NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `user_id` (`user_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 SQL;
 
         if (!$this->db->query($sql)) {
@@ -2494,20 +2490,20 @@ SQL;
     private function ensureMediaTable(): void
     {
         $sql = <<<'SQL'
-CREATE TABLE IF NOT EXISTS `app_home_page_media` (
-    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `user_id` INT UNSIGNED NOT NULL,
-    `card_id` VARCHAR(128) NULL,
-    `face_index` TINYINT UNSIGNED NULL,
-    `file_name` VARCHAR(255) NOT NULL,
-    `file_path` VARCHAR(512) NOT NULL,
-    `public_url` VARCHAR(512) NOT NULL,
-    `mime_type` VARCHAR(64) NULL,
-    `file_size` INT UNSIGNED NULL,
-    `created_at` DATETIME NULL,
-    PRIMARY KEY (`id`),
-    KEY `idx_user_id` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            CREATE TABLE IF NOT EXISTS `app_home_page_media` (
+                `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `user_id` INT UNSIGNED NOT NULL,
+                `card_id` VARCHAR(128) NULL,
+                `face_index` TINYINT UNSIGNED NULL,
+                `file_name` VARCHAR(255) NOT NULL,
+                `file_path` VARCHAR(512) NOT NULL,
+                `public_url` VARCHAR(512) NOT NULL,
+                `mime_type` VARCHAR(64) NULL,
+                `file_size` INT UNSIGNED NULL,
+                `created_at` DATETIME NULL,
+                PRIMARY KEY (`id`),
+                KEY `idx_user_id` (`user_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 SQL;
 
         if (!$this->db->query($sql)) {

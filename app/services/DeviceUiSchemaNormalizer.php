@@ -89,6 +89,17 @@ class DeviceUiSchemaNormalizer
             $schema = self::applyRequestedNode($schema, $modelNo, $nodeId);
         }
 
+        // Unlock MQTT/deviceCommands for already-online devices without changing schema shape.
+        $schema = self::unlockOnlineDeviceControl($schema);
+        // Match web preview: single-UI groups keep the group title only.
+        $schema = self::stripGroupedSingleInnerLabels($schema);
+        // Hide "1 Control" badge on single-control groups.
+        $schema = self::applyGroupCountVisibility($schema);
+        // Drop duplicate "Page N.Operation" header subtitle (keep title + model only).
+        $schema = self::stripDuplicatePageHeaderSubtitle($schema);
+        // Wire padding / empty live values → valueLoading (additive flags only).
+        $schema = self::applyLiveValueLoadingFlags($schema);
+
         $schema = self::normalizeDeviceFrames($schema, $report);
         // Fill CommandId / Function Code / ActionId from protocolMeta when the
         // slot exists but is empty, or insert the slot when meta has the value.
@@ -113,8 +124,946 @@ class DeviceUiSchemaNormalizer
         $schema = self::ensureRequiredIcons($schema);
         $schema = self::normalizeIcons($schema, $report);
         $schema = self::recordValidation($schema, $report);
+        $schema = self::attachModeThemes($schema);
+        // Pixel parity last so later contract rewrites cannot wipe preview sizes
+        // (e.g. sendButton rebuilt without width/height in normalizeControlContracts).
+        $schema = self::applyPreviewPixelParity($schema);
+        // Ensure actions.update_*.input.dataField carries bitwise + access for Flutter.
+        $schema = self::enrichActionDataFields($schema);
 
         return $schema;
+    }
+
+    /**
+     * Additive: copy field_level / start_bit / end_bit / access onto action dataField
+     * so Flutter can pack frames from actions.update_* without reading protocolMeta only.
+     */
+    private static function enrichActionDataFields(array $schema): array
+    {
+        if (!isset($schema['actions']) || !is_array($schema['actions'])) {
+            return $schema;
+        }
+
+        $controlsByAction = [];
+        if (isset($schema['controls']) && is_array($schema['controls'])) {
+            foreach ($schema['controls'] as $control) {
+                if (!is_array($control)) {
+                    continue;
+                }
+                $action = trim((string) ($control['action'] ?? ''));
+                if ($action !== '' && stripos($action, 'update_') === 0) {
+                    $controlsByAction[$action] = $control;
+                }
+            }
+        }
+
+        foreach ($schema['actions'] as $actionId => $action) {
+            if (!is_array($action)) {
+                continue;
+            }
+            if (!isset($action['input']) || !is_array($action['input'])) {
+                $action['input'] = [];
+            }
+            $dataField = (isset($action['input']['dataField']) && is_array($action['input']['dataField']))
+                ? $action['input']['dataField']
+                : [];
+            $control = $controlsByAction[$actionId] ?? null;
+            $meta = (is_array($control) && isset($control['protocolMeta']) && is_array($control['protocolMeta']))
+                ? $control['protocolMeta']
+                : [];
+
+            $fieldLevel = strtolower(trim((string) (
+                $dataField['field_level']
+                ?? $dataField['fieldLevel']
+                ?? $meta['field_level']
+                ?? $meta['fieldLevel']
+                ?? 'bytewise'
+            )));
+            $startBit = $dataField['start_bit'] ?? $dataField['startBit'] ?? $meta['start_bit'] ?? $meta['startBit'] ?? null;
+            $endBit = $dataField['end_bit'] ?? $dataField['endBit'] ?? $meta['end_bit'] ?? $meta['endBit'] ?? null;
+            $access = $dataField['access'] ?? $meta['access'] ?? null;
+
+            $dataField['field_level'] = $fieldLevel;
+            $dataField['fieldLevel'] = $fieldLevel;
+            $dataField['start_bit'] = $startBit;
+            $dataField['end_bit'] = $endBit;
+            $dataField['startBit'] = $startBit;
+            $dataField['endBit'] = $endBit;
+            if ($access !== null && $access !== '') {
+                $dataField['access'] = $access;
+            }
+            if (!isset($dataField['fieldIndex']) && isset($meta['field_index'])) {
+                $dataField['fieldIndex'] = $meta['field_index'];
+            }
+
+            $action['input']['dataField'] = $dataField;
+            $schema['actions'][$actionId] = $action;
+        }
+
+        if (isset($schema['mqtt']) && is_array($schema['mqtt'])) {
+            if (!isset($schema['mqtt']['connection']) || !is_array($schema['mqtt']['connection'])) {
+                $schema['mqtt']['connection'] = [
+                    'brokerSource' => 'runtime.mqttBroker || appConfig.mqtt',
+                    'authSource' => 'authenticatedSession.accessToken',
+                    'usernameSource' => 'authenticatedSession.emailOrUsername',
+                    'nodeIdSource' => '_clientConnection.nodeId',
+                    'schemaMustNotContainSecrets' => true,
+                ];
+            }
+            if (!isset($schema['mqtt']['liveState']) || !is_array($schema['mqtt']['liveState'])) {
+                $schema['mqtt']['liveState'] = [
+                    'preferLiveState' => true,
+                    'valueLoadingFlag' => 'valueLoading',
+                    'clearValueLoadingWhen' => 'liveStateApplied',
+                    'mergeInto' => 'state.parameters',
+                ];
+            }
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Single-control groups already render the parameter name on the group header.
+     * Clear the inner ParameterCard title so the app does not show Current / Current(A) twice.
+     */
+    private static function stripGroupedSingleInnerLabels(array $schema): array
+    {
+        if (!isset($schema['controls']) || !is_array($schema['controls'])) {
+            return $schema;
+        }
+
+        $groupCounts = [];
+        foreach ($schema['controls'] as $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+            $groupName = trim((string) ($control['groupParameter'] ?? ''));
+            if ($groupName === '') {
+                continue;
+            }
+            $groupKey = trim((string) ($control['pageNo'] ?? '')) . '::' . strtolower($groupName);
+            $groupCounts[$groupKey] = ($groupCounts[$groupKey] ?? 0) + 1;
+        }
+
+        foreach ($schema['controls'] as $index => $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+            $uiCount = isset($control['uiCount']) ? (int) $control['uiCount'] : 0;
+            $groupName = trim((string) ($control['groupParameter'] ?? ''));
+            $groupKey = trim((string) ($control['pageNo'] ?? '')) . '::' . strtolower($groupName);
+            $isSingle = $uiCount === 1 || ($groupName !== '' && ($groupCounts[$groupKey] ?? 0) === 1);
+            if (!$isSingle) {
+                continue;
+            }
+
+            $control['label'] = '';
+            $control['fieldLabel'] = '';
+            if (isset($control['component']) && is_array($control['component'])) {
+                if (!isset($control['component']['props']) || !is_array($control['component']['props'])) {
+                    $control['component']['props'] = [];
+                }
+                $control['component']['props']['label'] = '';
+                $control['component']['props']['title'] = '';
+                $control['component']['props']['showTitle'] = false;
+                $control['component']['props']['hideLabel'] = true;
+
+                if (isset($control['component']['widgetTree']['properties']['props'])
+                    && is_array($control['component']['widgetTree']['properties']['props'])) {
+                    $props = &$control['component']['widgetTree']['properties']['props'];
+                    $props['label'] = '';
+                    $props['title'] = '';
+                    $props['showTitle'] = false;
+                    $props['hideLabel'] = true;
+                    if (isset($props['metaChip']) && is_array($props['metaChip'])) {
+                        $props['metaChip']['label'] = '';
+                        $props['metaChip']['text'] = '';
+                        $props['metaChip']['title'] = '';
+                    }
+                    unset($props);
+                }
+            }
+            $schema['controls'][$index] = $control;
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Single-control groups should not show a "1 Control" / "1 UI" badge.
+     * Additive flags only — Flutter that ignores them keeps prior behavior.
+     */
+    private static function applyGroupCountVisibility(array $schema): array
+    {
+        if (!isset($schema['controls']) || !is_array($schema['controls'])) {
+            return $schema;
+        }
+
+        $groupCounts = [];
+        foreach ($schema['controls'] as $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+            $groupName = trim((string) ($control['groupParameter'] ?? ''));
+            if ($groupName === '') {
+                continue;
+            }
+            $groupKey = trim((string) ($control['pageNo'] ?? '')) . '::' . strtolower($groupName);
+            $groupCounts[$groupKey] = ($groupCounts[$groupKey] ?? 0) + 1;
+        }
+
+        foreach ($schema['controls'] as $index => $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+            $uiCount = isset($control['uiCount']) ? (int) $control['uiCount'] : 0;
+            $groupName = trim((string) ($control['groupParameter'] ?? ''));
+            $groupKey = trim((string) ($control['pageNo'] ?? '')) . '::' . strtolower($groupName);
+            $isSingle = $uiCount === 1 || ($groupName !== '' && ($groupCounts[$groupKey] ?? 0) === 1);
+            $showCount = !$isSingle && $uiCount > 1;
+            if ($uiCount <= 0 && !$isSingle) {
+                $showCount = ($groupCounts[$groupKey] ?? 0) > 1;
+            }
+            $control['showGroupCount'] = $showCount;
+            if (!isset($control['component']) || !is_array($control['component'])) {
+                $control['component'] = [];
+            }
+            if (!isset($control['component']['props']) || !is_array($control['component']['props'])) {
+                $control['component']['props'] = [];
+            }
+            $control['component']['props']['showGroupCount'] = $showCount;
+            $control['component']['props']['hideGroupCount'] = !$showCount;
+            $schema['controls'][$index] = $control;
+        }
+
+        return $schema;
+    }
+
+    /**
+     * App header showed page title plus another "Page N.Operation" line.
+     * Keep title + model subtitle only; rewrite legacy subtitle patterns on GET.
+     */
+    private static function stripDuplicatePageHeaderSubtitle(array $schema): array
+    {
+        $modelNo = '';
+        if (isset($schema['meta']['app']['modelNo'])) {
+            $modelNo = trim((string) $schema['meta']['app']['modelNo']);
+        } elseif (isset($schema['meta']['modelNo'])) {
+            $modelNo = trim((string) $schema['meta']['modelNo']);
+        } elseif (isset($schema['app']['modelNo'])) {
+            $modelNo = trim((string) $schema['app']['modelNo']);
+        }
+        $subtitle = $modelNo !== '' ? $modelNo : 'Model UI';
+
+        if (isset($schema['state']) && is_array($schema['state'])) {
+            $schema['state']['activePageSubtitle'] = $subtitle;
+        }
+        if (isset($schema['pages']) && is_array($schema['pages'])) {
+            foreach ($schema['pages'] as $i => $page) {
+                if (!is_array($page)) {
+                    continue;
+                }
+                $existing = trim((string) ($page['subtitle'] ?? ''));
+                if ($existing === '' || preg_match('/^Page\s*\d+\s*\.?\s*Operation$/i', $existing)) {
+                    $schema['pages'][$i]['subtitle'] = $subtitle;
+                }
+            }
+        }
+        if (isset($schema['mobileView']['header']) && is_array($schema['mobileView']['header'])) {
+            $pattern = trim((string) ($schema['mobileView']['header']['subtitlePattern'] ?? ''));
+            if ($pattern === '' || stripos($pattern, 'Operation') !== false || stripos($pattern, 'pageNo') !== false) {
+                $schema['mobileView']['header']['subtitlePattern'] = '{modelNo}';
+            }
+        }
+        if (isset($schema['ui']['widgetTree']) && is_array($schema['ui']['widgetTree'])) {
+            self::rewriteHeaderSubtitleNodes($schema['ui']['widgetTree'], $subtitle);
+        }
+        if (isset($schema['extensions']['universalUi']) && is_array($schema['extensions']['universalUi'])) {
+            self::rewriteHeaderSubtitleNodes($schema['extensions']['universalUi'], $subtitle);
+        }
+
+        return $schema;
+    }
+
+    private static function rewriteHeaderSubtitleNodes(&$node, $subtitle, $depth = 0)
+    {
+        if (!is_array($node) || $depth > 60) {
+            return;
+        }
+        $id = strtolower(trim((string) ($node['id'] ?? '')));
+        if ($id === 'active_page_subtitle') {
+            // Drop the duplicate third header line from legacy schemas.
+            $node['visible'] = false;
+            $node['visibility'] = false;
+            if (isset($node['properties']) && is_array($node['properties'])) {
+                $node['properties']['visible'] = false;
+                $node['properties']['text'] = $subtitle;
+            }
+            if (isset($node['text'])) {
+                $node['text'] = $subtitle;
+            }
+        }
+        if ($id === 'model_subtitle') {
+            if (isset($node['properties']) && is_array($node['properties'])) {
+                $node['properties']['text'] = $subtitle;
+                $node['properties']['textBinding'] = 'state.activePageSubtitle';
+            }
+            if (isset($node['text'])) {
+                $node['text'] = $subtitle;
+            }
+        }
+        foreach (['children', 'body', 'items', 'nodes'] as $listKey) {
+            if (!isset($node[$listKey]) || !is_array($node[$listKey])) {
+                continue;
+            }
+            $kept = [];
+            foreach ($node[$listKey] as $child) {
+                if (!is_array($child)) {
+                    $kept[] = $child;
+                    continue;
+                }
+                $childId = strtolower(trim((string) ($child['id'] ?? '')));
+                if ($childId === 'active_page_subtitle') {
+                    continue;
+                }
+                self::rewriteHeaderSubtitleNodes($child, $subtitle, $depth + 1);
+                $kept[] = $child;
+            }
+            $node[$listKey] = $kept;
+        }
+        foreach ($node as $key => $child) {
+            if (!is_array($child) || self::schemaWalkSkipKey($key) || in_array($key, ['children', 'body', 'items', 'nodes'], true)) {
+                continue;
+            }
+            self::rewriteHeaderSubtitleNodes($node[$key], $subtitle, $depth + 1);
+        }
+    }
+
+    /**
+     * Prefer Loading… over fake wire padding (00 / 0000 / 00000000) until MQTT live state arrives.
+     */
+    private static function applyLiveValueLoadingFlags(array $schema): array
+    {
+        if (!isset($schema['controls']) || !is_array($schema['controls'])) {
+            return $schema;
+        }
+        foreach ($schema['controls'] as $index => $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+            if (!empty($control['valueLoading'])) {
+                continue;
+            }
+            $type = strtolower((string) ($control['componentType'] ?? $control['catalogComponentType'] ?? ''));
+            $typeKey = str_replace(['_', '-'], '', $type);
+            if (in_array($typeKey, ['toggleswitch', 'switch', 'button', 'pushbutton', 'elevatedbutton'], true)) {
+                continue;
+            }
+            $writable = self::isWritableControl($control);
+            if ($writable && in_array($typeKey, ['entertext', 'textfield', 'cmd'], true)) {
+                continue;
+            }
+            $value = '';
+            foreach (['value', 'initialValue', 'displayValue'] as $key) {
+                if (isset($control[$key]) && is_scalar($control[$key])) {
+                    $value = trim((string) $control[$key]);
+                    break;
+                }
+            }
+            if ($value === '' && isset($control['component']['initialValue']) && is_scalar($control['component']['initialValue'])) {
+                $value = trim((string) $control['component']['initialValue']);
+            }
+            $needsLoading = self::valueNeedsLiveLoading($value);
+            if (!$needsLoading) {
+                continue;
+            }
+            $control['valueLoading'] = true;
+            $control['loadingText'] = 'Loading…';
+            $control['preferLiveState'] = true;
+            $control['value'] = '';
+            $control['initialValue'] = null;
+            if (!isset($control['component']) || !is_array($control['component'])) {
+                $control['component'] = [];
+            }
+            $control['component']['initialValue'] = null;
+            $control['component']['displayValue'] = '';
+            $control['component']['valueLoading'] = true;
+            if (!isset($control['component']['props']) || !is_array($control['component']['props'])) {
+                $control['component']['props'] = [];
+            }
+            $control['component']['props']['valueLoading'] = true;
+            $control['component']['props']['loading'] = true;
+            $control['component']['props']['loadingText'] = 'Loading…';
+            $control['component']['props']['placeholder'] = 'Loading…';
+            if (isset($schema['state']['device']['parameters']) && is_array($schema['state']['device']['parameters'])) {
+                $paramKey = trim((string) ($control['parameterKey'] ?? ''));
+                if ($paramKey === '' && !empty($control['binding'])) {
+                    $paramKey = preg_replace('/^device\.parameters\./', '', (string) $control['binding']);
+                }
+                if ($paramKey !== '' && array_key_exists($paramKey, $schema['state']['device']['parameters'])) {
+                    $schema['state']['device']['parameters'][$paramKey] = null;
+                }
+            }
+            $schema['controls'][$index] = $control;
+        }
+
+        return $schema;
+    }
+
+    private static function valueNeedsLiveLoading($value): bool
+    {
+        $text = trim((string) $value);
+        if ($text === '' || $text === '--' || strtolower($text) === 'null' || strtolower($text) === 'undefined') {
+            return true;
+        }
+        $raw = strtoupper(preg_replace('/[\s:_-]+/', '', preg_replace('/^0x/i', '', $text)));
+        return $raw !== '' && strlen($raw) >= 2 && (bool) preg_match('/^[0-9A-F]+$/', $raw) && (bool) preg_match('/^0+$/', $raw);
+    }
+
+    /**
+     * Pixel-to-pixel with Views/items/view_page_ui.php .phone-shell ParameterCard CSS.
+     * Rewrites known size/alignment style values only — no schema structure change.
+     */
+    private static function applyPreviewPixelParity(array $schema): array
+    {
+        $parity = [
+            'layout' => [
+                'type' => 'grid',
+                'columns' => ['auto', '1fr', 'auto'],
+                'gap' => 10,
+                'alignItems' => 'center',
+            ],
+            'minHeight' => 60,
+            'gap' => 10,
+            'iconBubble' => [
+                'size' => 44,
+                'width' => 44,
+                'height' => 44,
+                'shape' => 'circle',
+                'iconSize' => 22,
+            ],
+            'label' => [
+                'fontSize' => 10,
+                'fontWeight' => 600,
+                'marginBottom' => 4,
+                'letterSpacing' => 0.08,
+                'lineHeight' => 1.15,
+                'uppercase' => true,
+                'textAlign' => 'left',
+            ],
+            'value' => [
+                'fontSize' => 15,
+                'fontWeight' => 600,
+                'lineHeight' => 1.35,
+                'letterSpacing' => -0.015,
+                'textAlign' => 'left',
+            ],
+            'switch' => [
+                'trackWidth' => 52,
+                'trackHeight' => 28,
+                'width' => 52,
+                'height' => 28,
+                'thumbSize' => 22,
+                'thumbInset' => 3,
+                'thumbTravel' => 24,
+                'shape' => 'pill',
+            ],
+            'powerButton' => [
+                'size' => 48,
+                'width' => 48,
+                'height' => 48,
+                'borderWidth' => 3,
+                'shape' => 'circle',
+            ],
+            'actionDot' => [
+                'size' => 48,
+                'width' => 48,
+                'height' => 48,
+                'borderWidth' => 3,
+                'shape' => 'circle',
+            ],
+            'sendButton' => [
+                'size' => 32,
+                'width' => 32,
+                'height' => 32,
+                'borderRadius' => 9,
+                'iconSize' => 15,
+            ],
+            'metaChip' => [
+                'minWidth' => 40,
+                'height' => 32,
+                'fontSize' => 11,
+                'fontWeight' => 600,
+                'iconSize' => 14,
+            ],
+        ];
+
+        foreach ([
+            ['designSystem', 'componentStyles', 'parameterCard'],
+            ['extensions', 'universalUi', 'designSystem', 'componentStyles', 'parameterCard'],
+            ['extensions', 'serverDrivenUi', 'designSystem', 'componentStyles', 'parameterCard'],
+        ] as $path) {
+            $schema = self::mergeParameterCardParityPath($schema, $path, $parity);
+        }
+
+        if (isset($schema['controls']) && is_array($schema['controls'])) {
+            foreach ($schema['controls'] as $index => $control) {
+                if (!is_array($control)) {
+                    continue;
+                }
+                $schema['controls'][$index] = self::applyControlPreviewPixelParity($control, $parity);
+            }
+        }
+
+        if (isset($schema['ui']['widgetTree']) && is_array($schema['ui']['widgetTree'])) {
+            self::rewriteParameterCardWidgetParity($schema['ui']['widgetTree'], $parity);
+        }
+
+        if (isset($schema['theme']) && is_array($schema['theme'])) {
+            $btn = (int) ($schema['theme']['buttonSize'] ?? 0);
+            if ($btn > 0 && $btn < 40) {
+                $schema['theme']['buttonSize'] = 48;
+            }
+        }
+
+        return $schema;
+    }
+
+    private static function mergeParameterCardParityPath(array $schema, array $path, array $parity): array
+    {
+        $cursor = &$schema;
+        foreach ($path as $segment) {
+            if (!isset($cursor[$segment]) || !is_array($cursor[$segment])) {
+                unset($cursor);
+                return $schema;
+            }
+            $cursor = &$cursor[$segment];
+        }
+        $cursor['layout'] = $parity['layout'];
+        $cursor['minHeight'] = $parity['minHeight'];
+        $cursor['gap'] = $parity['gap'];
+        $cursor['alignItems'] = 'center';
+        if (!isset($cursor['parts']) || !is_array($cursor['parts'])) {
+            $cursor['parts'] = [];
+        }
+        foreach (['iconBubble', 'label', 'value', 'switch', 'powerButton', 'actionDot', 'sendButton', 'metaChip'] as $part) {
+            $existing = (isset($cursor['parts'][$part]) && is_array($cursor['parts'][$part])) ? $cursor['parts'][$part] : [];
+            $cursor['parts'][$part] = array_merge($existing, $parity[$part]);
+        }
+        unset($cursor);
+
+        return $schema;
+    }
+
+    private static function applyControlPreviewPixelParity(array $control, array $parity): array
+    {
+        $uiCount = isset($control['uiCount']) ? (int) $control['uiCount'] : 0;
+        $grouped = $uiCount === 1 || trim((string) ($control['groupParameter'] ?? '')) !== '';
+        $iconSize = $grouped ? 42 : 44;
+        if (!isset($control['styles']) || !is_array($control['styles'])) {
+            $control['styles'] = [];
+        }
+        $bubble = (isset($control['styles']['iconBubble']) && is_array($control['styles']['iconBubble']))
+            ? $control['styles']['iconBubble']
+            : [];
+        $control['styles']['iconBubble'] = array_merge($bubble, [
+            'size' => $iconSize,
+            'width' => $iconSize,
+            'height' => $iconSize,
+            'iconSize' => min((int) ($bubble['iconSize'] ?? 22), 22),
+            'shape' => 'circle',
+        ]);
+
+        $type = strtolower(str_replace(['_', '-'], '', (string) ($control['componentType'] ?? '')));
+        if (in_array($type, ['switch', 'toggleswitch'], true)) {
+            $control = self::mergeSizedProps($control, $parity['switch']);
+        }
+        if (in_array($type, ['button', 'pushbutton'], true)) {
+            $control = self::mergeSizedProps($control, [
+                'size' => $parity['powerButton']['size'],
+                'width' => $parity['powerButton']['width'],
+                'height' => $parity['powerButton']['height'],
+                'borderWidth' => $parity['powerButton']['borderWidth'],
+                'shape' => $parity['powerButton']['shape'],
+            ]);
+        }
+        if (in_array($type, ['textfield', 'entertext'], true)
+            && isset($control['component']['props']['sendButton'])
+            && is_array($control['component']['props']['sendButton'])) {
+            $control['component']['props']['sendButton'] = array_merge(
+                $control['component']['props']['sendButton'],
+                $parity['sendButton']
+            );
+        }
+
+        return $control;
+    }
+
+    private static function mergeSizedProps(array $control, array $metrics): array
+    {
+        if (isset($control['component']['props']) && is_array($control['component']['props'])) {
+            $control['component']['props'] = array_merge($control['component']['props'], $metrics);
+        }
+        if (isset($control['component']['widgetTree']['properties']['props'])
+            && is_array($control['component']['widgetTree']['properties']['props'])) {
+            $control['component']['widgetTree']['properties']['props'] = array_merge(
+                $control['component']['widgetTree']['properties']['props'],
+                $metrics
+            );
+        }
+        if (isset($control['rightAccessory']) && is_array($control['rightAccessory'])) {
+            $control['rightAccessory'] = array_merge($control['rightAccessory'], $metrics);
+        }
+
+        return $control;
+    }
+
+    private static function rewriteParameterCardWidgetParity(&$node, array $parity, $depth = 0)
+    {
+        if (!is_array($node) || $depth > 60) {
+            return;
+        }
+        $type = strtolower(trim((string) ($node['type'] ?? '')));
+        if ($type === 'parametercard') {
+            if (!isset($node['style']) || !is_array($node['style'])) {
+                $node['style'] = [];
+            }
+            $node['style']['minHeight'] = $parity['minHeight'];
+            $node['style']['gap'] = $parity['gap'];
+            $node['style']['alignItems'] = 'center';
+            $node['style']['crossAxisAlignment'] = 'center';
+            if (isset($node['properties']) && is_array($node['properties'])) {
+                $node['properties']['minHeight'] = $parity['minHeight'];
+                $node['properties']['gap'] = $parity['gap'];
+                $node['properties']['alignItems'] = 'center';
+            }
+        }
+        foreach (['children', 'body', 'items', 'nodes'] as $listKey) {
+            if (!isset($node[$listKey]) || !is_array($node[$listKey])) {
+                continue;
+            }
+            foreach ($node[$listKey] as $i => $child) {
+                if (is_array($child)) {
+                    self::rewriteParameterCardWidgetParity($node[$listKey][$i], $parity, $depth + 1);
+                }
+            }
+        }
+        foreach ($node as $key => $child) {
+            if (!is_array($child) || self::schemaWalkSkipKey($key) || in_array($key, ['children', 'body', 'items', 'nodes'], true)) {
+                continue;
+            }
+            self::rewriteParameterCardWidgetParity($node[$key], $parity, $depth + 1);
+        }
+    }
+
+    /**
+     * Already-provisioned devices must control/status without re-running Wi-Fi setup.
+     * Keeps the same keys; only refreshes enableWhen / controlReadyWhen / onlineConfirmed values.
+     */
+    private static function unlockOnlineDeviceControl(array $schema): array
+    {
+        $readyWhen = 'state.online == true || state.wifiProvisioning.onlineConfirmed == true';
+        $legacyWifiOnly = [
+            'state.wifiProvisioning.onlineConfirmed == true',
+            'state.wifiProvisioning.onlineConfirmed===true',
+            "state.wifiProvisioning.onlineConfirmed == true",
+        ];
+
+        if (isset($schema['mqtt']) && is_array($schema['mqtt'])) {
+            $enableWhen = trim((string) ($schema['mqtt']['enableWhen'] ?? ''));
+            if ($enableWhen === '' || in_array($enableWhen, $legacyWifiOnly, true)) {
+                $schema['mqtt']['enableWhen'] = $readyWhen;
+            }
+        }
+
+        if (isset($schema['wifiProvisioning']['postProvision']) && is_array($schema['wifiProvisioning']['postProvision'])) {
+            $controlReady = trim((string) ($schema['wifiProvisioning']['postProvision']['controlReadyWhen'] ?? ''));
+            if ($controlReady === '' || in_array($controlReady, $legacyWifiOnly, true)) {
+                $schema['wifiProvisioning']['postProvision']['controlReadyWhen'] = $readyWhen;
+            }
+        }
+
+        $online = false;
+        if (isset($schema['state']['online'])) {
+            $online = (bool) $schema['state']['online'];
+        } elseif (isset($schema['state']['deviceConnectivity']['online'])) {
+            $online = (bool) $schema['state']['deviceConnectivity']['online'];
+        }
+
+        if (isset($schema['state']['wifiProvisioning']) && is_array($schema['state']['wifiProvisioning'])) {
+            if ($online) {
+                $schema['state']['wifiProvisioning']['onlineConfirmed'] = true;
+            } elseif (!array_key_exists('onlineConfirmed', $schema['state']['wifiProvisioning'])) {
+                $schema['state']['wifiProvisioning']['onlineConfirmed'] = false;
+            }
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Add dark and light presets without changing the colors the app already paints
+     * from theme / wifiProvisioning.theme.
+     */
+    private static function attachModeThemes(array $schema): array
+    {
+        $theme = (isset($schema['theme']) && is_array($schema['theme'])) ? $schema['theme'] : array();
+        $schema['themes'] = self::buildModeThemes(self::devicePalettes($theme), 'system');
+
+        if (isset($schema['wifiProvisioning']) && is_array($schema['wifiProvisioning'])) {
+            $wifiTheme = (isset($schema['wifiProvisioning']['theme']) && is_array($schema['wifiProvisioning']['theme']))
+                ? $schema['wifiProvisioning']['theme']
+                : array();
+            $wifiColors = (isset($wifiTheme['colors']) && is_array($wifiTheme['colors'])) ? $wifiTheme['colors'] : array();
+            $schema['wifiProvisioning']['themes'] = self::buildModeThemes(self::wifiPalettes($wifiColors), 'system');
+        }
+
+        return $schema;
+    }
+
+    private static function activeThemeMode(array $theme): string
+    {
+        $mode = strtolower(trim((string) ($theme['mode'] ?? ($theme['themeMode'] ?? 'dark'))));
+
+        return $mode === 'light' ? 'light' : 'dark';
+    }
+
+    private static function buildModeThemes(array $palettes, string $activeMode): array
+    {
+        $dark = isset($palettes['dark']) && is_array($palettes['dark']) ? $palettes['dark'] : array();
+        $light = isset($palettes['light']) && is_array($palettes['light']) ? $palettes['light'] : array();
+        $keys = array_unique(array_merge(array_keys($dark), array_keys($light)));
+        sort($keys);
+        $alignedDark = array();
+        $alignedLight = array();
+        foreach ($keys as $key) {
+            $darkValue = array_key_exists($key, $dark) ? $dark[$key] : null;
+            $lightValue = array_key_exists($key, $light) ? $light[$key] : null;
+            if ($darkValue === null || $darkValue === '') {
+                $darkValue = $lightValue;
+            }
+            if ($lightValue === null || $lightValue === '') {
+                $lightValue = $darkValue;
+            }
+            $alignedDark[$key] = $darkValue;
+            $alignedLight[$key] = $lightValue;
+        }
+        if ($activeMode !== 'light' && $activeMode !== 'dark' && $activeMode !== 'system') {
+            $activeMode = 'system';
+        }
+
+        return array(
+            'serverControlled' => false,
+            'activeMode' => $activeMode,
+            'activeModeBinding' => array('$state' => 'global.themeMode'),
+            'presets' => array(
+                'dark' => array('color' => $alignedDark),
+                'light' => array('color' => $alignedLight),
+            ),
+        );
+    }
+
+    private static function devicePalettes(array $theme): array
+    {
+        $colors = array();
+        if (isset($theme['colors']) && is_array($theme['colors'])) {
+            foreach ($theme['colors'] as $key => $value) {
+                if (is_string($key) && is_string($value) && $value !== '') {
+                    $colors[$key] = $value;
+                }
+            }
+        }
+        $accent = $colors['accent'] ?? '#60A5FA';
+        $dark = array(
+            'bg.primary' => $colors['background'] ?? '#0B1220',
+            'bg.surface' => $colors['surface'] ?? ($colors['card'] ?? '#1E293B'),
+            'bg.elevated' => $colors['shell'] ?? '#0F172A',
+            'text.primary' => $colors['text'] ?? '#F8FAFC',
+            'text.secondary' => $colors['mutedText'] ?? ($colors['muted'] ?? '#94A3B8'),
+            'text.muted' => $colors['mutedText'] ?? ($colors['muted'] ?? '#94A3B8'),
+            'accent' => $accent,
+            'accent.on' => $colors['buttonText'] ?? '#FFFFFF',
+            'border' => $colors['border'] ?? '#334155',
+            'online' => $colors['success'] ?? '#22C55E',
+            'offline' => $colors['secondary'] ?? '#64748B',
+            'danger' => $colors['error'] ?? '#EF4444',
+            'nav.background' => $colors['topbar'] ?? '#020617',
+            'nav.active' => $accent,
+        );
+        $light = array(
+            'bg.primary' => '#F8FAFC',
+            'bg.surface' => '#FFFFFF',
+            'bg.elevated' => '#FFFFFF',
+            'text.primary' => '#0F172A',
+            'text.secondary' => '#475569',
+            'text.muted' => '#64748B',
+            'accent' => $accent,
+            'accent.on' => '#FFFFFF',
+            'border' => '#E2E8F0',
+            'online' => '#16A34A',
+            'offline' => '#94A3B8',
+            'danger' => '#DC2626',
+            'nav.background' => '#FFFFFF',
+            'nav.active' => $accent,
+        );
+        $lightLegacy = array(
+            'background' => '#F8FAFC',
+            'gradientEnd' => '#E2E8F0',
+            'shell' => '#FFFFFF',
+            'surface' => '#FFFFFF',
+            'card' => '#FFFFFF',
+            'text' => '#0F172A',
+            'mutedText' => '#64748B',
+            'muted' => '#64748B',
+            'accent' => $accent,
+            'primary' => $accent,
+            'secondary' => '#64748B',
+            'success' => '#16A34A',
+            'warning' => '#D97706',
+            'error' => '#DC2626',
+            'border' => '#E2E8F0',
+            'topbar' => '#FFFFFF',
+            'toggleOn' => $accent,
+            'toggleOff' => '#CBD5E1',
+            'buttonBg' => $accent,
+            'buttonText' => '#FFFFFF',
+            'icon' => $accent,
+        );
+        if (self::activeThemeMode($theme) === 'light') {
+            $light['bg.primary'] = $colors['background'] ?? $light['bg.primary'];
+            $light['bg.surface'] = $colors['surface'] ?? ($colors['card'] ?? $light['bg.surface']);
+            $light['bg.elevated'] = $colors['shell'] ?? $light['bg.elevated'];
+            $light['text.primary'] = $colors['text'] ?? $light['text.primary'];
+            $light['text.secondary'] = $colors['mutedText'] ?? ($colors['muted'] ?? $light['text.secondary']);
+            $light['text.muted'] = $colors['mutedText'] ?? ($colors['muted'] ?? $light['text.muted']);
+            $light['border'] = $colors['border'] ?? $light['border'];
+            $light['nav.background'] = $colors['topbar'] ?? $light['nav.background'];
+            $light['danger'] = $colors['error'] ?? $light['danger'];
+            $light['online'] = $colors['success'] ?? $light['online'];
+            $dark['bg.primary'] = '#0B1220';
+            $dark['bg.surface'] = '#1E293B';
+            $dark['bg.elevated'] = '#0F172A';
+            $dark['text.primary'] = '#F8FAFC';
+            $dark['text.secondary'] = '#94A3B8';
+            $dark['text.muted'] = '#94A3B8';
+            $dark['border'] = '#334155';
+            $dark['nav.background'] = '#020617';
+        }
+        foreach ($colors as $key => $value) {
+            if (self::activeThemeMode($theme) === 'light') {
+                $light[$key] = $value;
+                if (!array_key_exists($key, $dark)) {
+                    $dark[$key] = $lightLegacy[$key] ?? $value;
+                }
+            } else {
+                $dark[$key] = $value;
+                if (!array_key_exists($key, $light)) {
+                    $light[$key] = $lightLegacy[$key] ?? $value;
+                }
+            }
+        }
+
+        return array('dark' => $dark, 'light' => $light);
+    }
+
+    private static function wifiPalettes(array $colors): array
+    {
+        $clean = array();
+        foreach ($colors as $key => $value) {
+            if (is_string($key) && is_string($value) && $value !== '') {
+                $clean[$key] = $value;
+            }
+        }
+        $accent = $clean['accent'] ?? '#2F6BFF';
+        $light = array(
+            'bg.primary' => '#F7F9FC',
+            'bg.surface' => '#FFFFFF',
+            'bg.elevated' => '#FFFFFF',
+            'text.primary' => '#0B1B3D',
+            'text.secondary' => '#8B95A7',
+            'text.muted' => '#8B95A7',
+            'accent' => $accent,
+            'accent.on' => '#FFFFFF',
+            'border' => '#E6EAF2',
+            'online' => '#22C55E',
+            'offline' => '#8B95A7',
+            'danger' => '#EF4444',
+            'nav.background' => '#FFFFFF',
+            'nav.active' => $accent,
+            'background' => '#F7F9FC',
+            'surface' => '#FFFFFF',
+            'text' => '#0B1B3D',
+            'mutedText' => '#8B95A7',
+            'accentSoft' => '#E8F0FE',
+            'primary' => $accent,
+            'secondary' => '#1D4ED8',
+            'success' => '#22C55E',
+            'successSoft' => '#DCFCE7',
+            'warning' => '#F59E0B',
+            'warningSoft' => '#FEF3C7',
+            'error' => '#EF4444',
+            'errorSoft' => '#FEE2E2',
+            'heroStart' => '#0B1F4D',
+            'heroEnd' => '#1D4ED8',
+            'heroSuccessStart' => '#064E3B',
+            'heroSuccessEnd' => '#059669',
+            'heroErrorStart' => '#7F1D1D',
+            'heroErrorEnd' => '#DC2626',
+            'onAccent' => '#FFFFFF',
+            'onHero' => '#FFFFFF',
+            'trackerPendingFill' => '#E8EDF5',
+            'trackerPendingText' => '#9AA4B2',
+            'trackerLinePending' => '#E8EDF5',
+        );
+        $dark = array(
+            'bg.primary' => '#0B1220',
+            'bg.surface' => '#1E293B',
+            'bg.elevated' => '#0F172A',
+            'text.primary' => '#F8FAFC',
+            'text.secondary' => '#94A3B8',
+            'text.muted' => '#94A3B8',
+            'accent' => $accent,
+            'accent.on' => '#FFFFFF',
+            'border' => '#334155',
+            'online' => '#22C55E',
+            'offline' => '#94A3B8',
+            'danger' => '#FCA5A5',
+            'nav.background' => '#0B1220',
+            'nav.active' => $accent,
+            'background' => '#0B1220',
+            'surface' => '#1E293B',
+            'text' => '#F8FAFC',
+            'mutedText' => '#94A3B8',
+            'accentSoft' => '#1E3A8A',
+            'primary' => $accent,
+            'secondary' => '#93C5FD',
+            'success' => '#22C55E',
+            'successSoft' => '#064E3B',
+            'warning' => '#F59E0B',
+            'warningSoft' => '#78350F',
+            'error' => '#FCA5A5',
+            'errorSoft' => '#7F1D1D',
+            'heroStart' => '#0B1F4D',
+            'heroEnd' => '#1D4ED8',
+            'heroSuccessStart' => '#064E3B',
+            'heroSuccessEnd' => '#059669',
+            'heroErrorStart' => '#7F1D1D',
+            'heroErrorEnd' => '#DC2626',
+            'onAccent' => '#FFFFFF',
+            'onHero' => '#FFFFFF',
+            'trackerPendingFill' => '#1E293B',
+            'trackerPendingText' => '#94A3B8',
+            'trackerLinePending' => '#334155',
+        );
+        foreach ($clean as $key => $value) {
+            $light[$key] = $value;
+            if (!array_key_exists($key, $dark)) {
+                $dark[$key] = $value;
+            }
+        }
+
+        return array('dark' => $dark, 'light' => $light);
     }
 
     /**
@@ -309,15 +1258,21 @@ class DeviceUiSchemaNormalizer
         $control['writable'] = true;
         $control['readOnly'] = false;
         $control['interactive'] = true;
-        $control['access'] = 'write';
         if (!isset($control['protocolMeta']) || !is_array($control['protocolMeta'])) {
             $control['protocolMeta'] = [];
         }
         $access = strtolower(trim((string) (isset($control['protocolMeta']['access']) ? $control['protocolMeta']['access'] : '')));
+        // Preserve Ready when the API declared it; only fill blank/read with write.
         if ($access === '' || in_array($access, ['read', 'readonly', 'read-only', 'read_only', 'none'], true)) {
+            $control['access'] = 'write';
             $control['protocolMeta']['access'] = 'write';
+        } elseif (strpos($access, 'ready') !== false) {
+            $control['access'] = $control['protocolMeta']['access'];
         } elseif (strpos($access, 'write') === false) {
+            $control['access'] = 'Read/Write';
             $control['protocolMeta']['access'] = 'Read/Write';
+        } else {
+            $control['access'] = $control['protocolMeta']['access'];
         }
         if (isset($control['component']) && is_array($control['component'])) {
             $control['component']['readOnly'] = false;
@@ -858,8 +1813,10 @@ class DeviceUiSchemaNormalizer
         if ($actionId === '') {
             return;
         }
-        if (!isset($schema['actions']) || is_object($schema['actions'])) {
-            $schema['actions'] = is_object($schema['actions']) ? (array) $schema['actions'] : [];
+        if (!isset($schema['actions'])) {
+            $schema['actions'] = [];
+        } elseif (is_object($schema['actions'])) {
+            $schema['actions'] = (array) $schema['actions'];
         }
         if (!is_array($schema['actions'])) {
             $schema['actions'] = [];
@@ -2562,14 +3519,10 @@ class DeviceUiSchemaNormalizer
             } elseif ($type === 'elevatedbutton') {
                 $wanted = 'elevatedButton';
             }
-            $source = strtolower(trim((string) (isset($control['protocolMeta']['ui_type_source']) ? $control['protocolMeta']['ui_type_source'] : '')));
+            // Use the shared Ready/Write/blank rules (empty = writable for legacy
+            // command UIs; Ready counts as writable; Read = display-only).
+            $writable = self::isWritableControl($control);
             $access = strtolower(trim((string) (isset($control['protocolMeta']['access']) ? $control['protocolMeta']['access'] : '')));
-            $writable = !in_array($source, ['response', 'error'], true);
-            if ($access !== '' && in_array($access, ['read', 'readonly', 'read-only', 'read_only', 'none'], true)) {
-                $writable = false;
-            } elseif ($access !== '' && strpos($access, 'write') === false) {
-                $writable = false;
-            }
 
             if ($wanted !== null && ($accessoryType === '' || $accessoryType === 'toggle' || $accessoryType !== strtolower($wanted))) {
                 $value = isset($control['value']) ? $control['value'] : (isset($control['initialValue']) ? $control['initialValue'] : '');
@@ -2634,14 +3587,22 @@ class DeviceUiSchemaNormalizer
                 }
             }
             // Rule 3: writable Send/input controls publish access explicitly.
+            // Preserve Ready when the API declared it; do not rewrite Ready → Write.
             if ($writable) {
-                $control['access'] = 'write';
                 if (!isset($control['protocolMeta']) || !is_array($control['protocolMeta'])) {
                     $control['protocolMeta'] = [];
                 }
                 $metaAccess = strtolower(trim((string) (isset($control['protocolMeta']['access']) ? $control['protocolMeta']['access'] : '')));
-                if ($metaAccess === '' || strpos($metaAccess, 'write') === false) {
-                    $control['protocolMeta']['access'] = $metaAccess === '' || $metaAccess === 'read' ? 'write' : 'Read/Write';
+                if ($metaAccess === '' || $metaAccess === 'read') {
+                    $control['access'] = 'write';
+                    $control['protocolMeta']['access'] = 'write';
+                } elseif (strpos($metaAccess, 'ready') !== false) {
+                    $control['access'] = $control['protocolMeta']['access'];
+                } elseif (strpos($metaAccess, 'write') === false) {
+                    $control['access'] = 'Read/Write';
+                    $control['protocolMeta']['access'] = 'Read/Write';
+                } else {
+                    $control['access'] = $control['protocolMeta']['access'];
                 }
             }
             if (isset($control['props']) && is_array($control['props'])) {
@@ -3148,8 +4109,12 @@ class DeviceUiSchemaNormalizer
         if (in_array($access, ['read', 'readonly', 'read-only', 'read_only', 'none'], true)) {
             return false;
         }
+        // Ready and Write allow send; Read is display-only.
+        if ($access === 'ready' || strpos($access, 'ready') !== false) {
+            return true;
+        }
 
-        return strpos($access, 'write') !== false;
+        return strpos($access, 'write') !== false || $access === 'w' || $access === 'rw';
     }
 
     private static function buildWarnings(array $report)

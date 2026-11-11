@@ -3384,28 +3384,81 @@
     };
   }
 
+  function systemPrefersDark() {
+    try {
+      return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch (e) {
+      return false;
+    }
+  }
+
   function applyTheme() {
     var t = getTheme();
     var root = el.phone || document.getElementById('ahpPhone');
     if (!root) return;
 
-    var textPrimary = t.textPrimary || '#111827';
-    var textSecondary = t.textSecondary || '#374151';
-    var textMuted = t.textMuted || '#6b7280';
-    var phoneBg = t.phoneBg || '#f3f4f6';
-    var alertBg = t.alertBg || '#ffffff';
+    if (!applyTheme._osBound) {
+      applyTheme._osBound = true;
+      try {
+        var osTheme = window.matchMedia('(prefers-color-scheme: dark)');
+        var onOsTheme = function () { applyTheme(); };
+        if (osTheme.addEventListener) osTheme.addEventListener('change', onOsTheme);
+        else if (osTheme.addListener) osTheme.addListener(onOsTheme);
+      } catch (e) {}
+    }
+
     var accent = t.accentColor || '#111827';
-    var navActive = t.navActiveColor || '#111827';
-    var navBg = t.navBg || '#ffffff';
-    var welcomeText = t.welcomeTextColor || '#111827';
-    var isLight = t.bgStyle === 'light';
-    var surface = t.surfaceColor || t.alertBg || (isLight ? '#ffffff' : '#151b2e');
     var accentGreen = t.accentGreen || '#22c55e';
+    var isLight = !systemPrefersDark();
+    var savedIsLight = t.bgStyle === 'light';
+    var textPrimary;
+    var textSecondary;
+    var textMuted;
+    var phoneBg;
+    var alertBg;
+    var navActive;
+    var navBg;
+    var welcomeText;
+    var surface;
+    if (savedIsLight === isLight) {
+      textPrimary = t.textPrimary || (isLight ? '#111827' : '#ffffff');
+      textSecondary = t.textSecondary || (isLight ? '#374151' : '#dbe4ef');
+      textMuted = t.textMuted || (isLight ? '#6b7280' : '#94a3b8');
+      phoneBg = t.phoneBg || (isLight ? '#f3f4f6' : '#0b0f1a');
+      alertBg = t.alertBg || (isLight ? '#ffffff' : '#151b2e');
+      navActive = t.navActiveColor || (isLight ? '#111827' : '#3b82f6');
+      navBg = t.navBg || (isLight ? '#ffffff' : '#000000');
+      welcomeText = t.welcomeTextColor || textPrimary;
+      surface = t.surfaceColor || t.alertBg || (isLight ? '#ffffff' : '#151b2e');
+    } else if (isLight) {
+      textPrimary = '#111827';
+      textSecondary = '#374151';
+      textMuted = '#6b7280';
+      phoneBg = '#f3f4f6';
+      alertBg = '#ffffff';
+      navActive = t.navActiveColor || accent;
+      navBg = '#ffffff';
+      welcomeText = '#111827';
+      surface = '#ffffff';
+    } else {
+      textPrimary = '#ffffff';
+      textSecondary = '#dbe4ef';
+      textMuted = '#94a3b8';
+      phoneBg = '#0b0f1a';
+      alertBg = '#151b2e';
+      navActive = t.navActiveColor || '#3b82f6';
+      navBg = '#000000';
+      welcomeText = '#ffffff';
+      surface = '#151b2e';
+    }
     var borderColor = isLight ? 'rgba(17,24,39,.08)' : 'rgba(255,255,255,.10)';
     var cardShadow = isLight
       ? '0 18px 40px rgba(15,23,42,.08)'
       : '0 18px 40px rgba(0,0,0,.35)';
-    var logoutColors = resolveLogoutButtonColors(t);
+    var logoutColors = {
+      background: isLight ? textPrimary : (accent || '#3b82f6'),
+      text: '#ffffff'
+    };
 
     var themeVars = {
       '--ahp-phone-bg': phoneBg,
@@ -4963,12 +5016,6 @@
           renderProfilePage(color);
           return;
         }
-        if (action === 'appearance') {
-          setEditMode(true);
-          setActiveMenu('theme');
-          showToast('Theme is set in the studio Theme panel. Save to update the app.');
-          return;
-        }
         if (action === 'privacy') {
           showToast('Privacy policy opens in the mobile app');
           return;
@@ -5073,7 +5120,6 @@
     var rows = [
       ['fa-user-pen', 'Edit profile', 'Manage account details', 'edit'],
       ['fa-bell', 'Notifications', notifOn ? 'Alerts and reminders enabled' : 'Alerts and reminders disabled', 'notifications'],
-      ['fa-moon', 'Appearance', getThemeModeLabel() + ' mode', 'appearance'],
       ['fa-shield-halved', 'Privacy Policy', 'Security and data controls', 'privacy'],
       ['fa-star', 'Rating', 'Rate with stars and describe the issue', 'rating']
     ];

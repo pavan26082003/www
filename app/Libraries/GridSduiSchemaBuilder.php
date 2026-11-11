@@ -10,6 +10,15 @@ class GridSduiSchemaBuilder
 {
     public const GRID_LOGO_URL = 'https://efactor.tech/assets/images/GRID_Logo.png';
 
+    /** Public asset used above Circle Connect in the Grid preview / SDUI. */
+    public const ORBIT_GLOBE_ASSET = 'assets/grid-orbit-globe.svg';
+
+    /**
+     * Raster fallback for native clients. The SVG above carries <script>/<style>
+     * animation that flutter_svg cannot render, so the app should load this PNG.
+     */
+    public const ORBIT_GLOBE_IMAGE = 'assets/images/grid-orbit-globe.png';
+
     private static function publicOrigin(): string
     {
         $host = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
@@ -337,8 +346,14 @@ class GridSduiSchemaBuilder
 
         $first = trim((string) ($row['first_name'] ?? ''));
         $last = trim((string) ($row['last_name'] ?? ''));
+        $email = trim((string) ($row['email'] ?? ''));
+        // Fallback letter shown only when the account has no profile photo.
+        // Product rule: show the image if present, otherwise the first letter
+        // of the email. Name initials are kept as a last resort if email is blank.
         $initial = '';
-        if ($first !== '') {
+        if ($email !== '') {
+            $initial = strtoupper(substr($email, 0, 1));
+        } elseif ($first !== '') {
             $initial = strtoupper(substr($first, 0, 1));
         } elseif ($last !== '') {
             $initial = strtoupper(substr($last, 0, 1));
@@ -367,7 +382,7 @@ class GridSduiSchemaBuilder
             if (!$db->tableExists('users')) {
                 return null;
             }
-            $row = $db->table('users')->select('first_name, last_name, image')->where('id', $userId)->get()->getRowArray();
+            $row = $db->table('users')->select('first_name, last_name, email, image')->where('id', $userId)->get()->getRowArray();
             if (!is_array($row)) {
                 return null;
             }
@@ -399,7 +414,7 @@ class GridSduiSchemaBuilder
             }
             return null;
         }
-        $stmt = $db->prepare('SELECT first_name, last_name, image FROM users WHERE id = ? LIMIT 1');
+        $stmt = $db->prepare('SELECT first_name, last_name, email, image FROM users WHERE id = ? LIMIT 1');
         if (!$stmt) {
             $db->close();
             return null;
@@ -434,6 +449,22 @@ class GridSduiSchemaBuilder
     public static function liveHeaderProfile(int $userId): array
     {
         return self::resolveHeaderProfile($userId);
+    }
+
+    /**
+     * Authoritative appearance for mobile GRID (theme.defaultMode).
+     * Delegates to AppAppearance::resolve() — Account Profile → Appearance.
+     * The GRID Web Dashboard may keep a local sun/moon preview override; that
+     * override is web-only and must not write back through this resolver.
+     *
+     * @return string 'light'|'dark'|'system'
+     */
+    public static function resolveAccountAppearance(int $userId): string
+    {
+        if (class_exists(AppAppearance::class)) {
+            return AppAppearance::resolve($userId);
+        }
+        return 'system';
     }
 
     private static function storedPhotoUrl(string $photo): string
@@ -620,9 +651,13 @@ class GridSduiSchemaBuilder
             'id' => 'gridPage',
             'routeId' => 'grid',
             'logoUrl' => self::GRID_LOGO_URL,
+            // Decorative orbit globe (shown above Circle Connect). Optional for clients.
+            'orbitGlobeUrl' => self::orbitGlobeAssetUrl(),
             'header' => array(
                 'title' => 'Grid',
                 'subtitle' => 'Your professional network space',
+                'eyebrow' => 'Welcome to GRID',
+                'tagline' => 'Connect. Collaborate. Grow Together.',
                 'logoUrl' => self::GRID_LOGO_URL,
                 'searchIconToken' => 'scanner',
                 'avatarInitial' => 'S',
@@ -634,6 +669,7 @@ class GridSduiSchemaBuilder
                     'title' => 'Professional Space',
                     'subtitle' => 'Discover people, opportunities and grow your career.',
                     'iconToken' => 'user',
+                    'ctaLabel' => 'Explore Now',
                     'image' => '',
                     'imageUrl' => '',
                     'url' => '',
@@ -649,6 +685,7 @@ class GridSduiSchemaBuilder
                     'title' => 'Circle Connect',
                     'subtitle' => 'Meaningful conversations. Stronger circles.',
                     'iconToken' => 'users',
+                    'ctaLabel' => 'Explore Now',
                     'image' => '',
                     'imageUrl' => '',
                     'url' => '',
@@ -658,21 +695,20 @@ class GridSduiSchemaBuilder
                     'gradientEnd' => '#f4b496',
                     'textColor' => '#9a3412',
                     'actionId' => 'grid-open-circle-connect',
+                    // Same asset URL — clients may render above this card.
+                    'orbitGlobeUrl' => self::orbitGlobeAssetUrl(),
                 ),
             ),
-            'stats' => array(
-                array('id' => 'professionals', 'label' => 'Professionals', 'value' => 248),
-                array('id' => 'opportunities', 'label' => 'Opportunities', 'value' => 36),
-                array('id' => 'active-circles', 'label' => 'Active Circles', 'value' => 12),
-            ),
+            // Stats strip removed — feature cards go straight to Share Profile QR.
+            'stats' => array(),
             'shareQr' => array(
                 'title' => 'Share Profile QR',
                 'subtitle' => 'Share your professional or circle profile with anyone.',
-                'iconToken' => 'grid',
+                'iconToken' => 'qrcode',
                 'selectedMode' => 'professional',
                 'modes' => array(
-                    array('id' => 'professional', 'label' => 'Professional'),
-                    array('id' => 'circle', 'label' => 'Circle'),
+                    array('id' => 'professional', 'label' => 'Professional', 'iconToken' => 'user'),
+                    array('id' => 'circle', 'label' => 'Circle', 'iconToken' => 'users'),
                 ),
                 'qrCaption' => 'Scan to connect',
                 'qrPayload' => '',
@@ -683,9 +719,11 @@ class GridSduiSchemaBuilder
                 'selectModeActionId' => 'grid-select-qr-mode',
             ),
             'exploring' => array(
-                'title' => 'Recent Activity',
-                'seeAllLabel' => 'See all',
+                'title' => 'Updates',
+                'iconToken' => 'bell',
+                'seeAllLabel' => 'View All',
                 'seeAllActionId' => 'grid-see-all-exploring',
+                'viewAllLabel' => 'View All Updates',
                 'items' => array(),
             ),
             'quote' => array(
@@ -713,9 +751,8 @@ class GridSduiSchemaBuilder
                 $override['featureCards']
             );
         }
-        if (empty($override['stats']) || !is_array($override['stats'])) {
-            $merged['stats'] = $defaults['stats'];
-        }
+        // Never reinject the old 248/36/12 strip from saved layouts.
+        $merged['stats'] = array();
         $savedExplore = $override['exploring']['items'] ?? null;
         $savedExploreIsLegacy = false;
         if (is_array($savedExplore)) {
@@ -731,15 +768,39 @@ class GridSduiSchemaBuilder
             }
         }
         if ($savedExploreIsLegacy || empty($savedExplore) || !is_array($savedExplore)) {
-            $merged['exploring']['title'] = 'Recent Activity';
+            $merged['exploring']['title'] = 'Updates';
             $merged['exploring']['items'] = $defaults['exploring']['items'];
         }
+        $merged['exploring']['title'] = 'Updates';
+        $merged['exploring']['iconToken'] = 'bell';
+        $merged['exploring']['seeAllLabel'] = (string) ($merged['exploring']['seeAllLabel'] ?? 'View All');
+        if ($merged['exploring']['seeAllLabel'] === '' || strcasecmp($merged['exploring']['seeAllLabel'], 'See all') === 0) {
+            $merged['exploring']['seeAllLabel'] = 'View All';
+        }
+        $merged['exploring']['viewAllLabel'] = (string) ($merged['exploring']['viewAllLabel'] ?? 'View All Updates');
         if (empty($override['shareQr']) || !is_array($override['shareQr'])) {
             $merged['shareQr'] = $defaults['shareQr'];
         } else {
             $merged['shareQr'] = array_replace_recursive($defaults['shareQr'], $override['shareQr']);
             if (empty($override['shareQr']['modes']) || !is_array($override['shareQr']['modes'])) {
                 $merged['shareQr']['modes'] = $defaults['shareQr']['modes'];
+            } else {
+                // Keep saved mode ids/labels; fill missing mode iconToken only.
+                foreach ($merged['shareQr']['modes'] as $mi => $modeRow) {
+                    if (!is_array($modeRow)) {
+                        continue;
+                    }
+                    $modeId = (string) ($modeRow['id'] ?? '');
+                    if (trim((string) ($modeRow['iconToken'] ?? '')) !== '') {
+                        continue;
+                    }
+                    $merged['shareQr']['modes'][$mi]['iconToken'] = ($modeId === 'circle') ? 'users' : 'user';
+                }
+            }
+            // Prefer QR glyph over legacy grid icon for this card.
+            $shareIcon = strtolower(trim((string) ($merged['shareQr']['iconToken'] ?? '')));
+            if ($shareIcon === '' || $shareIcon === 'grid' || $shareIcon === 'border-all') {
+                $merged['shareQr']['iconToken'] = 'qrcode';
             }
         }
         if (empty($merged['logoUrl'])) {
@@ -748,9 +809,89 @@ class GridSduiSchemaBuilder
         if (empty($merged['header']['logoUrl'])) {
             $merged['header']['logoUrl'] = self::GRID_LOGO_URL;
         }
+        if (empty($merged['orbitGlobeUrl'])) {
+            $merged['orbitGlobeUrl'] = self::orbitGlobeAssetUrl();
+        }
+        if (!empty($merged['featureCards']) && is_array($merged['featureCards'])) {
+            foreach ($merged['featureCards'] as $fi => $card) {
+                if (!is_array($card) || (string) ($card['id'] ?? '') !== 'circle-connect') {
+                    continue;
+                }
+                if (empty($card['orbitGlobeUrl'])) {
+                    $merged['featureCards'][$fi]['orbitGlobeUrl'] = $merged['orbitGlobeUrl'];
+                }
+            }
+        }
         $merged['shareQr'] = self::fillShareQrImages(is_array($merged['shareQr'] ?? null) ? $merged['shareQr'] : array(), 0);
 
         return $merged;
+    }
+
+    /**
+     * Static SVG under www/assets (no-space filename). Prefer host-root URL so
+     * CI base_url under /app/public does not 404 the asset.
+     */
+    public static function orbitGlobeAssetUrl(): string
+    {
+        return self::publicAssetUrl(self::ORBIT_GLOBE_ASSET);
+    }
+
+    /** Flutter-safe raster globe (PNG) absolute URL. */
+    public static function orbitGlobeImageAssetUrl(): string
+    {
+        return self::publicAssetUrl(self::ORBIT_GLOBE_IMAGE);
+    }
+
+    /**
+     * Blend a hex color toward a base color. $baseRatio (0..1) is how much of
+     * the base to mix in. Used to derive dark-theme card gradients from a
+     * card's light brand color so appearanceDark stays on-brand.
+     */
+    private static function mixHex(string $hex, string $base, float $baseRatio): string
+    {
+        $parse = function ($h) {
+            $h = ltrim(trim((string) $h), '#');
+            if (strlen($h) === 3) {
+                $h = $h[0] . $h[0] . $h[1] . $h[1] . $h[2] . $h[2];
+            }
+            if (strlen($h) !== 6 || !ctype_xdigit($h)) {
+                return array(91, 108, 255);
+            }
+            return array(hexdec(substr($h, 0, 2)), hexdec(substr($h, 2, 2)), hexdec(substr($h, 4, 2)));
+        };
+        $ratio = max(0.0, min(1.0, $baseRatio));
+        $c1 = $parse($hex);
+        $c2 = $parse($base);
+        $m = function ($a, $b) use ($ratio) {
+            return (int) round($a * (1 - $ratio) + $b * $ratio);
+        };
+        return sprintf('#%02x%02x%02x', $m($c1[0], $c2[0]), $m($c1[1], $c2[1]), $m($c1[2], $c2[2]));
+    }
+
+    private static function publicAssetUrl(string $relPath): string
+    {
+        $path = '/' . ltrim($relPath, '/');
+        $host = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
+        if ($host !== '') {
+            $hostName = strtolower((string) preg_replace('/:\d+$/', '', $host));
+            $https = !in_array($hostName, array('localhost', '127.0.0.1', '::1'), true)
+                || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+
+            return ($https ? 'https://' : 'http://') . $host . $path;
+        }
+        if (function_exists('base_url')) {
+            try {
+                helper('url');
+                $url = base_url(ltrim($path, '/'));
+                if (is_string($url) && trim($url) !== '') {
+                    return rtrim($url, '/');
+                }
+            } catch (\Throwable $e) {
+                // fall through
+            }
+        }
+        return $path;
     }
 
     /**
@@ -849,7 +990,7 @@ class GridSduiSchemaBuilder
             $tileColor = (string) ($card['color'] ?? $card['gradientStart'] ?? '#5b6cff');
             $textColor = (string) ($card['textColor'] ?? '#312e81');
             $url = trim((string) ($card['url'] ?? $card['route'] ?? ''));
-            $components[$id] = array(
+            $featureComp = array(
                 'id' => $id,
                 'type' => 'featureCard',
                 'style' => 'softCard',
@@ -857,6 +998,9 @@ class GridSduiSchemaBuilder
                 'subtitle' => (string) ($card['subtitle'] ?? ''),
                 'iconToken' => self::knownIconToken($card['iconToken'] ?? 'user', 'user'),
                 'actionArrowIconToken' => 'chevron-right',
+                // "Explore Now" call-to-action shown at the bottom of each card.
+                'ctaLabel' => (string) ($card['ctaLabel'] ?? 'Explore Now'),
+                'ctaIconToken' => 'chevron-right',
                 'image' => null,
                 'imageUrl' => null,
                 'color' => $tileColor,
@@ -882,13 +1026,35 @@ class GridSduiSchemaBuilder
                 'layout' => array(
                     'columnSpan' => 1,
                     'rowSpan' => 1,
-                    'minHeight' => 168,
+                    // Match the web soft-card height so app tiles are not oversized.
+                    'minHeight' => 200,
+                    'height' => 200,
                     'minWidth' => 0,
                     'width' => 'fill',
                     'maxWidth' => '100%',
                 ),
+                // Dark-mode palette: deep on-brand gradient + light text. The
+                // app applies this when the device is in dark mode.
+                // Derive from the saturated brand color ($tileColor), not the
+                // pastel gradient, so dark cards stay on-brand (deep blue/orange).
+                'appearanceDark' => array(
+                    'borderRadius' => 26,
+                    'backgroundColor' => self::mixHex($tileColor, '#0b1220', 0.60),
+                    'backgroundGradient' => array(
+                        'start' => self::mixHex($tileColor, '#0b1220', 0.58),
+                        'end' => self::mixHex($tileColor, '#050a14', 0.74),
+                    ),
+                    'borderColor' => self::mixHex($tileColor, '#0b1220', 0.30),
+                    'titleColor' => '#f8fafc',
+                    'subtitleColor' => '#cbd5e1',
+                    'textColor' => '#f8fafc',
+                    'ctaColor' => '#c4b5fd',
+                    'actionArrowPosition' => 'topRight',
+                    'ctaPosition' => 'bottom',
+                    'showCta' => true,
+                ),
                 'appearance' => array(
-                    'borderRadius' => 24,
+                    'borderRadius' => 26,
                     'backgroundColor' => (string) ($card['gradientStart'] ?? $tileColor),
                     'backgroundGradient' => array(
                         'start' => (string) ($card['gradientStart'] ?? $tileColor),
@@ -898,8 +1064,17 @@ class GridSduiSchemaBuilder
                     'titlePosition' => 'belowIcon',
                     'showSubtitle' => true,
                     'showActionArrow' => true,
+                    // Web places the circular chevron at the top-right of each card.
+                    'actionArrowPosition' => 'topRight',
+                    'actionArrowSize' => 32,
+                    'showCta' => true,
+                    'ctaLabel' => (string) ($card['ctaLabel'] ?? 'Explore Now'),
+                    'ctaPosition' => 'bottom',
+                    'ctaFontSize' => 11,
+                    'ctaFontWeight' => 700,
+                    'ctaColor' => $tileColor,
                     'iconSize' => 36,
-                    'titleFontSize' => 16,
+                    'titleFontSize' => 17,
                     'subtitleFontSize' => 12,
                     'titlePadding' => 12,
                     'titleMaxLines' => 2,
@@ -910,6 +1085,18 @@ class GridSduiSchemaBuilder
                     'minWidth' => 0,
                 ),
             );
+            // Optional: clients render this decorative SVG above the Circle Connect card.
+            if ((string) ($card['id'] ?? '') === 'circle-connect') {
+                $globe = trim((string) ($card['orbitGlobeUrl'] ?? $content['orbitGlobeUrl'] ?? ''));
+                if ($globe === '') {
+                    $globe = self::orbitGlobeAssetUrl();
+                }
+                $featureComp['orbitGlobeUrl'] = $globe;
+                // Flutter-safe raster the native app should prefer (SVG has
+                // script/CSS animation that flutter_svg cannot render).
+                $featureComp['orbitGlobeImageUrl'] = self::orbitGlobeImageAssetUrl();
+            }
+            $components[$id] = $featureComp;
         }
 
         $exploreChildIds = array();
@@ -925,7 +1112,13 @@ class GridSduiSchemaBuilder
             $tint = (string) ($item['backgroundColor'] ?? '#eef2ff');
             $time = (string) ($item['time'] ?? '');
             $badge = (string) ($item['badge'] ?? '');
-            $avatarUrl = self::initialsImageUrl($initials, $avatarColor);
+            // Prefer a real photo the feed supplies (e.g. a sender's profile
+            // picture). Only absolute URLs are trusted; otherwise fall back to
+            // the server-rendered initials avatar, which always loads.
+            $providedImage = trim((string) ($item['imageUrl'] ?? $item['image'] ?? ''));
+            $avatarUrl = preg_match('#^https?://#i', $providedImage)
+                ? $providedImage
+                : self::initialsImageUrl($initials, $avatarColor);
             $avatar = array(
                 'type' => 'avatarButton',
                 'label' => $initials,
@@ -1009,6 +1202,18 @@ class GridSduiSchemaBuilder
                     'titleFlex' => 1,
                     'titleMinWidth' => 0,
                 ),
+                'appearanceDark' => array(
+                    'borderRadius' => 16,
+                    'backgroundColor' => '#141824',
+                    'backgroundGradient' => array(
+                        'start' => '#141824',
+                        'end' => '#141824',
+                    ),
+                    'borderColor' => '#262c3b',
+                    'titleColor' => '#f8fafc',
+                    'subtitleColor' => '#94a3b8',
+                    'textColor' => '#f8fafc',
+                ),
                 'appearance' => array(
                     'borderRadius' => 16,
                     'backgroundColor' => $tint,
@@ -1072,46 +1277,149 @@ class GridSduiSchemaBuilder
                 'grid-feature-row',
                 'grid-share-qr',
                 'grid-explore-section',
-                'grid-quote-block',
             ),
         );
 
         $avatarInitial = (string) ($header['avatarInitial'] ?? 'S');
         $avatarColor = (string) ($header['avatarColor'] ?? '#7c3aed');
         $avatarUrl = trim((string) ($header['avatarUrl'] ?? ''));
+        // Decorative animated globe now belongs to the header hero (shown to the
+        // right of the welcome text), not the Circle Connect card.
+        $headerOrbitGlobeUrl = trim((string) ($content['orbitGlobeUrl'] ?? ''));
+        if ($headerOrbitGlobeUrl === '') {
+            $headerOrbitGlobeUrl = self::orbitGlobeAssetUrl();
+        }
+        // Avatar tap opens only the account photo (url/route point at the image).
+        // Hidden-chrome WebView is used as the app's image preview surface.
+        $profileWebView = array(
+            'javaScriptEnabled' => true,
+            'sharedCookies' => true,
+            'clearCache' => false,
+            'showAppBar' => false,
+            'showToolbar' => false,
+            'hideAppBar' => true,
+            'displayMode' => 'fullscreen',
+        );
+        // Match the web hero exactly: "Your professional network space" is the big
+        // title. The short "Grid" title and the duplicate subtitle line are dropped
+        // so Flutter renders the same single heading the web does.
+        $welcomeHeading = trim((string) ($header['subtitle'] ?? ''));
+        if ($welcomeHeading === '') {
+            $welcomeHeading = 'Your professional network space';
+        }
         $components['grid-page-header'] = array(
             'id' => 'grid-page-header',
             'type' => 'pageHeader',
-            'title' => (string) ($header['title'] ?? 'Grid'),
-            'subtitle' => (string) ($header['subtitle'] ?? 'Your professional network space'),
+            'title' => $welcomeHeading,
+            'subtitle' => '',
+            // Hero copy shown by the app above/below the page title. Kept in the
+            // schema (not hardcoded in a renderer) so Flutter + web stay in sync.
+            'eyebrow' => (string) ($header['eyebrow'] ?? 'Welcome to GRID'),
+            // Eyebrow must sit under the logo/brand row, above the title — never
+            // at the very top of the header. Explicit order for the hero block.
+            'eyebrowPlacement' => 'belowBrand',
+            'heroOrder' => array('brand', 'eyebrow', 'title', 'subtitle', 'tagline'),
+            'tagline' => (string) ($header['tagline'] ?? 'Connect. Collaborate. Grow Together.'),
             'logoUrl' => $logoUrl,
             'image' => $logoUrl,
+            // Animated globe rendered to the RIGHT of the welcome text, inside the
+            // header hero. Web (<object>) runs the SVG's script animation; native
+            // clients that cannot run the SVG script load the PNG raster instead.
+            'orbitGlobeUrl' => $headerOrbitGlobeUrl,
+            'orbitGlobeImageUrl' => self::orbitGlobeImageAssetUrl(),
+            'orbitGlobePlacement' => 'heroRight',
+            // Display size (logical px) for the hero globe. 140 sits in the
+            // 130–150 band so Android/iOS match the web hero without crowding
+            // the welcome text or the scanner/avatar actions.
+            'orbitGlobeSize' => array('width' => 140, 'height' => 140),
+            // iOS was clipping the right edge because the header laid out with
+            // overflowX=hidden. Keep the globe fully inside the hero and let
+            // the row reflow instead of clipping.
+            'orbitGlobeClip' => false,
             'designTokens' => self::designTokens(),
             'layout' => array(
                 'direction' => 'horizontal',
                 'alignItems' => 'center',
                 'crossAxisAlignment' => 'center',
                 'gap' => 10,
-                'overflowX' => 'hidden',
+                'overflowX' => 'visible',
+                'overflowY' => 'visible',
+                'clipBehavior' => 'none',
                 'width' => 'fill',
                 'maxWidth' => '100%',
                 'minWidth' => 0,
                 'titleFlex' => 1,
                 'titleMinWidth' => 0,
+                'heroGlobeFlex' => 0,
+                'heroGlobeWidth' => 140,
+                'heroGlobeHeight' => 140,
                 'titleSubtitleDirection' => 'vertical',
                 'subtitlePlacement' => 'belowTitle',
+                'eyebrowPlacement' => 'belowBrand',
                 'actionsFlex' => 0,
                 'responsive' => array(
-                    'narrow' => array('gap' => 8, 'titleFontSize' => 22, 'subtitleFontSize' => 12, 'logoHeight' => 28),
-                    'compact' => array('gap' => 10, 'titleFontSize' => 24, 'subtitleFontSize' => 13, 'logoHeight' => 32),
-                    'regular' => array('gap' => 12, 'titleFontSize' => 28, 'subtitleFontSize' => 13, 'logoHeight' => 36),
-                    'medium' => array('gap' => 12, 'titleFontSize' => 30, 'subtitleFontSize' => 14, 'logoHeight' => 36),
-                    'expanded' => array('gap' => 16, 'titleFontSize' => 34, 'subtitleFontSize' => 15, 'logoHeight' => 40),
+                    'narrow' => array(
+                        'gap' => 8,
+                        'titleFontSize' => 20,
+                        'subtitleFontSize' => 12,
+                        'logoHeight' => 28,
+                        'heroGlobeWidth' => 130,
+                        'heroGlobeHeight' => 130,
+                        'overflowX' => 'visible',
+                        'clipBehavior' => 'none',
+                    ),
+                    'compact' => array(
+                        'gap' => 10,
+                        'titleFontSize' => 22,
+                        'subtitleFontSize' => 13,
+                        'logoHeight' => 32,
+                        'heroGlobeWidth' => 140,
+                        'heroGlobeHeight' => 140,
+                        'overflowX' => 'visible',
+                        'clipBehavior' => 'none',
+                    ),
+                    'regular' => array(
+                        'gap' => 12,
+                        'titleFontSize' => 26,
+                        'subtitleFontSize' => 13,
+                        'logoHeight' => 36,
+                        'heroGlobeWidth' => 140,
+                        'heroGlobeHeight' => 140,
+                    ),
+                    'medium' => array(
+                        'gap' => 12,
+                        'titleFontSize' => 28,
+                        'subtitleFontSize' => 14,
+                        'logoHeight' => 36,
+                        'heroGlobeWidth' => 150,
+                        'heroGlobeHeight' => 150,
+                    ),
+                    'expanded' => array(
+                        'gap' => 16,
+                        'titleFontSize' => 32,
+                        'subtitleFontSize' => 15,
+                        'logoHeight' => 40,
+                        'heroGlobeWidth' => 150,
+                        'heroGlobeHeight' => 150,
+                    ),
                 ),
             ),
             'appearance' => array(
                 'logoHeight' => 32,
                 'logoMaxWidth' => 96,
+                'orbitGlobeSize' => 140,
+                'orbitGlobeClip' => false,
+                'overflow' => 'visible',
+            ),
+            // Dark-mode text colors for the hero copy. logoUrlDark lets the app
+            // swap in a light logo (the default logo has a solid light bg).
+            'appearanceDark' => array(
+                'logoHeight' => 32,
+                'logoMaxWidth' => 96,
+                'eyebrowColor' => '#a78bfa',
+                'titleColor' => '#f8fafc',
+                'subtitleColor' => '#94a3b8',
+                'taglineColor' => '#94a3b8',
             ),
             'typography' => array(
                 'titleToken' => 'typography.pageTitle',
@@ -1154,6 +1462,17 @@ class GridSduiSchemaBuilder
                     'backgroundColor' => $avatarColor,
                     'foregroundColor' => '#ffffff',
                     'actionId' => 'navigate-profile',
+                    // Photo preview only. The action id stays 'navigate-profile'
+                    // so the web overlay and any existing app handlers keep
+                    // working; the destination is the account photo (or empty
+                    // when there is no image), never the Profile page.
+                    'previewMode' => 'imageOnly',
+                    'previewImageUrl' => $avatarUrl,
+                    'url' => $avatarUrl !== '' ? $avatarUrl : null,
+                    'route' => $avatarUrl !== '' ? $avatarUrl : null,
+                    'openIn' => $avatarUrl !== '' ? 'inAppWebView' : null,
+                    'webView' => $avatarUrl !== '' ? $profileWebView : null,
+                    'events' => array('tap' => array('actionId' => 'navigate-profile')),
                     'fontSize' => 15,
                     'action' => array(
                         'fontSize' => 15,
@@ -1218,23 +1537,31 @@ class GridSduiSchemaBuilder
             }
         }
 
+        $orbitGlobeUrl = trim((string) ($content['orbitGlobeUrl'] ?? ''));
+        if ($orbitGlobeUrl === '') {
+            $orbitGlobeUrl = self::orbitGlobeAssetUrl();
+        }
         $components['grid-feature-row'] = array(
             'id' => 'grid-feature-row',
             'type' => 'responsiveGrid',
-            'layout' => array_merge(self::gridLayoutMetrics(2, 12, 188), array(
+            // Optional decorative globe rendered above Circle Connect by web preview / clients.
+            'orbitGlobeUrl' => $orbitGlobeUrl,
+            // Flutter-safe raster (PNG) the native app should load instead of the SVG.
+            'orbitGlobeImageUrl' => self::orbitGlobeImageAssetUrl(),
+            'layout' => array_merge(self::gridLayoutMetrics(2, 12, 200), array(
                 'independentScroll' => false,
                 'responsive' => array(
-                    'narrow' => self::gridLayoutMetrics(2, 10, 176),
-                    'compact' => self::gridLayoutMetrics(2, 8, 188),
-                    'regular' => self::gridLayoutMetrics(2, 12, 188),
+                    'narrow' => self::gridLayoutMetrics(2, 10, 200),
+                    'compact' => self::gridLayoutMetrics(2, 8, 200),
+                    'regular' => self::gridLayoutMetrics(2, 12, 200),
                     'medium' => self::gridLayoutMetrics(2, 12, 200),
                     'expanded' => self::gridLayoutMetrics(2, 16, 210, array('maximumContentWidth' => 720)),
                 ),
             )),
             'layouts' => array(
-                'narrow' => self::gridLayoutMetrics(2, 10, 176),
-                'compact' => self::gridLayoutMetrics(2, 8, 188),
-                'regular' => self::gridLayoutMetrics(2, 12, 188),
+                'narrow' => self::gridLayoutMetrics(2, 10, 200),
+                'compact' => self::gridLayoutMetrics(2, 8, 200),
+                'regular' => self::gridLayoutMetrics(2, 12, 200),
                 'medium' => self::gridLayoutMetrics(2, 12, 200),
                 'expanded' => self::gridLayoutMetrics(2, 16, 210, array('maximumContentWidth' => 720)),
             ),
@@ -1260,9 +1587,11 @@ class GridSduiSchemaBuilder
                 continue;
             }
             $modeId = (string) ($mode['id'] ?? '');
+            $modeIconFallback = ($modeId === 'circle') ? 'users' : 'user';
             $modeItems[] = array(
                 'id' => $modeId,
                 'label' => (string) ($mode['label'] ?? $modeId),
+                'iconToken' => self::knownIconToken($mode['iconToken'] ?? $modeIconFallback, $modeIconFallback),
                 'selected' => $modeId !== '' && $modeId === $selectedMode,
                 'actionId' => (string) ($shareQr['selectModeActionId'] ?? 'grid-select-qr-mode'),
             );
@@ -1305,55 +1634,91 @@ class GridSduiSchemaBuilder
                     'expanded' => array('direction' => 'horizontal', 'gap' => 20, 'qrSize' => 160),
                 ),
             ),
+            'appearanceDark' => array(
+                'backgroundColor' => '#171b28',
+                'borderColor' => '#2a3344',
+                'borderWidth' => 1,
+                'borderRadius' => 24,
+                'padding' => 16,
+                'titleColor' => '#f8fafc',
+                'subtitleColor' => '#94a3b8',
+                // QR stays on white so it scans reliably.
+                'qrBackgroundColor' => '#ffffff',
+                'qrBorderColor' => '#2a3344',
+                'captionColor' => '#94a3b8',
+                'modeChipBackground' => '#0f172a',
+                'modeChipColor' => '#94a3b8',
+                'modeChipSelectedBackground' => '#8b5cf6',
+                'modeChipSelectedColor' => '#ffffff',
+            ),
             'appearance' => array(
                 'backgroundColor' => '#ffffff',
                 'borderColor' => '#e5e7eb',
                 'borderWidth' => 1,
-                'borderRadius' => 20,
+                'borderRadius' => 24,
                 'padding' => 16,
-                'titleFontSize' => 16,
+                'titleFontSize' => 15,
                 'titleFontWeight' => 800,
-                'titleColor' => '#1e1b4b',
+                'titleColor' => '#0f172a',
                 'subtitleFontSize' => 12,
-                'subtitleColor' => '#6b7280',
+                'subtitleColor' => '#64748b',
                 'qrSize' => 140,
                 'qrPadding' => 10,
-                'qrBorderRadius' => 14,
+                'qrBorderRadius' => 16,
                 'qrBackgroundColor' => '#ffffff',
                 'qrBorderColor' => '#e5e7eb',
                 'captionFontSize' => 11,
                 'captionColor' => '#94a3b8',
                 'modeChipBorderRadius' => 999,
                 'modeChipPaddingHorizontal' => 12,
-                'modeChipPaddingVertical' => 8,
+                'modeChipPaddingVertical' => 10,
                 'modeChipFontSize' => 12,
-                'modeChipBackground' => '#f3f4f6',
-                'modeChipColor' => '#475569',
+                'modeChipBackground' => '#f1f5f9',
+                'modeChipColor' => '#334155',
                 'modeChipSelectedBackground' => '#7c3aed',
                 'modeChipSelectedColor' => '#ffffff',
+                // Web places Professional / Circle under the QR row.
+                'modesPlacement' => 'bottom',
             ),
+            'modesPlacement' => 'bottom',
         );
 
         $filters = is_array($exploring['filters'] ?? null) ? $exploring['filters'] : array();
+        if ($filters === array()) {
+            $filters = array(
+                array('id' => 'professional', 'label' => 'Professional', 'iconToken' => 'briefcase', 'selected' => true),
+                array('id' => 'circle', 'label' => 'Chat', 'iconToken' => 'message', 'selected' => false),
+            );
+        }
         $filterModes = array();
-        foreach ($filters as $filter) {
+        foreach ($filters as $fi => $filter) {
             if (!is_array($filter)) {
                 continue;
             }
-            $filterLabel = (string) ($filter['label'] ?? '');
-            if (isset($filter['count']) && $filter['count'] !== '') {
-                $filterLabel .= ' ' . $filter['count'];
+            $filterId = (string) ($filter['id'] ?? '');
+            // Normalize legacy "All / Circle Connect" labels without changing ids.
+            if ($filterId === 'circle' && strcasecmp((string) ($filter['label'] ?? ''), 'Circle Connect') === 0) {
+                $filters[$fi]['label'] = 'Chat';
+                $filter['label'] = 'Chat';
             }
+            if (empty($filter['iconToken'])) {
+                $filters[$fi]['iconToken'] = ($filterId === 'circle') ? 'message' : 'briefcase';
+                $filter['iconToken'] = $filters[$fi]['iconToken'];
+            }
+            $filterLabel = (string) ($filter['label'] ?? '');
             $filterModes[] = array(
-                'id' => (string) ($filter['id'] ?? ''),
+                'id' => $filterId,
                 'label' => $filterLabel,
+                'iconToken' => self::knownIconToken($filter['iconToken'] ?? (($filterId === 'circle') ? 'message' : 'briefcase'), 'message'),
                 'selected' => !empty($filter['selected']),
+                'count' => isset($filter['count']) ? (int) $filter['count'] : null,
             );
         }
         $components['grid-explore-section'] = array(
             'id' => 'grid-explore-section',
             'type' => 'section',
-            'title' => (string) ($exploring['title'] ?? 'Recent Activity'),
+            'title' => (string) ($exploring['title'] ?? 'Updates'),
+            'iconToken' => self::knownIconToken($exploring['iconToken'] ?? 'bell', 'bell'),
             'badge' => (string) ($exploring['badge'] ?? ''),
             'headerBadge' => array(
                 'label' => (string) ($exploring['badge'] ?? ''),
@@ -1363,8 +1728,41 @@ class GridSduiSchemaBuilder
             'filters' => $filters,
             'modes' => $filterModes,
             'trailing' => array(
-                'label' => (string) ($exploring['seeAllLabel'] ?? 'See all'),
+                'label' => (string) ($exploring['seeAllLabel'] ?? 'View All'),
                 'actionId' => (string) ($exploring['seeAllActionId'] ?? 'grid-see-all-exploring'),
+            ),
+            'footer' => array(
+                'label' => (string) ($exploring['viewAllLabel'] ?? 'View All Updates'),
+                'actionId' => (string) ($exploring['seeAllActionId'] ?? 'grid-see-all-exploring'),
+            ),
+            'appearanceDark' => array(
+                'backgroundColor' => '#0e1118',
+                'borderColor' => '#262c3b',
+                'borderRadius' => 24,
+                'padding' => 14,
+                'titleColor' => '#f8fafc',
+                'filterSelectedBackground' => '#8b5cf6',
+                'filterSelectedColor' => '#ffffff',
+                'itemTitleColor' => '#f8fafc',
+                'itemSubtitleColor' => '#94a3b8',
+                'unreadDotColor' => '#60a5fa',
+                'footerBackgroundColor' => '#1e1b3a',
+                'footerColor' => '#c4b5fd',
+            ),
+            'appearance' => array(
+                'backgroundColor' => '#ffffff',
+                'borderRadius' => 24,
+                'padding' => 14,
+                'titleFontSize' => 18,
+                'titleFontWeight' => 800,
+                'titleColor' => '#0f172a',
+                'filterSelectedBackground' => '#7c3aed',
+                'filterSelectedColor' => '#ffffff',
+                'itemTitleFontSize' => 14,
+                'itemSubtitleFontSize' => 12,
+                'unreadDotColor' => '#3b82f6',
+                'footerBackgroundColor' => '#eef2ff',
+                'footerColor' => '#6d28d9',
             ),
             'children' => array('grid-explore-row'),
         );
@@ -1392,18 +1790,6 @@ class GridSduiSchemaBuilder
             'overflowPolicy' => 'reflow',
             'preserveChildOrder' => true,
             'children' => $exploreChildIds,
-        );
-
-        $components['grid-quote-block'] = array(
-            'id' => 'grid-quote-block',
-            'type' => 'quoteBlock',
-            'title' => (string) ($quote['text'] ?? 'Connections turn potential into progress.'),
-            'iconToken' => self::knownIconToken($quote['iconToken'] ?? 'quote', 'quote'),
-            'appearance' => array(
-                'backgroundColor' => '#f5f3ff',
-                'textColor' => '#312e81',
-                'borderRadius' => 20,
-            ),
         );
 
         $components['grid-loading'] = array('id' => 'grid-loading', 'type' => 'skeleton', 'variant' => 'home-dashboard');
@@ -1608,12 +1994,22 @@ class GridSduiSchemaBuilder
             }
             $notificationActions[$actionId] = self::inAppWebViewAction($itemUrl, $hiddenWebView);
         }
-        // Avatar image is display-only on the header button. Tapping must open
-        // the profile route — never the raw PNG in a WebView.
-        $profileAction = array(
-            'type' => 'navigate',
-            'destination' => array('routeId' => 'profile'),
-        );
+        // GRID header avatar only: enlarge the account photo. Never open the
+        // Profile page, Sign In, or an external site from this action id.
+        // Web intercepts 'navigate-profile' for its photo overlay before this
+        // URL is used. Home Profile tab keeps its own navigate-profile action
+        // in the home schema and is unchanged.
+        $avatarPhotoUrl = trim((string) ($content['header']['avatarUrl'] ?? ''));
+        $profileAction = $avatarPhotoUrl !== ''
+            ? self::inAppWebViewAction($avatarPhotoUrl, $hiddenWebView)
+            : array(
+                'type' => 'host-action',
+                'actionId' => 'preview-grid-avatar',
+                'destination' => array(
+                    'previewMode' => 'imageOnly',
+                    'imageUrl' => '',
+                ),
+            );
 
         return array(
             'navigate-grid' => array('type' => 'navigate', 'destination' => array('routeId' => 'grid')),
@@ -1705,13 +2101,22 @@ class GridSduiSchemaBuilder
             'user-pen' => 'profile',
             'message' => 'message',
             'comment' => 'message',
+            'chat' => 'message',
             'phone' => 'phone',
             'call' => 'phone',
+            'bell' => 'bell',
+            'notifications' => 'bell',
+            'briefcase' => 'briefcase',
+            'suitcase' => 'briefcase',
+            'building' => 'building',
+            'building-o' => 'building',
+            'company' => 'building',
+            'office' => 'building',
         );
         if (isset($map[$token])) {
             return $map[$token];
         }
-        $known = array('grid', 'search', 'qrcode', 'scanner', 'user', 'users', 'quote', 'chevron-right', 'profile', 'message', 'phone');
+        $known = array('grid', 'search', 'qrcode', 'scanner', 'user', 'users', 'quote', 'chevron-right', 'profile', 'message', 'phone', 'bell', 'briefcase', 'building');
         return in_array($token, $known, true) ? $token : (string) $fallback;
     }
 
@@ -1725,6 +2130,9 @@ class GridSduiSchemaBuilder
             'qrcode' => array('flutter' => 'qrCode', 'web' => 'qrcode'),
             'user' => array('flutter' => 'user', 'web' => 'user'),
             'users' => array('flutter' => 'users', 'web' => 'users'),
+            'bell' => array('flutter' => 'bell', 'web' => 'bell'),
+            'briefcase' => array('flutter' => 'briefcase', 'web' => 'briefcase'),
+            'building' => array('flutter' => 'building', 'web' => 'building'),
             'quote' => array('flutter' => 'quoteLeft', 'web' => 'quote-left'),
             'chevron-right' => array('flutter' => 'chevronRight', 'web' => 'chevron-right'),
             'profile' => array('flutter' => 'userPen', 'web' => 'user-pen'),
@@ -1746,7 +2154,11 @@ class GridSduiSchemaBuilder
         if (!isset($content['exploring']) || !is_array($content['exploring'])) {
             $content['exploring'] = array();
         }
-        $content['exploring']['title'] = 'Recent Activity';
+        // Live rows from Professional Space (grid_db) + Grid Chat / Circle (grid_chat_db).
+        $content['exploring']['title'] = 'Updates';
+        $content['exploring']['iconToken'] = 'bell';
+        $content['exploring']['seeAllLabel'] = 'View All';
+        $content['exploring']['viewAllLabel'] = 'View All Updates';
         $items = GridActivityNotifications::forUser($userId, $ssoToken);
         $unread = 0;
         $professionalCount = 0;
@@ -1765,10 +2177,23 @@ class GridSduiSchemaBuilder
             }
         }
         $content['exploring']['badge'] = $unread > 0 ? ($unread . ' new') : '';
+        // Professional = Professional Space notifications; Chat = Grid Chat / Circle.
+        // Keep filter ids aligned with item.space (professional | circle).
         $content['exploring']['filters'] = array(
-            array('id' => 'all', 'label' => 'All', 'selected' => true),
-            array('id' => 'professional', 'label' => 'Professional', 'count' => $professionalCount),
-            array('id' => 'circle', 'label' => 'Circle Connect', 'count' => $circleCount),
+            array(
+                'id' => 'professional',
+                'label' => 'Professional',
+                'iconToken' => 'briefcase',
+                'count' => $professionalCount,
+                'selected' => true,
+            ),
+            array(
+                'id' => 'circle',
+                'label' => 'Chat',
+                'iconToken' => 'message',
+                'count' => $circleCount,
+                'selected' => false,
+            ),
         );
         foreach ($items as $index => $item) {
             if (!is_array($item)) {
@@ -1875,6 +2300,8 @@ class GridSduiSchemaBuilder
             $content = GridWebSso::prepareContentForClient($content, $ssoToken);
         }
         $content = self::applyRecentNotifications($content, $userId, $ssoToken);
+        // Final guard: never publish the 248/36/12 stats strip to clients.
+        $content['stats'] = array();
         $endpoint = trim((string) ($options['endpoint'] ?? 'grid_api_creation.php'));
         if ($endpoint === '') {
             $endpoint = 'grid_api_creation.php';
@@ -1923,6 +2350,7 @@ class GridSduiSchemaBuilder
                     'queryParameters' => array_filter(array(
                         'action' => 'get_grid',
                         'user_id' => $userId > 0 ? $userId : null,
+                        'schema_rev' => 'grid-theme-system-1',
                     )),
                     'responseMapping' => array(
                         'schema' => '$.schema',
@@ -1942,6 +2370,8 @@ class GridSduiSchemaBuilder
                 'fontWeight' => 700,
             ),
             'theme' => array(
+                // Flat light set kept for backward compatibility with clients
+                // that read a single palette.
                 'colors' => array(
                     'surface' => '#ffffff',
                     'onAccent' => '#ffffff',
@@ -1950,6 +2380,37 @@ class GridSduiSchemaBuilder
                     'textPrimary' => '#2e1065',
                     'textSecondary' => '#6b7280',
                     'pageBackground' => '#f7f8fc',
+                ),
+                // Semantic token sets per theme. Clients apply 'appearanceDark'
+                // per component in dark mode (falling back to 'appearance').
+                // defaultMode = Account Profile → Appearance (AppAppearance):
+                //   light  → always light
+                //   dark   → always dark
+                //   system → follow device/OS (never pre-resolved here)
+                // Mobile GRID follows this value. The GRID Web Dashboard may
+                // keep a local sun/moon override that does not change this field.
+                'defaultMode' => self::resolveAccountAppearance($userId),
+                'modes' => array(
+                    'light' => array(
+                        'pageBackground' => '#eef4fb',
+                        'surface' => '#ffffff',
+                        'onSurface' => '#0b1b33',
+                        'textPrimary' => '#0b1b33',
+                        'textSecondary' => '#64748b',
+                        'border' => '#cbd5e1',
+                        'accent' => '#7c3aed',
+                        'onAccent' => '#ffffff',
+                    ),
+                    'dark' => array(
+                        'pageBackground' => '#050b16',
+                        'surface' => '#1a1f2e',
+                        'onSurface' => '#f8fafc',
+                        'textPrimary' => '#f8fafc',
+                        'textSecondary' => '#94a3b8',
+                        'border' => '#2a3344',
+                        'accent' => '#8b5cf6',
+                        'onAccent' => '#ffffff',
+                    ),
                 ),
             ),
             'typography' => array(

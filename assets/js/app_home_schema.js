@@ -2871,6 +2871,8 @@
       header: {
         title: 'Grid',
         subtitle: 'Your professional network space',
+        eyebrow: 'Welcome to GRID',
+        tagline: 'Connect. Collaborate. Grow Together.',
         searchIconToken: 'scanner',
         avatarInitial: 'S',
         avatarColor: '#7c3aed'
@@ -2881,6 +2883,7 @@
           title: 'Professional Space',
           subtitle: 'Discover people, opportunities and grow your career.',
           iconToken: 'user',
+          ctaLabel: 'Explore Now',
           color: '#5b6cff',
           gradientStart: '#dbeafe',
           gradientEnd: '#ede9fe',
@@ -2892,6 +2895,7 @@
           title: 'Circle Connect',
           subtitle: 'Meaningful conversations. Stronger circles.',
           iconToken: 'users',
+          ctaLabel: 'Explore Now',
           color: '#f97316',
           gradientStart: '#ffedd5',
           gradientEnd: '#fff7ed',
@@ -2899,31 +2903,44 @@
           actionId: 'grid-open-circle-connect'
         }
       ],
-      stats: [
-        { id: 'professionals', label: 'Professionals', value: 248 },
-        { id: 'opportunities', label: 'Opportunities', value: 36 },
-        { id: 'active-circles', label: 'Active Circles', value: 12 }
-      ],
+      stats: [],
       exploring: {
-        title: 'Continue Exploring',
-        seeAllLabel: 'See all',
+        title: 'Updates',
+        seeAllLabel: 'View All',
+        viewAllLabel: 'View All Updates',
         seeAllActionId: 'grid-see-all-exploring',
         items: [
           {
-            id: 'find-talent',
-            title: 'Find Talent',
-            subtitle: 'People with skills you need',
-            iconToken: 'user',
-            color: '#8b5cf6',
-            actionId: 'grid-open-find-talent'
+            id: 'professional-message',
+            title: 'Messages',
+            subtitle: 'Professional Space • No new messages',
+            iconToken: 'message',
+            color: '#5b6cff',
+            actionId: 'grid-open-professional-message'
           },
           {
-            id: 'join-circles',
-            title: 'Join Circles',
-            subtitle: "Communities you'll love",
-            iconToken: 'users',
-            color: '#14b8a6',
-            actionId: 'grid-open-join-circles'
+            id: 'professional-call',
+            title: 'Calls',
+            subtitle: 'Professional Space • No new calls',
+            iconToken: 'phone',
+            color: '#5b6cff',
+            actionId: 'grid-open-professional-call'
+          },
+          {
+            id: 'circle-message',
+            title: 'Messages',
+            subtitle: 'Circle Connect • No new messages',
+            iconToken: 'message',
+            color: '#ea580c',
+            actionId: 'grid-open-circle-message'
+          },
+          {
+            id: 'circle-call',
+            title: 'Calls',
+            subtitle: 'Circle Connect • No new calls',
+            iconToken: 'phone',
+            color: '#ea580c',
+            actionId: 'grid-open-circle-call'
           }
         ]
       },
@@ -2942,7 +2959,7 @@
       routeId: page.routeId || defaults.routeId,
       header: Object.assign({}, defaults.header, page.header || {}),
       featureCards: Array.isArray(page.featureCards) && page.featureCards.length ? page.featureCards : defaults.featureCards,
-      stats: Array.isArray(page.stats) && page.stats.length ? page.stats : defaults.stats,
+      stats: [],
       exploring: Object.assign({}, defaults.exploring, page.exploring || {}, {
         items: (page.exploring && Array.isArray(page.exploring.items) && page.exploring.items.length)
           ? page.exploring.items
@@ -2989,8 +3006,9 @@
     };
   }
 
-  function buildGridPageActions(cfg) {
+  function buildGridPageActions(cfg, avatarUrl) {
     var circleUrl = resolveCircleConnectUrl(cfg);
+    var photoUrl = String(avatarUrl || '').trim();
     return {
       'navigate-grid': { type: 'navigate', destination: { routeId: 'grid' } },
       'refresh-grid': {
@@ -3004,8 +3022,8 @@
       },
       'grid-open-scanner': {
         type: 'open-url',
-        url: 'https://efactor.tech/v8/grid_scan.php',
-        route: 'https://efactor.tech/v8/grid_scan.php',
+        url: 'https://efactor.tech/index.php/grid-dashboard/scanner',
+        route: 'https://efactor.tech/index.php/grid-dashboard/scanner',
         title: '',
         openIn: 'inAppWebView'
       },
@@ -3026,7 +3044,14 @@
       },
       'grid-open-find-talent': gridOpenUrlAction('https://efactor.tech/index.php/grid/network'),
       'grid-open-join-circles': gridOpenUrlAction('https://efactor.tech/index.php/grid-chat'),
-      'grid-see-all-exploring': gridOpenUrlAction('https://efactor.tech/index.php/grid/network')
+      'grid-see-all-exploring': gridOpenUrlAction('https://efactor.tech/index.php/grid/network'),
+      'grid-open-professional-message': gridOpenUrlAction('https://efactor.tech/index.php/grid/messaging'),
+      'grid-open-professional-call': gridOpenUrlAction('https://efactor.tech/index.php/grid/messaging'),
+      'grid-open-circle-message': gridOpenUrlAction('https://efactor.tech/index.php/grid-chat'),
+      'grid-open-circle-call': gridOpenUrlAction('https://efactor.tech/index.php/grid-chat?view=calls'),
+      'navigate-profile': photoUrl
+        ? gridOpenUrlAction(photoUrl)
+        : { type: 'navigate', destination: { routeId: 'profile' } }
     };
   }
 
@@ -3053,7 +3078,7 @@
       type: 'rest',
       endpoint: endpoint,
       method: 'GET',
-      queryParameters: userId ? { user_id: userId, schema_rev: 'scanner-qr-7' } : { schema_rev: 'scanner-qr-7' },
+      queryParameters: userId ? { user_id: userId, schema_rev: 'grid-theme-system-1' } : { schema_rev: 'grid-theme-system-1' },
       headers: { Accept: 'application/json' },
       responseMapping: {
         schema: '$.schema',
@@ -3122,17 +3147,50 @@
     var exploreChildIds = exploreItems.map(function (item, index) {
       var id = 'grid-explore-' + (item.id || index);
       usedIcons[item.iconToken || 'user'] = true;
+      var tint = item.backgroundColor || (item.space === 'circle' ? '#fff4ec' : '#eef2ff');
+      var avatarColor = item.avatarColor || item.color || '#5b6cff';
       components[id] = {
         id: id,
-        type: 'exploreCard',
+        type: 'featureCard',
+        style: 'softCard',
         title: item.title || '',
-        subtitle: item.subtitle || '',
-        iconToken: item.iconToken || 'user',
-        color: item.color || '#8b5cf6',
+        subtitle: [item.badge, item.preview || item.subtitle, item.time].filter(function (part) {
+          return String(part || '').trim() !== '';
+        }).join(' · '),
+        initials: item.initials || '',
+        badge: item.badge || '',
+        time: item.time || '',
+        preview: item.preview || item.subtitle || '',
+        space: item.space || '',
+        color: avatarColor,
+        backgroundColor: tint,
+        avatarColor: avatarColor,
+        gradientStart: tint,
+        gradientEnd: tint,
+        textColor: '#1e1b4b',
+        image: item.imageUrl || item.image || '',
+        imageUrl: item.imageUrl || item.image || '',
+        url: item.url || item.route || '',
+        route: item.route || item.url || '',
         actionId: item.actionId || null,
         events: item.actionId ? { tap: { actionId: item.actionId } } : undefined,
-        layout: { columnSpan: 1, rowSpan: 1 },
-        appearance: { borderRadius: 18, backgroundColor: '#ffffff' }
+        layout: { direction: 'horizontal', columnSpan: 1, rowSpan: 1, height: 72, minHeight: 72, maxHeight: 76 },
+        appearance: {
+          borderRadius: 16,
+          backgroundColor: tint,
+          backgroundGradient: { start: tint, end: tint },
+          iconPosition: 'leading',
+          titlePosition: 'besideIcon',
+          showAvatar: true,
+          showActionArrow: false,
+          iconBorderRadius: 21,
+          iconSize: 42,
+          titleMaxLines: 1,
+          subtitleMaxLines: 1,
+          height: 72,
+          minHeight: 72,
+          maxHeight: 76
+        }
       };
       return id;
     });
@@ -3193,7 +3251,7 @@
     components['grid-explore-section'] = {
       id: 'grid-explore-section',
       type: 'section',
-      title: exploring.title || 'Continue Exploring',
+      title: exploring.title || 'Recent',
       trailing: {
         label: exploring.seeAllLabel || 'See all',
         actionId: exploring.seeAllActionId || 'grid-see-all-exploring'
@@ -3204,7 +3262,7 @@
     components['grid-explore-row'] = {
       id: 'grid-explore-row',
       type: 'responsiveGrid',
-      layout: { columns: 2, columnGap: 12, rowGap: 12, independentScroll: false },
+      layout: { columns: 1, columnGap: 8, rowGap: 8, independentScroll: false },
       overflowPolicy: 'reflow',
       preserveChildOrder: true,
       children: exploreChildIds
@@ -3250,9 +3308,10 @@
       applyGridNetworkPageComponents(gridComponents, layout, usedIcons, cfg || {}, {});
     }
     var actions = fullSchema.actions || fullSchema.actionRegistry || {};
-    var gridActions = buildGridPageActions(cfg);
+    var gridContent = resolveGridPageContent(layout);
+    var gridActions = buildGridPageActions(cfg, (gridContent.header && gridContent.header.avatarUrl) || '');
     Object.keys(actions).forEach(function (key) {
-      if (key.indexOf('grid-') === 0 || key === 'navigate-grid' || key === 'refresh-grid' || key === 'navigate-profile') {
+      if (key.indexOf('grid-') === 0 || key === 'navigate-grid' || key === 'refresh-grid') {
         gridActions[key] = actions[key];
       }
     });
@@ -6174,6 +6233,7 @@
 
     out['apply-theme-light'] = buildApplyThemeAction('light', 'light');
     out['apply-theme-dark'] = buildApplyThemeAction('dark', 'dark');
+    out['apply-theme-system'] = buildApplyThemeAction('system', 'system');
 
     out['show-devices-auth-error'] = {
       type: 'sequence',
@@ -7170,6 +7230,14 @@
       selectedPresetBinding: { '$state': 'global.themePreset' },
       appearance: profileAppearance,
       options: [
+        {
+          id: 'appearance-system',
+          preset: 'system',
+          mode: 'system',
+          label: 'System Default',
+          subtitle: 'Follow the device Light or Dark appearance',
+          actionId: 'apply-theme-system'
+        },
         {
           id: 'appearance-light',
           preset: 'light',

@@ -312,6 +312,7 @@ class IotSduiSchemaBuilder
             ),
 
             'theme' => $this->getSduiThemeTokens(),
+            'themes' => $this->buildIotModeThemes(),
 
             'typography' => $this->getSduiTypographyTokens(),
 
@@ -1104,7 +1105,7 @@ class IotSduiSchemaBuilder
         }
 
         $structural = array(
-            'schemaVersion', 'kind', 'auth', 'layout', 'theme', 'typography', 'icons', 'ui', 'overlays',
+            'schemaVersion', 'kind', 'auth', 'layout', 'theme', 'themes', 'typography', 'icons', 'ui', 'overlays',
             'deviceFields', 'nodeFields', 'schemaContract', 'page', 'dataSources', 'components', 'metrics',
         );
 
@@ -1305,6 +1306,81 @@ class IotSduiSchemaBuilder
         }
 
         return 'device';
+    }
+
+    private function buildIotModeThemes(): array
+    {
+        $accent = '#111827';
+        $light = array(
+            'bg.primary' => '#ececec',
+            'bg.surface' => '#ffffff',
+            'bg.elevated' => '#ffffff',
+            'text.primary' => '#111827',
+            'text.secondary' => '#9ca3af',
+            'text.muted' => '#9ca3af',
+            'text.onDark' => '#ffffff',
+            'accent' => $accent,
+            'accent.on' => '#ffffff',
+            'accent.orange' => '#fb923c',
+            'border' => '#e5e7eb',
+            'online' => '#84cc16',
+            'offline' => '#94a3b8',
+            'danger' => '#dc2626',
+            'nav.background' => '#ffffff',
+            'nav.active' => $accent,
+            'background' => '#ececec',
+            'surface' => '#ffffff',
+            'surfaceOnline' => '#1c1c1e',
+            'surfaceOffline' => '#ffffff',
+            'textPrimary' => '#111827',
+            'textSecondary' => '#9ca3af',
+            'textOnDark' => '#ffffff',
+            'onlineAccent' => '#a3e635',
+            'scanner.background' => '#05070c',
+            'scanner.frame' => '#3b82f6',
+            'scanner.accent' => '#2563eb',
+            'scanner.backdrop' => 'rgba(15,23,42,.62)',
+        );
+        $dark = array(
+            'bg.primary' => '#0b0f1a',
+            'bg.surface' => '#151b2e',
+            'bg.elevated' => '#1c2438',
+            'text.primary' => '#ffffff',
+            'text.secondary' => '#dbe4ef',
+            'text.muted' => '#94a3b8',
+            'text.onDark' => '#ffffff',
+            'accent' => '#a3e635',
+            'accent.on' => '#0b0f1a',
+            'accent.orange' => '#fb923c',
+            'border' => 'rgba(255,255,255,.10)',
+            'online' => '#84cc16',
+            'offline' => '#64748b',
+            'danger' => '#f87171',
+            'nav.background' => '#000000',
+            'nav.active' => '#a3e635',
+            'background' => '#0b0f1a',
+            'surface' => '#151b2e',
+            'surfaceOnline' => '#1c1c1e',
+            'surfaceOffline' => '#1e293b',
+            'textPrimary' => '#ffffff',
+            'textSecondary' => '#dbe4ef',
+            'textOnDark' => '#ffffff',
+            'onlineAccent' => '#a3e635',
+            'scanner.background' => '#05070c',
+            'scanner.frame' => '#3b82f6',
+            'scanner.accent' => '#60a5fa',
+            'scanner.backdrop' => 'rgba(0,0,0,.72)',
+        );
+
+        return array(
+            'serverControlled' => false,
+            'activeMode' => 'system',
+            'activeModeBinding' => array('$state' => 'global.themeMode'),
+            'presets' => array(
+                'dark' => array('color' => $dark),
+                'light' => array('color' => $light),
+            ),
+        );
     }
 
     private function getSduiThemeTokens(): array

@@ -543,7 +543,9 @@ if (!function_exists('view_ui_is_direction_parameter')) {
 
         return $paramName === 'direction' || (bool) preg_match('/(^|[^a-z0-9])direction([^a-z0-9]|$)/', $paramName);
     }
+}
 
+if (!function_exists('view_ui_extract_option_tokens')) {
     function view_ui_extract_option_tokens($raw)
     {
         if (is_array($raw)) {
@@ -572,16 +574,43 @@ if (!function_exists('view_ui_is_direction_parameter')) {
 
         return [$text];
     }
+}
 
+if (!function_exists('view_ui_normalize_direction_wire_value')) {
+    function view_ui_normalize_direction_wire_value($value, $isAnti = false)
+    {
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return $isAnti ? '01' : '00';
+        }
+        if (preg_match('/^(0|00)$/i', $raw)) {
+            return '00';
+        }
+        if (preg_match('/^(1|01)$/i', $raw)) {
+            return '01';
+        }
+        if (preg_match('/^\d+$/', $raw)) {
+            $num = (int) $raw;
+            if ($num >= 0 && $num <= 255) {
+                return strtoupper(str_pad(dechex($num), 2, '0', STR_PAD_LEFT));
+            }
+        }
+
+        return $raw;
+    }
+}
+
+if (!function_exists('view_ui_direction_options')) {
     function view_ui_direction_options(array $apiMeta = [])
     {
         $labels = view_ui_extract_option_tokens($apiMeta['items'] ?? []);
         $values = view_ui_extract_option_tokens($apiMeta['item_values'] ?? []);
         $pairs = [];
         if (empty($labels)) {
+            // Protocol Data for Direction is a byte string ("00"/"01"), not bare 0/1.
             $pairs = [
-                ['label' => '0', 'value' => '0'],
-                ['label' => '1', 'value' => '1'],
+                ['label' => '0', 'value' => '00'],
+                ['label' => '1', 'value' => '01'],
             ];
         } else {
             foreach ($labels as $index => $label) {
@@ -603,26 +632,27 @@ if (!function_exists('view_ui_is_direction_parameter')) {
         }
 
         $mapped = [];
-        $antiTokens = ['1', 'ccw', 'anticlockwise', 'anticlock', 'counterclockwise', 'counterclock', 'reverse', 'rev'];
-        $cwTokens = ['0', 'cw', 'clockwise', 'clock', 'forward', 'fwd'];
+        $antiTokens = ['1', '01', 'ccw', 'anticlockwise', 'anticlock', 'counterclockwise', 'counterclock', 'reverse', 'rev'];
+        $cwTokens = ['0', '00', 'cw', 'clockwise', 'clock', 'forward', 'fwd'];
         foreach ($pairs as $index => $pair) {
             $token = strtolower((string) preg_replace('/[^a-z0-9]+/', '', (string) $pair['label']));
-            if (in_array($token, $antiTokens, true)) {
+            $valueToken = strtolower((string) preg_replace('/[^a-z0-9]+/', '', (string) $pair['value']));
+            if (in_array($token, $antiTokens, true) || in_array($valueToken, $antiTokens, true)) {
                 $isAnti = true;
-            } elseif (in_array($token, $cwTokens, true)) {
+            } elseif (in_array($token, $cwTokens, true) || in_array($valueToken, $cwTokens, true)) {
                 $isAnti = false;
             } else {
                 $isAnti = ($index === 1);
             }
             $mapped[] = [
                 'label' => $isAnti ? 'Anti-clockwise' : 'Clockwise',
-                'value' => (string) $pair['value'],
+                'value' => view_ui_normalize_direction_wire_value((string) $pair['value'], $isAnti),
             ];
         }
         if (count($mapped) < 2) {
             return [
-                ['label' => 'Clockwise', 'value' => isset($mapped[0]['value']) ? $mapped[0]['value'] : '0'],
-                ['label' => 'Anti-clockwise', 'value' => '1'],
+                ['label' => 'Clockwise', 'value' => isset($mapped[0]['value']) ? $mapped[0]['value'] : '00'],
+                ['label' => 'Anti-clockwise', 'value' => '01'],
             ];
         }
 
@@ -935,12 +965,20 @@ if (!function_exists('view_ui_extract_all_ui_components')) {
             $startBit = trim((string) ($field['start_bit'] ?? ($field['startBit'] ?? '')));
             $fieldDescription = $startBit !== '' ? ('Bit ' . $startBit) : 'Bitwise field';
         }
+        $displayDefault = function_exists('view_ui_pick_display_default')
+            ? view_ui_pick_display_default(
+                $field['value'] ?? null,
+                $field['asperui_value'] ?? null,
+                $apiMeta['default'] ?? null
+            )
+            : ($field['value'] ?? ($field['asperui_value'] ?? ($apiMeta['default'] ?? null)));
         return array_merge($apiMeta, [
             'ui_type' => $uiType,
             'ui_type_source' => $source,
             'field_index' => $index,
             'field_description' => $fieldDescription !== '' ? $fieldDescription : ($field['Field_description'] ?? ($field['field_description'] ?? ($field['default_name'] ?? null))),
-            'default' => $field['value'] ?? ($field['asperui_value'] ?? ($apiMeta['default'] ?? null)),
+            'default' => $displayDefault,
+            'asperui_value' => $field['asperui_value'] ?? ($apiMeta['asperui_value'] ?? null),
             'items' => !empty($field['asperui']) && is_array($field['asperui']) ? $field['asperui'] : ($apiMeta['items'] ?? []),
             'item_values' => !empty($field['asperui_values']) && is_array($field['asperui_values']) ? $field['asperui_values'] : ($apiMeta['item_values'] ?? []),
             'sno_asperui' => !empty($field['sno_asperui']) && is_array($field['sno_asperui']) ? $field['sno_asperui'] : ($apiMeta['sno_asperui'] ?? []),
@@ -1141,11 +1179,34 @@ if (!function_exists('view_ui_extract_all_ui_components')) {
         return $visible;
     }
 }
+if (!function_exists('view_ui_access_mode_allows_send')) {
+    /**
+     * Access rules for text input send:
+     * - Read / readonly → show input + value only (no send)
+     * - Ready / Write / Read/Write → show input + value + send
+     */
+    function view_ui_access_mode_allows_send($access)
+    {
+        $access = strtolower(trim((string) $access));
+        if ($access === '') {
+            return false;
+        }
+        if (in_array($access, ['read', 'readonly', 'read-only', 'read_only', 'none'], true)) {
+            return false;
+        }
+        if ($access === 'ready' || strpos($access, 'ready') !== false) {
+            return true;
+        }
+
+        return strpos($access, 'write') !== false || $access === 'w' || $access === 'rw';
+    }
+}
+
 if (!function_exists('view_ui_api_access_is_writable')) {
     /**
-     * A field is editable only when the linked API row says so. An empty or unknown
-     * access column is treated as read-only so the UI never offers an edit the
-     * device cannot accept.
+     * Matches schema protocolAccessIsWritable: blank access stays writable for
+     * legacy command UIs (toggles/buttons). Text send still uses
+     * view_ui_access_mode_allows_send (blank = no send).
      */
     function view_ui_api_access_is_writable(array $apiMeta, $source = '')
     {
@@ -1153,13 +1214,77 @@ if (!function_exists('view_ui_api_access_is_writable')) {
         if (in_array($source, ['response', 'error'], true)) {
             return false;
         }
-
         $access = strtolower(trim((string) ($apiMeta['access'] ?? '')));
         if ($access === '') {
+            return true;
+        }
+        if (in_array($access, ['read', 'readonly', 'read-only', 'read_only', 'none'], true)) {
             return false;
+        }
+        if ($access === 'ready' || strpos($access, 'ready') !== false) {
+            return true;
         }
 
         return strpos($access, 'write') !== false || $access === 'w' || $access === 'rw';
+    }
+}
+
+if (!function_exists('view_ui_value_looks_like_wire_padding')) {
+    function view_ui_value_looks_like_wire_padding($value)
+    {
+        $raw = strtoupper(preg_replace('/[\s:_-]+/', '', preg_replace('/^0x/i', '', trim((string) $value))));
+        // Length >= 2 so a real numeric "0" is not treated as unresolved padding.
+        return $raw !== '' && strlen($raw) >= 2 && preg_match('/^[0-9A-F]+$/', $raw) && preg_match('/^0+$/', $raw);
+    }
+}
+
+if (!function_exists('view_ui_value_needs_live_loading')) {
+    function view_ui_value_needs_live_loading($value, $componentType = '', $writable = false)
+    {
+        $componentType = strtolower(str_replace(['_', '-'], '', trim((string) $componentType)));
+        if (in_array($componentType, ['toggleswitch', 'switch', 'button', 'pushbutton', 'elevatedbutton'], true)) {
+            return false;
+        }
+        if ($writable && in_array($componentType, ['entertext', 'textfield', 'cmd'], true)) {
+            return false;
+        }
+        $text = trim((string) $value);
+        if ($text === '' || $text === '--' || strtolower($text) === 'null' || strtolower($text) === 'undefined') {
+            return true;
+        }
+
+        return view_ui_value_looks_like_wire_padding($text);
+    }
+}
+
+if (!function_exists('view_ui_pick_display_default')) {
+    /**
+     * Prefer human/live UI text (asperui) over wire placeholders like 00 / Command / Error.
+     */
+    function view_ui_pick_display_default($wireValue, $asperuiValue, $fallback = null)
+    {
+        $reserved = ['command' => true, 'response' => true, 'error' => true];
+        $wire = is_array($wireValue) ? reset($wireValue) : $wireValue;
+        $asperui = is_array($asperuiValue) ? reset($asperuiValue) : $asperuiValue;
+        $wire = trim((string) ($wire ?? ''));
+        $asperui = trim((string) ($asperui ?? ''));
+        $fallback = is_array($fallback) ? reset($fallback) : $fallback;
+        $fallback = trim((string) ($fallback ?? ''));
+
+        $wireBad = $wire === ''
+            || view_ui_value_looks_like_wire_padding($wire)
+            || isset($reserved[strtolower($wire)]);
+        if (!$wireBad) {
+            return $wire;
+        }
+        if ($asperui !== '' && !isset($reserved[strtolower($asperui)]) && !view_ui_value_looks_like_wire_padding($asperui)) {
+            return $asperui;
+        }
+        if ($fallback !== '' && !isset($reserved[strtolower($fallback)]) && !view_ui_value_looks_like_wire_padding($fallback)) {
+            return $fallback;
+        }
+
+        return $asperui !== '' ? $asperui : ($wire !== '' ? $wire : $fallback);
     }
 }
 
@@ -1170,16 +1295,30 @@ if (!function_exists('view_ui_resolve_component_value')) {
      */
     function view_ui_resolve_component_value(array $apiMeta, $componentType = '', $fallback = '')
     {
-        $value = $apiMeta['default'] ?? null;
+        $value = view_ui_pick_display_default(
+            $apiMeta['default'] ?? null,
+            $apiMeta['asperui_value'] ?? null,
+            null
+        );
         if (is_array($value)) {
             $value = reset($value);
         }
         $value = trim((string) $value);
 
-        if ($value === '' && !empty($apiMeta['items']) && is_array($apiMeta['items'])) {
+        if (($value === '' || view_ui_value_looks_like_wire_padding($value)) && !empty($apiMeta['items']) && is_array($apiMeta['items'])) {
             foreach ($apiMeta['items'] as $item) {
                 $item = trim((string) $item);
-                if ($item !== '') {
+                if ($item !== '' && !view_ui_value_looks_like_wire_padding($item)) {
+                    $value = $item;
+                    break;
+                }
+            }
+        }
+
+        if (($value === '' || view_ui_value_looks_like_wire_padding($value)) && !empty($apiMeta['item_values']) && is_array($apiMeta['item_values'])) {
+            foreach ($apiMeta['item_values'] as $item) {
+                $item = trim((string) $item);
+                if ($item !== '' && !view_ui_value_looks_like_wire_padding($item)) {
                     $value = $item;
                     break;
                 }
@@ -1985,6 +2124,28 @@ if (!function_exists('view_ui_icon')) {
       letter-spacing: 0;
       line-height: 1.4;
       text-align: left;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background: linear-gradient(140deg, #050b16, #0b1220 55%, #111827);
+        color: #e2e8f0;
+      }
+      .ui-studio,
+      .icon-picker,
+      .component-picker,
+      .save-toast {
+        --ui-bg: #0B1220;
+        --ui-shell: #0F172A;
+        --ui-surface: #1E293B;
+        --ui-surface-2: #0F172A;
+        --ui-text: #F8FAFC;
+        --ui-muted: #94A3B8;
+        --ui-border: #334155;
+        --ui-border-color: #334155;
+        --ui-graphite: #020617;
+        color: #F8FAFC;
+      }
     }
 
     .phone-shell {
@@ -3018,6 +3179,37 @@ if (!function_exists('view_ui_icon')) {
       letter-spacing: .02em;
     }
 
+    .param-value-loading {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ui-muted);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .01em;
+    }
+
+    .param-value-loading-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      border: 2px solid color-mix(in srgb, var(--ui-accent, #2563EB) 35%, transparent);
+      border-top-color: var(--ui-accent, #2563EB);
+      animation: param-value-spin .7s linear infinite;
+    }
+
+    .param-value-loading-text {
+      opacity: .9;
+    }
+
+    @keyframes param-value-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .field-value.is-value-loading {
+      min-height: 22px;
+    }
+
     .field-value {
       display: block;
       min-width: 0;
@@ -3047,11 +3239,6 @@ if (!function_exists('view_ui_icon')) {
       background: transparent;
       box-shadow: none;
       overflow: visible;
-    }
-
-    .param-card[data-component-type="autoTriggerTimer"],
-    .param-group-card:has(.param-card[data-component-type="autoTriggerTimer"]) {
-      display: none !important;
     }
 
     .param-group-card {
@@ -9143,9 +9330,6 @@ if (!function_exists('view_ui_icon')) {
                     $isGetStatusParam = strpos(str_replace(['_', '-'], ' ', $paramLower), 'get status') !== false;
                     $apiMeta = !empty($param['api']) && is_array($param['api']) ? $param['api'] : [];
                     $apiComponents = view_ui_extract_all_ui_components($apiMeta);
-                    if (view_ui_api_has_auto_trigger_component($apiMeta, $apiComponents)) {
-                        continue;
-                    }
                     $previewVisibleIndexes = view_ui_preview_visible_indexes($apiMeta, $apiComponents);
                     $previewVisibleCount = 0;
                     foreach ($apiComponents as $previewIndex => $previewComponent) {
@@ -9163,7 +9347,9 @@ if (!function_exists('view_ui_icon')) {
                     <div class="param-group-card<?= $isGetStatusParam ? ' is-get-status-group' : '' ?>" data-get-status="<?= $isGetStatusParam ? '1' : '0' ?>" data-param-key="<?= esc($page['page_no'] . ':' . ($paramName ?: 'Parameter')) ?>" data-param-name="<?= esc($paramName ?: 'Parameter') ?>" data-sequence="<?= esc($param['sequence']) ?>">
                       <div class="param-group-header">
                         <span class="field-label"><span class="param-group-dot" aria-hidden="true"></span><span class="param-group-title"><?= esc($paramName ?: 'Parameter') ?></span></span>
+                        <?php if ($previewVisibleCount > 1): ?>
                         <span class="param-group-count"><?= esc((string) $previewVisibleCount) ?> UI</span>
+                        <?php endif; ?>
                       </div>
                       <div class="param-component-stack">
                     <?php endif;
@@ -9215,7 +9401,7 @@ if (!function_exists('view_ui_icon')) {
                     if ($componentType === 'segmented' && view_ui_is_direction_parameter($paramName)) {
                         $directionOptions = view_ui_direction_options(is_array($apiMeta) ? $apiMeta : []);
                         if ($displayParamValue === '' || strcasecmp($displayParamValue, (string) $paramName) === 0) {
-                            $displayParamValue = (string) ($directionOptions[0]['value'] ?? '0');
+                            $displayParamValue = (string) ($directionOptions[0]['value'] ?? '00');
                         }
                     }
                     $isPower = in_array($componentType, ['toggleSwitch', 'switch'], true) || strpos($paramLower, 'power') !== false;
@@ -9228,8 +9414,19 @@ if (!function_exists('view_ui_icon')) {
                     $fieldSource = strtolower(trim((string) ($apiMeta['ui_type_source'] ?? $apiSource)));
                     // Editable only when the linked API row grants write access.
                     // cmd is device output, so it is never editable.
+                    // Text/cmd: blank access = no send. Other controls match schema (blank = writable).
                     $isReadOnlyProtocol = $componentType === 'cmd'
-                        || !view_ui_api_access_is_writable($apiMeta, $fieldSource);
+                        || ($isTextInput
+                            ? !view_ui_access_mode_allows_send($apiMeta['access'] ?? '')
+                            : !view_ui_api_access_is_writable($apiMeta, $fieldSource));
+                    $valueNeedsLoading = view_ui_value_needs_live_loading(
+                        $displayParamValue,
+                        $componentType,
+                        !$isReadOnlyProtocol
+                    );
+                    if ($valueNeedsLoading) {
+                        $displayParamValue = '';
+                    }
                     $isRangeLike = in_array($componentType, ['slider', 'brightnessSlider', 'airflowSlider', 'cctSlider', 'saturationSlider', 'hueSlider', 'hueSliderCustom', 'autoTriggerTimer'], true);
                     $rangeMin = is_numeric($apiMeta['minimum'] ?? null) ? (float) $apiMeta['minimum'] : 0;
                     $rangeMax = is_numeric($apiMeta['maximum'] ?? null) ? (float) $apiMeta['maximum'] : 100;
@@ -9321,7 +9518,7 @@ if (!function_exists('view_ui_icon')) {
                         <button type="button" class="param-icon" data-icon-picker-trigger="1" data-icon="<?= esc($paramIcon) ?>" aria-label="Change <?= esc($paramName ?: 'parameter') ?> icon"><?= view_ui_icon($paramIcon) ?></button>
                         <div>
                           <?php if (!$hasRelatedApiComponents || $hasMultipleApiComponents): ?><span class="field-label"><?= esc($displayParamName ?: 'Parameter') ?></span><?php endif; ?>
-                          <span class="field-value"><?php if ($componentType === 'cmd'): ?><span class="param-cmd-console param-component"><span class="param-cmd-prompt" aria-hidden="true">&gt;</span><textarea class="param-text-input param-cmd-input" readonly rows="1" aria-label="<?= esc($paramName ?: 'cmd') ?>"><?= esc($displayParamValue) ?></textarea></span><?php elseif ($isTextInput): ?><span class="param-text-input-wrap param-component"><input type="text" class="param-text-input" value="<?= esc($displayParamValue) ?>" <?= $isReadOnlyProtocol ? 'readonly' : '' ?> aria-label="<?= esc($paramName ?: 'parameter') ?>"><?php if (!$isReadOnlyProtocol): ?><button type="button" class="param-send-btn" aria-label="Send <?= esc($paramName ?: 'parameter') ?>"><?= view_ui_icon('send') ?></button><?php endif; ?></span><?php else: ?><?= $isPower && $displayParamValue === '' ? 'ON' : esc($displayParamValue !== '' ? $displayParamValue : '--') ?><?php endif; ?></span>
+                          <span class="field-value<?= $valueNeedsLoading ? ' is-value-loading' : '' ?>"<?php if ($valueNeedsLoading): ?> data-value-loading="1" aria-busy="true"<?php endif; ?>><?php if ($valueNeedsLoading): ?><span class="param-value-loading" aria-label="Loading value"><span class="param-value-loading-dot" aria-hidden="true"></span><span class="param-value-loading-text">Loading…</span></span><?php elseif ($componentType === 'cmd'): ?><span class="param-cmd-console param-component"><span class="param-cmd-prompt" aria-hidden="true">&gt;</span><textarea class="param-text-input param-cmd-input" readonly rows="1" aria-label="<?= esc($paramName ?: 'cmd') ?>"><?= esc($displayParamValue) ?></textarea></span><?php elseif ($isTextInput): ?><span class="param-text-input-wrap param-component"><input type="text" class="param-text-input" value="<?= esc($displayParamValue) ?>" <?= $isReadOnlyProtocol ? 'readonly' : '' ?> aria-label="<?= esc($paramName ?: 'parameter') ?>"><?php if (!$isReadOnlyProtocol): ?><button type="button" class="param-send-btn" aria-label="Send <?= esc($paramName ?: 'parameter') ?>"><?= view_ui_icon('send') ?></button><?php endif; ?></span><?php else: ?><?= $isPower && $displayParamValue === '' ? 'ON' : esc($displayParamValue !== '' ? $displayParamValue : '--') ?><?php endif; ?></span>
                         </div>
 
                         <?php if ($isPower): ?>
@@ -9892,7 +10089,7 @@ if (!function_exists('view_ui_icon')) {
                 <div class="studio-range-field">
                   <div class="studio-range-top">
                     <label for="studio-buttonSize">Button height</label>
-                    <output class="studio-range-output" for="studio-buttonSize">44px</output>
+                    <output class="studio-range-output" for="studio-buttonSize">48px</output>
                   </div>
                   <div class="studio-range-track-wrap">
                     <input id="studio-buttonSize" type="range" min="24" max="96" step="1" data-theme-key="buttonSize">
@@ -10501,26 +10698,69 @@ if (!function_exists('view_ui_icon')) {
     /**
      * Do not publish the API source name (Command / Response / Error) as the
      * control value — that made TUNING's three rows all read "Error".
+     * Also prefer asperui / option labels over wire padding like 00.
      */
     function sanitizeControlDisplayValue(rawValue, meta, label) {
       let value = rawValue == null ? '' : String(rawValue).trim();
       const source = String((meta && meta.ui_type_source) || '').toLowerCase();
       const reserved = { command: true, response: true, error: true };
+      const pickFallback = function() {
+        const candidates = [
+          meta && meta.asperui_value,
+          meta && meta.default,
+          Array.isArray(meta && meta.items) && meta.items.length ? meta.items[0] : null,
+          Array.isArray(meta && meta.item_values) && meta.item_values.length ? meta.item_values[0] : null
+        ];
+        for (let i = 0; i < candidates.length; i += 1) {
+          const text = candidates[i] == null ? '' : String(candidates[i]).trim();
+          if (!text) continue;
+          if (reserved[text.toLowerCase()]) continue;
+          if (/^0+$/i.test(text.replace(/[^0-9A-Fa-f]/g, '')) && /^[0-9A-Fa-f]+$/.test(text.replace(/[^0-9A-Fa-f]/g, ''))) continue;
+          return text;
+        }
+        return '';
+      };
       // Never publish API source-row names (Command / Response / Error) as values —
       // that made TUNING's three rows all show "Error".
-      if (reserved[value.toLowerCase()]) {
-        const fallback = meta && meta.default != null ? String(meta.default).trim() : '';
-        value = (!fallback || reserved[fallback.toLowerCase()]) ? '' : fallback;
+      if (reserved[value.toLowerCase()] || (/^0+$/i.test(value.replace(/[^0-9A-Fa-f]/g, '')) && value.replace(/[^0-9A-Fa-f]/g, '') !== '' && /^[0-9A-Fa-f]+$/i.test(value.replace(/[^0-9A-Fa-f]/g, '')))) {
+        value = pickFallback();
       }
       if (label && value.toLowerCase() === String(label).toLowerCase() && (source || reserved[String(label).toLowerCase()])) {
-        const fallback = meta && meta.default != null ? String(meta.default).trim() : '';
-        if (!fallback || fallback.toLowerCase() === value.toLowerCase() || reserved[fallback.toLowerCase()]) {
-          value = '';
-        } else {
-          value = fallback;
-        }
+        const fallback = pickFallback();
+        value = (!fallback || fallback.toLowerCase() === String(label).toLowerCase()) ? '' : fallback;
       }
       return value;
+    }
+
+    /**
+     * True when the published value is not a real device reading yet
+     * (empty / null / wire padding like 00, 0000, 00000000).
+     * Single "0" is kept as a possible real numeric value.
+     */
+    function isUnresolvedDeviceDisplayValue(value) {
+      const text = value == null ? '' : String(value).trim();
+      if (!text || text === '--' || text.toLowerCase() === 'null' || text.toLowerCase() === 'undefined') {
+        return true;
+      }
+      const hex = text.replace(/^0x/i, '').replace(/[\s:_-]+/g, '');
+      if (hex.length >= 2 && /^[0-9A-Fa-f]+$/.test(hex) && /^0+$/i.test(hex)) {
+        return true;
+      }
+      return false;
+    }
+
+    function controlNeedsLiveValueLoading(value, meta, options) {
+      const opts = options || {};
+      if (opts.forceFalse) return false;
+      const renderType = String(opts.renderType || '').toLowerCase().replace(/[_-]+/g, '');
+      if (renderType === 'switch' || renderType === 'button' || renderType === 'elevatedbutton' || renderType === 'pushbutton' || renderType === 'toggleswitch') {
+        return false;
+      }
+      // Writable text inputs can legitimately start blank — that is not "loading".
+      if (opts.writable && (renderType === 'textfield' || renderType === 'entertext' || renderType === 'cmd')) {
+        return false;
+      }
+      return isUnresolvedDeviceDisplayValue(value);
     }
 
     function resolveSliderHueAngle(value, min, max, config) {
@@ -10937,7 +11177,7 @@ if (!function_exists('view_ui_icon')) {
       };
       (pages || []).forEach(function(page) {
         keys['page.' + page.pageNo + '.title'] = page.title || ('Page ' + page.pageNo);
-        keys['page.' + page.pageNo + '.subtitle'] = page.subtitle || ('Page ' + page.pageNo + '.Operation');
+        keys['page.' + page.pageNo + '.subtitle'] = page.subtitle || modelNo || 'Model UI';
       });
       (controls || []).forEach(function(control) {
         const key = control.parameterKey || control.id;
@@ -10999,6 +11239,9 @@ if (!function_exists('view_ui_icon')) {
     ];
 
     function buildWifiProvisioningState() {
+      const alreadyOnline = (typeof getDeviceConnectivityState === 'function')
+        ? !!getDeviceConnectivityState().online
+        : !!initialDeviceOnline;
       return {
         screen: 'wifiNetworkPicker',
         busy: false,
@@ -11010,7 +11253,8 @@ if (!function_exists('view_ui_icon')) {
         stageIndex: 0,
         errorCode: null,
         errorMessage: null,
-        onlineConfirmed: false
+        // Already-online devices must unlock control/status without re-provisioning.
+        onlineConfirmed: alreadyOnline
       };
     }
 
@@ -11148,6 +11392,110 @@ if (!function_exists('view_ui_icon')) {
               screen: extra.screen || 'qrScanner'
             }
           }
+        }
+      };
+    }
+
+    function buildWifiModeThemes(colors) {
+      colors = colors || {};
+      var accent = colors.accent || '#2F6BFF';
+      var light = {
+        'bg.primary': colors.background || '#F7F9FC',
+        'bg.surface': colors.surface || '#FFFFFF',
+        'bg.elevated': colors.surface || '#FFFFFF',
+        'text.primary': colors.text || '#0B1B3D',
+        'text.secondary': colors.mutedText || '#8B95A7',
+        'text.muted': colors.mutedText || '#8B95A7',
+        'accent': accent,
+        'accent.on': colors.onAccent || '#FFFFFF',
+        'border': colors.border || '#E6EAF2',
+        'online': colors.success || '#22C55E',
+        'offline': colors.mutedText || '#8B95A7',
+        'danger': colors.error || '#EF4444',
+        'nav.background': colors.surface || '#FFFFFF',
+        'nav.active': accent,
+        background: colors.background || '#F7F9FC',
+        surface: colors.surface || '#FFFFFF',
+        text: colors.text || '#0B1B3D',
+        mutedText: colors.mutedText || '#8B95A7',
+        accentSoft: colors.accentSoft || '#E8F0FE',
+        primary: colors.primary || accent,
+        secondary: colors.secondary || '#1D4ED8',
+        success: colors.success || '#22C55E',
+        successSoft: colors.successSoft || '#DCFCE7',
+        warning: colors.warning || '#F59E0B',
+        warningSoft: colors.warningSoft || '#FEF3C7',
+        error: colors.error || '#EF4444',
+        errorSoft: colors.errorSoft || '#FEE2E2',
+        heroStart: colors.heroStart || '#0B1F4D',
+        heroEnd: colors.heroEnd || '#1D4ED8',
+        heroSuccessStart: colors.heroSuccessStart || '#064E3B',
+        heroSuccessEnd: colors.heroSuccessEnd || '#059669',
+        heroErrorStart: colors.heroErrorStart || '#7F1D1D',
+        heroErrorEnd: colors.heroErrorEnd || '#DC2626',
+        onAccent: colors.onAccent || '#FFFFFF',
+        onHero: colors.onHero || '#FFFFFF',
+        trackerPendingFill: colors.trackerPendingFill || '#E8EDF5',
+        trackerPendingText: colors.trackerPendingText || '#9AA4B2',
+        trackerLinePending: colors.trackerLinePending || '#E8EDF5'
+      };
+      var dark = {
+        'bg.primary': '#0B1220',
+        'bg.surface': '#1E293B',
+        'bg.elevated': '#0F172A',
+        'text.primary': '#F8FAFC',
+        'text.secondary': '#94A3B8',
+        'text.muted': '#94A3B8',
+        'accent': accent,
+        'accent.on': '#FFFFFF',
+        'border': '#334155',
+        'online': '#22C55E',
+        'offline': '#94A3B8',
+        'danger': '#FCA5A5',
+        'nav.background': '#0B1220',
+        'nav.active': accent,
+        background: '#0B1220',
+        surface: '#1E293B',
+        text: '#F8FAFC',
+        mutedText: '#94A3B8',
+        accentSoft: '#1E3A8A',
+        primary: accent,
+        secondary: '#93C5FD',
+        success: colors.success || '#22C55E',
+        successSoft: '#064E3B',
+        warning: colors.warning || '#F59E0B',
+        warningSoft: '#78350F',
+        error: '#FCA5A5',
+        errorSoft: '#7F1D1D',
+        heroStart: colors.heroStart || '#0B1F4D',
+        heroEnd: colors.heroEnd || '#1D4ED8',
+        heroSuccessStart: colors.heroSuccessStart || '#064E3B',
+        heroSuccessEnd: colors.heroSuccessEnd || '#059669',
+        heroErrorStart: colors.heroErrorStart || '#7F1D1D',
+        heroErrorEnd: colors.heroErrorEnd || '#DC2626',
+        onAccent: '#FFFFFF',
+        onHero: '#FFFFFF',
+        trackerPendingFill: '#1E293B',
+        trackerPendingText: '#94A3B8',
+        trackerLinePending: '#334155'
+      };
+      Object.keys(light).forEach(function (key) {
+        if (dark[key] == null || dark[key] === '') {
+          dark[key] = light[key];
+        }
+      });
+      Object.keys(dark).forEach(function (key) {
+        if (light[key] == null || light[key] === '') {
+          light[key] = dark[key];
+        }
+      });
+      return {
+        serverControlled: false,
+        activeMode: 'system',
+        activeModeBinding: { '$state': 'global.themeMode' },
+        presets: {
+          dark: { color: dark },
+          light: { color: light }
         }
       };
     }
@@ -11655,6 +12003,7 @@ if (!function_exists('view_ui_icon')) {
           }
         },
         theme: visual,
+        themes: buildWifiModeThemes(colors),
         tracker: tracker,
         signalQuality: signalQuality,
         componentStyles: componentStyles,
@@ -11665,7 +12014,8 @@ if (!function_exists('view_ui_icon')) {
             { dataSource: 'deviceState', binding: 'state.parameters' }
           ],
           enableTransports: ['mqtt', 'deviceCommands'],
-          controlReadyWhen: 'state.wifiProvisioning.onlineConfirmed == true',
+          // Already-provisioned devices must control without re-running Wi-Fi setup.
+          controlReadyWhen: 'state.online == true || state.wifiProvisioning.onlineConfirmed == true',
           deviceControl: {
             transport: 'mqtt',
             adapter: 'dataSources.deviceCommands',
@@ -12415,10 +12765,14 @@ if (!function_exists('view_ui_icon')) {
         deviceState: {
           namespace: 'device.parameters',
           bindingRoot: 'state.parameters',
+          syncWith: 'state.parameters',
           parameters: deviceParameters,
           config: deviceConfig,
           primary: primary,
           node_id: resolvedNodeId,
+          preferLiveState: true,
+          liveStateSource: 'dataSources.deviceState',
+          mergeStrategy: 'deepMerge',
           connectivity: {
             online: true,
             lastSync: null,
@@ -12632,12 +12986,21 @@ if (!function_exists('view_ui_icon')) {
         mqtt: {
           enabled: true,
           enableAfterProvision: true,
-          enableWhen: 'state.wifiProvisioning.onlineConfirmed == true',
+          // Subscribe/publish as soon as the device is online, or after Wi-Fi provision.
+          enableWhen: 'state.online == true || state.wifiProvisioning.onlineConfirmed == true',
           protocol: 'mqtt',
           qos: 1,
           retain: false,
+          // Broker host/port/credentials are runtime-only (never hardcoded in schema).
           broker: null,
           clientIdPattern: 'efactor_' + (resolvedNodeId || 'device') + '_{clientId}',
+          connection: {
+            brokerSource: 'runtime.mqttBroker || appConfig.mqtt',
+            authSource: 'authenticatedSession.accessToken',
+            usernameSource: 'authenticatedSession.emailOrUsername',
+            nodeIdSource: '_clientConnection.nodeId',
+            schemaMustNotContainSecrets: true
+          },
           topics: {
             command: 'device/' + (resolvedNodeId || '{nodeId}') + '/command',
             state: 'device/' + (resolvedNodeId || '{nodeId}') + '/state',
@@ -12649,7 +13012,13 @@ if (!function_exists('view_ui_icon')) {
             subscribe: 'deviceState.parameters',
             adapter: 'dataSources.deviceCommands'
           },
-          frameSource: 'deviceConfig.devices[0].pages'
+          frameSource: 'deviceConfig.devices[0].pages',
+          liveState: {
+            preferLiveState: true,
+            valueLoadingFlag: 'valueLoading',
+            clearValueLoadingWhen: 'liveStateApplied',
+            mergeInto: 'state.parameters'
+          }
         },
         responsive: Object.assign(buildDeviceUiResponsiveContract(), {
           runtime: {
@@ -12676,9 +13045,22 @@ if (!function_exists('view_ui_icon')) {
           dataSources: {
             deviceInfo: { type: 'inline', placement: 'modal' },
             deviceCommands: { type: 'none' },
+            deviceState: { type: 'inline', placement: 'controlValue', until: 'state.parameters live merge' },
             schema: { type: 'blocking', messageKey: 'loading.schema' }
           },
-          controls: { deferInteractiveUntilBound: true }
+          controls: {
+            deferInteractiveUntilBound: true,
+            // When preferLiveState is set and value is empty/wire-padding, show loading
+            // instead of fake readings like 00000000.
+            valueLoading: {
+              enabled: true,
+              flag: 'valueLoading',
+              clearWhen: 'liveStateApplied',
+              placeholder: 'Loading…',
+              emptyDisplay: '',
+              hideWirePadding: true
+            }
+          }
         },
         errorHandling: {
           strategy: 'graceful-degrade',
@@ -13984,9 +14366,69 @@ if (!function_exists('view_ui_icon')) {
       return control;
     }
 
+    function clearControlInnerTitle(control) {
+      if (!control || typeof control !== 'object') return;
+      control.label = '';
+      control.fieldLabel = '';
+      if (control.component && typeof control.component === 'object') {
+        control.component.props = Object.assign({}, control.component.props || {}, {
+          label: '',
+          title: '',
+          showTitle: false,
+          hideLabel: true
+        });
+        const treeProps = control.component.widgetTree
+          && control.component.widgetTree.properties
+          && control.component.widgetTree.properties.props;
+        if (treeProps && typeof treeProps === 'object') {
+          treeProps.label = '';
+          treeProps.title = '';
+          treeProps.showTitle = false;
+          treeProps.hideLabel = true;
+          if (treeProps.metaChip && typeof treeProps.metaChip === 'object') {
+            treeProps.metaChip.label = '';
+            treeProps.metaChip.text = '';
+            treeProps.metaChip.title = '';
+          }
+        }
+      }
+    }
+
+    function stripGroupedSingleInnerLabels(controls) {
+      const list = Array.isArray(controls) ? controls : [];
+      const groupCounts = {};
+      list.forEach(function(control) {
+        if (!control) return;
+        const groupKey = String(control.pageNo || '') + '::' + String(control.groupParameter || control.parameterName || control.parameter || '').trim().toLowerCase();
+        if (!String(control.groupParameter || '').trim() && parseInt(control.uiCount, 10) !== 1) return;
+        groupCounts[groupKey] = (groupCounts[groupKey] || 0) + 1;
+      });
+      list.forEach(function(control) {
+        if (!control) return;
+        const uiCount = parseInt(control.uiCount, 10);
+        const hasGroup = String(control.groupParameter || '').trim() !== '';
+        const groupKey = String(control.pageNo || '') + '::' + String(control.groupParameter || control.parameterName || control.parameter || '').trim().toLowerCase();
+        // Match web: hide inner title when this is the only UI in the group.
+        const isSingle = uiCount === 1 || (hasGroup && groupCounts[groupKey] === 1);
+        if (isSingle) {
+          clearControlInnerTitle(control);
+        }
+        const showCount = !isSingle && (Number.isFinite(uiCount) ? uiCount > 1 : true);
+        control.showGroupCount = showCount;
+        if (control.component && typeof control.component === 'object') {
+          if (!control.component.props || typeof control.component.props !== 'object') {
+            control.component.props = {};
+          }
+          control.component.props.showGroupCount = showCount;
+          control.component.props.hideGroupCount = !showCount;
+        }
+      });
+    }
+
     function repairDeviceUiP0Contracts(schema) {
       if (!schema || typeof schema !== 'object') return schema;
       const controls = Array.isArray(schema.controls) ? schema.controls : [];
+      stripGroupedSingleInnerLabels(controls);
       controls.forEach(function(control) {
         if (!control) return;
         const meta = control.protocolMeta || {};
@@ -14162,19 +14604,25 @@ if (!function_exists('view_ui_icon')) {
         ];
       }
 
-    // Text inputs are stricter than the other controls: a blank or unknown access
-    // column means the API never declared the field writable, so the box stays
-    // read-only rather than offering an edit the device will reject.
+    // Text inputs: Read = input+value only; Ready/Write = input+value+send.
+    // Blank/unknown access stays read-only so we never offer a dead send.
+    function accessModeAllowsSend(access) {
+      access = String(access || '').toLowerCase().trim();
+      if (!access) return false;
+      if (access === 'none' || access === 'read' || access === 'readonly' || access === 'read-only' || access === 'read_only') {
+        return false;
+      }
+      if (access === 'ready' || access.indexOf('ready') !== -1) return true;
+      return access.indexOf('write') !== -1 || access === 'w' || access === 'rw';
+    }
+
     function textFieldIsEditable(meta) {
       const access = String((meta && (meta.access || meta.protocolAccess)) || '').toLowerCase().trim();
       const source = String((meta && meta.ui_type_source) || '').toLowerCase().trim();
       if (source === 'response' || source === 'error') {
         return false;
       }
-      if (!access) {
-        return false;
-      }
-      return access.indexOf('write') !== -1 || access === 'w' || access === 'rw';
+      return accessModeAllowsSend(access);
     }
 
     function protocolAccessIsWritable(meta) {
@@ -14189,7 +14637,10 @@ if (!function_exists('view_ui_icon')) {
       if (access === 'none' || access === 'read' || access === 'readonly' || access === 'read-only' || access === 'read_only') {
         return false;
       }
-      return access.indexOf('write') !== -1;
+      if (access === 'ready' || access.indexOf('ready') !== -1) {
+        return true;
+      }
+      return access.indexOf('write') !== -1 || access === 'w' || access === 'rw';
     }
 
     function protocolUiTypeText(meta) {
@@ -14463,6 +14914,12 @@ if (!function_exists('view_ui_icon')) {
           controlActions[control.action].input.response = control.deviceFrame.response || [];
           controlActions[control.action].input.error = control.deviceFrame.error || [];
           controlActions[control.action].input.frameName = control.deviceFrame.name || name;
+          const refreshedDataField = findDeviceFrameDataField(control.deviceFrame, control.protocolMeta || meta);
+          controlActions[control.action].input.dataField = buildControlDataFieldPayload(
+            refreshedDataField,
+            control.protocolMeta || meta,
+            control.parameterName || control.parameter || name
+          );
         }
       });
     }
@@ -14646,6 +15103,34 @@ if (!function_exists('view_ui_icon')) {
         first: index <= 0,
         last: index === cards.length - 1 || index < 0
       };
+    }
+
+    /**
+     * Match the web preview: a single control inside a param-group keeps only the
+     * group title (CURRENT / NAME / SPEED). The inner ParameterCard title above
+     * the value is hidden so the app does not show the name twice.
+     */
+    function shouldHideGroupedInnerLabel(card) {
+      if (!card || !card.classList || !card.classList.contains('is-grouped-component')) {
+        return false;
+      }
+      const group = card.closest('.param-group-card');
+      if (!group) return false;
+      const cards = group.querySelectorAll(':scope > .param-component-stack > .param-card');
+      return cards.length <= 1;
+    }
+
+    function resolveControlCardLabel(card, override) {
+      if (shouldHideGroupedInnerLabel(card)) {
+        return '';
+      }
+      const labelElement = card ? card.querySelector('.field-label') : null;
+      return String(
+        (override && override.title)
+        || (labelElement ? labelElement.textContent.trim() : '')
+        || (card && (card.dataset.componentLabel || card.dataset.paramName))
+        || 'Parameter'
+      );
     }
 
     function validateCanonicalDeviceUiSchema(schema) {
@@ -14852,7 +15337,7 @@ if (!function_exists('view_ui_icon')) {
     function buildControlDataAction(controlId, componentType, binding, meta, parameterName, frame) {
       const actionId = buildControlDataActionId(controlId);
       const deviceFrame = frame && typeof frame === 'object' ? frame : buildDeviceFrameFromMeta(parameterName, meta);
-      const dataField = findDeviceFrameDataField(deviceFrame);
+      const dataField = findDeviceFrameDataField(deviceFrame, meta);
       return {
         id: actionId,
         definition: {
@@ -14872,30 +15357,70 @@ if (!function_exists('view_ui_icon')) {
             commands: Array.isArray(deviceFrame.commands) ? deviceFrame.commands : [],
             response: Array.isArray(deviceFrame.response) ? deviceFrame.response : [],
             error: Array.isArray(deviceFrame.error) ? deviceFrame.error : [],
-            dataField: dataField ? {
-              name: dataField.default_name || parameterName,
-              byteStart: dataField.byte_start_position || null,
-              noOfBytes: dataField.no_of_bytes || null,
-              uiType: dataField.ui_type || meta.ui_type || null,
-              asperui: Array.isArray(dataField.asperui) ? dataField.asperui : (meta.items || []),
-              asperuiValues: Array.isArray(dataField.asperui_values) ? dataField.asperui_values : (meta.item_values || []),
-              snoAsperui: Array.isArray(dataField.sno_asperui) ? dataField.sno_asperui : (meta.sno_asperui || []),
-              displayValue: dataField.display_value || {
-                min: meta.minimum != null ? String(meta.minimum) : '',
-                max: meta.maximum != null ? String(meta.maximum) : ''
-              },
-              access: dataField.ui_description || meta.access || null
-            } : null
+            dataField: buildControlDataFieldPayload(dataField, meta, parameterName)
           }
         }
       };
     }
 
-    function findDeviceFrameDataField(frame) {
-      const commands = frame && Array.isArray(frame.commands) ? frame.commands : [];
+    function buildControlDataFieldPayload(dataField, meta, parameterName) {
+      if (!dataField || typeof dataField !== 'object') return null;
+      meta = meta && typeof meta === 'object' ? meta : {};
+      const fieldLevel = String(
+        dataField.field_level || dataField.fieldLevel || meta.field_level || meta.fieldLevel || 'bytewise'
+      ).toLowerCase();
+      // Exact frame slot for this control, including bitwise metadata for Flutter packing.
+      return {
+        name: dataField.default_name || dataField.Field_description || parameterName,
+        byteStart: dataField.byte_start_position != null ? dataField.byte_start_position : null,
+        noOfBytes: dataField.no_of_bytes != null ? dataField.no_of_bytes : null,
+        fieldIndex: meta.field_index != null ? meta.field_index : (dataField.field_index != null ? dataField.field_index : null),
+        field_level: fieldLevel,
+        fieldLevel: fieldLevel,
+        start_bit: dataField.start_bit != null ? dataField.start_bit : (meta.start_bit != null ? meta.start_bit : null),
+        end_bit: dataField.end_bit != null ? dataField.end_bit : (meta.end_bit != null ? meta.end_bit : null),
+        startBit: dataField.start_bit != null ? dataField.start_bit : (meta.start_bit != null ? meta.start_bit : null),
+        endBit: dataField.end_bit != null ? dataField.end_bit : (meta.end_bit != null ? meta.end_bit : null),
+        uiType: dataField.ui_type || meta.ui_type || null,
+        asperui: Array.isArray(dataField.asperui) ? dataField.asperui : (meta.items || []),
+        asperuiValues: Array.isArray(dataField.asperui_values) ? dataField.asperui_values : (meta.item_values || []),
+        snoAsperui: Array.isArray(dataField.sno_asperui) ? dataField.sno_asperui : (meta.sno_asperui || []),
+        displayValue: dataField.display_value || {
+          min: meta.minimum != null ? String(meta.minimum) : '',
+          max: meta.maximum != null ? String(meta.maximum) : ''
+        },
+        // Prefer API access column (Ready/Write/Read), not ui_description noise.
+        access: meta.access || dataField.access || dataField.ui_description || null
+      };
+    }
+
+    function findDeviceFrameDataField(frame, meta) {
+      meta = meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : {};
+      const source = String(meta.ui_type_source || 'command').toLowerCase().trim();
+      const bucket = source === 'response' ? 'response' : (source === 'error' ? 'error' : 'commands');
+      const fields = frame && Array.isArray(frame[bucket])
+        ? frame[bucket]
+        : (frame && Array.isArray(frame.commands) ? frame.commands : []);
+
+      // Prefer the exact frame slot this UI card was built from (multi-UI / bitwise).
+      const fieldIndex = parseInt(meta.field_index, 10);
+      if (Number.isFinite(fieldIndex) && fieldIndex >= 0 && fields[fieldIndex] && typeof fields[fieldIndex] === 'object') {
+        return fields[fieldIndex];
+      }
+
+      const wantName = String(meta.field_description || meta.field_name || '').toLowerCase().trim();
+      if (wantName && wantName !== 'data' && wantName !== 'trigger' && wantName !== 'none') {
+        for (let index = 0; index < fields.length; index += 1) {
+          const field = fields[index];
+          if (!field || typeof field !== 'object') continue;
+          const description = String(field.Field_description || field.field_description || field.default_name || '').toLowerCase().trim();
+          if (description === wantName) return field;
+        }
+      }
+
       let fallback = null;
-      for (let index = 0; index < commands.length; index += 1) {
-        const field = commands[index];
+      for (let index = 0; index < fields.length; index += 1) {
+        const field = fields[index];
         if (!field || typeof field !== 'object') continue;
         const description = String(field.Field_description || field.default_name || '').toLowerCase();
         const uiType = String(field.ui_type || '').toLowerCase();
@@ -15913,40 +16438,136 @@ if (!function_exists('view_ui_icon')) {
       return fieldText || String(valueText || '');
     }
 
+    /**
+     * Pixel contract for ParameterCard — must match .phone-shell CSS in this file
+     * so Flutter renders the same sizes/alignment as the web preview.
+     */
+    function previewPixelParityMetrics(options) {
+      const opts = options || {};
+      const grouped = !!opts.grouped;
+      const cardPadding = parseInt(currentTheme.cardPadding || 14, 10);
+      const iconSize = grouped ? 42 : 44;
+      const glyphSize = parseInt(currentTheme.iconSize || 22, 10);
+      return {
+        layout: { type: 'grid', columns: ['auto', '1fr', 'auto'], alignItems: 'center', gap: 10 },
+        stackedLayout: { type: 'column', alignItems: 'stretch', gap: 6, overflow: 'visible' },
+        minHeight: grouped ? 44 : 60,
+        padding: grouped ? { top: 8, right: 4, bottom: 8, left: 4 } : cardPadding,
+        paddingVertical: grouped ? 8 : cardPadding,
+        paddingHorizontal: grouped ? 4 : cardPadding,
+        gap: 10,
+        iconBubble: {
+          size: iconSize,
+          width: iconSize,
+          height: iconSize,
+          shape: 'circle',
+          iconSize: Math.min(glyphSize, 22),
+          backgroundColor: 'rgba(37,99,235,0.14)',
+          innerBorder: { width: 1, color: 'rgba(37,99,235,0.18)' }
+        },
+        fieldLabel: {
+          fontFamily: currentTheme.fontFamily || 'Plus Jakarta Sans',
+          fontSize: 10,
+          fontWeight: 600,
+          letterSpacing: 0.08,
+          lineHeight: 1.15,
+          marginBottom: 4,
+          color: currentTheme.mutedTextColor,
+          uppercase: true,
+          textAlign: 'left'
+        },
+        fieldValue: {
+          fontFamily: currentTheme.fontFamily || 'Plus Jakarta Sans',
+          fontSize: 15,
+          fontWeight: 600,
+          letterSpacing: -0.015,
+          lineHeight: 1.35,
+          color: opts.textColor || currentTheme.textColor,
+          textAlign: 'left',
+          overflow: 'ellipsis',
+          maxLines: 1
+        },
+        metaChip: {
+          minWidth: 40,
+          height: 32,
+          paddingHorizontal: 8,
+          gap: 5,
+          shape: 'pill',
+          fontSize: 11,
+          fontWeight: 600,
+          iconSize: 14
+        },
+        switch: {
+          trackWidth: 52,
+          trackHeight: 28,
+          width: 52,
+          height: 28,
+          thumbSize: 22,
+          thumbInset: 3,
+          thumbTravel: 24,
+          shape: 'pill'
+        },
+        powerButton: {
+          width: 48,
+          height: 48,
+          size: 48,
+          shape: 'circle',
+          borderWidth: 3
+        },
+        actionDot: {
+          width: 48,
+          height: 48,
+          size: 48,
+          shape: 'circle',
+          borderWidth: 3,
+          innerBorder: { width: 3, color: '#FFFFFF' }
+        },
+        sendButton: {
+          width: 32,
+          height: 32,
+          size: 32,
+          borderRadius: 9,
+          iconSize: 15
+        },
+        leftAccent: {
+          visible: !grouped,
+          width: 3,
+          insetVertical: 14
+        }
+      };
+    }
+
     function buildParameterCardStyle(card, override) {
       const colors = getEffectiveComponentColors(override);
       const grouped = !!(card && card.classList && card.classList.contains('is-grouped-component'));
+      const parity = previewPixelParityMetrics({ grouped: grouped, textColor: colors.textColor });
       return {
         backgroundColor: grouped ? 'transparent' : colors.cardColor,
         borderColor: grouped ? 'transparent' : colors.borderColor,
         borderWidth: grouped ? 0 : parseInt(currentTheme.borderSize || 1, 10),
         borderRadius: grouped ? 0 : parseInt(currentTheme.borderRadius || 18, 10),
-        padding: grouped ? 8 : parseInt(currentTheme.cardPadding || 16, 10),
-        minHeight: grouped ? 44 : 66,
+        padding: parity.padding,
+        minHeight: parity.minHeight,
+        gap: parity.gap,
+        alignItems: 'center',
+        layout: parity.layout,
         leftAccent: {
-          visible: true,
-          width: 3,
+          visible: parity.leftAccent.visible,
+          width: parity.leftAccent.width,
+          insetVertical: parity.leftAccent.insetVertical,
           colorStart: currentTheme.secondaryColor,
           colorEnd: colors.accentColor
         },
-        iconBubble: {
-          size: 38,
+        iconBubble: Object.assign({}, parity.iconBubble, {
           backgroundColor: 'rgba(37,99,235,0.14)',
           iconColor: colors.iconColor
-        },
-        fieldLabel: {
-          fontFamily: currentTheme.fontFamily || 'Plus Jakarta Sans',
-          fontSize: 11,
-          fontWeight: 800,
-          color: currentTheme.mutedTextColor,
-          uppercase: true
-        },
-        fieldValue: {
-          fontFamily: currentTheme.fontFamily || 'Plus Jakarta Sans',
-          fontSize: 16,
-          fontWeight: 700,
+        }),
+        fieldLabel: Object.assign({}, parity.fieldLabel, {
+          color: currentTheme.mutedTextColor
+        }),
+        fieldValue: Object.assign({}, parity.fieldValue, {
           color: colors.textColor
-        }
+        })
       };
     }
 
@@ -15957,9 +16578,13 @@ if (!function_exists('view_ui_icon')) {
       const toggleColors = buildToggleAccessoryColors(override);
       const writable = protocolAccessIsWritable(meta);
       const switchEvents = writable ? [buildStacEvent('onChanged', binding)] : [];
+      const accessoryTitle = shouldHideGroupedInnerLabel(card)
+        ? ''
+        : String((card && card.dataset && card.dataset.paramName) || '');
 
       if (renderType === 'switch') {
         const isOn = parseToggleInitialValue(valueText);
+        const switchMetrics = previewPixelParityMetrics().switch;
         return {
           events: switchEvents,
           accessory: buildStacWidgetTree('Switch', binding, {
@@ -15970,6 +16595,13 @@ if (!function_exists('view_ui_icon')) {
             inactiveTrackColor: toggleColors.inactiveTrackColor || trackColor,
             inactiveThumbColor: toggleColors.inactiveThumbColor,
             thumbBorderColor: toggleColors.thumbBorderColor,
+            width: switchMetrics.width,
+            height: switchMetrics.height,
+            trackWidth: switchMetrics.trackWidth,
+            trackHeight: switchMetrics.trackHeight,
+            thumbSize: switchMetrics.thumbSize,
+            thumbInset: switchMetrics.thumbInset,
+            thumbTravel: switchMetrics.thumbTravel,
             useLiveBinding: true,
             trueValues: ['ON', '1', 'true', 'yes'],
             falseValues: ['OFF', '0', 'false', 'no'],
@@ -16043,9 +16675,9 @@ if (!function_exists('view_ui_icon')) {
           accessory: buildStacWidgetTree('metaChip', binding, {
             icon: metaIcon,
             value: metaValue,
-            label: String((card && card.dataset && card.dataset.paramName) || ''),
-            text: String((card && card.dataset && card.dataset.paramName) || ''),
-            title: String((card && card.dataset && card.dataset.paramName) || ''),
+            label: accessoryTitle,
+            text: accessoryTitle,
+            title: accessoryTitle,
             backgroundColor: override.statusColor || 'rgba(37,99,235,0.12)',
             textColor: colors.accentColor,
             iconColor: colors.accentColor,
@@ -16072,9 +16704,9 @@ if (!function_exists('view_ui_icon')) {
           accessory: buildStacWidgetTree('metaChip', binding, {
             icon: getParamMetaIcon(card),
             value: String(bounds.value),
-            label: String((card && card.dataset && card.dataset.paramName) || ''),
-            text: String((card && card.dataset && card.dataset.paramName) || ''),
-            title: String((card && card.dataset && card.dataset.paramName) || ''),
+            label: accessoryTitle,
+            text: accessoryTitle,
+            title: accessoryTitle,
             backgroundColor: override.statusColor || 'rgba(37,99,235,0.12)',
             textColor: colors.accentColor,
             iconColor: colors.accentColor,
@@ -16104,9 +16736,9 @@ if (!function_exists('view_ui_icon')) {
             icon: getParamMetaIcon(card),
             valueBinding: binding,
             useLiveBinding: true,
-            label: String((card && card.dataset && card.dataset.paramName) || ''),
-            text: String((card && card.dataset && card.dataset.paramName) || ''),
-            title: String((card && card.dataset && card.dataset.paramName) || ''),
+            label: accessoryTitle,
+            text: accessoryTitle,
+            title: accessoryTitle,
             backgroundColor: override.statusColor || 'rgba(37,99,235,0.12)',
             textColor: colors.accentColor,
             iconColor: colors.accentColor,
@@ -16139,14 +16771,16 @@ if (!function_exists('view_ui_icon')) {
 
       if (renderType === 'button') {
         const dotColor = override.statusColor || colors.accentColor;
-        const catalogEntry = getParameterCatalogEntry(componentType);
+        const powerMetrics = previewPixelParityMetrics().powerButton;
         return {
           events: [buildStacEvent('onTap', binding)],
           accessory: buildStacWidgetTree('PowerButton', binding, {
             color: dotColor,
             borderColor: dotColor,
-            size: catalogEntry && catalogEntry.pushButton ? 44 : 36,
-            borderWidth: 3,
+            size: powerMetrics.size,
+            width: powerMetrics.width,
+            height: powerMetrics.height,
+            borderWidth: powerMetrics.borderWidth,
             shape: 'circle',
             useLiveBinding: true
           }, [buildStacEvent('onTap', binding)])
@@ -16187,9 +16821,9 @@ if (!function_exists('view_ui_icon')) {
           accessory: buildStacWidgetTree('metaChip', binding, {
             icon: getParamMetaIcon(card),
             value: String(selected || ''),
-            label: String((card && card.dataset && card.dataset.paramName) || ''),
-            text: String((card && card.dataset && card.dataset.paramName) || ''),
-            title: String((card && card.dataset && card.dataset.paramName) || ''),
+            label: accessoryTitle,
+            text: accessoryTitle,
+            title: accessoryTitle,
             backgroundColor: override.statusColor || 'rgba(37,99,235,0.12)',
             textColor: colors.accentColor,
             iconColor: colors.accentColor,
@@ -16222,8 +16856,8 @@ if (!function_exists('view_ui_icon')) {
       }
 
       if (renderType === 'textField' || renderType === 'cmd') {
-        const initialValue = valueText || meta.default || '';
-        // Matches the preview: a text field is only editable when the API row says so.
+        const initialValue = sanitizeControlDisplayValue(valueText || meta.default || '', meta, card && card.dataset.paramName) || '';
+        // Read = input+value only; Ready/Write = input+value+send. cmd is always read-only.
         const fieldReadOnly = renderType === 'cmd' || !textFieldIsEditable(meta);
         const textVisual = buildTextFieldVisualContract({ colors: colors });
         const fieldEvents = fieldReadOnly
@@ -16288,9 +16922,9 @@ if (!function_exists('view_ui_icon')) {
           bundle.accessory = buildStacWidgetTree('metaChip', binding, {
             icon: getParamMetaIcon(card),
             value: formatRegisteredDisplayValue(registered, initialValue),
-            label: String((card && card.dataset && card.dataset.paramName) || ''),
-            text: String((card && card.dataset && card.dataset.paramName) || ''),
-            title: String((card && card.dataset && card.dataset.paramName) || ''),
+            label: accessoryTitle,
+            text: accessoryTitle,
+            title: accessoryTitle,
             backgroundColor: override.statusColor || 'rgba(124,58,237,0.12)',
             textColor: props.selectedBackgroundColor || colors.accentColor,
             iconColor: colors.iconColor,
@@ -16343,6 +16977,8 @@ if (!function_exists('view_ui_icon')) {
       const resolvedType = componentType || 'auto';
       const effectiveType = resolveParameterRenderType(resolvedType);
       const displayValue = getParamDisplayValue(card, effectiveType, override, valueText);
+      const hideInnerLabel = shouldHideGroupedInnerLabel(card);
+      const cardLabel = hideInnerLabel ? '' : label;
       const registeredBundle = buildRegisteredComponentAccessoryBundle(resolvedType, card, override, meta, valueText, binding);
       if (registeredBundle) {
         const children = [];
@@ -16353,7 +16989,10 @@ if (!function_exists('view_ui_icon')) {
           properties: {
             binding: binding,
             props: {
-              label: label,
+              label: cardLabel,
+              title: cardLabel,
+              showTitle: !hideInnerLabel,
+              hideLabel: hideInnerLabel,
               value: displayValue,
               icon: icon,
               variant: resolveSchemaComponentType(resolvedType),
@@ -16363,9 +17002,9 @@ if (!function_exists('view_ui_icon')) {
               metaIcon: getParamMetaIcon(card),
               metaValue: String(card.dataset.sequence || '1'),
               metaChip: {
-                label: label,
-                text: label,
-                title: label,
+                label: cardLabel,
+                text: cardLabel,
+                title: cardLabel,
                 value: String(card.dataset.sequence || '1')
               }
             },
@@ -16411,7 +17050,10 @@ if (!function_exists('view_ui_icon')) {
         properties: {
           binding: binding,
           props: {
-            label: label,
+            label: cardLabel,
+            title: cardLabel,
+            showTitle: !hideInnerLabel,
+            hideLabel: hideInnerLabel,
             value: headerValue,
             icon: icon,
             variant: resolveSchemaComponentType(resolvedType),
@@ -16421,9 +17063,9 @@ if (!function_exists('view_ui_icon')) {
             metaIcon: getParamMetaIcon(card),
             metaValue: String(card.dataset.sequence || '1'),
             metaChip: {
-              label: label,
-              text: label,
-              title: label,
+              label: cardLabel,
+              text: cardLabel,
+              title: cardLabel,
               value: String(card.dataset.sequence || '1')
             }
           },
@@ -16443,7 +17085,7 @@ if (!function_exists('view_ui_icon')) {
 
       const registered = getRegisteredComponent(resolvedType);
       if (registered) {
-        const label = String(override.title || card.dataset.paramName || 'Parameter');
+        const label = resolveControlCardLabel(card, override);
         const icon = getParamIcon(card);
         const initialValue = resolveRegisteredComponentValue(registered, valueText, meta);
         const displayValue = formatRegisteredDisplayValue(registered, initialValue);
@@ -16503,7 +17145,7 @@ if (!function_exists('view_ui_icon')) {
       }
 
       const entry = getComponentLibraryEntry(resolvedType) || getComponentLibraryEntry('auto');
-      const label = String(override.title || card.dataset.paramName || 'Parameter');
+      const label = resolveControlCardLabel(card, override);
       const icon = getParamIcon(card);
       const cardWidgetTree = buildParameterCardWidgetTree(resolvedType, card, override, meta, valueText, binding, label, icon);
       const base = {
@@ -16677,7 +17319,7 @@ if (!function_exists('view_ui_icon')) {
       }
 
       if (effectiveType === 'textField') {
-        const initialValue = valueText || meta.default || '';
+        const initialValue = sanitizeControlDisplayValue(valueText || meta.default || '', meta, card && card.dataset.paramName) || '';
         const textColors = getEffectiveComponentColors(override);
         const textVisual = buildTextFieldVisualContract({ colors: textColors });
         const textEditable = textFieldIsEditable(meta);
@@ -16688,8 +17330,10 @@ if (!function_exists('view_ui_icon')) {
           props: Object.assign({
             hintText: meta.default || '',
             maxLines: 1,
+            // Read still shows input+value; Ready/Write also show send.
             readOnly: !textEditable,
-            enabled: textEditable,
+            enabled: true,
+            interactive: textEditable,
             sendButton: buildSendButtonProps(binding, textEditable, textColors)
           }, textVisual),
           events: textEditable ? buildControlInteractionEvents(resolvedType, binding, interactionOptions) : []
@@ -16942,7 +17586,9 @@ if (!function_exists('view_ui_icon')) {
       (controls || []).forEach(function(control) {
         const key = control.parameterKey || String(control.binding || '').replace(/^device\.parameters\./, '');
         if (!key) return;
-        parameters[key] = normalizeParameterStateValue(control);
+        // Keep null while awaiting live device state so Flutter can show Loading…
+        // instead of fake wire padding like 00000000.
+        parameters[key] = control.valueLoading ? null : normalizeParameterStateValue(control);
       });
       return parameters;
     }
@@ -17207,7 +17853,6 @@ if (!function_exists('view_ui_icon')) {
           const controlId = parameterKey || ('control_' + pageNo + '_' + paramIndex);
           const override = getComponentOverride(parameterKey);
           const meta = getEffectiveParamMeta(card);
-          const labelElement = card.querySelector('.field-label');
           const catalogComponentType = canonicalCatalogTypeFromProtocol(meta, card.dataset.paramName, getResolvedParamComponentType(card));
           const schemaComponentType = resolveSchemaComponentType(catalogComponentType);
           const writable = protocolAccessIsWritable(meta);
@@ -17217,11 +17862,35 @@ if (!function_exists('view_ui_icon')) {
           const registeredComponent = getRegisteredComponent(catalogComponentType);
           const componentEntry = getAnyComponentEntry(catalogComponentType);
           const icon = getParamIcon(card);
-          const label = String(override.title || (labelElement ? labelElement.textContent.trim() : (card.dataset.componentLabel || card.dataset.paramName)) || 'Parameter');
+          // Grouped single controls keep the group title only (match web preview).
+          const label = resolveControlCardLabel(card, override);
           const rawValue = String(getParamLiveValue(card, catalogComponentType, override));
-          let value = sanitizeControlDisplayValue(rawValue, meta, label);
+          let value = sanitizeControlDisplayValue(rawValue, meta, label || card.dataset.paramName || '');
           const binding = controlBindingKey(parameterKey);
+          const valueLoading = controlNeedsLiveValueLoading(value, meta, {
+            renderType: resolveParameterRenderType(catalogComponentType),
+            writable: writable
+          });
+          if (valueLoading) {
+            value = '';
+          }
           const component = buildInlineComponentSchema(catalogComponentType, card, override, meta, value, binding);
+          if (component && valueLoading) {
+            component.initialValue = null;
+            component.displayValue = '';
+            component.valueLoading = true;
+            if (!component.props || typeof component.props !== 'object') component.props = {};
+            component.props.valueLoading = true;
+            component.props.loading = true;
+            component.props.loadingText = 'Loading…';
+            component.props.placeholder = 'Loading…';
+            if (component.widgetTree && component.widgetTree.properties && component.widgetTree.properties.props) {
+              component.widgetTree.properties.props.value = '';
+              component.widgetTree.properties.props.valueLoading = true;
+              component.widgetTree.properties.props.loading = true;
+              component.widgetTree.properties.props.loadingText = 'Loading…';
+            }
+          }
           const interactionEvents = writable
             ? ((component.events && component.events.length)
               ? component.events
@@ -17279,13 +17948,18 @@ if (!function_exists('view_ui_icon')) {
             variant: controlSchemaVariant(schemaComponentType),
             flutterWidget: component.flutterWidget,
             binding: binding,
-            initialValue: component.initialValue,
+            initialValue: valueLoading ? null : component.initialValue,
+            // Existing contract flags: Flutter should merge MQTT/API live state over schema defaults.
+            preferLiveState: true,
+            valueSource: 'deviceState',
+            valueLoading: valueLoading,
+            loadingText: valueLoading ? 'Loading…' : null,
             component: component,
             componentLabel: componentEntry ? componentEntry.label : catalogComponentType,
             icon: icon,
             metaIcon: getParamMetaIcon(card),
             label: label,
-            value: component.displayValue,
+            value: valueLoading ? '' : component.displayValue,
             visible: !override.hidden,
             events: interactionEvents,
             action: dataAction.id,
@@ -17301,6 +17975,10 @@ if (!function_exists('view_ui_icon')) {
               access: meta.access || null,
               field_description: meta.field_description || meta.Field_description || null,
               field_name: meta.field_name || meta.Field_name || null,
+              field_index: meta.field_index != null ? meta.field_index : null,
+              field_level: meta.field_level || null,
+              start_bit: meta.start_bit != null ? meta.start_bit : null,
+              end_bit: meta.end_bit != null ? meta.end_bit : null,
               items: Array.isArray(meta.items) ? meta.items : [],
               item_values: Array.isArray(meta.item_values) ? meta.item_values : [],
               sno_asperui: Array.isArray(meta.sno_asperui) ? meta.sno_asperui : [],
@@ -17325,12 +18003,15 @@ if (!function_exists('view_ui_icon')) {
                 colorStart: currentTheme.secondaryColor,
                 colorEnd: componentColors.accentColor
               },
-              iconBubble: {
-                size: 38,
-                backgroundColor: 'rgba(37,99,235,0.14)',
-                iconSize: parseInt(currentTheme.iconSize || 22, 10),
-                iconColor: componentColors.iconColor
-              }
+              iconBubble: (function() {
+                const parityIcon = previewPixelParityMetrics({
+                  grouped: !!(card && card.classList && card.classList.contains('is-grouped-component'))
+                }).iconBubble;
+                return Object.assign({}, parityIcon, {
+                  backgroundColor: 'rgba(37,99,235,0.14)',
+                  iconColor: componentColors.iconColor
+                });
+              })()
             }
           };
           applyReadOnlyProtocolContract(controlRecord, meta);
@@ -17407,6 +18088,15 @@ if (!function_exists('view_ui_icon')) {
           controlRecord.groupParameter = card.dataset.paramName || controlRecord.parameterName || '';
           controlRecord.uiCount = groupUiCount;
           controlRecord.relatedUiCount = groupUiCount + (hasSendButton ? 1 : 0);
+          // Hide "1 Control" / "1 UI" badge on single-control groups (match web preview).
+          controlRecord.showGroupCount = groupUiCount > 1;
+          if (controlRecord.component && typeof controlRecord.component === 'object') {
+            if (!controlRecord.component.props || typeof controlRecord.component.props !== 'object') {
+              controlRecord.component.props = {};
+            }
+            controlRecord.component.props.showGroupCount = groupUiCount > 1;
+            controlRecord.component.props.hideGroupCount = groupUiCount <= 1;
+          }
           if (hasSendButton) {
             controlRecord.uiParts = ['textField', 'sendButton'];
           }
@@ -21416,8 +22106,50 @@ if (!function_exists('view_ui_icon')) {
       });
     }
 
-    // Theme Application
+    function systemDisplayTheme(theme) {
+      var source = theme || {};
+      var dark = false;
+      try {
+        dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } catch (e) {}
+      var chrome = dark ? {
+        themeMode: 'dark',
+        backgroundType: 'gradient',
+        backgroundColor: '#0B1220',
+        gradientColor: '#111827',
+        shellColor: '#0F172A',
+        cardColor: '#1E293B',
+        textColor: '#F8FAFC',
+        mutedTextColor: '#94A3B8',
+        topbarColor: '#020617',
+        secondaryColor: '#64748B',
+        toggleOnColor: source.accentColor || '#60A5FA',
+        toggleOffColor: '#475569',
+        iconColor: source.accentColor || '#60A5FA',
+        borderColor: '#334155'
+      } : {
+        themeMode: 'light',
+        backgroundType: 'gradient',
+        backgroundColor: '#F8FAFC',
+        gradientColor: '#EEF2F7',
+        shellColor: '#F8FAFC',
+        cardColor: '#FFFFFF',
+        textColor: '#0F172A',
+        mutedTextColor: '#64748B',
+        topbarColor: '#FFFFFF',
+        secondaryColor: '#94A3B8',
+        toggleOnColor: source.accentColor || '#2563EB',
+        toggleOffColor: '#CBD5E1',
+        iconColor: source.accentColor || '#2563EB',
+        borderColor: '#E2E8F0'
+      };
+      return Object.assign({}, source, chrome);
+    }
+
+    // Theme Application. Paint follows the device Light/Dark setting.
+    // currentTheme itself is not rewritten, so saved schema colors stay as authored.
     function applyTheme(theme, options) {
+      theme = systemDisplayTheme(theme);
       const settings = options || {};
       document.body.setAttribute('data-studio-theme-mode', String(theme.themeMode || 'dark').toLowerCase());
       const root = phoneShell;
@@ -21464,7 +22196,7 @@ if (!function_exists('view_ui_icon')) {
         root.style.setProperty('--ui-card-padding', parseInt(theme.cardPadding || 16, 10) + 'px');
         root.style.setProperty('--ui-card-spacing', parseInt(theme.cardSpacing || 14, 10) + 'px');
         root.style.setProperty('--ui-card-margin', parseInt(theme.cardMargin || 0, 10) + 'px');
-        root.style.setProperty('--ui-button-height', parseInt(theme.buttonSize || 44, 10) + 'px');
+        root.style.setProperty('--ui-button-height', parseInt(theme.buttonSize || 48, 10) + 'px');
         root.style.setProperty('--ui-button-radius', parseInt(theme.buttonRadius || 16, 10) + 'px');
         const shadow = Math.max(0, Math.min(100, parseInt(theme.shadowStrength || 42, 10))) / 1000;
         const cardShadowY = Math.round(4 + shadow * 24);
@@ -21487,7 +22219,7 @@ if (!function_exists('view_ui_icon')) {
         const shouldStyle = target === 'all' || (target === 'save' && isSave) || (target === 'customize' && isCustomize);
         button.style.background = shouldStyle ? (theme.buttonBgColor || theme.accentColor) : '';
         button.style.color = shouldStyle ? (theme.buttonTextColor || '#fff') : '';
-        button.style.minHeight = (parseInt(theme.buttonSize || 44, 10)) + 'px';
+        button.style.minHeight = (parseInt(theme.buttonSize || 48, 10)) + 'px';
         button.style.borderRadius = (parseInt(theme.buttonRadius || 16, 10)) + 'px';
         button.classList.remove('is-hover-lift', 'is-hover-glow');
         const hover = theme.buttonHover || 'lift';
@@ -21671,7 +22403,7 @@ if (!function_exists('view_ui_icon')) {
         parameterCard: {
           all: { width: 'matchParent' },
           narrow: { minHeight: 60, padding: 12 },
-          compact: { minHeight: 66, padding: 14 },
+          compact: { minHeight: 60, padding: 14 },
           medium: { minHeight: 68, padding: 16 },
           expanded: { minHeight: 70, padding: 18 }
         },
@@ -22896,27 +23628,59 @@ if (!function_exists('view_ui_icon')) {
             action: { color: currentTheme.accentColor, fontSize: 12, fontWeight: 800 }
           }
         },
-        parameterCard: {
-          layout: { type: 'grid', columns: ['auto', '1fr', 'auto'], alignItems: 'center', gap: 12 },
-          stackedLayout: { type: 'column', alignItems: 'stretch', gap: 10, overflow: 'visible' },
-          position: 'relative',
-          overflow: 'visible',
-          minHeight: 66,
-          padding: numberValue(currentTheme.cardPadding, 16),
-          borderWidth: numberValue(currentTheme.borderSize, 1),
-          borderRadius: numberValue(currentTheme.borderRadius, 18),
-          blur: numberValue(currentTheme.cardBlur, 0),
-          shadow: { x: 0, y: 12, blur: 28, color: 'rgba(18,50,70,' + shadowAlpha.toFixed(2) + ')' },
-          parts: {
-            label: { color: currentTheme.mutedTextColor, fontSize: 11, fontWeight: 800, lineHeight: 1, uppercase: true, marginBottom: 5 },
-            value: { color: currentTheme.textColor, fontSize: 16, fontWeight: 700, lineHeight: 1.25 },
-            iconBubble: { width: 38, height: 38, shape: 'circle', backgroundColor: 'rgba(37,99,235,0.14)', innerBorder: { width: 1, color: 'rgba(37,99,235,0.18)' } },
-            metaChip: { minWidth: 42, height: 34, paddingHorizontal: 8, gap: 5, shape: 'pill', backgroundColor: 'rgba(37,99,235,0.12)', color: currentTheme.accentColor, fontSize: 12, fontWeight: 900, iconSize: 14, textTemplate: '{label}', labelSource: 'parameterName' },
-            switch: { trackWidth: 34, trackHeight: 18, thumbSize: 20, shape: 'pill', onTrackColor: currentTheme.toggleOnColor || '#2563EB', onThumbColor: '#FFFFFF', offTrackColor: currentTheme.toggleOffColor || '#CBD5E1', offThumbColor: '#FFFFFF' },
-            actionDot: { width: 36, height: 36, shape: 'circle', borderWidth: 3, borderColor: currentTheme.accentColor, backgroundColor: currentTheme.accentColor, innerBorder: { width: 4, color: '#FFFFFF' } },
-            leftAccent: { visible: true, width: 3, insetVertical: 14, background: linearGradient(180, [{ offset: 0, color: currentTheme.secondaryColor }, { offset: 1, color: currentTheme.accentColor }], currentTheme.accentColor) }
-          }
-        },
+        parameterCard: (function() {
+          const parity = previewPixelParityMetrics();
+          return {
+            layout: parity.layout,
+            stackedLayout: parity.stackedLayout,
+            position: 'relative',
+            overflow: 'visible',
+            minHeight: parity.minHeight,
+            padding: numberValue(currentTheme.cardPadding, 14),
+            gap: parity.gap,
+            alignItems: 'center',
+            borderWidth: numberValue(currentTheme.borderSize, 1),
+            borderRadius: numberValue(currentTheme.borderRadius, 18),
+            blur: numberValue(currentTheme.cardBlur, 0),
+            shadow: { x: 0, y: 12, blur: 28, color: 'rgba(18,50,70,' + shadowAlpha.toFixed(2) + ')' },
+            parts: {
+              label: Object.assign({}, parity.fieldLabel, { color: currentTheme.mutedTextColor }),
+              value: Object.assign({}, parity.fieldValue, { color: currentTheme.textColor }),
+              iconBubble: Object.assign({}, parity.iconBubble, {
+                backgroundColor: 'rgba(37,99,235,0.14)',
+                innerBorder: { width: 1, color: 'rgba(37,99,235,0.18)' }
+              }),
+              metaChip: Object.assign({}, parity.metaChip, {
+                backgroundColor: 'rgba(37,99,235,0.12)',
+                color: currentTheme.accentColor,
+                textTemplate: '{label}',
+                labelSource: 'parameterName'
+              }),
+              switch: Object.assign({}, parity.switch, {
+                onTrackColor: currentTheme.toggleOnColor || '#2563EB',
+                onThumbColor: '#FFFFFF',
+                offTrackColor: currentTheme.toggleOffColor || '#CBD5E1',
+                offThumbColor: '#FFFFFF'
+              }),
+              powerButton: Object.assign({}, parity.powerButton, {
+                borderColor: currentTheme.accentColor,
+                backgroundColor: currentTheme.accentColor
+              }),
+              actionDot: Object.assign({}, parity.actionDot, {
+                borderColor: currentTheme.accentColor,
+                backgroundColor: currentTheme.accentColor,
+                innerBorder: { width: 3, color: '#FFFFFF' }
+              }),
+              sendButton: Object.assign({}, parity.sendButton, {
+                backgroundColor: currentTheme.accentColor,
+                iconColor: '#FFFFFF'
+              }),
+              leftAccent: Object.assign({}, parity.leftAccent, {
+                background: linearGradient(180, [{ offset: 0, color: currentTheme.secondaryColor }, { offset: 1, color: currentTheme.accentColor }], currentTheme.accentColor)
+              })
+            }
+          };
+        })(),
         progress: {
           height: 5,
           margin: { top: 0, right: 18, bottom: 8, left: 18 },
@@ -23018,8 +23782,10 @@ if (!function_exists('view_ui_icon')) {
               borderColor: control.styles.borderColor,
               borderWidth: numberValue(currentTheme.borderSize, 1),
               borderRadius: numberValue(currentTheme.borderRadius, 18),
-              minHeight: 66,
-              padding: numberValue(currentTheme.cardPadding, 16),
+              minHeight: componentStyles.parameterCard.minHeight || 60,
+              gap: componentStyles.parameterCard.gap || 10,
+              alignItems: 'center',
+              padding: numberValue(currentTheme.cardPadding, 14),
               blur: numberValue(currentTheme.cardBlur, 0),
               iconColor: control.styles.iconColor,
               textColor: control.styles.textColor,
@@ -23224,7 +23990,7 @@ if (!function_exists('view_ui_icon')) {
               {
                 id: 'app-bar',
                 type: 'AppBar',
-                props: { titleBinding: 'navigation.activePage.title', subtitle: modelNo, captionPattern: 'Page {pageNo}.Operation', height: numberValue(currentTheme.headerHeight, 84), alignment: currentTheme.headerAlignment || 'left' },
+                props: { titleBinding: 'navigation.activePage.title', subtitle: modelNo || 'Model UI', height: numberValue(currentTheme.headerHeight, 84), alignment: currentTheme.headerAlignment || 'left' },
                 styleRef: 'appBar',
                 style: componentStyles.appBar,
                 children: [
@@ -23439,7 +24205,9 @@ if (!function_exists('view_ui_icon')) {
             override: buildComponentOverridePayload(override),
             styles: {
               width: 'match_parent',
-              minHeight: '66px',
+              minHeight: '60px',
+              gap: '10px',
+              alignItems: 'center',
               cardColor: componentColors.cardColor,
               borderColor: componentColors.borderColor,
               borderWidth: px(currentTheme.borderSize, 1),
@@ -23449,7 +24217,7 @@ if (!function_exists('view_ui_icon')) {
               textColor: componentColors.textColor,
               mutedTextColor: currentTheme.mutedTextColor,
               borderRadius: px(currentTheme.borderRadius, 18),
-              cardPadding: px(currentTheme.cardPadding, 16),
+              cardPadding: px(currentTheme.cardPadding, 14),
               leftAccent: {
                 visible: true,
                 width: '3px',
@@ -23458,7 +24226,9 @@ if (!function_exists('view_ui_icon')) {
               },
               iconBubble: {
                 shape: 'circle',
-                size: '38px',
+                size: String(previewPixelParityMetrics().iconBubble.size) + 'px',
+                width: String(previewPixelParityMetrics().iconBubble.width) + 'px',
+                height: String(previewPixelParityMetrics().iconBubble.height) + 'px',
                 backgroundColor: 'color-mix(' + componentColors.accentColor + ' 14%, #FFFFFF)',
                 iconColor: componentColors.iconColor
               }
@@ -23509,8 +24279,7 @@ if (!function_exists('view_ui_icon')) {
                   id: 'topTitle',
                   component: 'TitleBlock',
                   title: pageName,
-                  subtitle: modelNo,
-                  caption: 'Page ' + pageNo + '.Operation'
+                  subtitle: modelNo || 'Model UI'
                 },
                 {
                   id: 'headerActions',
@@ -23659,8 +24428,8 @@ if (!function_exists('view_ui_icon')) {
           '.brand-mark{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:2px 4px;border:0;border-radius:6px;background:#fff;overflow:hidden}.brand-mark img{display:block;height:28px;width:auto;max-width:118px;object-fit:contain}.brand-copy strong{display:block;color:' + currentTheme.textColor + ';font-size:14px;line-height:1.2;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.brand-copy span{display:block;margin-top:2px;color:' + currentTheme.mutedTextColor + ';font-size:11px;font-weight:700;}.online-state{display:inline-flex;align-items:center;gap:7px;color:' + currentTheme.successColor + ';font-size:12px;font-weight:900;}',
           '.page-slide{padding:' + px(currentTheme.pagePadding, 18) + ' ' + px(currentTheme.pagePadding, 18) + ' 4px}.slide-hero{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end;min-height:112px;margin-bottom:14px;padding:18px;border-radius:calc(' + px(currentTheme.borderRadius, 18) + ' + 6px);background:linear-gradient(145deg,' + currentTheme.topbarColor + ',' + currentTheme.secondaryColor + ');color:#fff;box-shadow:0 18px 38px rgba(18,50,70,.16);overflow:hidden;}.slide-hero:after{content:"";position:absolute;right:-36px;top:-36px;width:112px;height:112px;border-radius:50%;border:24px solid rgba(209,250,255,.16);}',
           '.slide-hero-kicker{display:inline-flex;align-items:center;gap:6px;margin-bottom:8px;color:rgba(255,255,255,.72);font-size:11px;font-weight:800;text-transform:uppercase}.slide-hero h2{margin:0;color:#fff;font-size:22px;line-height:1.1;font-weight:900;overflow-wrap:anywhere}.slide-hero p{margin:6px 0 0;color:rgba(255,255,255,.68);font-size:12px;font-weight:700}.slide-count{position:relative;z-index:1;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;width:58px;height:58px;border-radius:20px;background:rgba(255,255,255,.12);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);}',
-          '.device-card,.param-card{border:' + px(currentTheme.borderSize, 1) + ' solid ' + currentTheme.borderColor + ';border-radius:' + px(currentTheme.borderRadius, 18) + ';background:' + currentTheme.cardColor + ';box-shadow:0 12px 28px rgba(18,50,70,.1);}.name-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:' + px(currentTheme.cardPadding, 16) + ';}.field-label{display:block;margin-bottom:5px;color:' + currentTheme.mutedTextColor + ';font-size:11px;line-height:1;font-weight:800;text-transform:uppercase;letter-spacing:.02em}.field-value{display:block;min-width:0;color:' + currentTheme.textColor + ';font-size:16px;line-height:1.25;font-weight:700;overflow-wrap:anywhere}.edit-link{color:' + currentTheme.accentColor + ';font-size:12px;font-weight:800;text-decoration:none;}',
-          '.param-list{display:flex;flex-direction:column;gap:14px;margin-top:0;padding:0;border:0;background:transparent;overflow:visible}.param-group-card{display:flex;flex-direction:column;gap:0;padding:10px 10px 8px;border:1px solid ' + currentTheme.borderColor + ';border-radius:' + px(currentTheme.borderRadius, 18) + ';background:' + currentTheme.cardColor + ';overflow:hidden}.param-card.is-grouped-component{background:transparent;border:0;box-shadow:none;border-radius:0;min-height:44px}.param-card{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;min-height:66px;padding:' + px(currentTheme.cardPadding, 16) + ';position:relative;overflow:hidden;}.param-card.layout-stacked{display:flex;flex-direction:column;align-items:stretch;min-height:0;overflow:visible;padding-bottom:calc(' + px(currentTheme.cardPadding, 16) + ' + 4px)}.param-card.layout-stacked>.param-main-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;width:100%}.param-card.layout-stacked>.range-visual,.param-card.layout-stacked>.needle-gauge-visual,.param-card.layout-stacked>.pointer-gauge-visual,.param-card.layout-stacked>.power-gauge-visual,.param-card.layout-stacked>.segmented-visual,.param-card.layout-stacked>.linear-gauge-visual,.param-card.layout-stacked>.registered-visual{width:100%;max-width:100%;flex:0 0 auto;overflow:visible;box-sizing:border-box}.needle-gauge-visual,.pointer-gauge-visual,.power-gauge-visual{width:100%;display:flex;flex-direction:column;align-items:center;overflow:visible}.power-gauge-svg-host{width:100%;max-width:240px;margin:0 auto;display:flex;justify-content:center;overflow:visible}.needle-gauge-svg,.power-gauge-svg{width:100%;max-width:240px;height:auto;min-height:148px;display:block;overflow:visible}.param-card:before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 999px 999px 0;background:linear-gradient(180deg,' + currentTheme.secondaryColor + ',' + currentTheme.accentColor + ')}.param-icon{border:0;display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:rgba(37,99,235,.14);color:' + (currentTheme.iconColor || currentTheme.accentColor) + ';}.param-meta{display:flex;align-items:center;justify-content:center;gap:5px;min-width:42px;height:34px;padding:0 8px;border-radius:999px;background:rgba(37,99,235,.12);color:' + currentTheme.accentColor + ';font-size:12px;font-weight:900;}.toggle-visual{position:relative;width:34px;height:18px;border-radius:999px;background:' + currentTheme.toggleOffColor + ';}.toggle-visual:after{content:"";position:absolute;top:-1px;right:0;width:20px;height:20px;border-radius:50%;background:' + currentTheme.toggleOnColor + ';box-shadow:0 4px 9px rgba(37,99,235,.24);}.range-visual{grid-column:1/-1;margin-top:10px;width:100%}.range-values{display:flex;justify-content:space-between;color:' + currentTheme.textColor + ';font-size:10px;font-weight:600}.range-line{position:relative;height:3px;margin:12px 8px 8px;border-radius:999px;background:' + currentTheme.accentColor + '}.range-line:before{content:"";position:absolute;left:-6px;top:-9px;width:22px;height:22px;border-radius:50%;background:' + currentTheme.accentColor + '}',
+          '.device-card,.param-card{border:' + px(currentTheme.borderSize, 1) + ' solid ' + currentTheme.borderColor + ';border-radius:' + px(currentTheme.borderRadius, 18) + ';background:' + currentTheme.cardColor + ';box-shadow:0 12px 28px rgba(18,50,70,.1);}.name-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:' + px(currentTheme.cardPadding, 16) + ';}.field-label{display:block;margin-bottom:4px;color:' + currentTheme.mutedTextColor + ';font-size:10px;line-height:1.15;font-weight:600;text-transform:uppercase;letter-spacing:.08em;text-align:left}.field-value{display:block;min-width:0;color:' + currentTheme.textColor + ';font-size:15px;line-height:1.35;font-weight:600;overflow-wrap:anywhere;text-align:left}.edit-link{color:' + currentTheme.accentColor + ';font-size:12px;font-weight:800;text-decoration:none;}',
+          '.param-list{display:flex;flex-direction:column;gap:14px;margin-top:0;padding:0;border:0;background:transparent;overflow:visible}.param-group-card{display:flex;flex-direction:column;gap:0;padding:10px 10px 8px;border:1px solid ' + currentTheme.borderColor + ';border-radius:' + px(currentTheme.borderRadius, 18) + ';background:' + currentTheme.cardColor + ';overflow:hidden}.param-card.is-grouped-component{background:transparent;border:0;box-shadow:none;border-radius:0;min-height:44px}.param-card{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;min-height:60px;padding:' + px(currentTheme.cardPadding, 14) + ';position:relative;overflow:hidden;}.param-card.layout-stacked{display:flex;flex-direction:column;align-items:stretch;min-height:0;overflow:visible;padding-bottom:calc(' + px(currentTheme.cardPadding, 16) + ' + 4px)}.param-card.layout-stacked>.param-main-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;width:100%}.param-card.layout-stacked>.range-visual,.param-card.layout-stacked>.needle-gauge-visual,.param-card.layout-stacked>.pointer-gauge-visual,.param-card.layout-stacked>.power-gauge-visual,.param-card.layout-stacked>.segmented-visual,.param-card.layout-stacked>.linear-gauge-visual,.param-card.layout-stacked>.registered-visual{width:100%;max-width:100%;flex:0 0 auto;overflow:visible;box-sizing:border-box}.needle-gauge-visual,.pointer-gauge-visual,.power-gauge-visual{width:100%;display:flex;flex-direction:column;align-items:center;overflow:visible}.power-gauge-svg-host{width:100%;max-width:240px;margin:0 auto;display:flex;justify-content:center;overflow:visible}.needle-gauge-svg,.power-gauge-svg{width:100%;max-width:240px;height:auto;min-height:148px;display:block;overflow:visible}.param-card:before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 999px 999px 0;background:linear-gradient(180deg,' + currentTheme.secondaryColor + ',' + currentTheme.accentColor + ')}.param-icon{border:0;display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:rgba(37,99,235,.14);color:' + (currentTheme.iconColor || currentTheme.accentColor) + ';}.param-meta{display:flex;align-items:center;justify-content:center;gap:5px;min-width:42px;height:34px;padding:0 8px;border-radius:999px;background:rgba(37,99,235,.12);color:' + currentTheme.accentColor + ';font-size:12px;font-weight:900;}.toggle-visual{position:relative;width:34px;height:18px;border-radius:999px;background:' + currentTheme.toggleOffColor + ';}.toggle-visual:after{content:"";position:absolute;top:-1px;right:0;width:20px;height:20px;border-radius:50%;background:' + currentTheme.toggleOnColor + ';box-shadow:0 4px 9px rgba(37,99,235,.24);}.range-visual{grid-column:1/-1;margin-top:10px;width:100%}.range-values{display:flex;justify-content:space-between;color:' + currentTheme.textColor + ';font-size:10px;font-weight:600}.range-line{position:relative;height:3px;margin:12px 8px 8px;border-radius:999px;background:' + currentTheme.accentColor + '}.range-line:before{content:"";position:absolute;left:-6px;top:-9px;width:22px;height:22px;border-radius:50%;background:' + currentTheme.accentColor + '}',
           '.progress-shell{margin:0 18px 8px;height:5px;border-radius:999px;background:rgba(106,142,174,.18);overflow:hidden}.progress-bar{height:100%;border-radius:inherit;background:linear-gradient(90deg,' + currentTheme.secondaryColor + ',' + currentTheme.accentColor + ')}.slider-controls{display:grid;grid-template-columns:48px 1fr 48px;gap:10px;align-items:center;margin:6px 18px 0;padding:12px;border:1px solid rgba(106,142,174,.28);border-radius:20px;background:rgba(255,255,255,.72);box-shadow:0 12px 28px rgba(18,50,70,.1);}.slide-arrow{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:1px solid rgba(106,142,174,.28);border-radius:50%;background:' + currentTheme.topbarColor + ';color:#fff}.page-buttons{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.page-buttons::-webkit-scrollbar{display:none}.page-button{flex:0 0 auto;min-width:34px;height:34px;padding:0 10px;margin:8px;border:1px solid rgba(106,142,174,.28);border-radius:999px;background:#fff;color:' + currentTheme.textColor + ';font-size:13px;font-weight:900}.page-button.is-active{border-color:' + currentTheme.accentColor + ';background:linear-gradient(135deg,' + currentTheme.secondaryColor + ',' + currentTheme.accentColor + ');color:#fff;}'
         ].join('\n'),
         componentTemplates: {
@@ -23712,7 +24481,7 @@ if (!function_exists('view_ui_icon')) {
             height: currentTheme.headerHeight,
             backgroundColor: currentTheme.topbarColor,
             titleSource: 'page.pageName',
-            subtitlePattern: 'Page {pageNo}.Operation',
+            subtitlePattern: '{modelNo}',
             showHeaderIcons: String(currentTheme.showHeaderIcons) !== '0',
             alignment: currentTheme.headerAlignment,
             actions: [
@@ -24355,7 +25124,10 @@ if (!function_exists('view_ui_icon')) {
         source: deviceConnectivity.source
       });
       if (schema.state.wifiProvisioning && typeof schema.state.wifiProvisioning === 'object') {
-        if (typeof schema.state.wifiProvisioning.onlineConfirmed === 'undefined') {
+        // Seed from live connectivity so already-online devices unlock MQTT without Wi-Fi re-setup.
+        if (schema.state.online === true) {
+          schema.state.wifiProvisioning.onlineConfirmed = true;
+        } else if (typeof schema.state.wifiProvisioning.onlineConfirmed === 'undefined') {
           schema.state.wifiProvisioning.onlineConfirmed = false;
         }
       }
@@ -24363,6 +25135,9 @@ if (!function_exists('view_ui_icon')) {
       if (schema.deviceState) {
         schema.deviceState.bindingRoot = 'state.parameters';
         schema.deviceState.syncWith = 'state.parameters';
+        schema.deviceState.preferLiveState = true;
+        schema.deviceState.liveStateSource = schema.deviceState.liveStateSource || 'dataSources.deviceState';
+        schema.deviceState.mergeStrategy = schema.deviceState.mergeStrategy || 'deepMerge';
         if (schema.state.parameters) {
           schema.deviceState.parameters = schema.deviceState.parameters || {};
           Object.keys(schema.state.parameters).forEach(function(key) {
@@ -24373,6 +25148,11 @@ if (!function_exists('view_ui_icon')) {
           });
         }
       }
+      (Array.isArray(schema.controls) ? schema.controls : []).forEach(function(control) {
+        if (!control || typeof control !== 'object') return;
+        if (typeof control.preferLiveState === 'undefined') control.preferLiveState = true;
+        if (!control.valueSource) control.valueSource = 'deviceState';
+      });
 
       var controls = Array.isArray(schema.controls) ? schema.controls : [];
       controls.forEach(function(control) {
@@ -24634,7 +25414,7 @@ if (!function_exists('view_ui_icon')) {
       };
 
       const pagePadding = n(currentTheme.pagePadding, 18);
-      const cardPadding = n(currentTheme.cardPadding, 16);
+      const cardPadding = n(currentTheme.cardPadding, 14);
       const cardGap = n(currentTheme.cardSpacing, 14);
       const radius = n(currentTheme.borderRadius, 18);
       const borderWidth = n(currentTheme.borderSize, 1);
@@ -24657,7 +25437,8 @@ if (!function_exists('view_ui_icon')) {
         const pageControls = controlsBundle.controls.filter(function(control) {
           return String(control.pageNo) === String(page.pageNo);
         });
-        const pageSubtitle = 'Page ' + page.pageNo + '.Operation';
+        // Subtitle is model only — page title already carries PageN.Name (avoid duplicate header line).
+        const pageSubtitle = modelNo || 'Model UI';
         const renderableCount = Array.isArray(page.controlIds) ? page.controlIds.length : pageControls.length;
         return {
           id: page.id,
@@ -24795,7 +25576,10 @@ if (!function_exists('view_ui_icon')) {
           borderRadius: groupedCard ? 0 : radius,
           padding: groupedCard ? edge(8, 4, 8, 4) : edge(cardPadding, cardPadding, cardPadding, cardPadding),
           margin: edge(0, 0, cardMarginBottom, 0),
-          minHeight: groupedCard ? 44 : 66,
+          minHeight: groupedCard ? 44 : 60,
+          gap: 10,
+          alignItems: 'center',
+          crossAxisAlignment: 'center',
           textColor: styles.textColor || currentTheme.textColor,
           valueColor: styles.textColor || currentTheme.textColor,
           fieldValueColor: styles.textColor || currentTheme.textColor,
@@ -24857,7 +25641,8 @@ if (!function_exists('view_ui_icon')) {
       const activePageName = activePageMeta ? activePageMeta.title : (modelNo || 'Model UI');
       const activePageNo = activePageMeta ? activePageMeta.pageNo : '';
       const activePageId = activePageMeta ? activePageMeta.id : null;
-      const activeSubtitle = activePageNo ? ('Page ' + activePageNo + '.Operation') : 'No pages';
+      // Match web topbar: title = page name, subtitle = model only (no second "Page N.Operation").
+      const activeSubtitle = modelNo || 'Model UI';
       const progressWidthPercent = navigationPages.length ? Math.round(((activeIndex + 1) / navigationPages.length) * 10000) / 100 : 0;
 
       const headerAlignment = currentTheme.headerAlignment || 'left';
@@ -24893,8 +25678,7 @@ if (!function_exists('view_ui_icon')) {
               ]),
               node('column', 'top_title', { width: 'expanded', crossAxisAlignment: 'start', spacing: 2 }, {}, [
                 textNode('active_page_title', activePageName, textStyle(18, 800, headerChrome.titleColor, 1.2), 2, { textBinding: 'state.activePageName' }),
-                textNode('model_subtitle', modelNo || 'Model UI', textStyle(12, 600, headerChrome.subtitleColor, 1.25), 1),
-                textNode('active_page_subtitle', activeSubtitle, textStyle(12, 600, headerChrome.subtitleColor, 1.25), 1, { textBinding: 'state.activePageSubtitle' })
+                textNode('model_subtitle', activeSubtitle, textStyle(12, 600, headerChrome.subtitleColor, 1.25), 1, { textBinding: 'state.activePageSubtitle' })
               ]),
               node('row', 'top_actions', { spacing: 4, visibility: bool(currentTheme.showHeaderIcons) }, {}, [
                 buttonNode('device_wifi_button', 'WiFi', [{
@@ -25096,6 +25880,9 @@ if (!function_exists('view_ui_icon')) {
 
       const devicePrimary = (deviceConfig.devices && deviceConfig.devices[0] && deviceConfig.devices[0].primary) || 'power';
       const wifiProvisioning = buildWifiProvisioningSchema(resolvedNodeId);
+      if (wifiProvisioning && wifiProvisioning.state && typeof wifiProvisioning.state === 'object' && deviceConnectivity.online) {
+        wifiProvisioning.state.onlineConfirmed = true;
+      }
       const infoPage = buildDeviceInfoPageSchema(resolvedNodeId, schemaApiUrlWithNode);
       const extendedSchema = buildExtendedSchemaContract({
         controls: controlsBundle.controls,
@@ -25161,7 +25948,7 @@ if (!function_exists('view_ui_icon')) {
         meta: {
           source: 'studio',
           // Keep in sync with View_page_model::DEVICE_UI_SCHEMA_BUILD_VERSION
-          schemaBuildVersion: '2026-10-31.2',
+          schemaBuildVersion: '2026-11-10.1',
           app: {
             id: 'efactor_' + slug(modelNo, 'device_ui'),
             name: (modelNo || 'Efactor Device') + ' Control',
@@ -25565,7 +26352,7 @@ if (!function_exists('view_ui_icon')) {
             foregroundColor: headerChrome.titleColor,
             alignment: headerAlignment,
             titleSource: 'state.activePageName',
-            subtitlePattern: 'Page {pageNo}.Operation',
+            subtitlePattern: '{modelNo}',
             showHeaderIcons: bool(currentTheme.showHeaderIcons),
             backButton: {
               backgroundColor: headerChrome.backBackground,
@@ -26611,6 +27398,14 @@ if (!function_exists('view_ui_icon')) {
     bindStudioColorRows(document.getElementById('studio-theme-section'));
     bindStudioColorRows(document.getElementById('studio-general-section'));
     applyTheme(currentTheme, { reinitializeComponents: true });
+    try {
+      var systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      var repaintSystemTheme = function () {
+        applyTheme(currentTheme, { reinitializeComponents: false });
+      };
+      if (systemThemeQuery.addEventListener) systemThemeQuery.addEventListener('change', repaintSystemTheme);
+      else if (systemThemeQuery.addListener) systemThemeQuery.addListener(repaintSystemTheme);
+    } catch (e) {}
     resetThemeHistoryBaseline();
     refreshStudioParameterPanels();
     if (schemaNodeIdInput && !String(schemaNodeIdInput.value || '').trim()) {

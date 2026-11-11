@@ -48,51 +48,139 @@ if (is_readable($jsPath)) {
 ?>
 <link rel="stylesheet" href="<?= htmlspecialchars($ahpCss, ENT_QUOTES, 'UTF-8') ?>">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: ['class', '[data-theme="dark"]'],
+    corePlugins: { preflight: false },
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif']
+        },
+        colors: {
+          grid: {
+            ink: '#0f172a',
+            muted: '#64748b',
+            accent: '#7c3aed',
+            accent2: '#6366f1'
+          }
+        },
+        boxShadow: {
+          glass: '0 14px 36px rgba(15,23,42,.08)',
+          glow: '0 0 28px rgba(99,102,241,.28)'
+        }
+      }
+    }
+  };
+</script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 :root{
   --gd-ink:#1f2a44;
   --gd-muted:#71819a;
   --gd-line:rgba(148,163,184,.26);
   --gd-accent:#7c3aed;
   --gd-accent-2:#5b6cff;
+  --gd-font:'Plus Jakarta Sans',Inter,system-ui,sans-serif;
+}
+#grid-dashboard-root{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  display:block;
+  overflow-x:clip;
 }
 .gd-shell{
   height:calc(100vh - 72px);
+  min-height:0;
   display:flex;flex-direction:column;
   background:linear-gradient(120deg,#f3e8ff,#eef4fb 48%,#dbeafe);
-  font-family:Inter,Arial,sans-serif;
-  color:var(--gd-ink);overflow:hidden;
+  font-family:var(--gd-font);
+  color:var(--gd-ink);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  overflow:auto;
+  box-sizing:border-box;
 }
+.gd-shell *,.gd-shell *::before,.gd-shell *::after{box-sizing:border-box}
+.gd-shell.is-dark{
+  background:linear-gradient(140deg,#050b16,#0b1220 55%,#111827);
+  color:#e2e8f0;
+}
+.gd-shell.is-dark .gd-toolbar,
+.gd-shell.is-dark .gd-glass{
+  background:rgba(15,23,42,.92)!important;
+  border-color:rgba(148,163,184,.22)!important;
+  color:#e2e8f0;
+}
+.gd-shell.is-dark .gd-title-block h1,
+.gd-shell.is-dark .gd-glass strong{color:#f8fafc}
+.gd-shell.is-dark .gd-title-block p,
+.gd-shell.is-dark .gd-glass p,
+.gd-shell.is-dark .gd-field small{color:#94a3b8!important}
+.gd-shell.is-dark .gd-icon-btn,
+.gd-shell.is-dark .gd-copy-btn,
+.gd-shell.is-dark .gd-field input{
+  background:#0f172a!important;
+  color:#e2e8f0!important;
+  border-color:rgba(148,163,184,.28)!important;
+}
+.gd-shell.is-dark .gd-icon-btn:hover,
+.gd-shell.is-dark .gd-copy-btn:hover{background:#1e293b!important}
+.gd-shell.is-dark .gd-side-panel code{
+  color:#cbd5e1;
+  background:#0f172a;
+  border-color:rgba(148,163,184,.22);
+}
+.gd-shell.is-dark .gd-phone-screen{background:#050b16;color:#f8fafc}
 .gd-toolbar{
   min-height:60px;padding:10px 20px;
-  display:flex;align-items:center;gap:12px;
+  display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;
   background:rgba(255,255,255,.92);
   border-bottom:1px solid var(--gd-line);
   flex-shrink:0;
+  position:sticky;top:0;z-index:40;
 }
-.gd-title-block{flex:1}
+.gd-title-block{flex:1 1 180px;min-width:0}
 .gd-title-block span,.gd-panel-label{
   display:block;color:var(--gd-accent);
   font-size:11px;font-weight:900;
   text-transform:uppercase;letter-spacing:.05em;
 }
-.gd-title-block h1{margin:2px 0;font-size:20px}
-.gd-title-block p{margin:0;color:var(--gd-muted);font-size:12px}
+.gd-title-block h1{
+  margin:2px 0;font-size:clamp(16px,2.4vw,20px);
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+}
+.gd-title-block h1 img{height:28px;width:auto;max-width:100%;display:block}
+.gd-title-block p{margin:0;color:var(--gd-muted);font-size:12px;line-height:1.35}
+.gd-toolbar-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
 .gd-icon-btn{
   min-width:38px;height:38px;padding:0 12px;
   border:1px solid var(--gd-line);border-radius:10px;
   background:#fff;color:#24304a;font-size:12px;font-weight:700;cursor:pointer;
 }
 .gd-icon-btn:hover{background:#f8fafc}
+.gd-theme-btn{
+  width:38px;padding:0;display:inline-grid;place-items:center;
+  font-size:18px;line-height:1;
+}
+.gd-theme-btn .gd-theme-icon{display:none;line-height:1}
+.gd-theme-btn[data-mode="light"] .gd-theme-moon{display:inline}
+.gd-theme-btn[data-mode="dark"] .gd-theme-sun{display:inline}
+.gd-theme-btn[data-mode="system"] .gd-theme-moon{display:inline}
+.gd-theme-btn[data-mode="system"]{opacity:.92}
 .gd-workspace{
   flex:1;min-height:0;
   display:grid;
-  grid-template-columns:minmax(210px,240px) minmax(420px,1fr) minmax(320px,480px);
-  gap:18px;padding:18px 20px;overflow:hidden;
+  grid-template-columns:minmax(200px,240px) minmax(0,1fr) minmax(280px,420px);
+  gap:clamp(12px,2vw,18px);
+  padding:clamp(12px,2vw,18px) clamp(12px,2.5vw,20px);
+  overflow:auto;
+  align-items:stretch;
 }
-.gd-left-panel,.gd-side-panel{min-height:0;overflow:auto;padding:4px}
-.gd-left-panel{display:flex;flex-direction:column;gap:18px}
+.gd-left-panel,.gd-side-panel{min-height:0;overflow:auto;padding:4px;min-width:0}
+.gd-left-panel{display:flex;flex-direction:column;gap:14px}
 .gd-schema-btn{
   width:100%;min-height:44px;border:0;border-radius:12px;
   background:linear-gradient(135deg,#7c3aed,#5b6cff);
@@ -109,12 +197,15 @@ if (is_readable($jsPath)) {
 .gd-glass strong{display:block;font-size:15px;margin:6px 0}
 .gd-glass p{margin:0;color:var(--gd-muted);font-size:12px;line-height:1.45}
 .gd-phone-wrap{
-  min-height:0;overflow:auto;
+  min-height:0;min-width:0;overflow:auto;
   display:flex;justify-content:center;align-items:flex-start;
   padding:6px 0 24px;
 }
 .gd-phone{
-  position:relative;width:375px;
+  --gd-phone-w:375px;
+  position:relative;
+  width:min(100%,var(--gd-phone-w));
+  max-width:100%;
   border:11px solid #111827;border-radius:44px;
   background:#111827;
   box-shadow:0 26px 68px rgba(15,23,42,.34),inset 0 0 0 1px rgba(255,255,255,.06);
@@ -129,14 +220,22 @@ if (is_readable($jsPath)) {
   position:relative;z-index:11;height:34px;padding:0 20px;
   display:flex;align-items:center;justify-content:space-between;
   color:#fff;font-size:12px;font-weight:700;
+  font-family:var(--gd-font);
+  letter-spacing:.01em;
 }
 .gd-phone-screen{
   position:relative;
-  height:680px;overflow-y:auto;overflow-x:hidden;
-  background:#f7f8fc;
+  height:min(680px,calc(100vh - 220px));
+  min-height:480px;
+  overflow-y:auto;overflow-x:hidden;
+  background:#f7fbff;
   overscroll-behavior:contain;
+  font-family:var(--gd-font);
+  -webkit-font-smoothing:antialiased;
 }
-.gd-side-panel{display:flex;flex-direction:column;gap:12px}
+.gd-phone-screen[data-theme="dark"]{background:#050b16}
+.gd-side-panel{display:flex;flex-direction:column;gap:12px;min-width:0}
+.gd-side-panel .gd-glass{min-width:0}
 .gd-api-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .gd-copy-btn{
   border:1px solid var(--gd-line);border-radius:8px;background:#fff;
@@ -148,7 +247,7 @@ if (is_readable($jsPath)) {
   border:1px solid var(--gd-line);
 }
 .gd-schema-output{
-  flex:1;min-height:280px;width:100%;
+  flex:1;min-height:220px;width:100%;max-width:100%;
   border:1px solid var(--gd-line);border-radius:14px;
   background:#0f172a;color:#e2e8f0;
   font-family:Consolas,Monaco,monospace;font-size:11px;line-height:1.45;
@@ -283,11 +382,64 @@ if (is_readable($jsPath)) {
   font-size:11px;font-weight:700;letter-spacing:.01em;color:#cbd5e1;
   background:linear-gradient(180deg,#020617,#0f172a);
 }
+/* Large tablets / narrow desktops: keep phone centered, stack side schema */
+@media (max-width:1280px){
+  .gd-workspace{
+    grid-template-columns:minmax(180px,220px) minmax(0,1fr) minmax(240px,340px);
+    gap:14px;
+  }
+}
 @media (max-width:1100px){
-  .gd-workspace{grid-template-columns:1fr;overflow:auto}
-  .gd-phone-wrap{order:1}
-  .gd-left-panel{order:0}
-  .gd-side-panel{order:2;min-height:360px}
+  .gd-shell{height:auto;min-height:calc(100vh - 72px)}
+  .gd-workspace{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    grid-template-areas:
+      "left phone"
+      "side side";
+    overflow:visible;
+  }
+  .gd-left-panel{grid-area:left}
+  .gd-phone-wrap{grid-area:phone;padding-bottom:12px}
+  .gd-side-panel{grid-area:side;min-height:280px;max-height:none}
+  .gd-phone{--gd-phone-w:360px}
+  .gd-phone-screen{height:min(640px,70vh);min-height:420px}
+}
+@media (max-width:820px){
+  .gd-toolbar{padding:10px 12px}
+  .gd-title-block p{display:none}
+  .gd-workspace{
+    grid-template-columns:1fr;
+    grid-template-areas:
+      "left"
+      "phone"
+      "side";
+    padding:12px;
+  }
+  .gd-left-panel,.gd-side-panel{overflow:visible}
+  .gd-phone{--gd-phone-w:375px;border-width:10px;border-radius:36px}
+  .gd-phone-screen{height:min(680px,78vh);min-height:460px}
+  .gd-schema-output{min-height:200px}
+}
+@media (max-width:480px){
+  .gd-toolbar{gap:8px}
+  .gd-icon-btn{min-width:34px;height:34px;padding:0 10px;font-size:11px}
+  .gd-title-block h1{font-size:15px;gap:8px}
+  .gd-title-block h1 img{height:22px}
+  .gd-title-block span{font-size:10px}
+  .gd-workspace{padding:10px;gap:12px}
+  .gd-phone{
+    --gd-phone-w:100%;
+    border-width:8px;border-radius:28px;
+  }
+  .gd-phone::before{width:64px;height:16px;top:6px}
+  .gd-phone-status{height:28px;padding:0 14px;font-size:11px}
+  .gd-phone-screen{height:min(620px,72vh);min-height:400px}
+  .gd-glass{padding:12px;border-radius:12px}
+  .gd-schema-btn{min-height:42px}
+  .gd-toast{left:12px;right:12px;bottom:12px}
+}
+@media (max-height:760px){
+  .gd-phone-screen{height:min(560px,calc(100vh - 180px));min-height:360px}
 }
 </style>
 
@@ -303,13 +455,19 @@ if (is_readable($jsPath)) {
       <button type="button" class="gd-icon-btn" id="gdBackBtn">&#8592; Back</button>
       <div class="gd-title-block">
         <span>Network Experience</span>
-        <h1 style="display:flex;align-items:center;gap:10px;margin:2px 0">
-          <img src="https://efactor.tech/assets/images/GRID_Logo.png" alt="GRID" style="height:28px;width:auto;display:block">
+        <h1>
+          <img src="https://efactor.tech/assets/images/GRID_Logo.png" alt="GRID">
           <span>Grid Dashboard</span>
         </h1>
         <p>Generate Grid SDUI schema and preview the mobile UI.</p>
       </div>
-      <button type="button" class="gd-icon-btn" id="gdRefreshBtn">&#8635; Refresh</button>
+      <div class="gd-toolbar-actions">
+        <button type="button" class="gd-icon-btn gd-theme-btn" id="gdThemeBtn" data-mode="system" aria-label="Toggle light and dark mode" title="Toggle light / dark">
+          <span class="gd-theme-icon gd-theme-moon" aria-hidden="true">&#9790;</span>
+          <span class="gd-theme-icon gd-theme-sun" aria-hidden="true">&#9788;</span>
+        </button>
+        <button type="button" class="gd-icon-btn" id="gdRefreshBtn">&#8635; Refresh</button>
+      </div>
     </div>
 
     <div class="gd-workspace">
@@ -343,7 +501,7 @@ if (is_readable($jsPath)) {
       <div class="gd-phone-wrap">
         <div class="gd-phone">
           <div class="gd-phone-status"><span>9:41</span><span>LTE&nbsp;&nbsp;100%</span></div>
-          <div class="gd-phone-screen">
+          <div class="gd-phone-screen ahp-phone-screen" id="gdPhoneScreen" data-theme="light">
             <div id="gdPreviewRoot" class="ahp-grid-network-root" aria-live="polite"></div>
             <div class="gd-scan" id="gdScan" aria-hidden="true">
               <div class="gd-scan-bar">
@@ -424,6 +582,120 @@ window.GRID_DASHBOARD_BOOT = {
   var boot = window.GRID_DASHBOARD_BOOT || {};
   var currentSchema = boot.schema || null;
   var currentBrowserUrl = '';
+
+  var WEB_THEME_KEY = 'gdWebDashboardTheme';
+
+  function getWebThemeOverride() {
+    try {
+      var stored = String(sessionStorage.getItem(WEB_THEME_KEY) || '').toLowerCase();
+      if (stored === 'dark' || stored === 'light') return stored;
+    } catch (e) {}
+    return '';
+  }
+
+  function clearWebThemeOverride() {
+    try { sessionStorage.removeItem(WEB_THEME_KEY); } catch (e) {}
+  }
+
+  function setWebThemeOverride(mode) {
+    if (mode === 'system' || mode === '') {
+      clearWebThemeOverride();
+      applyAccountOrSystemAppearance();
+      syncThemeButton('system');
+      return;
+    }
+    mode = mode === 'dark' ? 'dark' : 'light';
+    try { sessionStorage.setItem(WEB_THEME_KEY, mode); } catch (e) {}
+    syncPhoneTheme(mode);
+    syncThemeButton(mode);
+  }
+
+  function accountAppearanceMode() {
+    var mode = String(
+      (currentSchema && currentSchema.theme && currentSchema.theme.defaultMode)
+      || (boot.schema && boot.schema.theme && boot.schema.theme.defaultMode)
+      || 'system'
+    ).toLowerCase();
+    if (mode === 'light' || mode === 'dark' || mode === 'system') return mode;
+    return 'system';
+  }
+
+  function systemPrefersDark() {
+    try {
+      return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function paintPhoneTheme(screen, mode) {
+    if (!screen) return;
+    var resolved = mode === 'dark' ? 'dark' : (mode === 'light' ? 'light' : (systemPrefersDark() ? 'dark' : 'light'));
+    screen.setAttribute('data-theme', resolved);
+    screen.classList.toggle('dark', resolved === 'dark');
+    var shell = root.querySelector('.gd-shell');
+    if (shell) shell.classList.toggle('is-dark', resolved === 'dark');
+  }
+
+  function applyAccountOrSystemAppearance() {
+    var screen = document.getElementById('gdPhoneScreen');
+    var mode = accountAppearanceMode();
+    var api = window.AHP_GRID_SDUI;
+    if (api && typeof api.applyAppearance === 'function') {
+      api.applyAppearance(screen, mode);
+      var painted = screen && screen.getAttribute('data-theme');
+      var shell = root.querySelector('.gd-shell');
+      if (shell) shell.classList.toggle('is-dark', painted === 'dark');
+    } else {
+      paintPhoneTheme(screen, mode);
+    }
+    syncThemeButton(getWebThemeOverride() || 'system');
+  }
+
+  function syncThemeButton(mode) {
+    var btn = document.getElementById('gdThemeBtn');
+    if (!btn) return;
+    var resolved = mode;
+    if (resolved !== 'light' && resolved !== 'dark' && resolved !== 'system') {
+      resolved = getWebThemeOverride() || 'system';
+    }
+    btn.setAttribute('data-mode', resolved === 'dark' ? 'dark' : (resolved === 'light' ? 'light' : 'system'));
+    if (resolved === 'system') {
+      btn.setAttribute('aria-label', 'Following system appearance. Click for light mode');
+      btn.title = 'System appearance (click for light)';
+    } else if (resolved === 'dark') {
+      btn.setAttribute('aria-label', 'Switch to system appearance');
+      btn.title = 'Dark mode (click for system)';
+    } else {
+      btn.setAttribute('aria-label', 'Switch to dark mode');
+      btn.title = 'Light mode (click for dark)';
+    }
+  }
+
+  function syncPhoneTheme(force) {
+    var screen = document.getElementById('gdPhoneScreen');
+    if (!screen) return;
+    if (force === 'dark' || force === 'light') {
+      paintPhoneTheme(screen, force);
+      syncThemeButton(force);
+      return;
+    }
+    var override = getWebThemeOverride();
+    if (override) {
+      paintPhoneTheme(screen, override);
+      syncThemeButton(override);
+      return;
+    }
+    // No web override: follow Account Profile → Appearance (system = OS).
+    applyAccountOrSystemAppearance();
+  }
+
+  // Seed from the web-only override, else account/system. Never writes the account preference.
+  if (getWebThemeOverride()) {
+    syncPhoneTheme(getWebThemeOverride());
+  } else {
+    applyAccountOrSystemAppearance();
+  }
 
   function toast(msg) {
     var el = document.getElementById('gdToast');
@@ -852,7 +1124,7 @@ window.GRID_DASHBOARD_BOOT = {
     var api = window.AHP_GRID_SDUI;
     if (!mount) return;
     if (!api || typeof api.render !== 'function') {
-      mount.innerHTML = '<div style="padding:24px;color:#6b7280;font:600 13px Inter,sans-serif">Grid preview renderer missing. Deploy assets/js/app_home_grid_sdui.js</div>';
+      mount.innerHTML = '<div style="padding:24px;color:#6b7280;font:600 13px \'Plus Jakarta Sans\',sans-serif">Grid preview renderer missing. Deploy assets/js/app_home_grid_sdui.js</div>';
       return;
     }
     var data = payload && payload.schema
@@ -861,6 +1133,8 @@ window.GRID_DASHBOARD_BOOT = {
     api.render(data, mount, {
       gridApiUrl: gridApiUrl,
       userId: userId,
+      // Web toolbar sun/moon only. Never sent to mobile schema / account preference.
+      webThemeOverride: getWebThemeOverride() || '',
       onAction: function (actionId, meta) {
         meta = meta || {};
         var url = meta.url || resolveFeatureUrl(actionId, currentSchema);
@@ -880,6 +1154,13 @@ window.GRID_DASHBOARD_BOOT = {
         if (actionId) toast('Action: ' + String(actionId).replace(/^grid-/, '').replace(/-/g, ' '));
       }
     });
+    // Web override wins; otherwise keep Account/System appearance live.
+    var webMode = getWebThemeOverride();
+    if (webMode) {
+      syncPhoneTheme(webMode);
+    } else {
+      applyAccountOrSystemAppearance();
+    }
   }
 
   function applyPayload(payload) {
@@ -988,6 +1269,19 @@ window.GRID_DASHBOARD_BOOT = {
     }
     window.location.assign(dashboardUrl || '/');
   });
+  var themeBtn = document.getElementById('gdThemeBtn');
+  if (themeBtn) {
+    themeBtn.addEventListener('click', function () {
+      // Web-only cycle: light → dark → system (follow account/OS). Never saves account preference.
+      var override = getWebThemeOverride();
+      var next;
+      if (!override) next = 'light';
+      else if (override === 'light') next = 'dark';
+      else next = 'system';
+      setWebThemeOverride(next);
+      toast(next === 'system' ? 'System appearance' : (next === 'dark' ? 'Dark mode' : 'Light mode'));
+    });
+  }
   var refreshBtn = document.getElementById('gdRefreshBtn');
   if (refreshBtn) refreshBtn.addEventListener('click', refreshSchema);
   var genBtn = document.getElementById('gdGenerateSchemaBtn');
