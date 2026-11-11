@@ -224,6 +224,7 @@ class AuthUiSchemaBuilder
                     'caption' => ['fontSize'=>11,'fontWeight'=>400,'letterSpacing'=>0],
                 ],
             ],
+            'themes' => $this->authModeThemes(),
 
             'icons' => $this->authIcons(),
 
@@ -242,7 +243,7 @@ class AuthUiSchemaBuilder
                 ],
                 'logo' => [
                     'type' => 'networkImage',
-                    'url' => base_url('assets/images/efactor-logo.jpg'),
+                    'url' => 'https://efactor.tech/assets/images/efactor-logo_light.png',
                     'fit' => 'contain',
                 ],
             ],
@@ -444,6 +445,68 @@ class AuthUiSchemaBuilder
             ],
         ];
     }
+    private function authModeThemes(): array
+    {
+        $light = [
+            'bg.primary' => '#F5F5F5',
+            'bg.surface' => '#FFFFFF',
+            'bg.elevated' => '#FFFFFF',
+            'text.primary' => '#1E1E1E',
+            'text.secondary' => '#667085',
+            'text.muted' => '#667085',
+            'accent' => '#202940',
+            'accent.on' => '#FFFFFF',
+            'border' => '#CDD5DF',
+            'online' => '#2C3947',
+            'offline' => '#98A2B3',
+            'danger' => '#B42318',
+            'nav.background' => '#FFFFFF',
+            'nav.active' => '#202940',
+            'primary' => '#202940',
+            'primaryDark' => '#1F150C',
+            'primaryLight' => '#E8EDF2',
+            'background' => '#F5F5F5',
+            'surface' => '#FFFFFF',
+            'textPrimary' => '#1E1E1E',
+            'textSecondary' => '#667085',
+            'success' => '#2C3947',
+        ];
+        $dark = [
+            'bg.primary' => '#1F150C',
+            'bg.surface' => '#202940',
+            'bg.elevated' => '#2A3548',
+            'text.primary' => '#F8FAFC',
+            'text.secondary' => '#E8EDF2',
+            'text.muted' => '#CBD5E1',
+            'accent' => '#E8EDF2',
+            'accent.on' => '#1F150C',
+            'border' => '#334155',
+            'online' => '#86EFAC',
+            'offline' => '#94A3B8',
+            'danger' => '#FCA5A5',
+            'nav.background' => '#1F150C',
+            'nav.active' => '#E8EDF2',
+            'primary' => '#E8EDF2',
+            'primaryDark' => '#0B1220',
+            'primaryLight' => '#334155',
+            'background' => '#1F150C',
+            'surface' => '#202940',
+            'textPrimary' => '#F8FAFC',
+            'textSecondary' => '#E8EDF2',
+            'success' => '#86EFAC',
+        ];
+
+        return [
+            'serverControlled' => false,
+            'activeMode' => 'light',
+            'activeModeBinding' => ['$state' => 'global.themeMode'],
+            'presets' => [
+                'dark' => ['color' => $dark],
+                'light' => ['color' => $light],
+            ],
+        ];
+    }
+
     private function productionMeta(): array
     {
         return [
@@ -962,7 +1025,7 @@ class AuthUiSchemaBuilder
                     'hideScrollbar'=>true,
                     'style'=>array_merge($this->glassPanelStyle(), ['padding'=>['top'=>20,'right'=>18,'bottom'=>18,'left'=>18],'borderRadius'=>26]),
                     'children'=>[
-                        ['id'=>'signup_logo','type'=>'image','asset'=>'logo','margin'=>['bottom'=>14],'size'=>['width'=>148,'height'=>48],'style'=>['fit'=>'contain','backgroundColor'=>'#FFFFFF','borderRadius'=>10,'alignment'=>'centerLeft']],
+                        ['id'=>'signup_logo','type'=>'image','asset'=>'logo','margin'=>['bottom'=>14],'size'=>['width'=>148,'height'=>48],'style'=>['fit'=>'contain','backgroundColor'=>'transparent','borderRadius'=>10,'alignment'=>'centerLeft']],
                         ['id'=>'signup_title','type'=>'text','text'=>'Get Started','style'=>array_merge($this->glassTitleStyle(), ['fontSize'=>28])],
                         ['id'=>'signup_subtitle','type'=>'text','text'=>'Create your secure Efactor account','style'=>$this->glassSubtitleStyle(),'margin'=>['top'=>6,'bottom'=>16]],
                         $this->input('signup_email','textInput','email','signupForm.email','Email address','mail_outline','signup.email',['inputType'=>'email','autocomplete'=>'email','maxLength'=>191,'style'=>$this->glassInputStyle()]),

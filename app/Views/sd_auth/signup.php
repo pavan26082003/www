@@ -24,7 +24,7 @@ button,input{font:inherit}
 .ef-shell::after{content:"";position:absolute;z-index:5;top:8px;left:50%;width:112px;height:27px;transform:translateX(-50%);border-radius:0 0 18px 18px;background:#101813}
 .ef-back{position:absolute;z-index:8;top:30px;left:22px;width:42px;height:42px;display:grid;place-items:center;border:1px solid var(--ef-line);border-radius:50%;color:#fff;background:rgba(255,255,255,.12);backdrop-filter:blur(16px);text-decoration:none;box-shadow:0 12px 30px rgba(0,0,0,.18)}
 .ef-back svg{width:18px;height:18px}
-.ef-logo{display:flex;align-items:center;justify-content:flex-start;width:148px;height:48px;margin:0 0 14px;padding:6px 10px;border-radius:10px;background:#fff;box-shadow:0 8px 18px rgba(0,0,0,.16)}
+.ef-logo{display:flex;align-items:center;justify-content:flex-start;width:148px;height:40px;margin:0 0 14px;padding:0;background:transparent;box-shadow:none}
 .ef-logo img{width:100%;height:100%;object-fit:contain;display:block}
 .ef-scroll{position:relative;z-index:3;flex:1 1 auto;min-height:0;width:100%;overflow-y:auto;overflow-x:hidden;padding:4px 0 2px;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .ef-scroll::-webkit-scrollbar{width:0;height:0}
@@ -109,7 +109,7 @@ button,input{font:inherit}
     </a>
     <div class="ef-scroll" id="signupScroll">
       <main class="ef-card" aria-labelledby="signupTitle">
-        <div class="ef-logo"><img src="<?= base_url('assets/images/efactor-logo.jpg') ?>" alt="Efactor"></div>
+        <div class="ef-logo"><img src="https://efactor.tech/assets/images/efactor-logo_light.png" alt="Efactor"></div>
         <div class="ef-heading-wrap">
           <h1 class="ef-title" id="signupTitle">Get Started</h1>
           <p class="ef-subtitle">Create your secure Efactor account</p>

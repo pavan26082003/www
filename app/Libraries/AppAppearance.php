@@ -5,12 +5,12 @@ namespace App\Libraries;
 /**
  * Account Profile → Appearance preference.
  *
- * Single resolver for GRID and other SDUI surfaces. Values:
+ * Single resolver for Home, Profile, GRID, IoT, and Device UI SDUI surfaces. Values:
  *   light | dark | system
  *
- * Mobile GRID must follow this value via schema theme.defaultMode.
- * The GRID Web Dashboard may keep a local preview override and must not
- * write back through this resolver unless a dedicated save API exists.
+ * Default is system (follow phone) until the user saves a choice in web settings.
+ * Mobile clients must follow the resolved value via themes.activeMode /
+ * theme.defaultMode / state.global.themeMode — never collapse system on the server.
  */
 class AppAppearance
 {
@@ -33,7 +33,38 @@ class AppAppearance
             return $fromSettings;
         }
 
+        $fromHome = self::fromAppHomeLayout($userId);
+        if ($fromHome !== null) {
+            return $fromHome;
+        }
+
         return 'system';
+    }
+
+    /**
+     * Persist account appearance for mobile schemas.
+     *
+     * @param mixed $value
+     */
+    public static function save(int $userId, $value): bool
+    {
+        if ($userId <= 0) {
+            return false;
+        }
+
+        $mode = self::normalize($value);
+        $ok = false;
+
+        if (self::writeUsersTable($userId, $mode)) {
+            $ok = true;
+        }
+        if (self::writeUserSettings($userId, $mode)) {
+            $ok = true;
+        }
+
+        // App Home layout.profilePage.appearance is written by the caller
+        // (web Profile settings / profile-preferences) to avoid save recursion.
+        return $ok;
     }
 
     /**
@@ -153,4 +184,106 @@ class AppAppearance
         }
         return null;
     }
+
+    /**
+     * App Home Profile web setting (layout.profilePage.appearance).
+     *
+     * @return string|null
+     */
+    private static function fromAppHomeLayout(int $userId): ?string
+    {
+        try {
+            if (!class_exists(\App\Models\AppHomePageModel::class)) {
+                return null;
+            }
+            $model = new \App\Models\AppHomePageModel();
+            $layout = $model->getLayout($userId);
+            if (!is_array($layout) || empty($layout['profilePage']) || !is_array($layout['profilePage'])) {
+                return null;
+            }
+            if (!array_key_exists('appearance', $layout['profilePage'])) {
+                return null;
+            }
+            $raw = $layout['profilePage']['appearance'];
+            if ($raw === null || $raw === '') {
+                return null;
+            }
+            return self::normalize($raw);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private static function writeUsersTable(int $userId, string $mode): bool
+    {
+        if (!class_exists(\Config\Database::class)) {
+            return false;
+        }
+        $candidates = array(
+            'appearance',
+            'theme_mode',
+            'theme_preference',
+            'color_scheme',
+            'ui_appearance',
+            'grid_appearance',
+        );
+        try {
+            $db = \Config\Database::connect('default', false);
+            if (!$db->tableExists('users')) {
+                return false;
+            }
+            foreach ($candidates as $col) {
+                if (!$db->fieldExists($col, 'users')) {
+                    continue;
+                }
+                $db->table('users')->where('id', $userId)->update(array($col => $mode));
+                return true;
+            }
+        } catch (\Throwable $e) {
+            return false;
+        }
+        return false;
+    }
+
+    private static function writeUserSettings(int $userId, string $mode): bool
+    {
+        if (!class_exists(\Config\Database::class)) {
+            return false;
+        }
+        $tables = array(
+            array('table' => 'user_settings', 'user' => 'user_id', 'key' => 'setting_name', 'value' => 'setting_value'),
+            array('table' => 'user_meta', 'user' => 'user_id', 'key' => 'meta_key', 'value' => 'meta_value'),
+            array('table' => 'users_settings', 'user' => 'user_id', 'key' => 'setting_name', 'value' => 'setting_value'),
+        );
+        try {
+            $db = \Config\Database::connect('default', false);
+            foreach ($tables as $spec) {
+                if (!$db->tableExists($spec['table'])) {
+                    continue;
+                }
+                $existing = $db->table($spec['table'])
+                    ->where($spec['user'], $userId)
+                    ->where($spec['key'], 'appearance')
+                    ->get()
+                    ->getRowArray();
+                if (is_array($existing)) {
+                    $db->table($spec['table'])
+                        ->where($spec['user'], $userId)
+                        ->where($spec['key'], 'appearance')
+                        ->update(array($spec['value'] => $mode));
+                } else {
+                    $db->table($spec['table'])->insert(array(
+                        $spec['user'] => $userId,
+                        $spec['key'] => 'appearance',
+                        $spec['value'] => $mode,
+                    ));
+                }
+                return true;
+            }
+        } catch (\Throwable $e) {
+            return false;
+        }
+        return false;
+    }
+
 }

@@ -102,8 +102,8 @@ class AppHomePageModel
     {
         return array(
             'header' => array(
-                'title' => 'eFactor · IoE',
-                'subtitle' => 'Smart insights & tools',
+                'title' => 'One Intelligent Ecosystem',
+                'subtitle' => 'Connected intelligence',
             ),
             'welcome' => array(
                 'greeting' => 'Welcome back',
@@ -241,6 +241,8 @@ class AppHomePageModel
                     'Spanish',
                 ),
                 'notificationsEnabled' => true,
+                // Account appearance for mobile: system | light | dark. Default system.
+                'appearance' => 'system',
                 'privacyPolicyText' => 'We collect account details (name, email, phone) to provide IoE device control, Grid networking, and support.'
                     . "\n\n"
                     . 'Your data is used to authenticate sessions, sync preferences (language, notifications, appearance), and improve reliability.'
@@ -534,6 +536,53 @@ class AppHomePageModel
     }
 
     /**
+     * Canonical home brand header for UI + published schema.
+     * Replaces kit/legacy titles (Market, Deals, Shop, etc.) with One Intelligent Ecosystem.
+     *
+     * @param array<string, mixed> $header
+     * @return array<string, mixed>
+     */
+    private function normalizeHomeBrandHeader(array $header): array
+    {
+        $title = $this->stripUnwantedHomeHeader((string) ($header['title'] ?? ''));
+        $subtitle = $this->stripUnwantedHomeHeader((string) ($header['subtitle'] ?? ''));
+
+        $legacyTitles = array(
+            'Welcome to SmartHome!',
+            'Welcome to Efactor!',
+            'Welcome to Efactor',
+            'eFactor · IoE',
+            'Efactor Market',
+            'Efactor Deals',
+            'Efactor Shop',
+            'Efactor Style',
+            'Efactor QuickMart',
+            'Efactor picks for you',
+        );
+        if ($title === '' || in_array($title, $legacyTitles, true)) {
+            $title = 'One Intelligent Ecosystem';
+        }
+
+        $legacySubtitles = array(
+            'Control your connected home.',
+            'Control your connected home',
+            'Smart insights & tools',
+            'Search or ask anything',
+            'Offers near you',
+            'Search on Efactor',
+            'Deliver to your door',
+        );
+        if ($subtitle === '' || in_array($subtitle, $legacySubtitles, true)) {
+            $subtitle = 'Connected intelligence';
+        }
+
+        $header['title'] = $title;
+        $header['subtitle'] = $subtitle;
+
+        return $header;
+    }
+
+    /**
      * Live account fields from users table (not from saved layout JSON).
      */
     public function getUserProfile(int $userId): array
@@ -629,13 +678,10 @@ class AppHomePageModel
             }
         }
 
-        if (($merged['header']['title'] ?? '') === 'Welcome to SmartHome!'
-            || ($merged['header']['title'] ?? '') === 'Welcome to Efactor!') {
-            $merged['header']['title'] = 'eFactor · IoE';
-            if (empty($merged['header']['subtitle']) || ($merged['header']['subtitle'] ?? '') === 'Control your connected home.') {
-                $merged['header']['subtitle'] = 'Smart insights & tools';
-            }
+        if (!isset($merged['header']) || !is_array($merged['header'])) {
+            $merged['header'] = array();
         }
+        $merged['header'] = $this->normalizeHomeBrandHeader($merged['header']);
 
         if (!empty($saved['theme']) && is_array($saved['theme'])) {
             $merged['theme'] = array_merge($default['theme'] ?? array(), $saved['theme']);
@@ -987,8 +1033,77 @@ class AppHomePageModel
 
         $schema = $this->attachGridDataSource($this->normalizeSmartphoneBreakpoints($data), $userId);
         $schema = $this->prepareRatingOpenUrlForClient($schema, $userId);
+        $schema = $this->applyAccountAppearanceToSchema($schema, $userId);
 
         return \App\Libraries\AppHomeSchemaSigner::attachSignature($schema);
+    }
+
+    /**
+     * Apply account appearance to existing theme-mode fields only.
+     * Default system; if the user saved light/dark in web Profile settings, use that.
+     * Does not add keys or change schema structure/parameters.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    private function applyAccountAppearanceToSchema(array $schema, int $userId): array
+    {
+        $mode = 'system';
+        if (class_exists(\App\Libraries\AppAppearance::class)) {
+            $mode = \App\Libraries\AppAppearance::resolve($userId);
+        }
+        $modeLabel = $mode === 'dark' ? 'Dark' : ($mode === 'light' ? 'Light' : 'System');
+
+        if (isset($schema['meta']) && is_array($schema['meta']) && array_key_exists('themeMode', $schema['meta'])) {
+            $schema['meta']['themeMode'] = $mode;
+        }
+        if (isset($schema['designTokens']) && is_array($schema['designTokens'])) {
+            if (array_key_exists('themeMode', $schema['designTokens'])) {
+                $schema['designTokens']['themeMode'] = $mode;
+            }
+            if (isset($schema['designTokens']['appearance']) && is_array($schema['designTokens']['appearance'])
+                && array_key_exists('mode', $schema['designTokens']['appearance'])) {
+                $schema['designTokens']['appearance']['mode'] = $mode;
+            }
+        }
+        if (isset($schema['themes']) && is_array($schema['themes'])) {
+            if (array_key_exists('activeMode', $schema['themes'])) {
+                $schema['themes']['activeMode'] = $mode;
+            }
+            if (array_key_exists('serverControlled', $schema['themes'])) {
+                // false = client may follow system / OS; mode still carries the account choice.
+                $schema['themes']['serverControlled'] = false;
+            }
+            if (isset($schema['themes']['appearance']) && is_array($schema['themes']['appearance'])
+                && array_key_exists('mode', $schema['themes']['appearance'])) {
+                $schema['themes']['appearance']['mode'] = $mode;
+            }
+        }
+        if (isset($schema['state']['global']) && is_array($schema['state']['global'])) {
+            if (array_key_exists('themeMode', $schema['state']['global'])) {
+                $schema['state']['global']['themeMode'] = $mode;
+            }
+            if (array_key_exists('themeServerControlled', $schema['state']['global'])) {
+                $schema['state']['global']['themeServerControlled'] = false;
+            }
+        }
+        if (isset($schema['components']['profile-menu']['items']) && is_array($schema['components']['profile-menu']['items'])) {
+            foreach ($schema['components']['profile-menu']['items'] as $idx => $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $id = (string) ($item['id'] ?? '');
+                $action = (string) ($item['actionId'] ?? '');
+                if ($id !== 'appearance' && $action !== 'profile-appearance') {
+                    continue;
+                }
+                if (array_key_exists('subtitle', $item)) {
+                    $schema['components']['profile-menu']['items'][$idx]['subtitle'] = $modeLabel . ' mode';
+                }
+            }
+        }
+
+        return $schema;
     }
 
     /**
@@ -1760,11 +1875,18 @@ class AppHomePageModel
         // Never join onto /v8/api_creation.php (that returns JSON, not HTML).
         $ratingPageUrl = $this->publicRatingPageUrl($userId);
 
+        $accountAppearance = 'system';
+        if (class_exists(\App\Libraries\AppAppearance::class)) {
+            $accountAppearance = \App\Libraries\AppAppearance::resolve($userId);
+        }
+
         return array(
             'userId' => $userId,
             'userEmail' => $userEmail,
             'loginUserProfile' => $profile,
-            'logoUrl' => 'https://efactor.tech/files/home/Logo_new.png',
+            'accountAppearance' => $accountAppearance,
+            'logoUrl' => 'https://efactor.tech/assets/images/efactor-logo.jpg',
+            'logoUrlDark' => 'https://efactor.tech/assets/images/efactor-logo_light.png',
             'schemaApiUrl' => $this->getSchemaApiUrl($userId),
             'apiBase' => $this->publicAppHomeApiBaseUrl(),
             'ratingPageUrl' => $ratingPageUrl,
@@ -1789,6 +1911,14 @@ class AppHomePageModel
         $notificationsEnabled = array_key_exists('notificationsEnabled', $layout['profilePage'])
             ? (bool) $layout['profilePage']['notificationsEnabled']
             : true;
+        $appearance = 'system';
+        if (array_key_exists('appearance', $layout['profilePage'])) {
+            $appearance = class_exists(\App\Libraries\AppAppearance::class)
+                ? \App\Libraries\AppAppearance::normalize($layout['profilePage']['appearance'])
+                : 'system';
+        } elseif (class_exists(\App\Libraries\AppAppearance::class)) {
+            $appearance = \App\Libraries\AppAppearance::resolve($userId);
+        }
         $languageOptions = $layout['profilePage']['languageOptions'] ?? null;
         $privacyPolicyText = $layout['profilePage']['privacyPolicyText'] ?? ($layout['profilePage']['privacyPolicy'] ?? null);
 
@@ -1799,6 +1929,7 @@ class AppHomePageModel
         $layout['profilePage']['avatarUrl'] = $profile['avatarUrl'] ?? '';
         $layout['profilePage']['language'] = $language;
         $layout['profilePage']['notificationsEnabled'] = $notificationsEnabled;
+        $layout['profilePage']['appearance'] = $appearance;
         if (is_array($languageOptions) && $languageOptions !== array()) {
             $layout['profilePage']['languageOptions'] = $languageOptions;
         }
@@ -1840,16 +1971,8 @@ class AppHomePageModel
         if (!isset($layout['header']) || !is_array($layout['header'])) {
             $layout['header'] = array();
         }
-        // Shared defaults for every account — never leave required header fields empty
-        // (QuickMart and similar templates previously saved blank title/subtitle).
-        $layout['header']['title'] = $this->stripUnwantedHomeHeader((string) ($layout['header']['title'] ?? ''));
-        $layout['header']['subtitle'] = $this->stripUnwantedHomeHeader((string) ($layout['header']['subtitle'] ?? ''));
-        if ($layout['header']['title'] === '') {
-            $layout['header']['title'] = 'eFactor · IoE';
-        }
-        if ($layout['header']['subtitle'] === '') {
-            $layout['header']['subtitle'] = 'Smart insights & tools';
-        }
+        // Shared brand header for every account / kit (Market, Deals, Shop, …).
+        $layout['header'] = $this->normalizeHomeBrandHeader($layout['header']);
 
         if (!isset($layout['theme']) || !is_array($layout['theme'])) {
             $layout['theme'] = array();
@@ -2122,6 +2245,12 @@ class AppHomePageModel
         }
 
         if (!empty($layout)) {
+            if (isset($layout['profilePage']['appearance']) && class_exists(\App\Libraries\AppAppearance::class)) {
+                $layout['profilePage']['appearance'] = \App\Libraries\AppAppearance::normalize(
+                    $layout['profilePage']['appearance']
+                );
+                \App\Libraries\AppAppearance::save($userId, $layout['profilePage']['appearance']);
+            }
             $layoutJson = json_encode($layout, $jsonFlags);
             if ($layoutJson === false) {
                 log_message('error', 'App home layout json_encode failed: ' . json_last_error_msg());

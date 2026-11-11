@@ -283,7 +283,7 @@ body{
   <div class="ef-phone">
     <main class="ef-screen" aria-labelledby="welcomeTitle">
       <div class="ef-brand">
-        <img src="<?= base_url('assets/images/efactor-logo.jpg') ?>"
+        <img src="https://efactor.tech/assets/images/efactor-logo_light.png"
              alt="Efactor"
              onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
         <!-- <span class="ef-brand-fallback" style="display:none">efactor</span> -->

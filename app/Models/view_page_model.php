@@ -24,7 +24,7 @@ class View_page_model extends Model
      * Bump when Device UI schema generator / normalizer output shape changes.
      * Stale models auto-rebuild on next getDeviceUiSchema / API fetch.
      */
-    private const DEVICE_UI_SCHEMA_BUILD_VERSION = '2026-10-31.2';
+    private const DEVICE_UI_SCHEMA_BUILD_VERSION = '2026-11-10.1';
 
     public function __construct()
     {
@@ -3127,7 +3127,12 @@ private function normalizeDeviceUiSchemaForApp(array $schema, $modelno, $nodeId 
             }
         }
 
-        return \App\Services\DeviceUiSchemaNormalizer::normalize($schema, $modelno, $nodeId);
+        $userId = 0;
+        if (class_exists(\App\Services\DeviceUiSchemaNormalizer::class, false)) {
+            $userId = \App\Services\DeviceUiSchemaNormalizer::resolveRequestUserId();
+        }
+
+        return \App\Services\DeviceUiSchemaNormalizer::normalize($schema, $modelno, $nodeId, $userId);
     } catch (\Throwable $exception) {
         log_message('error', 'Device UI schema normalize failed: ' . $exception->getMessage());
 
@@ -4316,6 +4321,18 @@ public function generateInitialDeviceUiSchema($modelno, $nodeId = '')
         $valueType = $this->deviceUiSchemaValueType($catalogType);
         $flutterWidget = $this->deviceUiSchemaFlutterWidget($schemaType);
         $initialValue = $api['default'] ?? ($writable ? null : '');
+        $valueLoading = false;
+        $initialText = is_scalar($initialValue) ? trim((string) $initialValue) : '';
+        if ($catalogType !== 'cmd' && !in_array($schemaType, ['switch', 'button', 'elevatedButton'], true)) {
+            $hex = strtoupper(preg_replace('/[\s:_-]+/', '', preg_replace('/^0x/i', '', $initialText)));
+            $isWirePadding = $hex !== '' && strlen($hex) >= 2 && (bool) preg_match('/^[0-9A-F]+$/', $hex) && (bool) preg_match('/^0+$/', $hex);
+            $isEmptyPlaceholder = $initialText === '' || strtolower($initialText) === 'null' || $initialText === '--';
+            $textEditableBlank = $writable && $schemaType === 'textField';
+            if (!$textEditableBlank && ($isEmptyPlaceholder || $isWirePadding)) {
+                $valueLoading = true;
+                $initialValue = null;
+            }
+        }
         $protocolMeta = [
             'command_id' => $api['command_id'] ?? null,
             'function_code' => $api['function_code'] ?? null,
@@ -4351,7 +4368,7 @@ public function generateInitialDeviceUiSchema($modelno, $nodeId = '')
             'flutterBinding' => 'state.parameters.' . $parameterKey . '.value',
             'initialValue' => $initialValue,
             'label' => $parameterName,
-            'value' => $initialValue,
+            'value' => $valueLoading ? '' : $initialValue,
             'visible' => true,
             'readOnly' => !$writable,
             'writable' => $writable,
@@ -4372,6 +4389,10 @@ public function generateInitialDeviceUiSchema($modelno, $nodeId = '')
         // current device state from the API and apply it to state.parameters at runtime.
         $controls[count($controls) - 1]['preferLiveState'] = true;
         $controls[count($controls) - 1]['valueSource']     = 'deviceState';
+        $controls[count($controls) - 1]['valueLoading']    = $valueLoading;
+        if ($valueLoading) {
+            $controls[count($controls) - 1]['loadingText'] = 'Loading…';
+        }
         if (!isset($pagesByNo[$pageNo])) {
             $pagesByNo[$pageNo] = [
                 'id' => 'page_' . $pageNo,
@@ -4486,7 +4507,9 @@ public function generateInitialDeviceUiSchema($modelno, $nodeId = '')
             'schemaApi' => $schemaApiUrl,
         ],
         'theme' => [
-            'mode' => 'dark',
+            // Runtime appearance follows the phone; light/dark palettes are attached on serve.
+            'mode' => 'system',
+            'defaultMode' => 'system',
             'colors' => [
                 'background' => '#0B1220',
                 'surface' => '#1E293B',
@@ -4494,6 +4517,11 @@ public function generateInitialDeviceUiSchema($modelno, $nodeId = '')
                 'accent' => '#60A5FA',
                 'border' => '#334155',
             ],
+        ],
+        'themes' => [
+            'serverControlled' => false,
+            'activeMode' => 'system',
+            'activeModeBinding' => ['$state' => 'global.themeMode'],
         ],
         'icons' => [
             'default' => 'gauge',
@@ -4509,6 +4537,10 @@ public function generateInitialDeviceUiSchema($modelno, $nodeId = '')
         ],
         'actions' => new \stdClass(),
         'state' => [
+            'global' => [
+                'themeMode' => 'system',
+                'themeServerControlled' => false,
+            ],
             'activePageIndex' => 0,
             'activePageId' => $firstPage['id'],
             'activePageNo' => $firstPage['pageNo'],
@@ -4761,6 +4793,23 @@ private function syncDeviceUiControlComponentProjection(array &$control, $schema
     }
 }
 
+private function deviceUiAccessModeAllowsSend($access)
+{
+    $access = strtolower(trim((string) $access));
+    if ($access === '') {
+        return false;
+    }
+    if (in_array($access, ['read', 'readonly', 'read-only', 'read_only', 'none'], true)) {
+        return false;
+    }
+    // Ready and Write both allow input + send; Read is display-only.
+    if ($access === 'ready' || strpos($access, 'ready') !== false) {
+        return true;
+    }
+
+    return strpos($access, 'write') !== false || $access === 'w' || $access === 'rw';
+}
+
 private function deviceUiMetaIsWritable(array $meta)
 {
     $source = strtolower(trim((string) ($meta['ui_type_source'] ?? '')));
@@ -4774,13 +4823,17 @@ private function deviceUiMetaIsWritable(array $meta)
     if (in_array($access, ['read', 'readonly', 'read-only', 'read_only', 'none'], true)) {
         return false;
     }
+    if ($access === 'ready' || strpos($access, 'ready') !== false) {
+        return true;
+    }
 
-    return strpos($access, 'write') !== false;
+    return strpos($access, 'write') !== false || $access === 'w' || $access === 'rw';
 }
 
 /**
  * Stricter than deviceUiMetaIsWritable: a blank access column means the API never
  * declared the field writable, so a text box must not offer an edit.
+ * Read = input+value only; Ready/Write = input+value+send.
  */
 private function deviceUiMetaTextIsEditable(array $meta)
 {
@@ -4789,12 +4842,7 @@ private function deviceUiMetaTextIsEditable(array $meta)
         return false;
     }
 
-    $access = strtolower(trim((string) ($meta['access'] ?? '')));
-    if ($access === '') {
-        return false;
-    }
-
-    return strpos($access, 'write') !== false || $access === 'w' || $access === 'rw';
+    return $this->deviceUiAccessModeAllowsSend($meta['access'] ?? '');
 }
 
 private function resolveDeviceUiNodeId($modelno, $nodeId = '')
@@ -5160,9 +5208,11 @@ private function refreshDeviceUiSchemaControlsFromApi($modelno, array $schema)
             $updatedControl['parameterKey'] = $parameterKey;
             $updatedControl['binding'] = $newBinding;
             $updatedControl['flutterBinding'] = 'state.parameters.' . $parameterKey . '.value';
+            // Single-UI groups already show the parameter title on the group header.
+            // Keep the inner ParameterCard label empty so the app does not print it twice.
             $updatedControl['label'] = $hasMultipleApiComponents
                 ? $this->deviceUiMultiComponentLabel($componentMeta, $parameterName)
-                : trim($parameterName . ($sourceLabel !== '' ? ' ' . $sourceLabel : ''));
+                : '';
             $updatedControl['apiComponentKey'] = $componentKey;
             $updatedControl['apiComponentIndex'] = $componentIndex;
 
@@ -5191,6 +5241,29 @@ private function refreshDeviceUiSchemaControlsFromApi($modelno, array $schema)
                 $updatedControl['componentType'] ?? 'auto',
                 $updatedControl['catalogComponentType'] ?? null
             );
+            if (!$hasMultipleApiComponents) {
+                $updatedControl['groupParameter'] = $parameterName;
+                $updatedControl['uiCount'] = 1;
+                $updatedControl['fieldLabel'] = '';
+                if (isset($updatedControl['component']) && is_array($updatedControl['component'])) {
+                    if (!isset($updatedControl['component']['props']) || !is_array($updatedControl['component']['props'])) {
+                        $updatedControl['component']['props'] = [];
+                    }
+                    $updatedControl['component']['props']['label'] = '';
+                    $updatedControl['component']['props']['title'] = '';
+                    $updatedControl['component']['props']['showTitle'] = false;
+                    $updatedControl['component']['props']['hideLabel'] = true;
+                    if (isset($updatedControl['component']['widgetTree']['properties']['props'])
+                        && is_array($updatedControl['component']['widgetTree']['properties']['props'])) {
+                        $treeProps = &$updatedControl['component']['widgetTree']['properties']['props'];
+                        $treeProps['label'] = '';
+                        $treeProps['title'] = '';
+                        $treeProps['showTitle'] = false;
+                        $treeProps['hideLabel'] = true;
+                        unset($treeProps);
+                    }
+                }
+            }
 
             // Re-derive the write contract from the refreshed access mode instead of
             // inheriting stale flags from the previous control.
@@ -5666,7 +5739,10 @@ private function deviceUiControlIsWritable(array $control)
     if (in_array($access, ['read', 'readonly', 'read-only', 'read_only', 'none'], true)) {
         return false;
     }
-    return strpos($access, 'write') !== false;
+    if ($access === 'ready' || strpos($access, 'ready') !== false) {
+        return true;
+    }
+    return strpos($access, 'write') !== false || $access === 'w' || $access === 'rw';
 }
 
 private function collectDeviceUiConfigFrames(array $schema, array &$framesByPage = null)
@@ -7664,21 +7740,65 @@ private function attachDeviceUiFlutterContract(array $schema)
         'designSystem' => [
             'componentStyles' => [
                 'parameterCard' => [
+                    // Match .phone-shell ParameterCard pixel contract (web preview).
                     'layout' => [
-                        'type' => 'row',
-                        'columns' => [
-                            ['flex' => 1],
-                            ['flex' => 0],
-                        ],
-                        'gap' => 8,
+                        'type' => 'grid',
+                        'columns' => ['auto', '1fr', 'auto'],
+                        'gap' => 10,
                         'alignItems' => 'center',
                     ],
+                    'minHeight' => 60,
+                    'gap' => 10,
                     'parts' => [
                         'iconBubble' => [
-                            'size' => 28,
-                            'width' => 28,
-                            'height' => 28,
+                            'size' => 44,
+                            'width' => 44,
+                            'height' => 44,
                             'shape' => 'circle',
+                            'iconSize' => 22,
+                        ],
+                        'label' => [
+                            'fontSize' => 10,
+                            'fontWeight' => 600,
+                            'marginBottom' => 4,
+                            'uppercase' => true,
+                            'letterSpacing' => 0.08,
+                            'textAlign' => 'left',
+                        ],
+                        'value' => [
+                            'fontSize' => 15,
+                            'fontWeight' => 600,
+                            'lineHeight' => 1.35,
+                            'textAlign' => 'left',
+                        ],
+                        'switch' => [
+                            'trackWidth' => 52,
+                            'trackHeight' => 28,
+                            'width' => 52,
+                            'height' => 28,
+                            'thumbSize' => 22,
+                            'shape' => 'pill',
+                        ],
+                        'powerButton' => [
+                            'size' => 48,
+                            'width' => 48,
+                            'height' => 48,
+                            'borderWidth' => 3,
+                            'shape' => 'circle',
+                        ],
+                        'actionDot' => [
+                            'size' => 48,
+                            'width' => 48,
+                            'height' => 48,
+                            'borderWidth' => 3,
+                            'shape' => 'circle',
+                        ],
+                        'sendButton' => [
+                            'size' => 32,
+                            'width' => 32,
+                            'height' => 32,
+                            'borderRadius' => 9,
+                            'iconSize' => 15,
                         ],
                     ],
                 ],
@@ -7699,13 +7819,9 @@ private function attachDeviceUiFlutterContract(array $schema)
     } else {
         $this->deviceUiFillMissingArray($existingUniversal, $fallbackUniversal);
         $schema['extensions']['universalUi'] = $existingUniversal;
-        if (isset($schema['extensions']['universalUi']['designSystem']['componentStyles']['parameterCard']['parts']['iconBubble']['size'])
-            && (int) $schema['extensions']['universalUi']['designSystem']['componentStyles']['parameterCard']['parts']['iconBubble']['size'] > 28) {
-            $schema['extensions']['universalUi']['designSystem']['componentStyles']['parameterCard']['parts']['iconBubble']['size'] = 28;
-            $schema['extensions']['universalUi']['designSystem']['componentStyles']['parameterCard']['parts']['iconBubble']['width'] = 28;
-            $schema['extensions']['universalUi']['designSystem']['componentStyles']['parameterCard']['parts']['iconBubble']['height'] = 28;
-        }
     }
+    // Always align ParameterCard / switch / power sizes to phone-shell preview pixels.
+    $schema = $this->enforceDeviceUiPreviewPixelParity($schema);
 
     if (!isset($schema['dataSources']) || !is_array($schema['dataSources'])) {
         $schema['dataSources'] = [];
@@ -7733,6 +7849,204 @@ private function attachDeviceUiFlutterContract(array $schema)
     }
 
     return $schema;
+}
+
+/**
+ * Force ParameterCard / switch / power / send sizes to match the web .phone-shell preview.
+ * Additive rewrite of known style keys only — does not change control ids or protocol.
+ */
+private function enforceDeviceUiPreviewPixelParity(array $schema): array
+{
+    $parity = [
+        'layout' => [
+            'type' => 'grid',
+            'columns' => ['auto', '1fr', 'auto'],
+            'gap' => 10,
+            'alignItems' => 'center',
+        ],
+        'minHeight' => 60,
+        'gap' => 10,
+        'iconBubble' => [
+            'size' => 44,
+            'width' => 44,
+            'height' => 44,
+            'shape' => 'circle',
+            'iconSize' => 22,
+        ],
+        'label' => [
+            'fontSize' => 10,
+            'fontWeight' => 600,
+            'marginBottom' => 4,
+            'letterSpacing' => 0.08,
+            'lineHeight' => 1.15,
+            'uppercase' => true,
+            'textAlign' => 'left',
+        ],
+        'value' => [
+            'fontSize' => 15,
+            'fontWeight' => 600,
+            'lineHeight' => 1.35,
+            'letterSpacing' => -0.015,
+            'textAlign' => 'left',
+        ],
+        'switch' => [
+            'trackWidth' => 52,
+            'trackHeight' => 28,
+            'width' => 52,
+            'height' => 28,
+            'thumbSize' => 22,
+            'thumbInset' => 3,
+            'thumbTravel' => 24,
+            'shape' => 'pill',
+        ],
+        'powerButton' => [
+            'size' => 48,
+            'width' => 48,
+            'height' => 48,
+            'borderWidth' => 3,
+            'shape' => 'circle',
+        ],
+        'actionDot' => [
+            'size' => 48,
+            'width' => 48,
+            'height' => 48,
+            'borderWidth' => 3,
+            'shape' => 'circle',
+        ],
+        'sendButton' => [
+            'size' => 32,
+            'width' => 32,
+            'height' => 32,
+            'borderRadius' => 9,
+            'iconSize' => 15,
+        ],
+        'metaChip' => [
+            'minWidth' => 40,
+            'height' => 32,
+            'fontSize' => 11,
+            'fontWeight' => 600,
+            'iconSize' => 14,
+        ],
+    ];
+
+    $paths = [
+        ['designSystem', 'componentStyles', 'parameterCard'],
+        ['extensions', 'universalUi', 'designSystem', 'componentStyles', 'parameterCard'],
+        ['extensions', 'serverDrivenUi', 'designSystem', 'componentStyles', 'parameterCard'],
+    ];
+    foreach ($paths as $path) {
+        $cursor = &$schema;
+        $ok = true;
+        foreach ($path as $segment) {
+            if (!isset($cursor[$segment]) || !is_array($cursor[$segment])) {
+                $ok = false;
+                break;
+            }
+            $cursor = &$cursor[$segment];
+        }
+        if (!$ok) {
+            unset($cursor);
+            continue;
+        }
+        $cursor['layout'] = $parity['layout'];
+        $cursor['minHeight'] = $parity['minHeight'];
+        $cursor['gap'] = $parity['gap'];
+        $cursor['alignItems'] = 'center';
+        if (!isset($cursor['parts']) || !is_array($cursor['parts'])) {
+            $cursor['parts'] = [];
+        }
+        foreach (['iconBubble', 'label', 'value', 'switch', 'powerButton', 'actionDot', 'sendButton', 'metaChip'] as $part) {
+            $existing = (isset($cursor['parts'][$part]) && is_array($cursor['parts'][$part])) ? $cursor['parts'][$part] : [];
+            $cursor['parts'][$part] = array_merge($existing, $parity[$part]);
+        }
+        unset($cursor);
+    }
+
+    if (isset($schema['controls']) && is_array($schema['controls'])) {
+        foreach ($schema['controls'] as $index => $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+            $grouped = ((int) ($control['uiCount'] ?? 0) === 1) || !empty($control['groupParameter']);
+            $iconSize = $grouped ? 42 : 44;
+            if (!isset($control['styles']) || !is_array($control['styles'])) {
+                $control['styles'] = [];
+            }
+            $bubble = (isset($control['styles']['iconBubble']) && is_array($control['styles']['iconBubble']))
+                ? $control['styles']['iconBubble']
+                : [];
+            $control['styles']['iconBubble'] = array_merge($bubble, [
+                'size' => $iconSize,
+                'width' => $iconSize,
+                'height' => $iconSize,
+                'iconSize' => min((int) ($bubble['iconSize'] ?? 22), 22),
+                'shape' => 'circle',
+            ]);
+
+            $type = strtolower(str_replace(['_', '-'], '', (string) ($control['componentType'] ?? '')));
+            if (in_array($type, ['switch', 'toggleswitch'], true)) {
+                $control = $this->deviceUiMergeSwitchPixelProps($control, $parity['switch']);
+            }
+            if (in_array($type, ['button', 'pushbutton'], true)) {
+                $control = $this->deviceUiMergePowerPixelProps($control, $parity['powerButton']);
+            }
+            if (in_array($type, ['textfield', 'entertext'], true)) {
+                $control = $this->deviceUiMergeSendPixelProps($control, $parity['sendButton']);
+            }
+            $schema['controls'][$index] = $control;
+        }
+    }
+
+    if (isset($schema['theme']) && is_array($schema['theme'])) {
+        $btn = (int) ($schema['theme']['buttonSize'] ?? ($schema['theme']['tokens']['buttonSize'] ?? 0));
+        if ($btn > 0 && $btn < 40) {
+            $schema['theme']['buttonSize'] = 48;
+            if (isset($schema['theme']['tokens']) && is_array($schema['theme']['tokens'])) {
+                $schema['theme']['tokens']['buttonSize'] = 48;
+            }
+        }
+    }
+
+    return $schema;
+}
+
+private function deviceUiMergeSwitchPixelProps(array $control, array $metrics): array
+{
+    if (isset($control['component']['props']) && is_array($control['component']['props'])) {
+        $control['component']['props'] = array_merge($control['component']['props'], $metrics);
+    }
+    if (isset($control['component']['widgetTree']['properties']['props']) && is_array($control['component']['widgetTree']['properties']['props'])) {
+        $control['component']['widgetTree']['properties']['props'] = array_merge(
+            $control['component']['widgetTree']['properties']['props'],
+            $metrics
+        );
+    }
+    if (isset($control['rightAccessory']) && is_array($control['rightAccessory'])) {
+        $control['rightAccessory'] = array_merge($control['rightAccessory'], $metrics);
+    }
+
+    return $control;
+}
+
+private function deviceUiMergePowerPixelProps(array $control, array $metrics): array
+{
+    return $this->deviceUiMergeSwitchPixelProps($control, [
+        'size' => $metrics['size'],
+        'width' => $metrics['width'],
+        'height' => $metrics['height'],
+        'borderWidth' => $metrics['borderWidth'],
+        'shape' => $metrics['shape'],
+    ]);
+}
+
+private function deviceUiMergeSendPixelProps(array $control, array $metrics): array
+{
+    if (!isset($control['component']['props']['sendButton']) || !is_array($control['component']['props']['sendButton'])) {
+        return $control;
+    }
+    $control['component']['props']['sendButton'] = array_merge($control['component']['props']['sendButton'], $metrics);
+
+    return $control;
 }
 
 private function collectDeviceUiSchemaControlListIds($node, array &$out)
@@ -7823,8 +8137,10 @@ private function validateDeviceUiSchemaContract(array $schema)
             $writable = true;
         } elseif (in_array($access, ['read', 'readonly', 'read-only', 'read_only', 'none'], true)) {
             $writable = false;
+        } elseif ($access === 'ready' || strpos($access, 'ready') !== false) {
+            $writable = true;
         } else {
-            $writable = strpos($access, 'write') !== false;
+            $writable = strpos($access, 'write') !== false || $access === 'w' || $access === 'rw';
         }
         if (!$writable) {
             foreach (array_merge($control['events'] ?? [], $control['component']['events'] ?? []) as $event) {
@@ -11065,13 +11381,16 @@ private function buildDeviceUiBrandLogoAsset($fileOrUrl, $alt = 'Brand')
 
 private function fallbackDeviceUiBrandLogoAsset($alt = 'Efactor')
 {
-    // Official E-FACTOR brand mark — same on local and server.
+    // Official E-FACTOR brand mark — light theme JPG; dark theme uses _light.png.
     $cdn = 'https://efactor.tech/assets/images/efactor-logo.jpg';
+    $cdnDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
     return [
         'fileName' => 'efactor-logo.jpg',
         'path' => '/assets/images/efactor-logo.jpg',
         'url' => $cdn,
         'previewUrl' => $cdn,
+        'urlDark' => $cdnDark,
+        'previewUrlDark' => $cdnDark,
         'alt' => $alt !== '' ? $alt : 'Efactor',
         'source' => 'cdn',
         'usage' => 'brandMark',
@@ -11096,10 +11415,27 @@ private function deviceUiPublicOrigin()
 
 private function deviceUiBrandLogoDarkUrl(array $brandLogo, $origin, $brandSlug)
 {
+    $darkCdn = trim((string) ($brandLogo['urlDark'] ?? ($brandLogo['previewUrlDark'] ?? '')));
+    if ($darkCdn !== '') {
+        return $darkCdn;
+    }
+
+    $url = trim((string) ($brandLogo['url'] ?? ($brandLogo['previewUrl'] ?? '')));
+    $fileName = strtolower(trim((string) ($brandLogo['fileName'] ?? basename(parse_url($url, PHP_URL_PATH) ?: ''))));
+    // Generic Efactor CDN marks: use the light wordmark on dark backgrounds.
+    if (
+        stripos($url, 'efactor-logo') !== false
+        || stripos($url, 'Logo_new') !== false
+        || in_array($fileName, array('efactor-logo.png', 'efactor-logo.jpg', 'efactor-logo_light.png', 'logo_new.png'), true)
+        || (($brandLogo['source'] ?? '') === 'cdn')
+    ) {
+        return 'https://efactor.tech/assets/images/efactor-logo_light.png';
+    }
+
     $origin = rtrim((string) $origin, '/');
-    $fileName = trim((string) ($brandLogo['fileName'] ?? ''));
-    if ($fileName !== '' && !$this->deviceUiIsPlaceholderValue($fileName)) {
-        return $origin . '/files/brand_logo_dark/' . rawurlencode($fileName);
+    $fileNameRaw = trim((string) ($brandLogo['fileName'] ?? ''));
+    if ($fileNameRaw !== '' && !$this->deviceUiIsPlaceholderValue($fileNameRaw)) {
+        return $origin . '/files/brand_logo_dark/' . rawurlencode($fileNameRaw);
     }
     $brandSlug = trim((string) $brandSlug);
     if ($brandSlug !== '') {
@@ -11573,11 +11909,11 @@ private function stripDeviceUiNameCardNodes(&$node, $depth = 0)
 private function schemaDeviceUiBrandLogoAsset(array $brandLogo)
 {
     return [
-        'fileName' => $brandLogo['fileName'] ?? 'Logo_new.png',
-        'path' => $brandLogo['path'] ?? '/files/home/Logo_new.png',
-        'url' => $brandLogo['url'] ?? '',
+        'fileName' => $brandLogo['fileName'] ?? 'efactor-logo.jpg',
+        'path' => $brandLogo['path'] ?? '/assets/images/efactor-logo.jpg',
+        'url' => $brandLogo['url'] ?? 'https://efactor.tech/assets/images/efactor-logo.jpg',
         'alt' => $brandLogo['alt'] ?? 'Brand',
-        'source' => $brandLogo['source'] ?? 'files/brand_logo',
+        'source' => $brandLogo['source'] ?? 'cdn',
         'usage' => $brandLogo['usage'] ?? 'brandMark',
     ];
 }

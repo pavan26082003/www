@@ -3,6 +3,60 @@
 
   var cfg = window.AHP_CONFIG || {};
   var layout = JSON.parse(JSON.stringify(cfg.layout || {}));
+  var LOGO_URL_LIGHT = 'https://efactor.tech/assets/images/efactor-logo.jpg';
+  var LOGO_URL_DARK = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+  var DEFAULT_HEADER_TITLE = 'One Intelligent Ecosystem';
+  var DEFAULT_HEADER_SUBTITLE = 'Connected intelligence';
+  var LEGACY_HOME_BRAND_TITLES = {
+    'eFactor · IoE': true,
+    'Welcome to SmartHome!': true,
+    'Welcome to Efactor!': true,
+    'Welcome to Efactor': true,
+    'Efactor Market': true,
+    'Efactor Deals': true,
+    'Efactor Shop': true,
+    'Efactor Style': true,
+    'Efactor QuickMart': true,
+    'Efactor picks for you': true
+  };
+  var LEGACY_HOME_BRAND_SUBTITLES = {
+    'Smart insights & tools': true,
+    'Control your connected home.': true,
+    'Control your connected home': true,
+    'Search or ask anything': true,
+    'Offers near you': true,
+    'Search on Efactor': true,
+    'Deliver to your door': true
+  };
+
+  function resolveBrandLogoUrl(isLight) {
+    if (isLight) {
+      return cfg.logoUrl || LOGO_URL_LIGHT;
+    }
+    return cfg.logoUrlDark || LOGO_URL_DARK;
+  }
+
+  function normalizeHomeBrandHeader(header) {
+    header = header && typeof header === 'object' ? header : {};
+    var title = String(header.title || '').trim();
+    var subtitle = String(header.subtitle || '').trim();
+    if (!title || LEGACY_HOME_BRAND_TITLES[title]) {
+      title = DEFAULT_HEADER_TITLE;
+    }
+    // Empty / kit subtitles → short brand subheading (title stays "One Intelligent Ecosystem").
+    if (!subtitle || LEGACY_HOME_BRAND_SUBTITLES[subtitle]) {
+      subtitle = DEFAULT_HEADER_SUBTITLE;
+    }
+    header.title = title;
+    header.subtitle = subtitle;
+    return header;
+  }
+
+  if (!layout.header || typeof layout.header !== 'object') {
+    layout.header = {};
+  }
+  layout.header = normalizeHomeBrandHeader(layout.header);
+
   var editMode = false;
   var activeMenuKey = 'layout';
   var selectedCardId = null;
@@ -412,7 +466,7 @@
       label: 'Efactor Deals',
       note: 'Promo banner + 2-column lifestyle grid',
       swatches: ['#f7f5ff', '#ffffff', '#6d28d9', '#ef4444'],
-      header: { title: 'Efactor Deals', subtitle: 'Offers near you' },
+      header: { title: 'One Intelligent Ecosystem', subtitle: 'Connected intelligence' },
       welcome: { greeting: 'Efactor picks for you', email: '', caption: 'Save more every day' },
       alerts: { count: 3, newUsers: 0, badgeText: 'hot', showBadge: true },
       theme: {
@@ -456,7 +510,7 @@
       label: 'Efactor QuickMart',
       note: 'Fast delivery + category + buy-again rail',
       swatches: ['#ecfeff', '#ffffff', '#0891b2', '#22c55e'],
-      header: { title: 'eFactor · IoE', subtitle: 'Smart insights & tools' },
+      header: { title: 'One Intelligent Ecosystem', subtitle: 'Connected intelligence' },
       welcome: { greeting: 'Delivering in 8 min', email: '', caption: 'Fresh picks for your home' },
       alerts: { count: 0, newUsers: 0, badgeText: 'live', showBadge: false },
       theme: {
@@ -501,7 +555,7 @@
       label: 'Efactor Market',
       note: 'Search-style feed + specials + 2-col grid',
       swatches: ['#ffffff', '#f3f4f6', '#111827', '#16a34a'],
-      header: { title: 'Efactor Market', subtitle: 'Search or ask anything' },
+      header: { title: 'One Intelligent Ecosystem', subtitle: 'Connected intelligence' },
       welcome: { greeting: 'Welcome to Efactor', email: '', caption: 'Shop everyday essentials' },
       alerts: { count: 2, newUsers: 0, badgeText: 'new', showBadge: true },
       theme: {
@@ -548,7 +602,7 @@
       label: 'Efactor Shop',
       note: 'Bold orange header + 3-column super savers',
       swatches: ['#ff5722', '#ffd600', '#e91e63', '#ffffff'],
-      header: { title: 'Efactor Shop', subtitle: 'Search on Efactor' },
+      header: { title: 'One Intelligent Ecosystem', subtitle: 'Connected intelligence' },
       welcome: { greeting: 'Daily Wear Sarees', email: '', caption: 'From ₹189 · Shop now' },
       alerts: { count: 3, newUsers: 0, badgeText: 'cart', showBadge: true },
       theme: {
@@ -591,7 +645,7 @@
       label: 'Efactor Style',
       note: 'Fashion lookbook + category rail + product grid',
       swatches: ['#ffffff', '#fdf2f8', '#db2777', '#111827'],
-      header: { title: 'Efactor Style', subtitle: 'Deliver to your door' },
+      header: { title: 'One Intelligent Ecosystem', subtitle: 'Connected intelligence' },
       welcome: { greeting: 'Lowest price in 30 days', email: '', caption: 'Curated brands on Efactor' },
       alerts: { count: 1, newUsers: 0, badgeText: 'sale', showBadge: true },
       theme: {
@@ -640,6 +694,7 @@
     btnSave: document.getElementById('ahpBtnSave'),
     btnSchema: document.getElementById('ahpBtnSchema'),
     btnStudioTheme: document.getElementById('ahpBtnStudioTheme'),
+    btnPreviewTheme: document.getElementById('ahpBtnPreviewTheme'),
     shell: document.getElementById('ahpShell'),
     btnBack: document.getElementById('ahpBtnBack'),
     btnZoomIn: document.getElementById('ahpZoomIn'),
@@ -3392,6 +3447,67 @@
     }
   }
 
+  // Web phone preview only — never writes Profile Appearance / mobile setting.
+  var PREVIEW_THEME_KEY = 'ahpPhonePreviewTheme';
+
+  function getPreviewThemeMode() {
+    try {
+      var stored = sessionStorage.getItem(PREVIEW_THEME_KEY);
+      if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
+    } catch (e) {}
+    return 'system';
+  }
+
+  function setPreviewThemeMode(mode) {
+    if (mode !== 'light' && mode !== 'dark' && mode !== 'system') mode = 'system';
+    try { sessionStorage.setItem(PREVIEW_THEME_KEY, mode); } catch (e) {}
+    syncPreviewThemeButton(mode);
+    applyTheme();
+  }
+
+  function syncPreviewThemeButton(mode) {
+    var btn = el.btnPreviewTheme || document.getElementById('ahpBtnPreviewTheme');
+    if (!btn) return;
+    if (mode !== 'light' && mode !== 'dark' && mode !== 'system') mode = getPreviewThemeMode();
+    btn.setAttribute('data-mode', mode);
+    var icon = document.getElementById('ahpPreviewThemeIcon');
+    var label = document.getElementById('ahpPreviewThemeLabel');
+    if (mode === 'system') {
+      if (icon) icon.className = 'fas fa-mobile-screen-button';
+      if (label) label.textContent = 'System';
+      btn.title = 'Phone preview: System (click for Light). Does not change mobile Appearance setting.';
+      btn.setAttribute('aria-label', 'Phone preview following system. Click for light');
+    } else if (mode === 'light') {
+      if (icon) icon.className = 'fas fa-sun';
+      if (label) label.textContent = 'Light';
+      btn.title = 'Phone preview: Light (click for Dark). Does not change mobile Appearance setting.';
+      btn.setAttribute('aria-label', 'Phone preview light. Click for dark');
+    } else {
+      if (icon) icon.className = 'fas fa-moon';
+      if (label) label.textContent = 'Dark';
+      btn.title = 'Phone preview: Dark (click for System). Does not change mobile Appearance setting.';
+      btn.setAttribute('aria-label', 'Phone preview dark. Click for system');
+    }
+  }
+
+  function togglePreviewThemeMode() {
+    var mode = getPreviewThemeMode();
+    var next = mode === 'system' ? 'light' : (mode === 'light' ? 'dark' : 'system');
+    setPreviewThemeMode(next);
+    showToast(
+      next === 'system'
+        ? 'Preview: System (web only)'
+        : ('Preview: ' + (next === 'dark' ? 'Dark' : 'Light') + ' (web only)')
+    );
+  }
+
+  function resolvePreviewIsLight() {
+    var mode = getPreviewThemeMode();
+    if (mode === 'light') return true;
+    if (mode === 'dark') return false;
+    return !systemPrefersDark();
+  }
+
   function applyTheme() {
     var t = getTheme();
     var root = el.phone || document.getElementById('ahpPhone');
@@ -3401,7 +3517,9 @@
       applyTheme._osBound = true;
       try {
         var osTheme = window.matchMedia('(prefers-color-scheme: dark)');
-        var onOsTheme = function () { applyTheme(); };
+        var onOsTheme = function () {
+          if (getPreviewThemeMode() === 'system') applyTheme();
+        };
         if (osTheme.addEventListener) osTheme.addEventListener('change', onOsTheme);
         else if (osTheme.addListener) osTheme.addListener(onOsTheme);
       } catch (e) {}
@@ -3409,8 +3527,9 @@
 
     var accent = t.accentColor || '#111827';
     var accentGreen = t.accentGreen || '#22c55e';
-    var isLight = !systemPrefersDark();
+    var isLight = resolvePreviewIsLight();
     var savedIsLight = t.bgStyle === 'light';
+    syncPreviewThemeButton(getPreviewThemeMode());
     var textPrimary;
     var textSecondary;
     var textMuted;
@@ -3505,9 +3624,11 @@
 
     var logoEl = document.getElementById('ahpLogoIcon');
     if (logoEl) {
-      var logoUrl = cfg.logoUrl || 'https://efactor.tech/files/home/Logo_new.png';
+      var logoUrl = resolveBrandLogoUrl(isLight);
+      var logoLight = cfg.logoUrl || LOGO_URL_LIGHT;
+      var logoDark = cfg.logoUrlDark || LOGO_URL_DARK;
       logoEl.classList.add('ahp-m-logo-img');
-      logoEl.innerHTML = '<img src="' + esc(logoUrl) + '" alt="eFactor">';
+      logoEl.innerHTML = '<img src="' + esc(logoUrl) + '" alt="eFactor" data-logo-light="' + esc(logoLight) + '" data-logo-dark="' + esc(logoDark) + '">';
     }
 
     var alerts = document.getElementById('ahpAlerts');
@@ -4212,13 +4333,24 @@
   }
 
   function renderHeader() {
+    layout.header = normalizeHomeBrandHeader(layout.header || {});
     var h = layout.header || {};
     var a = layout.alerts || {};
 
     var titleEl = document.getElementById('ahpHeaderTitle');
     var subEl = document.getElementById('ahpHeaderSub');
-    if (titleEl) titleEl.textContent = h.title || 'eFactor · IoE';
-    if (subEl) subEl.textContent = h.subtitle || 'Smart insights & tools';
+    if (titleEl) titleEl.textContent = h.title || DEFAULT_HEADER_TITLE;
+    if (subEl) {
+      var subText = String(h.subtitle != null ? h.subtitle : DEFAULT_HEADER_SUBTITLE).trim();
+      if (!subText) subText = DEFAULT_HEADER_SUBTITLE;
+      subEl.textContent = subText;
+      subEl.style.display = subText ? '' : 'none';
+    }
+
+    var toolTitle = document.getElementById('toolHeaderTitle');
+    var toolSub = document.getElementById('toolHeaderSub');
+    if (toolTitle && document.activeElement !== toolTitle) toolTitle.value = h.title || DEFAULT_HEADER_TITLE;
+    if (toolSub && document.activeElement !== toolSub) toolSub.value = h.subtitle || '';
 
     var alertCountEl = document.getElementById('ahpAlertCount');
     var alertMeta = document.getElementById('ahpAlertMeta');
@@ -4540,7 +4672,7 @@
       return;
     }
     var current = getActiveStaticUiId();
-    var logoUrl = (api.logoUrl || cfg.logoUrl || 'https://efactor.tech/files/home/Logo_new.png');
+    var logoUrl = (api.logoUrl || cfg.logoUrl || LOGO_URL_LIGHT);
     wrap.innerHTML = api.list().map(function (tpl) {
       var imgs = (tpl.previewImages || []).slice(0, 4);
       while (imgs.length < 4) imgs.push(imgs[imgs.length - 1] || logoUrl);
@@ -4564,7 +4696,7 @@
   }
 
   function brandBarHtml(subtitle) {
-    var logoUrl = (window.AhpStaticUi && window.AhpStaticUi.logoUrl) || cfg.logoUrl || 'https://efactor.tech/files/home/Logo_new.png';
+    var logoUrl = (window.AhpStaticUi && window.AhpStaticUi.logoUrl) || cfg.logoUrl || LOGO_URL_LIGHT;
     return '<div class="ahp-page-brandbar">' +
       '<img src="' + esc(logoUrl) + '" alt="eFactor">' +
       '<strong>eFactor</strong>' +
@@ -4961,6 +5093,9 @@
     setVal('toolProfilePhone', live.phone != null ? live.phone : (p.phone || ''));
     setVal('toolProfileMemberId', live.memberId || p.memberId || ('EF-' + (cfg.userId || '0')));
     setCheck('toolProfileNotifications', p.notificationsEnabled !== false);
+    var appearance = String(p.appearance || cfg.accountAppearance || 'system').toLowerCase();
+    if (appearance !== 'light' && appearance !== 'dark' && appearance !== 'system') appearance = 'system';
+    setVal('toolProfileAppearance', appearance);
   }
 
   function getThemeModeLabel() {
@@ -7432,7 +7567,7 @@
     var draft = options.useFactory ? null : homeTemplateDraft(templateId);
     if (draft) {
       var keptEmail = (layout.welcome && layout.welcome.email) || cfg.userEmail || '';
-      layout.header = cloneTemplateValue(draft.header || {});
+      layout.header = normalizeHomeBrandHeader(cloneTemplateValue(draft.header || {}));
       layout.welcome = Object.assign({}, cloneTemplateValue(draft.welcome || {}), {
         email: (draft.welcome && draft.welcome.email) || keptEmail
       });
@@ -7447,7 +7582,7 @@
       return true;
     }
 
-    layout.header = Object.assign({}, layout.header || {}, tpl.header || {});
+    layout.header = normalizeHomeBrandHeader(Object.assign({}, layout.header || {}, tpl.header || {}));
     layout.welcome = Object.assign({}, layout.welcome || {}, tpl.welcome || {}, {
       email: (layout.welcome && layout.welcome.email) || cfg.userEmail || ''
     });
@@ -8324,6 +8459,9 @@
     var profile = getProfilePage();
     applyLoginUserProfileToLayout();
     profile.notificationsEnabled = getCheck('toolProfileNotifications');
+    var appearance = String(getVal('toolProfileAppearance') || profile.appearance || 'system').toLowerCase();
+    if (appearance !== 'light' && appearance !== 'dark' && appearance !== 'system') appearance = 'system';
+    profile.appearance = appearance;
 
     var devicesPage = getDevicesPage();
     if (!devicesPage.header) devicesPage.header = {};
@@ -8733,6 +8871,11 @@
       setNavActive(getVal('toolNavActive'));
     });
 
+    bindField('toolProfileAppearance', function () {
+      var appearance = String(getVal('toolProfileAppearance') || 'system').toLowerCase();
+      if (appearance !== 'light' && appearance !== 'dark' && appearance !== 'system') appearance = 'system';
+      getProfilePage().appearance = appearance;
+    });
     bindField('toolProfileNotifications', function () {
       getProfilePage().notificationsEnabled = getCheck('toolProfileNotifications');
       if (layout.activePage === 'profile' || layout.activePage === 'settings') {
@@ -9100,6 +9243,8 @@
     if (el.btnSave) el.btnSave.addEventListener('click', saveLayout);
     if (el.btnSchema) el.btnSchema.addEventListener('click', openSchemaPanel);
     if (el.btnStudioTheme) el.btnStudioTheme.addEventListener('click', toggleStudioThemeMode);
+    if (el.btnPreviewTheme) el.btnPreviewTheme.addEventListener('click', togglePreviewThemeMode);
+    syncPreviewThemeButton(getPreviewThemeMode());
     applyStudioThemeMode(getStudioThemeMode());
     if (el.btnBack) el.btnBack.addEventListener('click', function () { window.location.href = cfg.dashboardUrl || '/'; });
     if (el.btnCopyApiUrl) el.btnCopyApiUrl.addEventListener('click', copySchemaApiUrl);

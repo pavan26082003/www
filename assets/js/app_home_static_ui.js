@@ -60,7 +60,7 @@
     allfood: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=300&h=300&fit=crop'
   };
 
-  var LOGO = 'https://efactor.tech/files/home/Logo_new.png';
+  var LOGO = 'https://efactor.tech/assets/images/efactor-logo.jpg';
 
   function brandBar(subtitle) {
     var sub = subtitle == null ? 'Smart ecosystem' : String(subtitle);

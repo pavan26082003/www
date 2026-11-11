@@ -1780,6 +1780,24 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
 .iot-qr-btn.ghost:hover{background:#f8fafc;}
 .iot-qr-btn.ghost:active{transform:scale(.98);}
 
+/* ── Phone preview theme toggle (web only; does not change mobile Appearance) ─ */
+.ahp-flow-preview-theme{
+  background:rgba(20,184,166,.16)!important;
+  border:1px solid rgba(20,184,166,.35)!important;
+  color:#ccfbf1!important;
+}
+.ahp-flow-preview-theme:hover{background:rgba(20,184,166,.24)!important;}
+.ahp-flow-preview-theme[data-mode="light"]{
+  background:rgba(251,191,36,.16)!important;
+  border-color:rgba(251,191,36,.4)!important;
+  color:#fef3c7!important;
+}
+.ahp-flow-preview-theme[data-mode="dark"]{
+  background:rgba(99,102,241,.18)!important;
+  border-color:rgba(129,140,248,.4)!important;
+  color:#e0e7ff!important;
+}
+
 /* ── Studio panel theme toggle (does not affect phone preview) ───────── */
 .ahp-flow-studio-theme{
   background:rgba(255,255,255,.08)!important;
@@ -1801,6 +1819,11 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
   background:rgba(15,23,42,.06)!important;
   border-color:rgba(15,23,42,.12)!important;
   color:#334155!important;
+}
+#ahpShell.ahp-studio-light .ahp-flow-preview-theme{
+  background:rgba(13,148,136,.12)!important;
+  border-color:rgba(13,148,136,.28)!important;
+  color:#0f766e!important;
 }
 #ahpShell.ahp-studio-light .ahp-menu-column,
 #ahpShell.ahp-studio-light .ahp-tools-column{
@@ -2016,27 +2039,47 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
 .ahp-m-brand{
   display:flex!important;
   align-items:center;
-  gap:10px;
+  gap:12px;
   min-width:0;
+  flex:1 1 auto;
+}
+.ahp-m-brand > div:not(.ahp-m-logo){
+  min-width:0;
+  flex:1 1 auto;
+  overflow:hidden;
 }
 .ahp-m-brand h1{
   margin:0;
-  font-size:18px;
-  font-weight:800;
-  line-height:1.15;
+  font-size:14px;
+  font-weight:700;
+  line-height:1.25;
+  letter-spacing:-0.01em;
   color:var(--ahp-text-primary,#0f172a)!important;
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  word-break:break-word;
 }
 .ahp-m-brand p{
   margin:2px 0 0;
   font-size:11px;
+  font-weight:500;
+  line-height:1.25;
   color:var(--ahp-text-muted,#64748b)!important;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 .ahp-m-logo.ahp-m-logo-img{
   width:auto!important;
   height:28px!important;
   min-height:28px!important;
   max-height:32px!important;
-  max-width:96px!important;
+  max-width:88px!important;
   min-width:0!important;
   border-radius:0!important;
   display:flex!important;
@@ -2051,7 +2094,7 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
 .ahp-m-logo.ahp-m-logo-img img{
   width:auto!important;
   height:100%!important;
-  max-width:96px!important;
+  max-width:88px!important;
   max-height:28px!important;
   object-fit:contain!important;
   object-position:left center!important;
@@ -2587,10 +2630,11 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
 }
 .ahp-gn-logo{
   display:block!important;
-  height:36px!important;
+  height:48px!important;
   width:auto!important;
-  max-width:140px!important;
+  max-width:168px!important;
   object-fit:contain!important;
+  background:transparent!important;
 }
 .ahp-gn-header-actions{
   display:flex!important;
@@ -2600,7 +2644,7 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
 }
 .ahp-gn-icon-btn,
 .ahp-gn-theme-btn{
-  width:42px!important;height:42px!important;
+  width:48px!important;height:48px!important;
   border:1px solid rgba(148,163,184,.22)!important;border-radius:50%!important;
   background:rgba(255,255,255,.88)!important;color:var(--gn-ink)!important;
   box-shadow:0 6px 16px rgba(15,23,42,.08)!important;
@@ -2616,7 +2660,7 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
   box-shadow:0 10px 22px rgba(15,23,42,.12)!important;
 }
 .ahp-gn-icon-btn svg,
-.ahp-gn-theme-btn svg{width:18px!important;height:18px!important;display:block!important}
+.ahp-gn-theme-btn svg{width:22px!important;height:22px!important;display:block!important}
 .ahp-gn-theme-btn .ahp-gn-theme-sun{display:none!important}
 .ahp-gn-theme-btn .ahp-gn-theme-moon{display:grid!important}
 .ahp-phone-screen[data-theme="dark"] .ahp-gn-theme-btn .ahp-gn-theme-sun,
@@ -2631,7 +2675,7 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
 }
 .ahp-gn-avatar{
   position:relative!important;
-  width:42px!important;height:42px!important;
+  width:48px!important;height:48px!important;
   border:2px solid #fff!important;border-radius:50%!important;
   color:#fff!important;font-weight:800!important;font-size:15px!important;
   display:grid!important;place-items:center!important;cursor:pointer!important;
@@ -2646,7 +2690,7 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
 /* Hero: text on the left, orbit globe on the right, aligned on the same line. */
 .ahp-gn-hero{
   position:relative!important;
-  min-height:140px!important;
+  min-height:160px!important;
   padding:4px 8px 2px 4px!important;
   overflow:visible!important;
   display:block!important;
@@ -2656,7 +2700,7 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
 .ahp-gn-hero-copy{
   position:relative!important;
   z-index:2!important;
-  max-width:54%!important;
+  max-width:calc(100% - 172px)!important;
   display:flex!important;
   flex-direction:column!important;
   gap:6px!important;
@@ -2690,9 +2734,9 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
   top:50%!important;
   right:0!important;
   transform:translateY(-50%)!important;
-  width:min(140px,48%)!important;
-  max-width:140px!important;
-  height:auto!important;
+  width:160px!important;
+  max-width:160px!important;
+  height:160px!important;
   aspect-ratio:1 / 1!important;
   z-index:1!important;
   pointer-events:none!important;
@@ -3450,7 +3494,9 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
 }
 .ahp-phone-screen[data-theme="dark"] .ahp-gn-header .ahp-gn-logo,
 .gd-phone-screen[data-theme="dark"] .ahp-gn-header .ahp-gn-logo{
-  filter:brightness(1.08) contrast(1.05)!important;
+  filter:none!important;
+  height:48px!important;
+  max-width:168px!important;
 }
 .ahp-phone-screen[data-theme="dark"] .ahp-gn-quote,
 .gd-phone-screen[data-theme="dark"] .ahp-gn-quote{

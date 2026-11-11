@@ -1,9 +1,13 @@
 <?php
 helper('url');
 $apiBase = rtrim((string) ($apiBase ?? site_url('app-home-page/api')), '/');
-$logoUrl = trim((string) ($logoUrl ?? 'https://efactor.tech/files/home/Logo_new.png'));
-if ($logoUrl === '') {
-    $logoUrl = 'https://efactor.tech/files/home/Logo_new.png';
+$logoUrlLight = trim((string) ($logoUrlLight ?? ($logoUrl ?? 'https://efactor.tech/assets/images/efactor-logo.jpg')));
+$logoUrlDark = trim((string) ($logoUrlDark ?? 'https://efactor.tech/assets/images/efactor-logo_light.png'));
+if ($logoUrlLight === '') {
+    $logoUrlLight = 'https://efactor.tech/assets/images/efactor-logo.jpg';
+}
+if ($logoUrlDark === '') {
+    $logoUrlDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
 }
 ?>
 <!DOCTYPE html>
@@ -42,15 +46,12 @@ if ($logoUrl === '') {
       margin: 0 0 18px;
     }
     .brandbar img {
-      width: 28px;
-      height: 28px;
+      width: auto;
+      height: 44px;
+      max-width: 180px;
       object-fit: contain;
-      border-radius: 6px;
-    }
-    .brandbar strong {
-      font-size: 16px;
-      font-weight: 800;
-      letter-spacing: -0.02em;
+      border-radius: 0;
+      background: transparent;
     }
     .brandbar span {
       margin-left: auto;
@@ -138,8 +139,13 @@ if ($logoUrl === '') {
 <body>
   <div class="wrap">
     <div class="brandbar">
-      <img src="<?= esc($logoUrl) ?>" alt="eFactor">
-      <strong>eFactor</strong>
+      <img
+        id="ratingLogo"
+        src="<?= esc($logoUrlDark) ?>"
+        alt=""
+        data-logo-light="<?= esc($logoUrlLight) ?>"
+        data-logo-dark="<?= esc($logoUrlDark) ?>"
+      >
       <span>Account</span>
     </div>
     <h1>Rating</h1>
@@ -160,6 +166,45 @@ if ($logoUrl === '') {
       var commentEl = document.getElementById('comment');
       var sendBtn = document.getElementById('sendBtn');
       var toast = document.getElementById('toast');
+      var logoEl = document.getElementById('ratingLogo');
+
+      function isDarkMode() {
+        try {
+          return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        } catch (e) {
+          return true;
+        }
+      }
+
+      function syncRatingLogo() {
+        if (!logoEl) return;
+        var lightUrl = logoEl.getAttribute('data-logo-light') || 'https://efactor.tech/assets/images/efactor-logo.jpg';
+        var darkUrl = logoEl.getAttribute('data-logo-dark') || 'https://efactor.tech/assets/images/efactor-logo_light.png';
+        var next = isDarkMode() ? darkUrl : lightUrl;
+        if (next && logoEl.getAttribute('src') !== next) {
+          logoEl.setAttribute('src', next);
+        }
+      }
+
+      function returnToProfile() {
+        // Same close pattern as grid/help scanners — closes in-app WebView back to Profile.
+        try {
+          var bridge = window.flutter_inappwebview;
+          if (bridge && typeof bridge.callHandler === 'function') {
+            bridge.callHandler('closeWebView');
+            return;
+          }
+        } catch (e) {}
+        try {
+          if (window.history.length > 1) {
+            window.history.back();
+            return;
+          }
+        } catch (e2) {}
+        try {
+          window.close();
+        } catch (e3) {}
+      }
 
       function showToast(msg) {
         toast.textContent = msg;
@@ -210,9 +255,7 @@ if ($logoUrl === '') {
               stars = 0;
               commentEl.value = '';
               renderStars();
-              setTimeout(function () {
-                if (window.history.length > 1) window.history.back();
-              }, 900);
+              setTimeout(returnToProfile, 700);
               return;
             }
             sendBtn.disabled = false;
@@ -222,6 +265,13 @@ if ($logoUrl === '') {
             sendBtn.disabled = false;
           });
       });
+
+      syncRatingLogo();
+      try {
+        var mq = window.matchMedia('(prefers-color-scheme: dark)');
+        if (mq && mq.addEventListener) mq.addEventListener('change', syncRatingLogo);
+        else if (mq && mq.addListener) mq.addListener(syncRatingLogo);
+      } catch (e) {}
 
       renderStars();
     })();

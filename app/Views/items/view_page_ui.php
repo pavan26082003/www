@@ -413,7 +413,9 @@ if (!function_exists('view_ui_resolve_brand_logo_asset')) {
      */
     function view_ui_resolve_brand_logo_asset(array $incoming = [])
     {
-        $efactorLogo = 'https://efactor.tech/assets/images/efactor-logo.jpg';
+        // Light theme logo. Dark theme uses efactor-logo_light.png.
+        $efactorLogoLight = 'https://efactor.tech/assets/images/efactor-logo.jpg';
+        $efactorLogoDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
         $incomingUrl = trim((string) ($incoming['url'] ?? ($incoming['previewUrl'] ?? '')));
         $incomingName = strtolower((string) ($incoming['fileName'] ?? basename(parse_url($incomingUrl, PHP_URL_PATH) ?: '')));
         $isGenericPlaceholder = $incomingUrl === ''
@@ -421,10 +423,13 @@ if (!function_exists('view_ui_resolve_brand_logo_asset')) {
             || stripos($incomingUrl, 'logo_new') !== false
             || stripos($incomingUrl, 'efactor_brand') !== false
             || stripos($incomingUrl, 'efactIMG') !== false
+            || stripos($incomingUrl, 'efactor-logo') !== false
             || $incomingName === 'logo_new.png'
             || $incomingName === 'logo_new.jpeg'
             || $incomingName === 'logo_new.jpg'
             || $incomingName === 'efactor-logo.jpg'
+            || $incomingName === 'efactor-logo.png'
+            || $incomingName === 'efactor-logo_light.png'
             || $incomingName === 'efactor_brand.jpg'
             || $incomingName === 'efactimg.png';
 
@@ -447,8 +452,10 @@ if (!function_exists('view_ui_resolve_brand_logo_asset')) {
         return [
             'fileName' => 'efactor-logo.jpg',
             'path' => '/assets/images/efactor-logo.jpg',
-            'url' => $efactorLogo,
-            'previewUrl' => $efactorLogo,
+            'url' => $efactorLogoLight,
+            'previewUrl' => $efactorLogoLight,
+            'urlDark' => $efactorLogoDark,
+            'previewUrlDark' => $efactorLogoDark,
             'alt' => 'Efactor',
             'source' => 'cdn',
         ];
@@ -4534,7 +4541,7 @@ if (!function_exists('view_ui_icon')) {
     }
 
     body[data-studio-theme-mode="dark"] .phone-shell .brand-mark {
-      background: #FFFFFF;
+      background: transparent;
     }
 
     body[data-studio-theme-mode="dark"] .phone-shell .param-text-input {
@@ -9303,9 +9310,14 @@ if (!function_exists('view_ui_icon')) {
       </div>
     </header>
 
+    <?php
+      $brand_logo_light_url = (string) ($brand_logo_asset['url'] ?? ($brand_logo_asset['previewUrl'] ?? $brand_logo_preview_url));
+      $brand_logo_dark_url = (string) ($brand_logo_asset['urlDark'] ?? ($brand_logo_asset['previewUrlDark'] ?? 'https://efactor.tech/assets/images/efactor-logo_light.png'));
+      $brand_logo_initial_url = $is_dark_ui_theme ? $brand_logo_dark_url : $brand_logo_light_url;
+    ?>
     <section class="brand-strip">
       <div class="brand-mark">
-        <img src="<?= esc($brand_logo_preview_url) ?>" alt="<?= esc($brand_logo_asset['alt'] ?? 'Brand') ?>" width="110" height="28">
+        <img src="<?= esc($brand_logo_initial_url) ?>" alt="<?= esc($brand_logo_asset['alt'] ?? 'Brand') ?>" width="110" height="28" data-logo-light="<?= esc($brand_logo_light_url) ?>" data-logo-dark="<?= esc($brand_logo_dark_url) ?>">
       </div>
       <div class="brand-copy">
         <strong><?= esc($modelno ?: 'Linked UI') ?></strong>
@@ -11392,6 +11404,53 @@ if (!function_exists('view_ui_icon')) {
               screen: extra.screen || 'qrScanner'
             }
           }
+        }
+      };
+    }
+
+    function buildDeviceModeThemes(colors) {
+      colors = colors || {};
+      var accent = colors.accent || '#60A5FA';
+      var authoredDark = String(colors._studioMode || currentTheme.themeMode || 'dark').toLowerCase() !== 'light';
+      var dark = {
+        'bg.primary': authoredDark ? (colors.background || '#0B1220') : '#0B1220',
+        'bg.surface': authoredDark ? (colors.surface || '#1E293B') : '#1E293B',
+        'bg.elevated': authoredDark ? (colors.shell || '#0F172A') : '#0F172A',
+        'text.primary': authoredDark ? (colors.text || '#F8FAFC') : '#F8FAFC',
+        'text.secondary': authoredDark ? (colors.mutedText || '#94A3B8') : '#94A3B8',
+        'text.muted': authoredDark ? (colors.mutedText || '#94A3B8') : '#94A3B8',
+        accent: accent,
+        'accent.on': colors.buttonText || '#FFFFFF',
+        border: authoredDark ? (colors.border || '#334155') : '#334155',
+        online: colors.success || '#22C55E',
+        offline: colors.secondary || '#64748B',
+        danger: colors.error || '#EF4444',
+        'nav.background': authoredDark ? (colors.topbar || '#020617') : '#020617',
+        'nav.active': accent
+      };
+      var light = {
+        'bg.primary': !authoredDark ? (colors.background || '#F8FAFC') : '#F8FAFC',
+        'bg.surface': !authoredDark ? (colors.surface || '#FFFFFF') : '#FFFFFF',
+        'bg.elevated': !authoredDark ? (colors.shell || '#FFFFFF') : '#FFFFFF',
+        'text.primary': !authoredDark ? (colors.text || '#0F172A') : '#0F172A',
+        'text.secondary': !authoredDark ? (colors.mutedText || '#475569') : '#475569',
+        'text.muted': !authoredDark ? (colors.mutedText || '#64748B') : '#64748B',
+        accent: accent,
+        'accent.on': '#FFFFFF',
+        border: !authoredDark ? (colors.border || '#E2E8F0') : '#E2E8F0',
+        online: '#16A34A',
+        offline: '#94A3B8',
+        danger: '#DC2626',
+        'nav.background': !authoredDark ? (colors.topbar || '#FFFFFF') : '#FFFFFF',
+        'nav.active': accent
+      };
+      return {
+        serverControlled: false,
+        activeMode: 'system',
+        activeModeBinding: { '$state': 'global.themeMode' },
+        presets: {
+          dark: { color: dark },
+          light: { color: light }
         }
       };
     }
@@ -22297,6 +22356,26 @@ if (!function_exists('view_ui_icon')) {
         brand.style.boxShadow = '';
       });
 
+      // Theme-aware Efactor brand mark: light theme → efactor-logo.jpg, dark → efactor-logo_light.png.
+      (function syncBrandLogoForTheme() {
+        const isDarkMode = String(theme.themeMode || '').toLowerCase() === 'dark';
+        const lightFallback = (brandLogo && (brandLogo.url || brandLogo.previewUrl)) || 'https://efactor.tech/assets/images/efactor-logo.jpg';
+        const darkFallback = (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png';
+        queryPreviewAll('.brand-mark img').forEach(function(img) {
+          const lightUrl = img.getAttribute('data-logo-light') || lightFallback;
+          const darkUrl = img.getAttribute('data-logo-dark') || darkFallback;
+          if (!img.getAttribute('data-logo-light')) img.setAttribute('data-logo-light', lightUrl);
+          if (!img.getAttribute('data-logo-dark')) img.setAttribute('data-logo-dark', darkUrl);
+          const next = isDarkMode ? darkUrl : lightUrl;
+          if (next && img.getAttribute('src') !== next) {
+            img.setAttribute('src', next);
+          }
+        });
+        queryPreviewAll('.brand-mark').forEach(function(mark) {
+          mark.style.background = isDarkMode ? 'transparent' : '';
+        });
+      })();
+
       queryPreviewAll('.name-card').forEach(function(card) {
         card.style.display = String(theme.nameCardVisible) === '0' ? 'none' : 'grid';
       });
@@ -24007,8 +24086,8 @@ if (!function_exists('view_ui_icon')) {
                   logo: {
                     src: (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || '',
                     url: (brandLogo && brandLogo.url) || '',
-                    path: (brandLogo && brandLogo.path) || '/files/home/Logo_new.png',
-                    fileName: (brandLogo && brandLogo.fileName) || 'Logo_new.png',
+                    path: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.jpg',
+                    fileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.jpg',
                     alt: (brandLogo && brandLogo.alt) || 'Efactor',
                     fit: 'contain'
                   },
@@ -24300,8 +24379,8 @@ if (!function_exists('view_ui_icon')) {
               className: 'brand-strip',
               brand: {
                 logoUrl: (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || '',
-                logoPath: (brandLogo && brandLogo.path) || '/files/home/Logo_new.png',
-                logoFileName: (brandLogo && brandLogo.fileName) || 'Logo_new.png',
+                logoPath: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.jpg',
+                logoFileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.jpg',
                 alt: (brandLogo && brandLogo.alt) || 'Efactor'
               },
               title: modelNo || 'Linked UI',
@@ -24425,7 +24504,7 @@ if (!function_exists('view_ui_icon')) {
           '.app-back-btn,.back-btn,.icon-btn{display:inline-flex;align-items:center;justify-content:center;height:36px;border:0;border-radius:999px;background:' + headerChromeFromTheme(currentTheme).backBackground + ';color:' + headerChromeFromTheme(currentTheme).backForeground + ';box-shadow:none;}.app-back-btn,.back-btn{width:auto;min-width:42px;padding:0 12px;gap:2px;font-size:13px;font-weight:600;}.icon-btn{width:36px;border-radius:50%;}',
           '.top-title h1{margin:0;color:' + headerChromeFromTheme(currentTheme).titleColor + ';font-size:16px;line-height:1.2;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.top-title p,.top-title-device{margin:2px 0 0;color:' + headerChromeFromTheme(currentTheme).deviceColor + ';font-size:12px;line-height:1.25;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.top-actions{display:flex;align-items:center;gap:6px;}',
           '.brand-strip{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;margin:10px 16px 12px;padding:10px 16px;border:0;border-radius:999px;background:' + currentTheme.cardColor + ';box-shadow:0 10px 28px rgba(15,23,42,.12);color:' + currentTheme.textColor + ';}',
-          '.brand-mark{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:2px 4px;border:0;border-radius:6px;background:#fff;overflow:hidden}.brand-mark img{display:block;height:28px;width:auto;max-width:118px;object-fit:contain}.brand-copy strong{display:block;color:' + currentTheme.textColor + ';font-size:14px;line-height:1.2;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.brand-copy span{display:block;margin-top:2px;color:' + currentTheme.mutedTextColor + ';font-size:11px;font-weight:700;}.online-state{display:inline-flex;align-items:center;gap:7px;color:' + currentTheme.successColor + ';font-size:12px;font-weight:900;}',
+          '.brand-mark{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:2px 4px;border:0;border-radius:6px;background:' + (String(currentTheme.themeMode || '').toLowerCase() === 'dark' ? 'transparent' : '#fff') + ';overflow:hidden}.brand-mark img{display:block;height:28px;width:auto;max-width:118px;object-fit:contain}.brand-copy strong{display:block;color:' + currentTheme.textColor + ';font-size:14px;line-height:1.2;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.brand-copy span{display:block;margin-top:2px;color:' + currentTheme.mutedTextColor + ';font-size:11px;font-weight:700;}.online-state{display:inline-flex;align-items:center;gap:7px;color:' + currentTheme.successColor + ';font-size:12px;font-weight:900;}',
           '.page-slide{padding:' + px(currentTheme.pagePadding, 18) + ' ' + px(currentTheme.pagePadding, 18) + ' 4px}.slide-hero{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end;min-height:112px;margin-bottom:14px;padding:18px;border-radius:calc(' + px(currentTheme.borderRadius, 18) + ' + 6px);background:linear-gradient(145deg,' + currentTheme.topbarColor + ',' + currentTheme.secondaryColor + ');color:#fff;box-shadow:0 18px 38px rgba(18,50,70,.16);overflow:hidden;}.slide-hero:after{content:"";position:absolute;right:-36px;top:-36px;width:112px;height:112px;border-radius:50%;border:24px solid rgba(209,250,255,.16);}',
           '.slide-hero-kicker{display:inline-flex;align-items:center;gap:6px;margin-bottom:8px;color:rgba(255,255,255,.72);font-size:11px;font-weight:800;text-transform:uppercase}.slide-hero h2{margin:0;color:#fff;font-size:22px;line-height:1.1;font-weight:900;overflow-wrap:anywhere}.slide-hero p{margin:6px 0 0;color:rgba(255,255,255,.68);font-size:12px;font-weight:700}.slide-count{position:relative;z-index:1;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;width:58px;height:58px;border-radius:20px;background:rgba(255,255,255,.12);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);}',
           '.device-card,.param-card{border:' + px(currentTheme.borderSize, 1) + ' solid ' + currentTheme.borderColor + ';border-radius:' + px(currentTheme.borderRadius, 18) + ';background:' + currentTheme.cardColor + ';box-shadow:0 12px 28px rgba(18,50,70,.1);}.name-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:' + px(currentTheme.cardPadding, 16) + ';}.field-label{display:block;margin-bottom:4px;color:' + currentTheme.mutedTextColor + ';font-size:10px;line-height:1.15;font-weight:600;text-transform:uppercase;letter-spacing:.08em;text-align:left}.field-value{display:block;min-width:0;color:' + currentTheme.textColor + ';font-size:15px;line-height:1.35;font-weight:600;overflow-wrap:anywhere;text-align:left}.edit-link{color:' + currentTheme.accentColor + ';font-size:12px;font-weight:800;text-decoration:none;}',
@@ -24434,7 +24513,13 @@ if (!function_exists('view_ui_icon')) {
         ].join('\n'),
         componentTemplates: {
           appTopbar: '<button class="app-back-btn">{{icon:chevron-left}}<span class="app-back-label">Back</span></button><div class="top-title"><h1>Page {{page.pageNo}}. {{page.pageName}}</h1><p class="top-title-device">{{modelNo}}</p></div><div class="top-actions">{{actionIcons}}</div>',
-          brandStrip: '<div class="brand-mark"><img src="' + ((brandLogo && (brandLogo.previewUrl || brandLogo.url)) || '') + '" alt="' + ((brandLogo && brandLogo.alt) || 'Efactor') + '"></div><div class="brand-copy"><strong>{{modelNo}}</strong><span>{{linkedPagesText}}</span></div><div class="online-state ' + (getDeviceConnectivityState().online ? 'is-online' : 'is-offline') + '" data-online-state="' + (getDeviceConnectivityState().online ? '1' : '0') + '">' + getDeviceConnectivityState().label + '</div>',
+          brandStrip: (function() {
+            const brandThemeDark = String(currentTheme.themeMode || '').toLowerCase() === 'dark';
+            const brandLightUrl = (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || 'https://efactor.tech/assets/images/efactor-logo.jpg';
+            const brandDarkUrl = (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png';
+            const brandActiveUrl = brandThemeDark ? brandDarkUrl : brandLightUrl;
+            return '<div class="brand-mark"><img src="' + brandActiveUrl + '" alt="' + ((brandLogo && brandLogo.alt) || 'Efactor') + '" data-logo-light="' + brandLightUrl + '" data-logo-dark="' + brandDarkUrl + '"></div><div class="brand-copy"><strong>{{modelNo}}</strong><span>{{linkedPagesText}}</span></div><div class="online-state ' + (getDeviceConnectivityState().online ? 'is-online' : 'is-offline') + '" data-online-state="' + (getDeviceConnectivityState().online ? '1' : '0') + '">' + getDeviceConnectivityState().label + '</div>';
+          })(),
           controlCard: '<article class="param-card{{stackedClass}}"><div class="param-main-row"><button class="param-icon">{{icon:control.icon}}</button><div><span class="field-label">{{control.name}}</span><span class="field-value">{{control.value}}</span></div>{{rightAccessory}}</div>{{rangeAccessory}}</article>',
           switchAccessory: '<span class="toggle-visual" aria-hidden="true"></span>',
           actionAccessory: '<button class="param-meta">{{icon:control.metaIcon}}<span class="meta-value">{{control.rightAccessory.value}}</span></button>',
@@ -24793,7 +24878,9 @@ if (!function_exists('view_ui_icon')) {
           shell: { header: 'appBar', brand: 'brandBar', content: '$navigation.activePage', footer: 'pagePager' }
         },
         theme: {
-          mode: currentTheme.themeMode || 'dark',
+          mode: 'system',
+          defaultMode: 'system',
+          studioMode: currentTheme.themeMode || 'dark',
           tokens: {
             colors: {
               primary: currentTheme.accentColor,
@@ -25718,18 +25805,24 @@ if (!function_exists('view_ui_icon')) {
             shadow: shadow(10, 28, 'rgba(15,23,42,0.12)')
           }, [
             node('row', 'brand_strip_row', { mainAxisAlignment: 'spaceBetween', crossAxisAlignment: 'center', spacing: 12 }, {}, [
-              node('image', 'brand_mark', {
-                src: (brandLogo && brandLogo.url) || '',
-                url: (brandLogo && brandLogo.url) || '',
-                path: (brandLogo && brandLogo.path) || '',
-                fileName: (brandLogo && brandLogo.fileName) || '',
-                fit: 'contain',
-                semanticLabel: (brandLogo && brandLogo.alt) || 'Efactor'
-              }, {
+              node('image', 'brand_mark', (function() {
+                const brandThemeDark = String(currentTheme.themeMode || '').toLowerCase() === 'dark';
+                const brandLightUrl = (brandLogo && (brandLogo.url || brandLogo.previewUrl)) || 'https://efactor.tech/assets/images/efactor-logo.jpg';
+                const brandDarkUrl = (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png';
+                const brandActiveUrl = brandThemeDark ? brandDarkUrl : brandLightUrl;
+                return {
+                  src: brandActiveUrl,
+                  url: brandActiveUrl,
+                  path: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.jpg',
+                  fileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.jpg',
+                  fit: 'contain',
+                  semanticLabel: (brandLogo && brandLogo.alt) || 'Efactor'
+                };
+              })(), {
                 width: 110,
                 height: 28,
                 alignment: 'centerLeft',
-                backgroundColor: '#FFFFFF',
+                backgroundColor: (String(currentTheme.themeMode || '').toLowerCase() === 'dark') ? 'transparent' : '#FFFFFF',
                 borderRadius: 6
               }, []),
               node('column', 'brand_copy', { width: 'expanded', crossAxisAlignment: 'start', spacing: 2 }, {}, [
@@ -25904,11 +25997,11 @@ if (!function_exists('view_ui_icon')) {
         generatedTimezone: generatedStamp.timezone,
         assets: {
           brandLogo: {
-            fileName: (brandLogo && brandLogo.fileName) || 'Logo_new.png',
-            path: (brandLogo && brandLogo.path) || '/files/home/Logo_new.png',
-            url: (brandLogo && brandLogo.url) || '',
+            fileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.jpg',
+            path: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.jpg',
+            url: (brandLogo && brandLogo.url) || 'https://efactor.tech/assets/images/efactor-logo.jpg',
             alt: (brandLogo && brandLogo.alt) || 'Efactor',
-            source: (brandLogo && brandLogo.source) || 'files/home',
+            source: (brandLogo && brandLogo.source) || 'cdn',
             usage: 'brandMark'
           }
         },
@@ -26003,7 +26096,11 @@ if (!function_exists('view_ui_icon')) {
         },
         node_id: buildNodeIdSchemaSection(resolvedNodeId),
         theme: {
-          mode: currentTheme.themeMode || 'dark',
+          // Runtime appearance follows the phone. Studio palette stays in colors below;
+          // light/dark switchable presets are attached as themes on save/serve.
+          mode: 'system',
+          defaultMode: 'system',
+          studioMode: currentTheme.themeMode || 'dark',
           backgroundType: currentTheme.backgroundType || 'gradient',
           tokens: {
             topbarColor: currentTheme.topbarColor,
@@ -26065,6 +26162,20 @@ if (!function_exists('view_ui_icon')) {
             cardBlur: n(currentTheme.cardBlur, 0)
           }
         },
+        themes: buildDeviceModeThemes({
+          background: currentTheme.backgroundColor,
+          surface: currentTheme.cardColor,
+          shell: currentTheme.shellColor,
+          text: currentTheme.textColor,
+          mutedText: currentTheme.mutedTextColor,
+          accent: currentTheme.accentColor,
+          border: currentTheme.borderColor,
+          topbar: currentTheme.topbarColor,
+          success: currentTheme.successColor,
+          error: currentTheme.errorColor,
+          secondary: currentTheme.secondaryColor,
+          buttonText: currentTheme.buttonTextColor
+        }),
         icons: {
           library: buildCompactIconLibrary(usedIconNames),
           default: currentTheme.parameterIcon || 'gauge',
@@ -26124,6 +26235,10 @@ if (!function_exists('view_ui_icon')) {
           }
         },
         state: {
+          global: {
+            themeMode: 'system',
+            themeServerControlled: false
+          },
           activePageIndex: activeIndex,
           activePageId: activePageId,
           activePageNo: activePageNo,

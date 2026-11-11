@@ -144,6 +144,9 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
         <button type="button" class="ahp-flow-btn ahp-flow-schema" id="ahpBtnSchema" style="display:none">
             <i class="fas fa-code"></i> Schema
         </button>
+        <button type="button" class="ahp-flow-btn ahp-flow-preview-theme" id="ahpBtnPreviewTheme" data-mode="system" title="Phone preview only — does not change mobile Appearance setting" aria-label="Phone preview theme">
+            <i class="fas fa-mobile-screen-button" id="ahpPreviewThemeIcon"></i> <span id="ahpPreviewThemeLabel">System</span>
+        </button>
         <button type="button" class="ahp-flow-btn ahp-flow-studio-theme" id="ahpBtnStudioTheme" style="display:none" title="Toggle studio panel light/dark mode" aria-pressed="false">
             <i class="fas fa-sun" id="ahpStudioThemeIcon"></i> <span id="ahpStudioThemeLabel">Light</span>
         </button>
@@ -245,10 +248,10 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
 
                                     <header class="ahp-m-header">
                                         <div class="ahp-m-brand">
-                                            <div class="ahp-m-logo ahp-m-logo-img" id="ahpLogoIcon"><img src="https://efactor.tech/files/home/Logo_new.png" alt="eFactor"></div>
+                                            <div class="ahp-m-logo ahp-m-logo-img" id="ahpLogoIcon"><img src="https://efactor.tech/assets/images/efactor-logo.jpg" alt="eFactor" data-logo-light="https://efactor.tech/assets/images/efactor-logo.jpg" data-logo-dark="https://efactor.tech/assets/images/efactor-logo_light.png"></div>
                                             <div>
-                                                <h1 id="ahpHeaderTitle"><?= ahp_h($layout['header']['title'] ?? 'eFactor · IoE') ?></h1>
-                                                <p id="ahpHeaderSub"><?= ahp_h($layout['header']['subtitle'] ?? 'Smart insights & tools') ?></p>
+                                                <h1 id="ahpHeaderTitle"><?= ahp_h($layout['header']['title'] ?? 'One Intelligent Ecosystem') ?></h1>
+                                                <p id="ahpHeaderSub"><?= ahp_h($layout['header']['subtitle'] ?? 'Connected intelligence') ?></p>
                                             </div>
                                         </div>
                                         <div class="ahp-m-more"><i class="fas fa-ellipsis-h"></i></div>
@@ -342,7 +345,7 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
                         <p class="ahp-tool-hint">Header, grid spacing, alerts strip, and cube rotation.</p>
                         <div class="ahp-field">
                             <label for="toolHeaderTitle">Brand title</label>
-                            <input type="text" id="toolHeaderTitle" value="<?= ahp_h($layout['header']['title'] ?? '') ?>" placeholder="eFactor · IoE">
+                            <input type="text" id="toolHeaderTitle" value="<?= ahp_h($layout['header']['title'] ?? '') ?>" placeholder="One Intelligent Ecosystem">
                         </div>
                         <div class="ahp-field">
                             <label for="toolHeaderSub">Subtitle (optional)</label>
@@ -543,7 +546,7 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
 
                     <div class="ahp-tool-section" data-tool="profile">
                         <div class="ahp-tool-title">Profile Page</div>
-                        <p class="ahp-tool-hint">Name, email, phone, and member ID are loaded from your account. Notifications can be customized here.</p>
+                        <p class="ahp-tool-hint">Name, email, phone, and member ID are loaded from your account. Appearance and notifications apply on mobile after Save.</p>
                         <div class="ahp-field">
                             <label for="toolProfileName">Display name</label>
                             <input type="text" id="toolProfileName" class="ahp-readonly-field" value="<?= ahp_h($loginUserProfile['name'] ?? ($layout['profilePage']['name'] ?? 'Profile')) ?>" readonly>
@@ -559,6 +562,21 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
                         <div class="ahp-field">
                             <label for="toolProfileMemberId">Member ID</label>
                             <input type="text" id="toolProfileMemberId" class="ahp-readonly-field" value="<?= ahp_h($loginUserProfile['memberId'] ?? ($layout['profilePage']['memberId'] ?? ('EF-' . (int) $userId))) ?>" readonly>
+                        </div>
+                        <?php
+                            $accountAppearance = strtolower(trim((string) ($layout['profilePage']['appearance'] ?? 'system')));
+                            if (!in_array($accountAppearance, array('light', 'dark', 'system'), true)) {
+                                $accountAppearance = 'system';
+                            }
+                        ?>
+                        <div class="ahp-field">
+                            <label for="toolProfileAppearance">Appearance (mobile)</label>
+                            <select id="toolProfileAppearance">
+                                <option value="system" <?= $accountAppearance === 'system' ? 'selected' : '' ?>>System default (follow phone)</option>
+                                <option value="light" <?= $accountAppearance === 'light' ? 'selected' : '' ?>>Light</option>
+                                <option value="dark" <?= $accountAppearance === 'dark' ? 'selected' : '' ?>>Dark</option>
+                            </select>
+                            <p class="ahp-tool-hint">Saved setting for the mobile app. The top-bar Light/Dark/System button only changes this web phone preview.</p>
                         </div>
                         <div class="ahp-field">
                             <label class="ahp-check-label">
@@ -623,6 +641,7 @@ window.AHP_CONFIG = {
     userEmail: <?= json_encode($userEmail) ?>,
     userId: <?= (int) $userId ?>,
     loginUserProfile: <?= json_encode($loginUserProfile ?? array(), JSON_UNESCAPED_UNICODE) ?>,
+    accountAppearance: <?= json_encode($accountAppearance ?? ($layout['profilePage']['appearance'] ?? 'system'), JSON_UNESCAPED_UNICODE) ?>,
     apiBase: <?= json_encode($apiBase) ?>,
     filesBase: <?= json_encode(rtrim(base_url('files'), '/')) ?>,
     schemaApiUrl: <?= json_encode($schemaApiUrl ?? '', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
@@ -634,7 +653,8 @@ window.AHP_CONFIG = {
     welcomeUrl: <?= json_encode(site_url('welcome')) ?>,
     csrfName: <?= json_encode($csrfName) ?>,
     csrfHash: <?= json_encode($csrfHash) ?>,
-    logoUrl: <?= json_encode('https://efactor.tech/files/home/Logo_new.png') ?>,
+    logoUrl: <?= json_encode('https://efactor.tech/assets/images/efactor-logo.jpg') ?>,
+    logoUrlDark: <?= json_encode('https://efactor.tech/assets/images/efactor-logo_light.png') ?>,
     phoneWidth: 375,
     phoneHeight: 812,
     iotSduiBundled: <?= $ahpIotSduiReadable ? 'true' : 'false' ?>

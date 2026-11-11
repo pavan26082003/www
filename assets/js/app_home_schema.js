@@ -1287,24 +1287,26 @@
       homeHeader: {
         greetingFontSize: 13,
         greetingFontWeight: 600,
-        titleFontSize: 18,
-        titleFontWeight: 800,
-        titleLineHeight: 1.15,
-        titleLetterSpacing: 0,
+        titleFontSize: 14,
+        titleFontWeight: 700,
+        titleLineHeight: 1.25,
+        titleLetterSpacing: -0.01,
         subtitleFontSize: 11,
-        logoWidth: 96,
+        subtitleFontWeight: 500,
+        subtitleLineHeight: 1.25,
+        logoWidth: 88,
         logoHeight: 28,
-        logoMaxWidth: 96,
+        logoMaxWidth: 88,
         logoMaxHeight: 28,
         avatarSize: 46,
         avatarFontSize: 15,
         avatarFontWeight: 800,
-        layoutGap: 10,
+        layoutGap: 12,
         marginBottom: 12,
         textColumnMinWidth: 0,
         textOverflow: 'ellipsis',
         titleMaxLines: 2,
-        subtitleMaxLines: 2,
+        subtitleMaxLines: 1,
         greetingMaxLines: 1
       },
       bottomNavigation: buildBottomNavAppearance(theme),
@@ -1386,7 +1388,7 @@
     var api = global.AhpStaticUi;
     if (api && typeof api.toSchema === 'function') {
       return api.toSchema(templateId, {
-        logoUrl: (cfg && cfg.logoUrl) || (api.logoUrl) || 'https://efactor.tech/files/home/Logo_new.png'
+        logoUrl: (cfg && cfg.logoUrl) || (api.logoUrl) || 'https://efactor.tech/assets/images/efactor-logo.jpg'
       });
     }
     return {
@@ -1395,7 +1397,7 @@
       templateId: templateId,
       brand: {
         name: 'eFactor',
-        logoUrl: (cfg && cfg.logoUrl) || 'https://efactor.tech/files/home/Logo_new.png'
+        logoUrl: (cfg && cfg.logoUrl) || 'https://efactor.tech/assets/images/efactor-logo.jpg'
       },
       rendererKey: 'staticHomeUi',
       note: 'Static home UI kit selected. Load AhpStaticUi for full kit metadata.'
@@ -1518,6 +1520,11 @@
     layout = layout || {};
     var theme = layout.theme || {};
     layout.theme = theme;
+    if (!layout.header || typeof layout.header !== 'object') {
+      layout.header = {};
+    }
+    layout.header.title = resolveHomeHeaderTitle(layout);
+    layout.header.subtitle = resolveHomeHeaderSubtitle(layout);
     var staticUi = String(layout.staticUiTemplate || theme.staticUiTemplate || '').trim();
     var kit = String(theme.homeTemplate || layout.homeTemplate || '').toLowerCase();
     if (!staticUi && themeIsDarkCanvas(theme) && LIGHT_HOME_KITS[kit]) {
@@ -1652,8 +1659,8 @@
       },
       spacing: { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 24, gridGap: resolveGridGap(theme) },
       typography: {
-        brandTitle: { fontFamily: 'system', fontSize: 18, fontWeight: 800, lineHeight: 1.15, colorToken: 'colors.textPrimary', maxLines: 2, overflow: 'clip', softWrap: true },
-        brandSubtitle: { fontFamily: 'system', fontSize: 11, fontWeight: 400, lineHeight: 1.25, colorToken: 'colors.textMuted', maxLines: 2, overflow: 'ellipsis' },
+        brandTitle: { fontFamily: 'system', fontSize: 14, fontWeight: 700, lineHeight: 1.25, letterSpacing: -0.01, colorToken: 'colors.textPrimary', maxLines: 2, overflow: 'ellipsis', softWrap: true },
+        brandSubtitle: { fontFamily: 'system', fontSize: 11, fontWeight: 500, lineHeight: 1.25, colorToken: 'colors.textMuted', maxLines: 1, overflow: 'ellipsis', softWrap: true },
         welcomeGreeting: { fontFamily: 'system', fontSize: 15, fontWeight: 700, lineHeight: 1.2, colorToken: 'colors.welcomeText', maxLines: 2, overflow: 'clip', softWrap: true },
         welcomeEmail: { fontFamily: 'system', fontSize: 13, fontWeight: 600, lineHeight: 1.25, colorToken: 'colors.welcomeText', maxLines: 1, overflow: 'ellipsis' },
         welcomeCaption: { fontFamily: 'system', fontSize: 11, fontWeight: 500, lineHeight: 1.2, colorToken: 'colors.welcomeText', maxLines: 2, overflow: 'clip', softWrap: true },
@@ -2351,19 +2358,45 @@
     return /\b\d+\s*minutes?\b/i.test(text) && /nearby/i.test(text);
   }
 
+  var HOME_BRAND_TITLE = 'One Intelligent Ecosystem';
+  var LEGACY_HOME_BRAND_TITLES = {
+    'eFactor · IoE': true,
+    'Welcome to SmartHome!': true,
+    'Welcome to Efactor!': true,
+    'Welcome to Efactor': true,
+    'Efactor Market': true,
+    'Efactor Deals': true,
+    'Efactor Shop': true,
+    'Efactor Style': true,
+    'Efactor QuickMart': true,
+    'Efactor picks for you': true
+  };
+  var LEGACY_HOME_BRAND_SUBTITLES = {
+    'Smart insights & tools': true,
+    'Control your connected home.': true,
+    'Control your connected home': true,
+    'Search or ask anything': true,
+    'Offers near you': true,
+    'Search on Efactor': true,
+    'Deliver to your door': true
+  };
+
   function resolveHomeHeaderTitle(layout) {
     var header = (layout && layout.header) || {};
     var title = String(header.title || '').trim();
-    // Same fallback for every template/account — never emit empty required title.
+    // Same fallback for every template/account — never emit empty / kit brand titles.
     if (isUnwantedHomeHeaderText(title)) title = '';
-    return title || 'eFactor · IoE';
+    if (!title || LEGACY_HOME_BRAND_TITLES[title]) return HOME_BRAND_TITLE;
+    return title;
   }
 
   function resolveHomeHeaderSubtitle(layout) {
     var header = (layout && layout.header) || {};
     var subtitle = String(header.subtitle || '').trim();
     if (isUnwantedHomeHeaderText(subtitle)) subtitle = '';
-    return subtitle || 'Smart insights & tools';
+    // Kit/legacy/empty → short subheading under "One Intelligent Ecosystem".
+    if (!subtitle || LEGACY_HOME_BRAND_SUBTITLES[subtitle]) return 'Connected intelligence';
+    return subtitle;
   }
 
   function buildHomeHeaderTextBlock(text, i18nKey, typographyToken, typography, overflow) {
@@ -2412,7 +2445,8 @@
     var subtitleText = resolveHomeHeaderSubtitle(layout);
     var titleColor = theme.textPrimary || (theme.bgStyle === 'light' ? '#0f172a' : '#f8fafc');
     var subtitleColor = theme.textMuted || (theme.bgStyle === 'light' ? '#64748b' : '#94a3b8');
-    var logoUrl = (cfg && cfg.logoUrl) || 'https://efactor.tech/files/home/Logo_new.png';
+    var logoUrl = (cfg && cfg.logoUrl) || 'https://efactor.tech/assets/images/efactor-logo.jpg';
+    var logoUrlDark = (cfg && cfg.logoUrlDark) || 'https://efactor.tech/assets/images/efactor-logo_light.png';
     var profile = mergeLayoutProfile(layout, cfg);
     var greetingName = getProfileGreetingName(profile, cfg);
     var avatarUrl = getProfileAvatarUrl(profile, cfg);
@@ -2423,9 +2457,10 @@
       overflowPolicy: 'ellipsis',
       logo: {
         imageUrl: logoUrl,
-        width: 96,
+        imageUrlDark: logoUrlDark,
+        width: 88,
         height: 28,
-        maxWidth: 96,
+        maxWidth: 88,
         maxHeight: 28,
         borderRadius: 0,
         objectFit: 'contain',
@@ -2437,9 +2472,10 @@
         'home.brandTitle',
         'typography.brandTitle',
         {
-          fontSize: 18,
-          fontWeight: 800,
-          lineHeight: 1.15,
+          fontSize: 14,
+          fontWeight: 700,
+          lineHeight: 1.25,
+          letterSpacing: -0.01,
           colorToken: 'colors.textPrimary',
           color: titleColor
         },
@@ -2451,18 +2487,18 @@
         'typography.brandSubtitle',
         {
           fontSize: 11,
-          fontWeight: 400,
+          fontWeight: 500,
           lineHeight: 1.25,
           colorToken: 'colors.textMuted',
           color: subtitleColor
         },
-        RESPONSIVE_TEXT_OVERFLOW.subtitle
+        { maxLines: 1, overflow: 'ellipsis', softWrap: true }
       ),
       layout: {
         direction: 'row',
         align: 'center',
         justify: 'space-between',
-        gap: 10,
+        gap: 12,
         marginBottom: 12
       },
       textColumn: {
@@ -2475,17 +2511,22 @@
         overflow: 'hidden'
       },
       appearance: {
-        titleFontSize: 18,
-        titleFontWeight: 800,
-        titleLineHeight: 1.15,
+        titleFontSize: 14,
+        titleFontWeight: 700,
+        titleLineHeight: 1.25,
+        titleLetterSpacing: -0.01,
         titleColor: titleColor,
+        titleMaxLines: 2,
         subtitleFontSize: 11,
-        subtitleFontWeight: 400,
+        subtitleFontWeight: 500,
         subtitleLineHeight: 1.25,
         subtitleColor: subtitleColor,
-        logoWidth: 96,
+        subtitleMaxLines: 1,
+        logoWidth: 88,
         logoHeight: 28,
-        layoutGap: 10,
+        logoMaxWidth: 88,
+        logoMaxHeight: 28,
+        layoutGap: 12,
         marginBottom: 12,
         backgroundColor: 'transparent'
       }
@@ -2580,6 +2621,15 @@
     };
   }
 
+  function resolveAccountAppearance(layout, cfg) {
+    var raw = (cfg && cfg.accountAppearance)
+      || (layout && layout.profilePage && layout.profilePage.appearance)
+      || 'system';
+    raw = String(raw || 'system').toLowerCase();
+    if (raw !== 'light' && raw !== 'dark' && raw !== 'system') return 'system';
+    return raw;
+  }
+
   /**
    * Full profile screen (header + menu rows + logout). Never publish the
    * pageHeader-only stub (profile-page-header) — Flutter needs these children.
@@ -2595,7 +2645,7 @@
     var profileInitials = getProfileInitials(profile, cfg);
     var profileAvatarUrl = getProfileAvatarUrl(profile, cfg);
     var notifOn = profile.notificationsEnabled !== false;
-    var themeModeFallback = (theme.bgStyle === 'dark') ? 'dark' : 'light';
+    var themeModeFallback = resolveAccountAppearance(layout, cfg);
     var displayName = profile.name || 'Profile';
     var displayEmail = profile.email || (layout.welcome && layout.welcome.email) || cfg.userEmail || '';
     if (!displayEmail) displayEmail = 'user@example.com';
@@ -2741,7 +2791,7 @@
           id: 'appearance',
           iconToken: 'appearance',
           label: { '$i18n': 'profile.appearance' },
-          subtitle: (themeModeFallback === 'dark' ? 'Dark' : 'Light') + ' mode',
+          subtitle: (themeModeFallback === 'system' ? 'System' : (themeModeFallback === 'dark' ? 'Dark' : 'Light')) + ' mode',
           subtitleBinding: { '$state': 'global.themeMode' },
           subtitleFormat: '{value} mode',
           subtitleTransform: 'capitalizeFirst',
@@ -4117,15 +4167,15 @@
       meta: {
         appId: 'efactor-ioe',
         userId: userId,
-        title: (layout.header && layout.header.title) || 'Welcome to Efactor!',
-        description: (layout.header && layout.header.subtitle) || 'Smart ecosystem dashboard',
+        title: resolveHomeHeaderTitle(layout),
+        description: resolveHomeHeaderSubtitle(layout) || 'Smart ecosystem dashboard',
         defaultRouteId: 'home',
         defaultLocale: ts.locale,
         timezone: ts.timezone,
         generatedAtIst: ts.local,
         generatedAtUtc: ts.utc,
         themePreset: theme.bgStyle || 'light',
-        themeMode: theme.bgStyle === 'light' ? 'light' : 'dark',
+        themeMode: resolveAccountAppearance(layout, cfg),
         layoutSnapshot: buildLayoutSnapshot(layout, cfg),
         staticUiTemplate: (layout.staticUiTemplate || theme.staticUiTemplate || null),
         staticUi: appliedStaticUi || buildStaticUiSnapshot(layout, cfg),
@@ -4788,13 +4838,36 @@
     };
   }
 
-  function buildApplyThemeAction(preset, mode) {
+  function resolveAccountAppearance(layout, cfg) {
+    var raw = (cfg && cfg.accountAppearance)
+      || (layout && layout.profilePage && layout.profilePage.appearance)
+      || 'system';
+    raw = String(raw || 'system').toLowerCase();
+    if (raw !== 'light' && raw !== 'dark' && raw !== 'system') return 'system';
+    return raw;
+  }
+
+  function buildApplyThemeAction(preset, mode, cfg) {
+    cfg = cfg || {};
+    var prefsApiBase = (cfg.apiBase ? String(cfg.apiBase).replace(/\/+$/, '') : '/index.php/app-home-page/api');
     return {
       type: 'sequence',
       actions: [
         { type: 'set-state', path: 'global.themeMode', value: mode },
         { type: 'set-state', path: 'global.themePreset', value: preset },
-        { type: 'host-action', actionId: 'apply-theme-preset', parameters: { preset: preset, mode: mode } }
+        {
+          type: 'request',
+          request: {
+            method: 'POST',
+            endpoint: prefsApiBase + '/profile-preferences',
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+            body: { appearance: mode, themeMode: mode }
+          },
+          onSuccess: { type: 'show-snackbar', message: mode === 'system' ? 'Using system appearance' : ((mode === 'dark' ? 'Dark' : 'Light') + ' mode saved') },
+          onError: { type: 'show-snackbar', message: 'Could not save appearance' }
+        },
+        { type: 'host-action', actionId: 'apply-theme-preset', parameters: { preset: preset, mode: mode } },
+        { type: 'host-action', actionId: 'save-profile-preferences', parameters: { appearance: mode, themeMode: mode } }
       ]
     };
   }
@@ -5353,8 +5426,8 @@
     var header = layout.header || {};
     var welcome = layout.welcome || {};
     var v2 = global.AhpSchemaV2 || {};
-    var title = v2.resolveHomeHeaderTitle ? v2.resolveHomeHeaderTitle(layout) : (header.title || 'Welcome to Efactor!');
-    var subtitle = v2.resolveHomeHeaderSubtitle ? v2.resolveHomeHeaderSubtitle(layout) : (header.subtitle || 'Control your connected home');
+    var title = v2.resolveHomeHeaderTitle ? v2.resolveHomeHeaderTitle(layout) : (header.title || 'One Intelligent Ecosystem');
+    var subtitle = v2.resolveHomeHeaderSubtitle ? v2.resolveHomeHeaderSubtitle(layout) : (header.subtitle || '');
     var themeModeLabel = (global.AhpSchemaV2 && global.AhpSchemaV2.getThemeModeLabel)
       ? global.AhpSchemaV2.getThemeModeLabel(layout.theme)
       : 'Light';
@@ -5931,12 +6004,14 @@
     var initials = v2.getProfileInitials ? v2.getProfileInitials(profile, cfg) : 'U';
     var avatarUrl = v2.getProfileAvatarUrl ? v2.getProfileAvatarUrl(profile, cfg) : '';
     var layoutProfile = layout.profilePage || {};
+    var accountAppearance = resolveAccountAppearance(layout, cfg);
 
     return {
       global: {
-        themeMode: bgStyle === 'light' ? 'light' : 'dark',
+        // Account appearance: system by default; light/dark if saved in web Profile settings.
+        themeMode: accountAppearance,
         themePreset: bgStyle,
-        themeServerControlled: true,
+        themeServerControlled: false,
         locale: 'en-IN',
         networkStatus: 'online',
         apiEnvironment: 'production',
@@ -6231,9 +6306,9 @@
       ]
     };
 
-    out['apply-theme-light'] = buildApplyThemeAction('light', 'light');
-    out['apply-theme-dark'] = buildApplyThemeAction('dark', 'dark');
-    out['apply-theme-system'] = buildApplyThemeAction('system', 'system');
+    out['apply-theme-light'] = buildApplyThemeAction('light', 'light', cfg);
+    out['apply-theme-dark'] = buildApplyThemeAction('dark', 'dark', cfg);
+    out['apply-theme-system'] = buildApplyThemeAction('system', 'system', cfg);
 
     out['show-devices-auth-error'] = {
       type: 'sequence',
@@ -7064,7 +7139,7 @@
     }
     var profileAppearance = (out['profile-header'] && out['profile-header'].appearance)
       || (v2.buildProfileAppearanceContract ? v2.buildProfileAppearanceContract(theme) : { pagePadding: 16, pageGap: 12 });
-    var themeModeFallback = (theme.bgStyle === 'dark') ? 'dark' : 'light';
+    var themeModeFallback = resolveAccountAppearance(layout, cfg);
     delete out['profile-page-header'];
 
     var profile = (global.AhpSchemaV2 && global.AhpSchemaV2.mergeLayoutProfile)
@@ -7544,15 +7619,19 @@
 
       meta: Object.assign({}, base.meta || {}, {
         schemaProfile: 'homepage-canonical-v3',
-        title: (layout.header && layout.header.title) || 'Welcome to Efactor!',
-        description: (layout.header && layout.header.subtitle) || 'Smart ecosystem dashboard',
+        title: (global.AhpSchemaV2 && global.AhpSchemaV2.resolveHomeHeaderTitle)
+          ? global.AhpSchemaV2.resolveHomeHeaderTitle(layout)
+          : ((layout.header && layout.header.title) || 'One Intelligent Ecosystem'),
+        description: (global.AhpSchemaV2 && global.AhpSchemaV2.resolveHomeHeaderSubtitle)
+          ? (global.AhpSchemaV2.resolveHomeHeaderSubtitle(layout) || 'Smart ecosystem dashboard')
+          : ((layout.header && layout.header.subtitle) || 'Smart ecosystem dashboard'),
         defaultRouteId: 'home',
         defaultLocale: ts.locale,
         timezone: ts.timezone,
         generatedAtIst: ts.local,
         generatedAtUtc: ts.utc,
         themePreset: themePreset,
-        themeMode: themePreset === 'light' ? 'light' : 'dark',
+        themeMode: resolveAccountAppearance(layout, cfg),
         uiMode: (base.meta && base.meta.uiMode) || (staticUiActive ? 'staticHomeUi' : 'cubeHome'),
         staticUiTemplate: layout.staticUiTemplate || (layout.theme && layout.theme.staticUiTemplate) || (base.meta && base.meta.staticUiTemplate) || null,
         staticUi: (base.meta && base.meta.staticUi) || null,
@@ -7581,15 +7660,16 @@
         ? global.AhpSchemaV2.buildDesignTokens(layout.theme || {})
         : (base.designTokens || {}), {
         themePreset: themePreset,
-        themeMode: themePreset === 'light' ? 'light' : 'dark',
+        themeMode: resolveAccountAppearance(layout, cfg),
         appearance: buildThemeAppearanceBlock(layout.theme || {})
       }),
       themes: {
         activePreset: themePreset,
         activePresetBinding: stateRef('global.themePreset'),
-        activeMode: themePreset === 'light' ? 'light' : 'dark',
+        // Account appearance: system by default; light/dark if saved in web Profile settings.
+        activeMode: resolveAccountAppearance(layout, cfg),
         activeModeBinding: stateRef('global.themeMode'),
-        serverControlled: true,
+        serverControlled: false,
         userSelectable: false,
         appearance: buildThemeAppearanceBlock(layout.theme || {}),
         presets: buildThemePresetsCatalog(layout.theme || {})

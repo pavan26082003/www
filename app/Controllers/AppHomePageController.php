@@ -35,19 +35,25 @@ class AppHomePageController extends Security_Controller
             return redirect()->to(site_url('signin?redirect=app-home-page/rating'));
         }
 
-        $logoUrl = 'https://efactor.tech/files/home/Logo_new.png';
+        $logoUrlLight = 'https://efactor.tech/assets/images/efactor-logo.jpg';
+        $logoUrlDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
         try {
             $cfg = $this->appHomePageModel->buildSchemaConfig((int) $this->login_user->id);
             if (!empty($cfg['logoUrl'])) {
-                $logoUrl = (string) $cfg['logoUrl'];
+                $logoUrlLight = (string) $cfg['logoUrl'];
+            }
+            if (!empty($cfg['logoUrlDark'])) {
+                $logoUrlDark = (string) $cfg['logoUrlDark'];
             }
         } catch (\Throwable $e) {
-            // keep default logo
+            // keep default logos
         }
 
         return view('app_home_page/rating', array(
             'apiBase' => site_url('app-home-page/api'),
-            'logoUrl' => $logoUrl,
+            'logoUrl' => $logoUrlLight,
+            'logoUrlLight' => $logoUrlLight,
+            'logoUrlDark' => $logoUrlDark,
         ));
     }
 
@@ -684,6 +690,17 @@ class AppHomePageController extends Security_Controller
                 $layout['profilePage']['privacyPolicyText'] = $text;
                 $changed = true;
             }
+        }
+        $appearanceRaw = $payload['appearance'] ?? ($payload['themeMode'] ?? null);
+        if ($appearanceRaw !== null && $appearanceRaw !== '') {
+            $appearance = class_exists(\App\Libraries\AppAppearance::class)
+                ? \App\Libraries\AppAppearance::normalize($appearanceRaw)
+                : 'system';
+            $layout['profilePage']['appearance'] = $appearance;
+            if (class_exists(\App\Libraries\AppAppearance::class)) {
+                \App\Libraries\AppAppearance::save($userId, $appearance);
+            }
+            $changed = true;
         }
 
         if (!$changed) {
