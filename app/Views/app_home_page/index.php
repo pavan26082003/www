@@ -107,7 +107,7 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
     <title>App Home Page — eFactor</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&family=Poppins:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;600;700&family=Lato:wght@400;700&family=Nunito:wght@400;600;700;800&family=Merriweather:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Roboto:wght@400;500;700&family=Poppins:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;600;700&family=Lato:wght@400;700&family=Nunito:wght@400;600;700;800&family=Merriweather:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style id="ahp-inline-css"><?= $ahpInlineCss ?></style>
     <?php
@@ -248,9 +248,9 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
 
                                     <header class="ahp-m-header">
                                         <div class="ahp-m-brand">
-                                            <div class="ahp-m-logo ahp-m-logo-img" id="ahpLogoIcon"><img src="https://efactor.tech/assets/images/efactor-logo.jpg" alt="eFactor" data-logo-light="https://efactor.tech/assets/images/efactor-logo.jpg" data-logo-dark="https://efactor.tech/assets/images/efactor-logo_light.png"></div>
+                                            <div class="ahp-m-logo ahp-m-logo-img" id="ahpLogoIcon"><img src="https://efactor.tech/assets/images/efactor-logo.png" alt="eFactor" data-logo-light="https://efactor.tech/assets/images/efactor-logo.png" data-logo-dark="https://efactor.tech/assets/images/efactor-logo_light.png"></div>
                                             <div>
-                                                <h1 id="ahpHeaderTitle"><?= ahp_h($layout['header']['title'] ?? 'One Intelligent Ecosystem') ?></h1>
+                                                <h1 id="ahpHeaderTitle"><?= ahp_h("One\nIntelligent Ecosystem") ?></h1>
                                                 <p id="ahpHeaderSub"><?= ahp_h($layout['header']['subtitle'] ?? 'Connected intelligence') ?></p>
                                             </div>
                                         </div>
@@ -653,7 +653,7 @@ window.AHP_CONFIG = {
     welcomeUrl: <?= json_encode(site_url('welcome')) ?>,
     csrfName: <?= json_encode($csrfName) ?>,
     csrfHash: <?= json_encode($csrfHash) ?>,
-    logoUrl: <?= json_encode('https://efactor.tech/assets/images/efactor-logo.jpg') ?>,
+    logoUrl: <?= json_encode('https://efactor.tech/assets/images/efactor-logo.png') ?>,
     logoUrlDark: <?= json_encode('https://efactor.tech/assets/images/efactor-logo_light.png') ?>,
     phoneWidth: 375,
     phoneHeight: 812,

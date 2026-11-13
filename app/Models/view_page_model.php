@@ -4507,9 +4507,11 @@ public function generateInitialDeviceUiSchema($modelno, $nodeId = '')
             'schemaApi' => $schemaApiUrl,
         ],
         'theme' => [
-            // Runtime appearance follows the phone; light/dark palettes are attached on serve.
+            // Runtime appearance: system follows the phone; light/dark stay in-app.
             'mode' => 'system',
             'defaultMode' => 'system',
+            'followSystem' => true,
+            'watchOsAppearance' => true,
             'colors' => [
                 'background' => '#0B1220',
                 'surface' => '#1E293B',
@@ -4520,6 +4522,9 @@ public function generateInitialDeviceUiSchema($modelno, $nodeId = '')
         ],
         'themes' => [
             'serverControlled' => false,
+            'followSystem' => true,
+            'watchOsAppearance' => true,
+            'overrideSystemBrightness' => false,
             'activeMode' => 'system',
             'activeModeBinding' => ['$state' => 'global.themeMode'],
         ],
@@ -4540,6 +4545,8 @@ public function generateInitialDeviceUiSchema($modelno, $nodeId = '')
             'global' => [
                 'themeMode' => 'system',
                 'themeServerControlled' => false,
+                'followSystem' => true,
+                'watchOsAppearance' => true,
             ],
             'activePageIndex' => 0,
             'activePageId' => $firstPage['id'],
@@ -11382,11 +11389,11 @@ private function buildDeviceUiBrandLogoAsset($fileOrUrl, $alt = 'Brand')
 private function fallbackDeviceUiBrandLogoAsset($alt = 'Efactor')
 {
     // Official E-FACTOR brand mark — light theme JPG; dark theme uses _light.png.
-    $cdn = 'https://efactor.tech/assets/images/efactor-logo.jpg';
+    $cdn = 'https://efactor.tech/assets/images/efactor-logo.png';
     $cdnDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
     return [
-        'fileName' => 'efactor-logo.jpg',
-        'path' => '/assets/images/efactor-logo.jpg',
+        'fileName' => 'efactor-logo.png',
+        'path' => '/assets/images/efactor-logo.png',
         'url' => $cdn,
         'previewUrl' => $cdn,
         'urlDark' => $cdnDark,
@@ -11426,7 +11433,7 @@ private function deviceUiBrandLogoDarkUrl(array $brandLogo, $origin, $brandSlug)
     if (
         stripos($url, 'efactor-logo') !== false
         || stripos($url, 'Logo_new') !== false
-        || in_array($fileName, array('efactor-logo.png', 'efactor-logo.jpg', 'efactor-logo_light.png', 'logo_new.png'), true)
+        || in_array($fileName, array('efactor-logo.jpg', 'efactor-logo.png', 'efactor-logo_light.png', 'logo_new.png'), true)
         || (($brandLogo['source'] ?? '') === 'cdn')
     ) {
         return 'https://efactor.tech/assets/images/efactor-logo_light.png';
@@ -11908,10 +11915,22 @@ private function stripDeviceUiNameCardNodes(&$node, $depth = 0)
 
 private function schemaDeviceUiBrandLogoAsset(array $brandLogo)
 {
+    $lightUrl = $brandLogo['url'] ?? 'https://efactor.tech/assets/images/efactor-logo.png';
+    $darkUrl = trim((string) ($brandLogo['urlDark'] ?? ($brandLogo['previewUrlDark'] ?? '')));
+    if ($darkUrl === '') {
+        $darkUrl = $this->deviceUiBrandLogoDarkUrl($brandLogo, $this->deviceUiPublicOrigin(), '');
+    }
+    if ($darkUrl === '') {
+        $darkUrl = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+    }
+
     return [
-        'fileName' => $brandLogo['fileName'] ?? 'efactor-logo.jpg',
-        'path' => $brandLogo['path'] ?? '/assets/images/efactor-logo.jpg',
-        'url' => $brandLogo['url'] ?? 'https://efactor.tech/assets/images/efactor-logo.jpg',
+        'fileName' => $brandLogo['fileName'] ?? 'efactor-logo.png',
+        'path' => $brandLogo['path'] ?? '/assets/images/efactor-logo.png',
+        'url' => $lightUrl,
+        'previewUrl' => $brandLogo['previewUrl'] ?? $lightUrl,
+        'urlDark' => $darkUrl,
+        'previewUrlDark' => $brandLogo['previewUrlDark'] ?? $darkUrl,
         'alt' => $brandLogo['alt'] ?? 'Brand',
         'source' => $brandLogo['source'] ?? 'cdn',
         'usage' => $brandLogo['usage'] ?? 'brandMark',
@@ -11925,17 +11944,21 @@ private function applyDeviceUiBrandLogoToSchema(array $schema, array $brandLogo)
     }
 
     $schemaSafe = $this->schemaDeviceUiBrandLogoAsset($brandLogo);
+    // Ensure walk helpers see resolved dark URL even if the incoming asset omitted it.
+    $brandLogo = array_merge($brandLogo, $schemaSafe);
     $schema['assets'] = isset($schema['assets']) && is_array($schema['assets']) ? $schema['assets'] : [];
     $schema['assets']['brandLogo'] = $schemaSafe;
 
     if (isset($schema['mobileView']['brandStrip']) && is_array($schema['mobileView']['brandStrip'])) {
         $schema['mobileView']['brandStrip']['logoUrl'] = $schemaSafe['url'];
+        $schema['mobileView']['brandStrip']['logoUrlDark'] = $schemaSafe['urlDark'];
         $schema['mobileView']['brandStrip']['logoPath'] = $schemaSafe['path'];
         $schema['mobileView']['brandStrip']['logoFileName'] = $schemaSafe['fileName'];
     }
 
     if (isset($schema['meta']['links']) && is_array($schema['meta']['links'])) {
         $schema['meta']['links']['brandLogo'] = $schemaSafe['url'];
+        $schema['meta']['links']['brandLogoDark'] = $schemaSafe['urlDark'];
     }
 
     foreach (['ui', 'app', 'mobileView', 'pages'] as $rootKey) {
@@ -11962,12 +11985,26 @@ private function applyDeviceUiBrandLogoToNode(&$node, array $brandLogo, $depth =
     $isBrandStrip = in_array($id, ['brand_strip', 'brand-strip', 'brandstrip'], true)
         || in_array($type, ['brandbar', 'brandstrip'], true);
 
+    $darkUrl = trim((string) ($brandLogo['urlDark'] ?? ($brandLogo['previewUrlDark'] ?? '')));
+
     if ($isBrandMark) {
         if (array_key_exists('src', $node)) {
             $node['src'] = $brandLogo['url'];
         }
         if (array_key_exists('url', $node)) {
             $node['url'] = $brandLogo['url'];
+        }
+        if (array_key_exists('logoUrl', $node)) {
+            $node['logoUrl'] = $brandLogo['url'];
+        }
+        if (array_key_exists('imageUrl', $node)) {
+            $node['imageUrl'] = $brandLogo['url'];
+        }
+        if ($darkUrl !== '') {
+            $node['srcDark'] = $darkUrl;
+            $node['urlDark'] = $darkUrl;
+            $node['logoUrlDark'] = $darkUrl;
+            $node['imageUrlDark'] = $darkUrl;
         }
         if (array_key_exists('path', $node) && isset($brandLogo['path'])) {
             $node['path'] = $brandLogo['path'];
@@ -11988,6 +12025,10 @@ private function applyDeviceUiBrandLogoToNode(&$node, array $brandLogo, $depth =
             if (array_key_exists('url', $node['props']['logo'])) {
                 $node['props']['logo']['url'] = $brandLogo['url'];
             }
+            if ($darkUrl !== '') {
+                $node['props']['logo']['srcDark'] = $darkUrl;
+                $node['props']['logo']['urlDark'] = $darkUrl;
+            }
             if (array_key_exists('path', $node['props']['logo']) && isset($brandLogo['path'])) {
                 $node['props']['logo']['path'] = $brandLogo['path'];
             }
@@ -12002,6 +12043,9 @@ private function applyDeviceUiBrandLogoToNode(&$node, array $brandLogo, $depth =
             if (array_key_exists('logoUrl', $node['brand'])) {
                 $node['brand']['logoUrl'] = $brandLogo['url'];
             }
+            if ($darkUrl !== '') {
+                $node['brand']['logoUrlDark'] = $darkUrl;
+            }
             if (array_key_exists('logoPath', $node['brand']) && isset($brandLogo['path'])) {
                 $node['brand']['logoPath'] = $brandLogo['path'];
             }
@@ -12011,6 +12055,12 @@ private function applyDeviceUiBrandLogoToNode(&$node, array $brandLogo, $depth =
             if (array_key_exists('alt', $node['brand']) && !empty($brandLogo['alt'])) {
                 $node['brand']['alt'] = $brandLogo['alt'];
             }
+        }
+        if (array_key_exists('logoUrl', $node)) {
+            $node['logoUrl'] = $brandLogo['url'];
+        }
+        if ($darkUrl !== '' && (array_key_exists('logoUrl', $node) || array_key_exists('logoUrlDark', $node))) {
+            $node['logoUrlDark'] = $darkUrl;
         }
     }
 

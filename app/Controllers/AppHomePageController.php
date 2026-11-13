@@ -35,7 +35,7 @@ class AppHomePageController extends Security_Controller
             return redirect()->to(site_url('signin?redirect=app-home-page/rating'));
         }
 
-        $logoUrlLight = 'https://efactor.tech/assets/images/efactor-logo.jpg';
+        $logoUrlLight = 'https://efactor.tech/assets/images/efactor-logo.png';
         $logoUrlDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
         try {
             $cfg = $this->appHomePageModel->buildSchemaConfig((int) $this->login_user->id);
@@ -717,11 +717,21 @@ class AppHomePageController extends Security_Controller
         );
         $this->appHomePageModel->saveSettings($userId, $layout, $schema ?: array());
 
+        $appearance = (string) ($layout['profilePage']['appearance'] ?? 'system');
+        // Do not return the full schema here. Replacing the tree resets the
+        // Flutter route to Home even when the user is on Profile/IoT/Grid.
         return array(
             'success' => true,
             'message' => 'Profile preferences saved',
             'profilePage' => $layout['profilePage'],
-            'schema' => $schema ?: array(),
+            'appearance' => $appearance,
+            'themeMode' => $appearance,
+            'followSystem' => ($appearance === 'system'),
+            'watchOsAppearance' => ($appearance === 'system'),
+            'overrideSystemBrightness' => ($appearance !== 'system'),
+            'reloadSchema' => false,
+            'preserveNavigation' => true,
+            'keepCurrentRoute' => true,
         );
     }
 

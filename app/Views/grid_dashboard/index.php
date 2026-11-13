@@ -152,7 +152,7 @@ if (is_readable($jsPath)) {
   margin:2px 0;font-size:clamp(16px,2.4vw,20px);
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
 }
-.gd-title-block h1 img{height:28px;width:auto;max-width:100%;display:block}
+.gd-title-block h1 img{height:40px;width:auto;max-width:100%;display:block;background:transparent}
 .gd-title-block p{margin:0;color:var(--gd-muted);font-size:12px;line-height:1.35}
 .gd-toolbar-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
 .gd-icon-btn{
@@ -424,7 +424,7 @@ if (is_readable($jsPath)) {
   .gd-toolbar{gap:8px}
   .gd-icon-btn{min-width:34px;height:34px;padding:0 10px;font-size:11px}
   .gd-title-block h1{font-size:15px;gap:8px}
-  .gd-title-block h1 img{height:22px}
+  .gd-title-block h1 img{height:32px}
   .gd-title-block span{font-size:10px}
   .gd-workspace{padding:10px;gap:12px}
   .gd-phone{
@@ -456,7 +456,7 @@ if (is_readable($jsPath)) {
       <div class="gd-title-block">
         <span>Network Experience</span>
         <h1>
-          <img src="https://efactor.tech/assets/images/GRID_Logo.png" alt="GRID">
+          <img id="gdToolbarLogo" src="https://efactor.tech/assets/images/GRID_Logo.png" data-logo-light="https://efactor.tech/assets/images/GRID_Logo.png" data-logo-dark="https://efactor.tech/assets/images/dark_grid.png" alt="GRID">
           <span>Grid Dashboard</span>
         </h1>
         <p>Generate Grid SDUI schema and preview the mobile UI.</p>
@@ -628,6 +628,16 @@ window.GRID_DASHBOARD_BOOT = {
     }
   }
 
+  function syncBrandLogos(theme) {
+    var dark = theme === 'dark';
+    var nodes = root.querySelectorAll('.ahp-gn-logo, #gdToolbarLogo');
+    for (var i = 0; i < nodes.length; i++) {
+      var img = nodes[i];
+      var next = dark ? (img.getAttribute('data-logo-dark') || '') : (img.getAttribute('data-logo-light') || '');
+      if (next && img.getAttribute('src') !== next) img.setAttribute('src', next);
+    }
+  }
+
   function paintPhoneTheme(screen, mode) {
     if (!screen) return;
     var resolved = mode === 'dark' ? 'dark' : (mode === 'light' ? 'light' : (systemPrefersDark() ? 'dark' : 'light'));
@@ -635,6 +645,7 @@ window.GRID_DASHBOARD_BOOT = {
     screen.classList.toggle('dark', resolved === 'dark');
     var shell = root.querySelector('.gd-shell');
     if (shell) shell.classList.toggle('is-dark', resolved === 'dark');
+    syncBrandLogos(resolved);
   }
 
   function applyAccountOrSystemAppearance() {
@@ -646,6 +657,7 @@ window.GRID_DASHBOARD_BOOT = {
       var painted = screen && screen.getAttribute('data-theme');
       var shell = root.querySelector('.gd-shell');
       if (shell) shell.classList.toggle('is-dark', painted === 'dark');
+      syncBrandLogos(painted === 'dark' ? 'dark' : 'light');
     } else {
       paintPhoneTheme(screen, mode);
     }
@@ -688,6 +700,16 @@ window.GRID_DASHBOARD_BOOT = {
     }
     // No web override: follow Account Profile → Appearance (system = OS).
     applyAccountOrSystemAppearance();
+  }
+
+  var phoneScreen = document.getElementById('gdPhoneScreen');
+  if (phoneScreen) {
+    phoneScreen.addEventListener('grid-theme', function (event) {
+      var theme = event && event.detail && event.detail.theme === 'dark' ? 'dark' : 'light';
+      var shell = root.querySelector('.gd-shell');
+      if (shell) shell.classList.toggle('is-dark', theme === 'dark');
+      syncBrandLogos(theme);
+    });
   }
 
   // Seed from the web-only override, else account/system. Never writes the account preference.

@@ -414,7 +414,7 @@ if (!function_exists('view_ui_resolve_brand_logo_asset')) {
     function view_ui_resolve_brand_logo_asset(array $incoming = [])
     {
         // Light theme logo. Dark theme uses efactor-logo_light.png.
-        $efactorLogoLight = 'https://efactor.tech/assets/images/efactor-logo.jpg';
+        $efactorLogoLight = 'https://efactor.tech/assets/images/efactor-logo.png';
         $efactorLogoDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
         $incomingUrl = trim((string) ($incoming['url'] ?? ($incoming['previewUrl'] ?? '')));
         $incomingName = strtolower((string) ($incoming['fileName'] ?? basename(parse_url($incomingUrl, PHP_URL_PATH) ?: '')));
@@ -450,8 +450,8 @@ if (!function_exists('view_ui_resolve_brand_logo_asset')) {
         }
 
         return [
-            'fileName' => 'efactor-logo.jpg',
-            'path' => '/assets/images/efactor-logo.jpg',
+            'fileName' => 'efactor-logo.png',
+            'path' => '/assets/images/efactor-logo.png',
             'url' => $efactorLogoLight,
             'previewUrl' => $efactorLogoLight,
             'urlDark' => $efactorLogoDark,
@@ -466,6 +466,18 @@ $brand_logo_asset = view_ui_resolve_brand_logo_asset(
     (isset($brand_logo_asset) && is_array($brand_logo_asset)) ? $brand_logo_asset : []
 );
 $brand_logo_preview_url = (string) ($brand_logo_asset['previewUrl'] ?? ($brand_logo_asset['url'] ?? ''));
+$account_appearance_mode = 'system';
+try {
+    $account_appearance_uid = 0;
+    if (class_exists(\App\Services\DeviceUiSchemaNormalizer::class)) {
+        $account_appearance_uid = (int) \App\Services\DeviceUiSchemaNormalizer::resolveRequestUserId();
+    }
+    if ($account_appearance_uid > 0 && class_exists(\App\Libraries\AppAppearance::class)) {
+        $account_appearance_mode = \App\Libraries\AppAppearance::resolve($account_appearance_uid);
+    }
+} catch (\Throwable $e) {
+    $account_appearance_mode = 'system';
+}
 $request_for_view = service('request');
 $active_scan_username = trim((string) ($request_for_view ? $request_for_view->getGet('username') : ''));
 if ($active_scan_username === '') {
@@ -11444,15 +11456,12 @@ if (!function_exists('view_ui_icon')) {
         'nav.background': !authoredDark ? (colors.topbar || '#FFFFFF') : '#FFFFFF',
         'nav.active': accent
       };
-      return {
-        serverControlled: false,
-        activeMode: 'system',
-        activeModeBinding: { '$state': 'global.themeMode' },
+      return Object.assign(accountThemeFollowFlags(), {
         presets: {
           dark: { color: dark },
           light: { color: light }
         }
-      };
+      });
     }
 
     function buildWifiModeThemes(colors) {
@@ -11548,15 +11557,12 @@ if (!function_exists('view_ui_icon')) {
           light[key] = dark[key];
         }
       });
-      return {
-        serverControlled: false,
-        activeMode: 'system',
-        activeModeBinding: { '$state': 'global.themeMode' },
+      return Object.assign(accountThemeFollowFlags(), {
         presets: {
           dark: { color: dark },
           light: { color: light }
         }
-      };
+      });
     }
 
     function buildWifiProvisioningSchema(resolvedNodeId) {
@@ -18287,6 +18293,22 @@ if (!function_exists('view_ui_icon')) {
     const parametersApiUrl = schemaApiUrl;
     const editPageLinkingUrl = <?= json_encode(get_uri('items/api_page_linking/' . (int) $modal_id . '?modelno=' . rawurlencode($modelno)), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     const brandLogo = <?= json_encode($brand_logo_asset ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    const accountAppearance = <?= json_encode($account_appearance_mode ?? 'system', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    function resolveAccountAppearanceMode() {
+      const raw = String(accountAppearance || 'system').toLowerCase();
+      return (raw === 'light' || raw === 'dark' || raw === 'system') ? raw : 'system';
+    }
+    function accountThemeFollowFlags(mode) {
+      mode = mode || resolveAccountAppearanceMode();
+      return {
+        serverControlled: mode !== 'system',
+        followSystem: mode === 'system',
+        watchOsAppearance: mode === 'system',
+        overrideSystemBrightness: mode !== 'system',
+        activeMode: mode,
+        activeModeBinding: { '$state': 'global.themeMode' }
+      };
+    }
     const initialDeviceOnline = <?= $device_online ? 'true' : 'false' ?>;
     const initialDeviceOnlineLabel = <?= json_encode($device_online_label, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
     const initialDeviceOnlineTimestamp = <?= json_encode($device_online_timestamp, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
@@ -22356,10 +22378,10 @@ if (!function_exists('view_ui_icon')) {
         brand.style.boxShadow = '';
       });
 
-      // Theme-aware Efactor brand mark: light theme → efactor-logo.jpg, dark → efactor-logo_light.png.
+      // Theme-aware Efactor brand mark: light theme → efactor-logo.png, dark → efactor-logo_light.png.
       (function syncBrandLogoForTheme() {
         const isDarkMode = String(theme.themeMode || '').toLowerCase() === 'dark';
-        const lightFallback = (brandLogo && (brandLogo.url || brandLogo.previewUrl)) || 'https://efactor.tech/assets/images/efactor-logo.jpg';
+        const lightFallback = (brandLogo && (brandLogo.url || brandLogo.previewUrl)) || 'https://efactor.tech/assets/images/efactor-logo.png';
         const darkFallback = (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png';
         queryPreviewAll('.brand-mark img').forEach(function(img) {
           const lightUrl = img.getAttribute('data-logo-light') || lightFallback;
@@ -24084,10 +24106,12 @@ if (!function_exists('view_ui_icon')) {
                 visible: boolValue(currentTheme.brandVisible),
                 props: {
                   logo: {
-                    src: (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || '',
-                    url: (brandLogo && brandLogo.url) || '',
-                    path: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.jpg',
-                    fileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.jpg',
+                    src: (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || 'https://efactor.tech/assets/images/efactor-logo.png',
+                    url: (brandLogo && brandLogo.url) || 'https://efactor.tech/assets/images/efactor-logo.png',
+                    srcDark: (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
+                    urlDark: (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
+                    path: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.png',
+                    fileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.png',
                     alt: (brandLogo && brandLogo.alt) || 'Efactor',
                     fit: 'contain'
                   },
@@ -24378,9 +24402,10 @@ if (!function_exists('view_ui_icon')) {
               visible: toBool(currentTheme.brandVisible),
               className: 'brand-strip',
               brand: {
-                logoUrl: (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || '',
-                logoPath: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.jpg',
-                logoFileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.jpg',
+                logoUrl: (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || 'https://efactor.tech/assets/images/efactor-logo.png',
+                logoUrlDark: (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
+                logoPath: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.png',
+                logoFileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.png',
                 alt: (brandLogo && brandLogo.alt) || 'Efactor'
               },
               title: modelNo || 'Linked UI',
@@ -24515,7 +24540,7 @@ if (!function_exists('view_ui_icon')) {
           appTopbar: '<button class="app-back-btn">{{icon:chevron-left}}<span class="app-back-label">Back</span></button><div class="top-title"><h1>Page {{page.pageNo}}. {{page.pageName}}</h1><p class="top-title-device">{{modelNo}}</p></div><div class="top-actions">{{actionIcons}}</div>',
           brandStrip: (function() {
             const brandThemeDark = String(currentTheme.themeMode || '').toLowerCase() === 'dark';
-            const brandLightUrl = (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || 'https://efactor.tech/assets/images/efactor-logo.jpg';
+            const brandLightUrl = (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || 'https://efactor.tech/assets/images/efactor-logo.png';
             const brandDarkUrl = (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png';
             const brandActiveUrl = brandThemeDark ? brandDarkUrl : brandLightUrl;
             return '<div class="brand-mark"><img src="' + brandActiveUrl + '" alt="' + ((brandLogo && brandLogo.alt) || 'Efactor') + '" data-logo-light="' + brandLightUrl + '" data-logo-dark="' + brandDarkUrl + '"></div><div class="brand-copy"><strong>{{modelNo}}</strong><span>{{linkedPagesText}}</span></div><div class="online-state ' + (getDeviceConnectivityState().online ? 'is-online' : 'is-offline') + '" data-online-state="' + (getDeviceConnectivityState().online ? '1' : '0') + '">' + getDeviceConnectivityState().label + '</div>';
@@ -24580,7 +24605,8 @@ if (!function_exists('view_ui_icon')) {
             showStatus: String(currentTheme.showStatus) !== '0',
             statusText: getDeviceConnectivityState().label,
             statusColor: getDeviceConnectivityState().online ? currentTheme.successColor : currentTheme.errorColor,
-            logoUrl: (brandLogo && brandLogo.url) || '',
+            logoUrl: (brandLogo && brandLogo.url) || 'https://efactor.tech/assets/images/efactor-logo.png',
+            logoUrlDark: (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
             logoPath: (brandLogo && brandLogo.path) || '',
             logoFileName: (brandLogo && brandLogo.fileName) || ''
           },
@@ -24878,8 +24904,10 @@ if (!function_exists('view_ui_icon')) {
           shell: { header: 'appBar', brand: 'brandBar', content: '$navigation.activePage', footer: 'pagePager' }
         },
         theme: {
-          mode: 'system',
-          defaultMode: 'system',
+          mode: resolveAccountAppearanceMode(),
+          defaultMode: resolveAccountAppearanceMode(),
+          followSystem: resolveAccountAppearanceMode() === 'system',
+          watchOsAppearance: resolveAccountAppearanceMode() === 'system',
           studioMode: currentTheme.themeMode || 'dark',
           tokens: {
             colors: {
@@ -25806,15 +25834,21 @@ if (!function_exists('view_ui_icon')) {
           }, [
             node('row', 'brand_strip_row', { mainAxisAlignment: 'spaceBetween', crossAxisAlignment: 'center', spacing: 12 }, {}, [
               node('image', 'brand_mark', (function() {
-                const brandThemeDark = String(currentTheme.themeMode || '').toLowerCase() === 'dark';
-                const brandLightUrl = (brandLogo && (brandLogo.url || brandLogo.previewUrl)) || 'https://efactor.tech/assets/images/efactor-logo.jpg';
+                // Always publish light as primary + dark as companion so the app can
+                // switch on account appearance (do not bake studio themeMode into src).
+                const brandLightUrl = (brandLogo && (brandLogo.url || brandLogo.previewUrl)) || 'https://efactor.tech/assets/images/efactor-logo.png';
                 const brandDarkUrl = (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png';
-                const brandActiveUrl = brandThemeDark ? brandDarkUrl : brandLightUrl;
                 return {
-                  src: brandActiveUrl,
-                  url: brandActiveUrl,
-                  path: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.jpg',
-                  fileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.jpg',
+                  src: brandLightUrl,
+                  url: brandLightUrl,
+                  srcDark: brandDarkUrl,
+                  urlDark: brandDarkUrl,
+                  logoUrl: brandLightUrl,
+                  logoUrlDark: brandDarkUrl,
+                  imageUrl: brandLightUrl,
+                  imageUrlDark: brandDarkUrl,
+                  path: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.png',
+                  fileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.png',
                   fit: 'contain',
                   semanticLabel: (brandLogo && brandLogo.alt) || 'Efactor'
                 };
@@ -25822,7 +25856,7 @@ if (!function_exists('view_ui_icon')) {
                 width: 110,
                 height: 28,
                 alignment: 'centerLeft',
-                backgroundColor: (String(currentTheme.themeMode || '').toLowerCase() === 'dark') ? 'transparent' : '#FFFFFF',
+                backgroundColor: 'transparent',
                 borderRadius: 6
               }, []),
               node('column', 'brand_copy', { width: 'expanded', crossAxisAlignment: 'start', spacing: 2 }, {}, [
@@ -25997,9 +26031,12 @@ if (!function_exists('view_ui_icon')) {
         generatedTimezone: generatedStamp.timezone,
         assets: {
           brandLogo: {
-            fileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.jpg',
-            path: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.jpg',
-            url: (brandLogo && brandLogo.url) || 'https://efactor.tech/assets/images/efactor-logo.jpg',
+            fileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.png',
+            path: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.png',
+            url: (brandLogo && brandLogo.url) || 'https://efactor.tech/assets/images/efactor-logo.png',
+            previewUrl: (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || 'https://efactor.tech/assets/images/efactor-logo.png',
+            urlDark: (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
+            previewUrlDark: (brandLogo && (brandLogo.previewUrlDark || brandLogo.urlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
             alt: (brandLogo && brandLogo.alt) || 'Efactor',
             source: (brandLogo && brandLogo.source) || 'cdn',
             usage: 'brandMark'
@@ -26088,7 +26125,8 @@ if (!function_exists('view_ui_icon')) {
             wifiStatus: scanApiUrlWithNode,
             wifiProvisioning: 'wifiProvisioning',
             infoPage: 'infoPage',
-            brandLogo: (brandLogo && brandLogo.url) || '',
+            brandLogo: (brandLogo && brandLogo.url) || 'https://efactor.tech/assets/images/efactor-logo.png',
+            brandLogoDark: (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
             parameters: schemaApiUrlWithNode,
             deviceInfo: schemaApiUrlWithNode,
             editPageLinking: editPageLinkingUrl
@@ -26096,10 +26134,12 @@ if (!function_exists('view_ui_icon')) {
         },
         node_id: buildNodeIdSchemaSection(resolvedNodeId),
         theme: {
-          // Runtime appearance follows the phone. Studio palette stays in colors below;
-          // light/dark switchable presets are attached as themes on save/serve.
-          mode: 'system',
-          defaultMode: 'system',
+          // Runtime appearance: system follows the phone; light/dark stay in-app.
+          // Studio palette stays in colors below; switchable presets on save/serve.
+          mode: resolveAccountAppearanceMode(),
+          defaultMode: resolveAccountAppearanceMode(),
+          followSystem: resolveAccountAppearanceMode() === 'system',
+          watchOsAppearance: resolveAccountAppearanceMode() === 'system',
           studioMode: currentTheme.themeMode || 'dark',
           backgroundType: currentTheme.backgroundType || 'gradient',
           tokens: {
@@ -26236,8 +26276,10 @@ if (!function_exists('view_ui_icon')) {
         },
         state: {
           global: {
-            themeMode: 'system',
-            themeServerControlled: false
+            themeMode: resolveAccountAppearanceMode(),
+            themeServerControlled: resolveAccountAppearanceMode() !== 'system',
+            followSystem: resolveAccountAppearanceMode() === 'system',
+            watchOsAppearance: resolveAccountAppearanceMode() === 'system'
           },
           activePageIndex: activeIndex,
           activePageId: activePageId,
@@ -26484,7 +26526,8 @@ if (!function_exists('view_ui_icon')) {
             modelNo: modelNo,
             showStatus: bool(currentTheme.showStatus),
             statusText: getDeviceConnectivityState().label,
-            logoUrl: (brandLogo && brandLogo.url) || '',
+            logoUrl: (brandLogo && brandLogo.url) || 'https://efactor.tech/assets/images/efactor-logo.png',
+            logoUrlDark: (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
             logoPath: (brandLogo && brandLogo.path) || '',
             logoFileName: (brandLogo && brandLogo.fileName) || ''
           },

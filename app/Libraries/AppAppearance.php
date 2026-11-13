@@ -8,9 +8,12 @@ namespace App\Libraries;
  * Single resolver for Home, Profile, GRID, IoT, and Device UI SDUI surfaces. Values:
  *   light | dark | system
  *
- * Default is system (follow phone) until the user saves a choice in web settings.
- * Mobile clients must follow the resolved value via themes.activeMode /
- * theme.defaultMode / state.global.themeMode — never collapse system on the server.
+ * Default is system (follow phone) until the user saves a choice in settings.
+ * Mobile clients must:
+ *   light  → force light (ignore OS)
+ *   dark   → force dark (ignore OS)
+ *   system → follow phone OS
+ * Never collapse system to light/dark on the server.
  */
 class AppAppearance
 {

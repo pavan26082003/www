@@ -1,10 +1,10 @@
 <?php
 helper('url');
 $apiBase = rtrim((string) ($apiBase ?? site_url('app-home-page/api')), '/');
-$logoUrlLight = trim((string) ($logoUrlLight ?? ($logoUrl ?? 'https://efactor.tech/assets/images/efactor-logo.jpg')));
+$logoUrlLight = trim((string) ($logoUrlLight ?? ($logoUrl ?? 'https://efactor.tech/assets/images/efactor-logo.png')));
 $logoUrlDark = trim((string) ($logoUrlDark ?? 'https://efactor.tech/assets/images/efactor-logo_light.png'));
 if ($logoUrlLight === '') {
-    $logoUrlLight = 'https://efactor.tech/assets/images/efactor-logo.jpg';
+    $logoUrlLight = 'https://efactor.tech/assets/images/efactor-logo.png';
 }
 if ($logoUrlDark === '') {
     $logoUrlDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
@@ -178,7 +178,7 @@ if ($logoUrlDark === '') {
 
       function syncRatingLogo() {
         if (!logoEl) return;
-        var lightUrl = logoEl.getAttribute('data-logo-light') || 'https://efactor.tech/assets/images/efactor-logo.jpg';
+        var lightUrl = logoEl.getAttribute('data-logo-light') || 'https://efactor.tech/assets/images/efactor-logo.png';
         var darkUrl = logoEl.getAttribute('data-logo-dark') || 'https://efactor.tech/assets/images/efactor-logo_light.png';
         var next = isDarkMode() ? darkUrl : lightUrl;
         if (next && logoEl.getAttribute('src') !== next) {

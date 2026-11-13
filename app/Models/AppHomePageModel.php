@@ -279,14 +279,37 @@ class AppHomePageModel
             trim($usersImage),
         );
         foreach ($candidates as $raw) {
+            $raw = trim((string) $raw);
+            if ($raw === '') {
+                continue;
+            }
+            // Prefer the same helper GRID / account UI use so serialized
+            // users.image and profile_images paths resolve correctly.
+            if (function_exists('get_avatar')) {
+                $fromHelper = trim((string) get_avatar($raw));
+                if ($fromHelper !== '' && !preg_match('#/assets/images/avatar\.jpg(\?|$)#i', $fromHelper)) {
+                    $canon = $this->canonicalizeProfileImageUrl($fromHelper);
+                    if ($canon !== '') {
+                        return $canon;
+                    }
+                }
+            }
             $url = $this->publicAvatarUrl($raw);
             if ($url !== '') {
                 return $url;
             }
         }
 
-            return '';
+        if (class_exists(\App\Libraries\GridSduiSchemaBuilder::class)) {
+            $live = \App\Libraries\GridSduiSchemaBuilder::liveHeaderProfile($userId);
+            $gridUrl = trim((string) ($live['imageUrl'] ?? ''));
+            if ($gridUrl !== '') {
+                return $this->canonicalizeProfileImageUrl($gridUrl);
+            }
         }
+
+        return '';
+    }
 
     private function readGridProfileAvatar(int $userId): string
     {
@@ -1057,6 +1080,122 @@ class AppHomePageModel
         if (isset($schema['meta']) && is_array($schema['meta']) && array_key_exists('themeMode', $schema['meta'])) {
             $schema['meta']['themeMode'] = $mode;
         }
+        $logoLight = 'https://efactor.tech/assets/images/efactor-logo.png';
+        $logoDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+        // Live schemas often omit home-header.logo. Inject both assets so the
+        // app can swap on Light/Dark without waiting for a studio republish.
+        if (isset($schema['components']['home-header']) && is_array($schema['components']['home-header'])) {
+            if (!isset($schema['components']['home-header']['logo']) || !is_array($schema['components']['home-header']['logo'])) {
+                $schema['components']['home-header']['logo'] = array();
+            }
+            $logo =& $schema['components']['home-header']['logo'];
+            $logo['imageUrl'] = $logoLight;
+            $logo['imageUrlLight'] = $logoLight;
+            $logo['imageUrlDark'] = $logoDark;
+            $logo['logoUrl'] = $logoLight;
+            $logo['logoUrlDark'] = $logoDark;
+            $logo['src'] = $logoLight;
+            $logo['srcDark'] = $logoDark;
+            $logo['themeAware'] = true;
+            unset($logo);
+
+            $schema['components']['home-header']['appearanceLight'] = array(
+                'logoUrl' => $logoLight,
+                'imageUrl' => $logoLight,
+                'titleColor' => '#0f172a',
+                'subtitleColor' => '#64748b',
+            );
+            $schema['components']['home-header']['appearanceDark'] = array(
+                'logoUrl' => $logoDark,
+                'logoUrlDark' => $logoDark,
+                'imageUrl' => $logoDark,
+                'imageUrlDark' => $logoDark,
+                'titleColor' => '#f8fafc',
+                'subtitleColor' => '#94a3b8',
+            );
+            if (isset($schema['components']['home-header']['appearance']) && is_array($schema['components']['home-header']['appearance'])) {
+                $hdrApp =& $schema['components']['home-header']['appearance'];
+                $hdrApp['titleColor'] = '#0f172a';
+                $hdrApp['titleColorLight'] = '#0f172a';
+                $hdrApp['titleColorDark'] = '#f8fafc';
+                $hdrApp['subtitleColor'] = '#64748b';
+                $hdrApp['subtitleColorLight'] = '#64748b';
+                $hdrApp['subtitleColorDark'] = '#94a3b8';
+                $hdrApp['logoUrl'] = $logoLight;
+                $hdrApp['imageUrl'] = $logoLight;
+                $hdrApp['themeAware'] = true;
+                unset($hdrApp);
+            }
+        }
+        if (isset($schema['components']['home-header']['title']) && is_array($schema['components']['home-header']['title'])) {
+            $title =& $schema['components']['home-header']['title'];
+            if (!isset($title['typography']) || !is_array($title['typography'])) {
+                $title['typography'] = array();
+            }
+            $title['typography']['color'] = '#0f172a';
+            $title['typography']['colorLight'] = '#0f172a';
+            $title['typography']['colorDark'] = '#f8fafc';
+            unset($title);
+        }
+        if (isset($schema['components']['home-header']['subtitle']) && is_array($schema['components']['home-header']['subtitle'])) {
+            $subtitle =& $schema['components']['home-header']['subtitle'];
+            if (!isset($subtitle['typography']) || !is_array($subtitle['typography'])) {
+                $subtitle['typography'] = array();
+            }
+            $subtitle['typography']['color'] = '#64748b';
+            $subtitle['typography']['colorLight'] = '#64748b';
+            $subtitle['typography']['colorDark'] = '#94a3b8';
+            unset($subtitle);
+        }
+        if (isset($schema['components']['main-bottom-navigation']) && is_array($schema['components']['main-bottom-navigation'])) {
+            if (!isset($schema['components']['main-bottom-navigation']['appearance'])
+                || !is_array($schema['components']['main-bottom-navigation']['appearance'])) {
+                $schema['components']['main-bottom-navigation']['appearance'] = array();
+            }
+            $navApp =& $schema['components']['main-bottom-navigation']['appearance'];
+            $navApp['backgroundColor'] = '#ffffff';
+            $navApp['backgroundColorLight'] = '#ffffff';
+            $navApp['backgroundColorDark'] = '#000000';
+            $navApp['activeColor'] = '#111827';
+            $navApp['activeColorLight'] = '#111827';
+            $navApp['activeColorDark'] = '#93c5fd';
+            $navApp['inactiveColor'] = '#64748b';
+            $navApp['inactiveColorLight'] = '#64748b';
+            $navApp['inactiveColorDark'] = '#94a3b8';
+            $navApp['iconColorLight'] = '#64748b';
+            $navApp['iconColorDark'] = '#94a3b8';
+            $navApp['iconColorActiveLight'] = '#111827';
+            $navApp['iconColorActiveDark'] = '#93c5fd';
+            $navApp['labelColorLight'] = '#64748b';
+            $navApp['labelColorDark'] = '#94a3b8';
+            $navApp['labelColorActiveLight'] = '#111827';
+            $navApp['labelColorActiveDark'] = '#93c5fd';
+            $navApp['themeAware'] = true;
+            unset($navApp);
+        }
+        if (isset($schema['components']['alerts-summary']['content']) && is_array($schema['components']['alerts-summary']['content'])) {
+            $alertContent =& $schema['components']['alerts-summary']['content'];
+            if (array_key_exists('valueSeparator', $alertContent)) {
+                $alertContent['valueSeparator'] = ' ';
+            }
+            if (array_key_exists('titleValueFormat', $alertContent)) {
+                $alertContent['titleValueFormat'] = 'Live Alerts {value}';
+            }
+            unset($alertContent);
+        }
+        if (isset($schema['components']['alerts-summary']['appearance']) && is_array($schema['components']['alerts-summary']['appearance'])) {
+            $alertAppearance =& $schema['components']['alerts-summary']['appearance'];
+            if (array_key_exists('backgroundColorDark', $alertAppearance)) {
+                $alertAppearance['backgroundColorDark'] = '#1e293b';
+            }
+            if (array_key_exists('textColorDark', $alertAppearance)) {
+                $alertAppearance['textColorDark'] = '#f8fafc';
+            }
+            if (array_key_exists('backgroundColorToken', $alertAppearance)) {
+                $alertAppearance['backgroundColorToken'] = 'colors.surfaceElevated';
+            }
+            unset($alertAppearance);
+        }
         if (isset($schema['designTokens']) && is_array($schema['designTokens'])) {
             if (array_key_exists('themeMode', $schema['designTokens'])) {
                 $schema['designTokens']['themeMode'] = $mode;
@@ -1067,25 +1206,34 @@ class AppHomePageModel
             }
         }
         if (isset($schema['themes']) && is_array($schema['themes'])) {
-            if (array_key_exists('activeMode', $schema['themes'])) {
-                $schema['themes']['activeMode'] = $mode;
-            }
-            if (array_key_exists('serverControlled', $schema['themes'])) {
-                // false = client may follow system / OS; mode still carries the account choice.
-                $schema['themes']['serverControlled'] = false;
-            }
-            if (isset($schema['themes']['appearance']) && is_array($schema['themes']['appearance'])
-                && array_key_exists('mode', $schema['themes']['appearance'])) {
+            $schema['themes']['activeMode'] = $mode;
+            $schema['themes']['followSystem'] = ($mode === 'system');
+            $schema['themes']['watchOsAppearance'] = ($mode === 'system');
+            $schema['themes']['overrideSystemBrightness'] = ($mode !== 'system');
+            // Light/Dark are account-owned. Only System may follow the phone OS.
+            $schema['themes']['serverControlled'] = ($mode !== 'system');
+            if (isset($schema['themes']['appearance']) && is_array($schema['themes']['appearance'])) {
                 $schema['themes']['appearance']['mode'] = $mode;
             }
         }
         if (isset($schema['state']['global']) && is_array($schema['state']['global'])) {
-            if (array_key_exists('themeMode', $schema['state']['global'])) {
-                $schema['state']['global']['themeMode'] = $mode;
-            }
-            if (array_key_exists('themeServerControlled', $schema['state']['global'])) {
-                $schema['state']['global']['themeServerControlled'] = false;
-            }
+            $schema['state']['global']['themeMode'] = $mode;
+            $schema['state']['global']['themePreset'] = $mode;
+            $schema['state']['global']['themeServerControlled'] = ($mode !== 'system');
+            $schema['state']['global']['followSystem'] = ($mode === 'system');
+            $schema['state']['global']['watchOsAppearance'] = ($mode === 'system');
+        }
+        $schema['schemaReloadPolicy'] = array(
+            'preserveRoute' => true,
+            'preserveNavigation' => true,
+            'preservePageState' => true,
+            'resetToInitialRoute' => false,
+        );
+        if (isset($schema['navigation']) && is_array($schema['navigation'])) {
+            $schema['navigation']['preservePageState'] = true;
+            $schema['navigation']['preserveRouteOnSchemaReload'] = true;
+            $schema['navigation']['restoreLastRoute'] = true;
+            $schema['navigation']['resetToInitialRouteOnReload'] = false;
         }
         if (isset($schema['components']['profile-menu']['items']) && is_array($schema['components']['profile-menu']['items'])) {
             foreach ($schema['components']['profile-menu']['items'] as $idx => $item) {
@@ -1097,8 +1245,41 @@ class AppHomePageModel
                 if ($id !== 'appearance' && $action !== 'profile-appearance') {
                     continue;
                 }
-                if (array_key_exists('subtitle', $item)) {
+                // Do not clobber dynamic subtitle objects ($format / bindings).
+                if (array_key_exists('subtitle', $item) && is_string($item['subtitle'])) {
                     $schema['components']['profile-menu']['items'][$idx]['subtitle'] = $modeLabel . ' mode';
+                }
+            }
+        }
+        // Appearance selector: keep mode/preset bindings on the same state path so
+        // studio bgStyle cannot mark a second row selected.
+        if (isset($schema['components']['profile-appearance-selector'])
+            && is_array($schema['components']['profile-appearance-selector'])) {
+            if (array_key_exists('selectedPresetBinding', $schema['components']['profile-appearance-selector'])) {
+                $schema['components']['profile-appearance-selector']['selectedPresetBinding'] = array(
+                    '$state' => 'global.themeMode',
+                );
+            }
+            if (isset($schema['components']['profile-appearance-selector']['options'])
+                && is_array($schema['components']['profile-appearance-selector']['options'])) {
+                foreach ($schema['components']['profile-appearance-selector']['options'] as $optIdx => $opt) {
+                    if (!is_array($opt)) {
+                        continue;
+                    }
+                    $optMode = strtolower(trim((string) ($opt['mode'] ?? '')));
+                    if ($optMode === '' || !in_array($optMode, array('system', 'light', 'dark'), true)) {
+                        continue;
+                    }
+                    // Only refresh selectedWhen when the option already has one.
+                    if (!array_key_exists('selectedWhen', $opt)) {
+                        continue;
+                    }
+                    $schema['components']['profile-appearance-selector']['options'][$optIdx]['selectedWhen'] = array(
+                        'equals' => array(
+                            array('$state' => 'global.themeMode'),
+                            $optMode,
+                        ),
+                    );
                 }
             }
         }
@@ -1128,22 +1309,34 @@ class AppHomePageModel
         $avatarUrl = trim((string) ($profile['avatarUrl'] ?? ''));
         $initials = $this->profileInitials($name, $email);
 
+        if ($avatarUrl === '' && class_exists(\App\Libraries\GridSduiSchemaBuilder::class)) {
+            $liveHeader = \App\Libraries\GridSduiSchemaBuilder::liveHeaderProfile($userId);
+            $avatarUrl = trim((string) ($liveHeader['imageUrl'] ?? ''));
+            if ($initials === '' && trim((string) ($liveHeader['initial'] ?? '')) !== '') {
+                $initials = trim((string) $liveHeader['initial']);
+            }
+        }
+
         if (isset($schema['state']['session']['user']) && is_array($schema['state']['session']['user'])) {
-            $this->replaceExistingValues($schema['state']['session']['user'], array(
+            $sessionValues = array(
                 'email' => $email,
                 'displayName' => $name,
                 'greetingName' => $name,
                 'firstName' => $this->profileFirstName($name, $email),
                 'initials' => $initials,
-                'avatarUrl' => $avatarUrl,
                 'phone' => $phone,
                 'memberId' => $memberId,
-            ));
+            );
+            // Never blank a working avatar URL with an empty resolve.
+            if ($avatarUrl !== '') {
+                $sessionValues['avatarUrl'] = $avatarUrl;
+            }
+            $this->replaceExistingValues($schema['state']['session']['user'], $sessionValues);
         }
 
         if (isset($schema['components']['profile-header']) && is_array($schema['components']['profile-header'])) {
             $header =& $schema['components']['profile-header'];
-            $this->replaceExistingValues($header, array(
+            $headerValues = array(
                 'name' => $name,
                 'title' => $name,
                 'fullName' => $name,
@@ -1156,16 +1349,26 @@ class AppHomePageModel
                 'chip' => $phone,
                 'phoneChip' => $phone,
                 'avatarText' => $initials,
-                'avatarUrl' => $avatarUrl,
-                'imageUrl' => $avatarUrl,
-            ));
+            );
+            if ($avatarUrl !== '') {
+                $headerValues['avatarUrl'] = $avatarUrl;
+                $headerValues['imageUrl'] = $avatarUrl;
+            }
+            $this->replaceExistingValues($header, $headerValues);
 
             if (isset($header['avatar']) && is_array($header['avatar'])) {
-                $this->replaceExistingValues($header['avatar'], array(
-                    'initials' => $initials,
-                    'imageUrl' => $avatarUrl,
-                ));
-                $this->replaceBindingFallback($header['avatar'], 'imageUrlBinding', $avatarUrl);
+                $avatarValues = array('initials' => $initials);
+                if ($avatarUrl !== '') {
+                    $avatarValues['imageUrl'] = $avatarUrl;
+                }
+                $this->replaceExistingValues($header['avatar'], $avatarValues);
+                if ($avatarUrl !== '') {
+                    $this->replaceBindingFallback($header['avatar'], 'imageUrlBinding', $avatarUrl);
+                    if (isset($header['avatar']['appearance']) && is_array($header['avatar']['appearance'])
+                        && array_key_exists('imageUrl', $header['avatar']['appearance'])) {
+                        $header['avatar']['appearance']['imageUrl'] = $avatarUrl;
+                    }
+                }
             }
 
             if (isset($header['fields']) && is_array($header['fields'])) {
@@ -1193,22 +1396,50 @@ class AppHomePageModel
                 'phoneBinding' => $phone,
                 'memberIdBinding' => $memberId,
                 'eyebrowBinding' => $memberId,
-                'avatarUrlBinding' => $avatarUrl,
-                'imageUrlBinding' => $avatarUrl,
                 'avatarTextBinding' => $initials,
             );
+            if ($avatarUrl !== '') {
+                $fallbacks['avatarUrlBinding'] = $avatarUrl;
+                $fallbacks['imageUrlBinding'] = $avatarUrl;
+            }
             foreach ($fallbacks as $binding => $value) {
                 $this->replaceBindingFallback($header, $binding, $value);
             }
             unset($header);
         }
 
-        if ($avatarUrl === '' && class_exists(\App\Libraries\GridSduiSchemaBuilder::class)) {
-            $liveHeader = \App\Libraries\GridSduiSchemaBuilder::liveHeaderProfile($userId);
-            $avatarUrl = trim((string) ($liveHeader['imageUrl'] ?? ''));
-            if ($initials === '' && trim((string) ($liveHeader['initial'] ?? '')) !== '') {
-                $initials = trim((string) $liveHeader['initial']);
+        // Keep welcome banner avatar in sync with the same live photo.
+        if ($avatarUrl !== '' && isset($schema['components']['welcome-banner']['avatar']) && is_array($schema['components']['welcome-banner']['avatar'])) {
+            $welcomeAvatar =& $schema['components']['welcome-banner']['avatar'];
+            if (array_key_exists('imageUrl', $welcomeAvatar)) {
+                $welcomeAvatar['imageUrl'] = $avatarUrl;
             }
+            $this->replaceBindingFallback($welcomeAvatar, 'imageUrlBinding', $avatarUrl);
+            if (isset($welcomeAvatar['appearance']) && is_array($welcomeAvatar['appearance'])
+                && array_key_exists('imageUrl', $welcomeAvatar['appearance'])) {
+                $welcomeAvatar['appearance']['imageUrl'] = $avatarUrl;
+            }
+            unset($welcomeAvatar);
+        }
+
+        // Theme logos: light mode → efactor-logo.png, dark mode → efactor-logo_light.png.
+        // Always publish both keys so stale stored schemas still switch.
+        if (isset($schema['components']['home-header']) && is_array($schema['components']['home-header'])) {
+            $logoLight = 'https://efactor.tech/assets/images/efactor-logo.png';
+            $logoDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+            if (!isset($schema['components']['home-header']['logo']) || !is_array($schema['components']['home-header']['logo'])) {
+                $schema['components']['home-header']['logo'] = array();
+            }
+            $homeLogo =& $schema['components']['home-header']['logo'];
+            $homeLogo['logoUrl'] = $logoLight;
+            $homeLogo['imageUrlLight'] = $logoLight;
+            $homeLogo['imageUrl'] = $logoLight;
+            $homeLogo['src'] = $logoLight;
+            $homeLogo['logoUrlDark'] = $logoDark;
+            $homeLogo['imageUrlDark'] = $logoDark;
+            $homeLogo['srcDark'] = $logoDark;
+            $homeLogo['themeAware'] = true;
+            unset($homeLogo);
         }
         if (isset($schema['components']['grid-page-header']['actions']) && is_array($schema['components']['grid-page-header']['actions'])) {
             foreach ($schema['components']['grid-page-header']['actions'] as $actionIndex => $headerAction) {
@@ -1237,13 +1468,16 @@ class AppHomePageModel
             if (!isset($schema[$profileKey]) || !is_array($schema[$profileKey])) {
                 continue;
             }
-            $this->replaceExistingValues($schema[$profileKey], array(
+            $pageValues = array(
                 'name' => $name,
                 'email' => $email,
                 'phone' => $phone,
                 'memberId' => $memberId,
-                'avatarUrl' => $avatarUrl,
-            ));
+            );
+            if ($avatarUrl !== '') {
+                $pageValues['avatarUrl'] = $avatarUrl;
+            }
+            $this->replaceExistingValues($schema[$profileKey], $pageValues);
         }
 
         return $schema;
@@ -1885,7 +2119,7 @@ class AppHomePageModel
             'userEmail' => $userEmail,
             'loginUserProfile' => $profile,
             'accountAppearance' => $accountAppearance,
-            'logoUrl' => 'https://efactor.tech/assets/images/efactor-logo.jpg',
+            'logoUrl' => 'https://efactor.tech/assets/images/efactor-logo.png',
             'logoUrlDark' => 'https://efactor.tech/assets/images/efactor-logo_light.png',
             'schemaApiUrl' => $this->getSchemaApiUrl($userId),
             'apiBase' => $this->publicAppHomeApiBaseUrl(),

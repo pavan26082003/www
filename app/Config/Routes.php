@@ -878,6 +878,8 @@ $routes->match(['get', 'post'], 'iot-dashboard/api/(:segment)', 'IotDashboard::a
 // -----------------------------------------------------------------------------
 $routes->get('grid-dashboard', 'GridDashboard::index');
 $routes->get('grid-dashboard/scanner', 'GridDashboard::scanner');
+// App SDUI grid-open-scanner uses /grid/qr — same page as the dashboard scanner.
+$routes->get('grid/qr', 'GridDashboard::scanner');
 $routes->match(['get', 'post'], 'grid-dashboard/api/(:segment)', 'GridDashboard::api/$1');
 
 $routes->get('items/vendor', 'vendor_controller::vendor');
@@ -999,8 +1001,9 @@ $gridRoutesFile = APPPATH . 'Config/GRID_Config/Routes.php';
 if (is_file($gridRoutesFile)) {
     require $gridRoutesFile;
 }
-// Scanned professional QR. Same shell as /grid; the page reads user_id and grid_id.
-$routes->get('grid/connect', 'GRID_Controllers\GridController::index');
+// Scanned professional QR. Keep this on the public connect bridge so external
+// scanners can launch the app instead of being forced through web sign-in.
+$routes->match(['get', 'post', 'head'], 'grid/connect', 'GRID_Controllers\GridController::connect');
 
 
 // Mobile push contract. Session cookie or Bearer token, no CSRF.

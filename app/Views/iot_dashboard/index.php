@@ -7,7 +7,7 @@ $v8DeviceApiBase = isset($v8DeviceApiPath) ? rtrim((string) $v8DeviceApiPath, '/
 $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($savedAccessToken) : '';
 ?>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 /* ── design tokens ──────────────────────────────────────────── */
 :root{
   --iot-blue:#2563eb;
@@ -19,6 +19,7 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
   --iot-ink:#1f2a44;
   --iot-muted:#71819a;
   --iot-line:rgba(148,163,184,.26);
+  --iot-font:'Plus Jakarta Sans',system-ui,sans-serif;
 }
 
 /* ── shell ───────────────────────────────────────────────────── */
@@ -26,9 +27,14 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
   height:calc(100vh - 72px);
   display:flex;flex-direction:column;
   background:linear-gradient(120deg,#d6f8f1,#eef4fb 48%,#d9e7ff);
-  font-family:Inter,Arial,sans-serif;
+  font-family:var(--iot-font);
+  -webkit-font-smoothing:antialiased;
   color:var(--iot-ink);overflow:hidden;
 }
+.iot-shell button,
+.iot-shell input:not(.iot-token-input),
+.iot-qr-modal button,
+.iot-qr-modal input{font-family:inherit}
 .iot-shell.is-dark{
   background:linear-gradient(140deg,#050b16,#0b1220 55%,#111827);
   color:#e2e8f0;
@@ -71,6 +77,54 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
 .iot-shell.is-dark .is-offline .iot-device-type{color:#94a3b8}
 .iot-shell.is-dark .iot-panel-card code{color:#cbd5e1}
 .iot-shell.is-dark .iot-detail-row dd{color:#f8fafc}
+.iot-shell.is-dark .iot-device-search input::placeholder,
+.iot-shell.is-dark .iot-token-input::placeholder{color:#64748b}
+.iot-shell.is-dark .iot-empty-state{
+  color:#94a3b8;
+  border-color:rgba(148,163,184,.35);
+  background:rgba(15,23,42,.35);
+}
+.iot-shell.is-dark .iot-detail-status.offline{
+  background:rgba(148,163,184,.12);color:#cbd5e1;border-color:rgba(148,163,184,.28);
+}
+.iot-shell.is-dark .is-offline .iot-power-label{color:#f8fafc}
+/* Online cards stay readable on a dark phone: a green fade, offline stays slate. */
+.iot-shell.is-dark .iot-device-card.is-online{
+  background:linear-gradient(165deg,#1f4d32 0%,#163526 34%,#1c1c1e 72%);
+  color:#f8fafc;
+  box-shadow:0 12px 28px rgba(0,0,0,.32),0 0 0 1px rgba(132,204,22,.28);
+}
+.iot-shell.is-dark .iot-device-card.is-online::before{
+  background:radial-gradient(circle at 8% 0%,rgba(163,230,53,.32) 0%,transparent 52%);
+}
+.iot-shell.is-dark .iot-device-card.is-online:hover{
+  box-shadow:0 16px 34px rgba(0,0,0,.38),0 0 0 1px rgba(163,230,53,.42);
+}
+.iot-shell.is-dark .iot-header-search-btn.is-open{background:#e2e8f0;color:#0f172a}
+html.iot-is-dark{color-scheme:dark}
+html.iot-is-dark .iot-qr-sheet{background:#0f172a;color:#e2e8f0}
+html.iot-is-dark .iot-qr-sheet-header,
+html.iot-is-dark .iot-qr-sheet-footer{border-color:rgba(148,163,184,.22)}
+html.iot-is-dark .iot-qr-sheet-title,
+html.iot-is-dark .iot-qr-manual-title{color:#f8fafc}
+html.iot-is-dark .iot-qr-icon-btn{background:#1e293b;color:#e2e8f0}
+html.iot-is-dark .iot-qr-icon-btn:hover{background:#334155}
+html.iot-is-dark .iot-qr-icon-btn.is-qr,
+html.iot-is-dark .iot-qr-manual-label-text,
+html.iot-is-dark .iot-qr-kicker{color:#93c5fd}
+html.iot-is-dark .iot-qr-hero{
+  background:linear-gradient(135deg,#172554,#0f172a);border-color:#1e3a8a;
+}
+html.iot-is-dark .iot-qr-subtitle,
+html.iot-is-dark .iot-qr-manual-hint{color:#94a3b8}
+html.iot-is-dark .iot-qr-step{background:#1e293b;color:#94a3b8}
+html.iot-is-dark .iot-qr-step.is-done{background:#14532d;color:#86efac}
+html.iot-is-dark .iot-qr-status-pill{background:#1e293b;border-color:#334155;color:#e2e8f0}
+html.iot-is-dark .iot-qr-btn.ghost{background:#0f172a;color:#cbd5e1;border-color:#334155}
+html.iot-is-dark .iot-qr-btn.ghost:hover{background:#1e293b}
+html.iot-is-dark .iot-qr-manual-card{background:#0f172a}
+html.iot-is-dark .iot-qr-manual-label{color:#94a3b8}
+html.iot-is-dark .iot-qr-manual-input{background:#1e293b;color:#f8fafc;border-color:#334155}
 
 /* ── toolbar ─────────────────────────────────────────────────── */
 .iot-toolbar{
@@ -83,7 +137,7 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
 .iot-title-block{flex:1}
 .iot-title-block span,.iot-panel-label,.iot-eyebrow{
   display:block;color:var(--iot-blue);
-  font-size:11px;font-weight:900;
+  font-size:11px;font-weight:800;
   text-transform:uppercase;letter-spacing:.05em;
 }
 .iot-title-block h1{margin:2px 0;font-size:20px}
@@ -111,7 +165,7 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
 .iot-schema-btn{
   width:100%;min-height:44px;border:0;border-radius:12px;
   background:linear-gradient(135deg,#0f8b8d,#2563eb);
-  color:#fff;font-size:13px;font-weight:900;cursor:pointer;
+  color:#fff;font-size:13px;font-weight:800;cursor:pointer;
 }
 .iot-schema-btn:disabled{opacity:.6;cursor:wait}
 
@@ -120,7 +174,7 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
   display:flex;flex-direction:column;gap:6px;
 }
 .iot-token-field label{
-  font-size:10px;font-weight:900;color:var(--iot-blue);
+  font-size:10px;font-weight:800;color:var(--iot-blue);
   text-transform:uppercase;letter-spacing:.05em;
 }
 .iot-token-input{
@@ -176,7 +230,7 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
   padding:14px 12px 28px;
   background:#ececec;
   overscroll-behavior:contain;
-  font-family:'Inter',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-family:var(--iot-font);
   -webkit-font-smoothing:antialiased;
 }
 .iot-phone-header{
@@ -184,7 +238,7 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
   padding:4px 2px 12px;margin-bottom:4px;
   background:transparent;box-shadow:none;
 }
-.iot-phone-header h2{margin:4px 0 2px;font-size:22px;font-weight:900;line-height:1.08;color:#111827}
+.iot-phone-header h2{margin:4px 0 2px;font-size:22px;font-weight:800;line-height:1.08;color:#111827}
 .iot-phone-header .iot-eyebrow{color:#9ca3af;font-size:12px;font-weight:600;text-transform:none;letter-spacing:0}
 .iot-phone-header p{margin:0;color:#9ca3af;font-size:12px}
 .iot-header-actions{display:flex;align-items:flex-start;gap:8px;flex-shrink:0}
@@ -200,7 +254,7 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
 }
 .iot-device-search input{
   flex:1;min-width:0;border:0;outline:none;background:transparent;
-  font:600 13px/1.2 'Inter',system-ui,sans-serif;color:#111827;
+  font:600 13px/1.2 var(--iot-font);color:#111827;
 }
 .iot-device-search input::placeholder{color:#9ca3af;font-weight:600}
 .iot-device-search input::-webkit-search-cancel-button{cursor:pointer}
@@ -236,6 +290,7 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
 }
 .iot-qr-modal{
   position:fixed;inset:0;z-index:9999;display:none;
+  font-family:var(--iot-font);
   align-items:flex-end;justify-content:center;padding:0;
   background:rgba(15,23,42,.62);backdrop-filter:blur(6px);
 }
@@ -262,7 +317,7 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
   padding:14px 16px 10px;border-bottom:1px solid #f1f5f9;
 }
 .iot-qr-sheet-title{
-  text-align:center;font-size:15px;font-weight:900;color:#111827;letter-spacing:-.02em;
+  text-align:center;font-size:15px;font-weight:800;color:#111827;letter-spacing:-.02em;
 }
 .iot-qr-header-spacer{width:36px;height:36px}
 .iot-qr-icon-btn{
@@ -376,7 +431,7 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
   width:100%;background:#fff;border-radius:18px;padding:18px 16px 16px;
   box-shadow:0 16px 40px rgba(15,23,42,.22);
 }
-.iot-qr-manual-title{margin:0 0 4px;font-size:15px;font-weight:900;color:#111827;text-align:center;letter-spacing:-.02em}
+.iot-qr-manual-title{margin:0 0 4px;font-size:15px;font-weight:800;color:#111827;text-align:center;letter-spacing:-.02em}
 .iot-qr-manual-hint{margin:0 0 14px;font-size:12px;font-weight:600;color:#64748b;text-align:center;line-height:1.45}
 .iot-qr-manual-label{display:block;font-size:11px;font-weight:800;color:#475569;margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase}
 .iot-qr-manual-input{
@@ -403,7 +458,7 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
 .iot-stats-card-left{display:flex;flex-direction:column;gap:2px}
 .iot-stats-card-label{font-size:11px;font-weight:700;color:#9ca3af}
 .iot-stats-card-title{font-size:13px;font-weight:800;color:#111827}
-.iot-stats-card-value{font-size:28px;font-weight:900;color:#84cc16;line-height:1.05;margin-top:2px}
+.iot-stats-card-value{font-size:28px;font-weight:800;color:#84cc16;line-height:1.05;margin-top:2px}
 .iot-stats-card-value span{font-size:14px;font-weight:700;color:#84cc16}
 .iot-stats-card-art{
   width:58px;height:58px;border-radius:18px;flex-shrink:0;
@@ -494,11 +549,11 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
 .iot-card-icon .iot-icon-fallback{
   position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:1;
 }
-.iot-card-icon .iot-icon-fallback.is-initial{font-size:14px;font-weight:900}
+.iot-card-icon .iot-icon-fallback.is-initial{font-size:14px;font-weight:800}
 .iot-brand-placeholder{
   width:38px;height:38px;min-width:38px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  font-size:14px;font-weight:900;flex-shrink:0;
+  font-size:14px;font-weight:800;flex-shrink:0;
 }
 .is-online .iot-brand-placeholder{background:#fff;color:#111827}
 .is-offline .iot-brand-placeholder{background:#111827;color:#fff}
@@ -681,6 +736,22 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
      data-csrf-name="<?= htmlspecialchars($csrfTokenName ?? '', ENT_QUOTES, 'UTF-8') ?>"
      data-csrf-hash="<?= htmlspecialchars($csrfHash ?? '', ENT_QUOTES, 'UTF-8') ?>">
   <section class="iot-shell">
+    <script>
+    (function () {
+      var mode = 'system';
+      try {
+        var stored = String(sessionStorage.getItem('iotDashboardThemeMode') || '').toLowerCase();
+        if (stored === 'light' || stored === 'dark' || stored === 'system') mode = stored;
+      } catch (e) {}
+      var dark = mode === 'dark' || (mode !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var shell = document.currentScript && document.currentScript.parentElement;
+      if (shell) {
+        shell.classList.toggle('is-dark', !!dark);
+        shell.setAttribute('data-theme-mode', mode);
+      }
+      document.documentElement.classList.toggle('iot-is-dark', !!dark);
+    })();
+    </script>
 
     <div class="iot-toolbar">
       <button type="button" class="iot-icon-btn" id="iotBackBtn">&#8592; Back</button>
@@ -689,7 +760,7 @@ $tokenSuffix = $savedAccessToken !== '' ? '&access_token=' . rawurlencode($saved
         <h1>IoT Dashboard</h1>
         <p>Live profile devices with production mobile schema.</p>
       </div>
-      <button type="button" class="iot-icon-btn iot-theme-btn" id="iotThemeBtn" aria-pressed="false">Dark</button>
+      <button type="button" class="iot-icon-btn iot-theme-btn" id="iotThemeBtn" data-mode="system" aria-pressed="false" aria-label="Following phone appearance. Click for light mode" title="System appearance (click for light)">System</button>
       <button type="button" class="iot-icon-btn" id="iotRefreshBtn">&#8635; Refresh</button>
     </div>
 
@@ -1241,7 +1312,7 @@ window.IOT_DASHBOARD_BOOT = {
     var p = parse(d);
     var logoHtml = p.brandLogo
       ? '<img class="iot-detail-brand-logo" src="' + esc(p.brandLogo) + '" alt="' + esc(p.brandName) + '" loading="lazy">'
-      : '<span class="iot-detail-brand-logo" style="width:28px;height:28px;border-radius:6px;background:#111827;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:900">' + esc(p.brandName.charAt(0).toUpperCase()) + '</span>';
+      : '<span class="iot-detail-brand-logo" style="width:28px;height:28px;border-radius:6px;background:#111827;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800">' + esc(p.brandName.charAt(0).toUpperCase()) + '</span>';
     var imgHtml = p.productImage
       ? '<img class="iot-detail-product-img" src="' + esc(p.productImage) + '" alt="' + esc(p.productName) + '" loading="lazy">'
       : '';
@@ -1810,23 +1881,68 @@ window.IOT_DASHBOARD_BOOT = {
   document.getElementById('iotGenerateSchemaBtn')?.addEventListener('click', generateSchema);
   var iotThemeBtn = document.getElementById('iotThemeBtn');
   var iotShell = document.querySelector('.iot-shell');
-  function applyIotDarkTheme(on) {
-    if (!iotShell) return;
-    iotShell.classList.toggle('is-dark', !!on);
-    if (iotThemeBtn) {
-      iotThemeBtn.classList.toggle('is-on', !!on);
-      iotThemeBtn.textContent = on ? 'Light' : 'Dark';
-      iotThemeBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
-      iotThemeBtn.setAttribute('aria-label', on ? 'Switch to light theme' : 'Switch to dark theme');
-    }
-    try { sessionStorage.setItem('iotDashboardTheme', on ? 'dark' : 'light'); } catch (e) {}
+  var IOT_THEME_KEY = 'iotDashboardThemeMode';
+  var iotThemeMedia = null;
+  try {
+    iotThemeMedia = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  } catch (e) {}
+
+  function iotSystemPrefersDark() {
+    try { return !!(iotThemeMedia && iotThemeMedia.matches); } catch (e) { return false; }
   }
-  var savedIotTheme = '';
-  try { savedIotTheme = sessionStorage.getItem('iotDashboardTheme') || ''; } catch (e) {}
-  applyIotDarkTheme(savedIotTheme !== 'light');
+
+  function getIotThemeMode() {
+    try {
+      var stored = String(sessionStorage.getItem(IOT_THEME_KEY) || '').toLowerCase();
+      if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
+    } catch (e) {}
+    return 'system';
+  }
+
+  function applyIotTheme(mode) {
+    if (mode !== 'light' && mode !== 'dark' && mode !== 'system') mode = 'system';
+    var on = mode === 'dark' || (mode !== 'light' && iotSystemPrefersDark());
+    if (iotShell) {
+      iotShell.classList.toggle('is-dark', on);
+      iotShell.setAttribute('data-theme-mode', mode);
+    }
+    var phone = iotShell ? iotShell.querySelector('.iot-phone-screen') : null;
+    if (phone) phone.setAttribute('data-theme', on ? 'dark' : 'light');
+    document.documentElement.classList.toggle('iot-is-dark', on);
+    if (iotThemeBtn) {
+      iotThemeBtn.classList.toggle('is-on', on);
+      iotThemeBtn.setAttribute('data-mode', mode);
+      iotThemeBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (mode === 'system') {
+        iotThemeBtn.textContent = 'System';
+        iotThemeBtn.setAttribute('aria-label', 'Following phone appearance. Click for light mode');
+        iotThemeBtn.title = 'System appearance (click for light)';
+      } else if (mode === 'light') {
+        iotThemeBtn.textContent = 'Light';
+        iotThemeBtn.setAttribute('aria-label', 'Light mode. Click for dark mode');
+        iotThemeBtn.title = 'Light mode (click for dark)';
+      } else {
+        iotThemeBtn.textContent = 'Dark';
+        iotThemeBtn.setAttribute('aria-label', 'Dark mode. Click for system appearance');
+        iotThemeBtn.title = 'Dark mode (click for system)';
+      }
+    }
+    try { sessionStorage.setItem(IOT_THEME_KEY, mode); } catch (e) {}
+  }
+
+  applyIotTheme(getIotThemeMode());
+  if (iotThemeMedia) {
+    var onIotSystemTheme = function () {
+      if (getIotThemeMode() === 'system') applyIotTheme('system');
+    };
+    if (iotThemeMedia.addEventListener) iotThemeMedia.addEventListener('change', onIotSystemTheme);
+    else if (iotThemeMedia.addListener) iotThemeMedia.addListener(onIotSystemTheme);
+  }
   if (iotThemeBtn) {
     iotThemeBtn.addEventListener('click', function () {
-      applyIotDarkTheme(!iotShell.classList.contains('is-dark'));
+      var mode = getIotThemeMode();
+      var next = mode === 'system' ? 'light' : (mode === 'light' ? 'dark' : 'system');
+      applyIotTheme(next);
     });
   }
   document.getElementById('iotRefreshBtn')?.addEventListener('click', refresh);

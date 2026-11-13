@@ -17,7 +17,8 @@ if (file_exists($html_path)) {
         'initialRoute' => $initial_route ?? '',
     ];
 
-    $app_data_script = '<script>window.__APP_DATA__ = ' . json_encode($app_data, JSON_UNESCAPED_SLASHES) . ';</script>';
+    $theme_script = '<script>(function(){var theme=String(new URLSearchParams(window.location.search).get("theme")||"").toLowerCase();if(theme!=="dark"&&theme!=="light")return;document.documentElement.setAttribute("data-theme",theme);try{var raw=localStorage.getItem("mychat_settings");var settings=raw?JSON.parse(raw):{};if(!settings||typeof settings!=="object")settings={};settings.theme=theme;localStorage.setItem("mychat_settings",JSON.stringify(settings));}catch(e){}})();</script>';
+    $app_data_script = $theme_script . '<script>window.__APP_DATA__ = ' . json_encode($app_data, JSON_UNESCAPED_SLASHES) . ';</script>';
     $offline_script = '<script src="/grid-offline.js?v=1"></script>';
 
     // Inject App Data before closing head tag

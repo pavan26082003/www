@@ -10,6 +10,19 @@ class GridSduiSchemaBuilder
 {
     public const GRID_LOGO_URL = 'https://efactor.tech/assets/images/GRID_Logo.png';
 
+    /** Light wordmark for dark backgrounds. Same aspect as GRID_LOGO_URL. */
+    public const GRID_LOGO_DARK_URL = 'https://efactor.tech/assets/images/dark_grid.png';
+
+    /**
+     * Layout-contract revision. STRING, not an integer. Changes only when the
+     * Grid layout contract changes. Personalized fields (avatar, QR, updates)
+     * can change without a new revision.
+     */
+    public const SCHEMA_REV = 'grid-logo-globe-3';
+
+    /** Same PNG in light and dark. No separate dark globe. */
+    public const ORBIT_GLOBE_IMAGE_URL = 'https://efactor.tech/assets/images/grid-orbit-globe.png';
+
     /** Public asset used above Circle Connect in the Grid preview / SDUI. */
     public const ORBIT_GLOBE_ASSET = 'assets/grid-orbit-globe.svg';
 
@@ -598,6 +611,7 @@ class GridSduiSchemaBuilder
             'colors' => array(
                 'textPrimary' => '#2e1065',
                 'textSecondary' => '#6b7280',
+                'textMuted' => '#94a3b8',
                 'border' => '#e5e7eb',
                 'surface' => '#ffffff',
                 'onSurface' => '#111827',
@@ -612,18 +626,19 @@ class GridSduiSchemaBuilder
                 'color' => '#ffffff',
             ),
             'typography' => array(
+                'fontFamily' => 'Plus Jakarta Sans',
                 'pageTitle' => array(
-                    'size' => 26,
-                    'fontSize' => 26,
+                    'size' => 18,
+                    'fontSize' => 18,
                     'weight' => 800,
                     'fontWeight' => 800,
                     'letterSpacing' => -0.02,
-                    'maxLines' => 1,
+                    'maxLines' => 2,
                     'overflow' => 'ellipsis',
                 ),
                 'pageSubtitle' => array(
-                    'size' => 13,
-                    'fontSize' => 13,
+                    'size' => 11,
+                    'fontSize' => 11,
                     'weight' => 500,
                     'fontWeight' => 500,
                     'maxLines' => 2,
@@ -836,10 +851,10 @@ class GridSduiSchemaBuilder
         return self::publicAssetUrl(self::ORBIT_GLOBE_ASSET);
     }
 
-    /** Flutter-safe raster globe (PNG) absolute URL. */
+    /** Flutter-safe raster globe (PNG). Always the public HTTPS file. */
     public static function orbitGlobeImageAssetUrl(): string
     {
-        return self::publicAssetUrl(self::ORBIT_GLOBE_IMAGE);
+        return self::ORBIT_GLOBE_IMAGE_URL;
     }
 
     /**
@@ -1261,16 +1276,25 @@ class GridSduiSchemaBuilder
                 'width' => 'fill',
                 'maxWidth' => '100%',
                 'minWidth' => 0,
-                'reservedBottomInset' => 108,
-                'padding' => array('left' => 16, 'right' => 16, 'top' => 12, 'bottom' => 108),
-                'gap' => 16,
+                'reservedBottomInset' => 136,
+                'contentAvoidsBottomNavigation' => true,
+                'padding' => array('left' => 16, 'right' => 16, 'top' => 18, 'bottom' => 136),
+                'gap' => 18,
                 'responsive' => array(
-                    'narrow' => array('padding' => array('left' => 12, 'right' => 12, 'top' => 8, 'bottom' => 108), 'gap' => 12),
-                    'compact' => array('padding' => array('left' => 12, 'right' => 12, 'top' => 10, 'bottom' => 108), 'gap' => 14),
-                    'regular' => array('padding' => array('left' => 16, 'right' => 16, 'top' => 12, 'bottom' => 108), 'gap' => 16),
-                    'medium' => array('padding' => array('left' => 20, 'right' => 20, 'top' => 12, 'bottom' => 108), 'gap' => 18),
-                    'expanded' => array('padding' => array('left' => 28, 'right' => 28, 'top' => 16, 'bottom' => 108), 'gap' => 22, 'maxWidth' => 720),
+                    'narrow' => array('padding' => array('left' => 12, 'right' => 12, 'top' => 12, 'bottom' => 136), 'gap' => 14),
+                    'compact' => array('padding' => array('left' => 16, 'right' => 16, 'top' => 18, 'bottom' => 136), 'gap' => 18),
+                    'regular' => array('padding' => array('left' => 16, 'right' => 16, 'top' => 18, 'bottom' => 136), 'gap' => 18),
+                    'medium' => array('padding' => array('left' => 20, 'right' => 20, 'top' => 12, 'bottom' => 136), 'gap' => 18),
+                    'expanded' => array('padding' => array('left' => 28, 'right' => 28, 'top' => 16, 'bottom' => 136), 'gap' => 22, 'maxWidth' => 720),
                 ),
+            ),
+            'appearance' => array(
+                'backgroundColor' => '#eef4fb',
+                'pageBackground' => '#eef4fb',
+            ),
+            'appearanceDark' => array(
+                'backgroundColor' => '#050b16',
+                'pageBackground' => '#050b16',
             ),
             'children' => array(
                 'grid-page-header',
@@ -1321,17 +1345,20 @@ class GridSduiSchemaBuilder
             'heroOrder' => array('brand', 'eyebrow', 'title', 'subtitle', 'tagline'),
             'tagline' => (string) ($header['tagline'] ?? 'Connect. Collaborate. Grow Together.'),
             'logoUrl' => $logoUrl,
+            'logoUrlDark' => self::GRID_LOGO_DARK_URL,
             'image' => $logoUrl,
             // Animated globe rendered to the RIGHT of the welcome text, inside the
             // header hero. Web (<object>) runs the SVG's script animation; native
             // clients that cannot run the SVG script load the PNG raster instead.
             'orbitGlobeUrl' => $headerOrbitGlobeUrl,
             'orbitGlobeImageUrl' => self::orbitGlobeImageAssetUrl(),
+            'orbitGlobeImageUrlDark' => self::orbitGlobeImageAssetUrl(),
             'orbitGlobePlacement' => 'heroRight',
-            // Display size (logical px) for the hero globe. 140 sits in the
-            // 130–150 band so Android/iOS match the web hero without crowding
-            // the welcome text or the scanner/avatar actions.
-            'orbitGlobeSize' => array('width' => 140, 'height' => 140),
+            // Display size (logical px) for the hero globe box. Matches the web
+            // hero (.ahp-gn-orbit-globe-wrap). The SVG viewBox is 512 with the
+            // sphere at r=210, so the box must be this large or the app globe
+            // draws smaller than the web object.
+            'orbitGlobeSize' => array('width' => 160, 'height' => 160),
             // iOS was clipping the right edge because the header laid out with
             // overflowX=hidden. Keep the globe fully inside the hero and let
             // the row reflow instead of clipping.
@@ -1351,8 +1378,8 @@ class GridSduiSchemaBuilder
                 'titleFlex' => 1,
                 'titleMinWidth' => 0,
                 'heroGlobeFlex' => 0,
-                'heroGlobeWidth' => 140,
-                'heroGlobeHeight' => 140,
+                'heroGlobeWidth' => 160,
+                'heroGlobeHeight' => 160,
                 'titleSubtitleDirection' => 'vertical',
                 'subtitlePlacement' => 'belowTitle',
                 'eyebrowPlacement' => 'belowBrand',
@@ -1360,78 +1387,89 @@ class GridSduiSchemaBuilder
                 'responsive' => array(
                     'narrow' => array(
                         'gap' => 8,
-                        'titleFontSize' => 20,
-                        'subtitleFontSize' => 12,
-                        'logoHeight' => 28,
-                        'heroGlobeWidth' => 130,
-                        'heroGlobeHeight' => 130,
+                        'titleFontSize' => 18,
+                        'subtitleFontSize' => 11,
+                        'logoHeight' => 44,
+                        'heroGlobeWidth' => 148,
+                        'heroGlobeHeight' => 148,
                         'overflowX' => 'visible',
                         'clipBehavior' => 'none',
                     ),
                     'compact' => array(
-                        'gap' => 10,
-                        'titleFontSize' => 22,
-                        'subtitleFontSize' => 13,
-                        'logoHeight' => 32,
-                        'heroGlobeWidth' => 140,
-                        'heroGlobeHeight' => 140,
+                        'gap' => 12,
+                        'titleFontSize' => 18,
+                        'subtitleFontSize' => 11,
+                        'logoHeight' => 48,
+                        'heroGlobeWidth' => 160,
+                        'heroGlobeHeight' => 160,
                         'overflowX' => 'visible',
                         'clipBehavior' => 'none',
                     ),
                     'regular' => array(
                         'gap' => 12,
-                        'titleFontSize' => 26,
-                        'subtitleFontSize' => 13,
-                        'logoHeight' => 36,
-                        'heroGlobeWidth' => 140,
-                        'heroGlobeHeight' => 140,
+                        'titleFontSize' => 18,
+                        'subtitleFontSize' => 11,
+                        'logoHeight' => 48,
+                        'heroGlobeWidth' => 160,
+                        'heroGlobeHeight' => 160,
                     ),
                     'medium' => array(
                         'gap' => 12,
-                        'titleFontSize' => 28,
-                        'subtitleFontSize' => 14,
-                        'logoHeight' => 36,
-                        'heroGlobeWidth' => 150,
-                        'heroGlobeHeight' => 150,
+                        'titleFontSize' => 22,
+                        'subtitleFontSize' => 12,
+                        'logoHeight' => 52,
+                        'heroGlobeWidth' => 168,
+                        'heroGlobeHeight' => 168,
                     ),
                     'expanded' => array(
                         'gap' => 16,
-                        'titleFontSize' => 32,
-                        'subtitleFontSize' => 15,
-                        'logoHeight' => 40,
-                        'heroGlobeWidth' => 150,
-                        'heroGlobeHeight' => 150,
+                        'titleFontSize' => 24,
+                        'subtitleFontSize' => 13,
+                        'logoHeight' => 56,
+                        'heroGlobeWidth' => 168,
+                        'heroGlobeHeight' => 168,
                     ),
                 ),
             ),
             'appearance' => array(
-                'logoHeight' => 32,
-                'logoMaxWidth' => 96,
-                'orbitGlobeSize' => 140,
+                'logoHeight' => 48,
+                'logoMaxWidth' => 168,
+                'orbitGlobeSize' => 160,
                 'orbitGlobeClip' => false,
                 'overflow' => 'visible',
             ),
             // Dark-mode text colors for the hero copy. logoUrlDark lets the app
-            // swap in a light logo (the default logo has a solid light bg).
+            // swap in the light wordmark (the default logo is for light backgrounds).
             'appearanceDark' => array(
-                'logoHeight' => 32,
-                'logoMaxWidth' => 96,
+                'logoUrlDark' => self::GRID_LOGO_DARK_URL,
+                'logoHeight' => 48,
+                'logoMaxWidth' => 168,
                 'eyebrowColor' => '#a78bfa',
                 'titleColor' => '#f8fafc',
                 'subtitleColor' => '#94a3b8',
                 'taglineColor' => '#94a3b8',
             ),
             'typography' => array(
+                'fontFamily' => 'Plus Jakarta Sans',
                 'titleToken' => 'typography.pageTitle',
                 'subtitleToken' => 'typography.pageSubtitle',
                 'title' => array(
-                    'fontSize' => 24,
+                    'fontFamily' => 'Plus Jakarta Sans',
+                    'fontSize' => 18,
                     'fontWeight' => 800,
-                    'maxLines' => 1,
+                    'maxLines' => 2,
                     'overflow' => 'ellipsis',
                 ),
                 'subtitle' => array(
-                    'fontSize' => 13,
+                    'fontFamily' => 'Plus Jakarta Sans',
+                    'fontSize' => 11,
+                    'fontWeight' => 500,
+                    'maxLines' => 2,
+                    'overflow' => 'ellipsis',
+                ),
+                'tagline' => array(
+                    'fontFamily' => 'Plus Jakarta Sans',
+                    'fontSize' => 11,
                     'fontWeight' => 500,
                     'maxLines' => 2,
                     'overflow' => 'ellipsis',
@@ -1443,14 +1481,24 @@ class GridSduiSchemaBuilder
                     'iconToken' => 'scanner',
                     'actionId' => 'grid-open-scanner',
                     'layout' => array(
-                        'width' => 40,
-                        'height' => 40,
+                        'width' => 48,
+                        'height' => 48,
                         'flex' => 0,
                         'shrink' => 0,
                     ),
                     'appearance' => array(
-                        'size' => 40,
+                        'size' => 48,
                         'iconSize' => 22,
+                        'backgroundColor' => '#ffffff',
+                        'foregroundColor' => '#0b1b33',
+                        'borderColor' => '#e5e7eb',
+                    ),
+                    'appearanceDark' => array(
+                        'size' => 48,
+                        'iconSize' => 22,
+                        'backgroundColor' => '#1a1f2e',
+                        'foregroundColor' => '#f8fafc',
+                        'borderColor' => '#2a3344',
                     ),
                 ),
                 array(
@@ -1493,24 +1541,34 @@ class GridSduiSchemaBuilder
                         ),
                     ),
                     'layout' => array(
-                        'width' => 40,
-                        'height' => 40,
+                        'width' => 48,
+                        'height' => 48,
                         'flex' => 0,
                         'shrink' => 0,
                     ),
                     'style' => array(
-                        'width' => 40,
-                        'height' => 40,
-                        'fontSize' => 15,
+                        'width' => 48,
+                        'height' => 48,
+                        'fontSize' => 16,
                         'fontWeight' => 700,
                         'backgroundColor' => $avatarColor,
                         'color' => '#ffffff',
                     ),
+                    'appearanceDark' => array(
+                        'size' => 48,
+                        'width' => 48,
+                        'height' => 48,
+                        'borderRadius' => 24,
+                        'backgroundColor' => $avatarColor,
+                        'foregroundColor' => '#ffffff',
+                        'fontSize' => 16,
+                        'fontWeight' => 700,
+                    ),
                     'appearance' => array(
-                        'size' => 40,
-                        'width' => 40,
-                        'height' => 40,
-                        'borderRadius' => 20,
+                        'size' => 48,
+                        'width' => 48,
+                        'height' => 48,
+                        'borderRadius' => 24,
                         'backgroundColor' => $avatarColor,
                         'foregroundColor' => '#ffffff',
                         'fontSize' => 15,
@@ -1548,11 +1606,18 @@ class GridSduiSchemaBuilder
             'orbitGlobeUrl' => $orbitGlobeUrl,
             // Flutter-safe raster (PNG) the native app should load instead of the SVG.
             'orbitGlobeImageUrl' => self::orbitGlobeImageAssetUrl(),
+            'orbitGlobeImageUrlDark' => self::orbitGlobeImageAssetUrl(),
+            'appearance' => array(
+                'backgroundColor' => 'transparent',
+            ),
+            'appearanceDark' => array(
+                'backgroundColor' => 'transparent',
+            ),
             'layout' => array_merge(self::gridLayoutMetrics(2, 12, 200), array(
                 'independentScroll' => false,
                 'responsive' => array(
                     'narrow' => self::gridLayoutMetrics(2, 10, 200),
-                    'compact' => self::gridLayoutMetrics(2, 8, 200),
+                    'compact' => self::gridLayoutMetrics(2, 12, 200),
                     'regular' => self::gridLayoutMetrics(2, 12, 200),
                     'medium' => self::gridLayoutMetrics(2, 12, 200),
                     'expanded' => self::gridLayoutMetrics(2, 16, 210, array('maximumContentWidth' => 720)),
@@ -1560,7 +1625,7 @@ class GridSduiSchemaBuilder
             )),
             'layouts' => array(
                 'narrow' => self::gridLayoutMetrics(2, 10, 200),
-                'compact' => self::gridLayoutMetrics(2, 8, 200),
+                'compact' => self::gridLayoutMetrics(2, 12, 200),
                 'regular' => self::gridLayoutMetrics(2, 12, 200),
                 'medium' => self::gridLayoutMetrics(2, 12, 200),
                 'expanded' => self::gridLayoutMetrics(2, 16, 210, array('maximumContentWidth' => 720)),
@@ -1628,7 +1693,7 @@ class GridSduiSchemaBuilder
                 'qrSize' => 140,
                 'responsive' => array(
                     'narrow' => array('direction' => 'vertical', 'gap' => 14, 'alignItems' => 'stretch', 'qrSize' => 160),
-                    'compact' => array('direction' => 'horizontal', 'gap' => 14, 'qrSize' => 132),
+                    'compact' => array('direction' => 'horizontal', 'gap' => 16, 'qrSize' => 140),
                     'regular' => array('direction' => 'horizontal', 'gap' => 16, 'qrSize' => 140),
                     'medium' => array('direction' => 'horizontal', 'gap' => 18, 'qrSize' => 148),
                     'expanded' => array('direction' => 'horizontal', 'gap' => 20, 'qrSize' => 160),
@@ -1770,6 +1835,12 @@ class GridSduiSchemaBuilder
         $components['grid-explore-row'] = array(
             'id' => 'grid-explore-row',
             'type' => 'responsiveGrid',
+            'appearance' => array(
+                'backgroundColor' => 'transparent',
+            ),
+            'appearanceDark' => array(
+                'backgroundColor' => 'transparent',
+            ),
             'layout' => array_merge(self::gridLayoutMetrics(1, 8, 76), array(
                 'independentScroll' => false,
                 'responsive' => array(
@@ -1792,19 +1863,43 @@ class GridSduiSchemaBuilder
             'children' => $exploreChildIds,
         );
 
-        $components['grid-loading'] = array('id' => 'grid-loading', 'type' => 'skeleton', 'variant' => 'home-dashboard');
+        $components['grid-loading'] = array(
+            'id' => 'grid-loading',
+            'type' => 'skeleton',
+            'variant' => 'home-dashboard',
+            'appearance' => array('backgroundColor' => '#eef4fb'),
+            'appearanceDark' => array('backgroundColor' => '#050b16'),
+        );
         $components['grid-empty'] = array(
             'id' => 'grid-empty',
             'type' => 'emptyState',
             'iconToken' => 'grid',
             'title' => 'Grid is empty',
             'subtitle' => 'Your network space will appear here.',
+            'appearance' => array(
+                'backgroundColor' => '#eef4fb',
+                'titleColor' => '#0b1b33',
+                'subtitleColor' => '#64748b',
+            ),
+            'appearanceDark' => array(
+                'backgroundColor' => '#050b16',
+                'titleColor' => '#f8fafc',
+                'subtitleColor' => '#94a3b8',
+            ),
         );
         $components['grid-error'] = array(
             'id' => 'grid-error',
             'type' => 'errorState',
             'title' => 'Unable to load Grid',
             'retryActionId' => 'refresh-grid',
+            'appearance' => array(
+                'backgroundColor' => '#eef4fb',
+                'titleColor' => '#0b1b33',
+            ),
+            'appearanceDark' => array(
+                'backgroundColor' => '#050b16',
+                'titleColor' => '#f8fafc',
+            ),
         );
 
         return $components;
@@ -2308,10 +2403,12 @@ class GridSduiSchemaBuilder
         }
 
         $components = self::buildComponents($content, $userId, $gridId);
+        $accountMode = self::resolveAccountAppearance($userId);
 
         return array(
             'schemaType' => 'server-driven-mobile-app',
             'schemaVersion' => '3.0.0',
+            'schema_rev' => self::SCHEMA_REV,
             'pageId' => 'grid',
             'routeId' => 'grid',
             'rootComponentId' => 'grid-page',
@@ -2350,7 +2447,7 @@ class GridSduiSchemaBuilder
                     'queryParameters' => array_filter(array(
                         'action' => 'get_grid',
                         'user_id' => $userId > 0 ? $userId : null,
-                        'schema_rev' => 'grid-theme-system-1',
+                        'schema_rev' => self::SCHEMA_REV,
                     )),
                     'responseMapping' => array(
                         'schema' => '$.schema',
@@ -2379,17 +2476,20 @@ class GridSduiSchemaBuilder
                     'accent' => '#7c3aed',
                     'textPrimary' => '#2e1065',
                     'textSecondary' => '#6b7280',
+                    'textMuted' => '#94a3b8',
                     'pageBackground' => '#f7f8fc',
                 ),
                 // Semantic token sets per theme. Clients apply 'appearanceDark'
                 // per component in dark mode (falling back to 'appearance').
                 // defaultMode = Account Profile → Appearance (AppAppearance):
-                //   light  → always light
-                //   dark   → always dark
-                //   system → follow device/OS (never pre-resolved here)
-                // Mobile GRID follows this value. The GRID Web Dashboard may
-                // keep a local sun/moon override that does not change this field.
-                'defaultMode' => self::resolveAccountAppearance($userId),
+                //   light  → always light (app-only, ignore phone OS)
+                //   dark   → always dark (app-only, ignore phone OS)
+                //   system → follow phone OS (never pre-resolved here)
+                'defaultMode' => $accountMode,
+                'followSystem' => $accountMode === 'system',
+                'watchOsAppearance' => $accountMode === 'system',
+                'overrideSystemBrightness' => $accountMode !== 'system',
+                'systemFollows' => $accountMode === 'system' ? 'device' : 'account',
                 'modes' => array(
                     'light' => array(
                         'pageBackground' => '#eef4fb',
@@ -2397,6 +2497,7 @@ class GridSduiSchemaBuilder
                         'onSurface' => '#0b1b33',
                         'textPrimary' => '#0b1b33',
                         'textSecondary' => '#64748b',
+                        'textMuted' => '#94a3b8',
                         'border' => '#cbd5e1',
                         'accent' => '#7c3aed',
                         'onAccent' => '#ffffff',
@@ -2407,6 +2508,7 @@ class GridSduiSchemaBuilder
                         'onSurface' => '#f8fafc',
                         'textPrimary' => '#f8fafc',
                         'textSecondary' => '#94a3b8',
+                        'textMuted' => '#64748b',
                         'border' => '#2a3344',
                         'accent' => '#8b5cf6',
                         'onAccent' => '#ffffff',
@@ -2414,19 +2516,29 @@ class GridSduiSchemaBuilder
                 ),
             ),
             'typography' => array(
+                'fontFamily' => 'Plus Jakarta Sans',
                 'action' => array(
                     'fontSize' => 15,
                     'fontWeight' => 700,
                     'lineHeight' => 1.2,
                 ),
                 'pageTitle' => array(
-                    'fontSize' => 26,
+                    'fontFamily' => 'Plus Jakarta Sans',
+                    'fontSize' => 18,
                     'fontWeight' => 800,
-                    'maxLines' => 1,
+                    'maxLines' => 2,
                     'overflow' => 'ellipsis',
                 ),
                 'pageSubtitle' => array(
-                    'fontSize' => 13,
+                    'fontFamily' => 'Plus Jakarta Sans',
+                    'fontSize' => 11,
+                    'fontWeight' => 500,
+                    'maxLines' => 2,
+                    'overflow' => 'ellipsis',
+                ),
+                'tagline' => array(
+                    'fontFamily' => 'Plus Jakarta Sans',
+                    'fontSize' => 11,
                     'fontWeight' => 500,
                     'maxLines' => 2,
                     'overflow' => 'ellipsis',

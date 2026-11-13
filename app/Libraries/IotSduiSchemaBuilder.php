@@ -235,19 +235,19 @@ class IotSduiSchemaBuilder
                 ),
                 'layouts' => array(
                     'narrow'   => array(
-                        'pagePadding'     => array('horizontal' => 10, 'top' => 12, 'bottom' => 108),
+                        'pagePadding'     => array('horizontal' => 10, 'top' => 12, 'bottom' => 136),
                         'maxContentWidth' => null,
                     ),
                     'compact'  => array(
-                        'pagePadding'     => array('horizontal' => 12, 'top' => 14, 'bottom' => 108),
+                        'pagePadding'     => array('horizontal' => 12, 'top' => 14, 'bottom' => 136),
                         'maxContentWidth' => null,
                     ),
                     'medium'   => array(
-                        'pagePadding'     => array('horizontal' => 20, 'top' => 16, 'bottom' => 32),
+                        'pagePadding'     => array('horizontal' => 20, 'top' => 16, 'bottom' => 136),
                         'maxContentWidth' => 720,
                     ),
                     'expanded' => array(
-                        'pagePadding'     => array('horizontal' => 32, 'top' => 20, 'bottom' => 40),
+                        'pagePadding'     => array('horizontal' => 32, 'top' => 20, 'bottom' => 136),
                         'maxContentWidth' => 1024,
                     ),
                 ),
@@ -267,7 +267,7 @@ class IotSduiSchemaBuilder
                 'replaceAppShell' => false,
                 'bottomNavigationFixed' => true,
                 'bottomNavigationOutsideScroll' => true,
-                'reservedBottomInset' => 108,
+                'reservedBottomInset' => 136,
             ),
             'appShell' => array(
                 'reuseHostShell' => true,
@@ -277,11 +277,11 @@ class IotSduiSchemaBuilder
                 'bottomNavigationOutsidePageScroll' => true,
                 'bottomNavigationPosition' => 'fixed',
                 'contentAvoidsBottomNavigation' => true,
-                'reservedBottomInset' => 108,
+                'reservedBottomInset' => 136,
             ),
             'layout' => array(
                 'engine'      => 'sdui',
-                'pagePadding' => array('horizontal' => 12, 'top' => 14, 'bottom' => 108),
+                'pagePadding' => array('horizontal' => 12, 'top' => 14, 'bottom' => 136),
                 'grid'        => array('columns' => 2, 'gap' => 12),
                 'card'        => array(
                     'minHeight'    => 168,
@@ -298,21 +298,21 @@ class IotSduiSchemaBuilder
                 // Breakpoint-specific page-level overrides — Flutter deep-merges the
                 // selected entry into the base layout above.
                 'responsiveLayout' => array(
-                    'narrow'   => array('pagePadding' => array('horizontal' => 10, 'top' => 12, 'bottom' => 24)),
-                    'compact'  => array('pagePadding' => array('horizontal' => 12, 'top' => 14, 'bottom' => 28)),
+                    'narrow'   => array('pagePadding' => array('horizontal' => 10, 'top' => 12, 'bottom' => 136)),
+                    'compact'  => array('pagePadding' => array('horizontal' => 12, 'top' => 14, 'bottom' => 136)),
                     'medium'   => array(
-                        'pagePadding'     => array('horizontal' => 20, 'top' => 16, 'bottom' => 32),
+                        'pagePadding'     => array('horizontal' => 20, 'top' => 16, 'bottom' => 136),
                         'maxContentWidth' => 720,
                     ),
                     'expanded' => array(
-                        'pagePadding'     => array('horizontal' => 32, 'top' => 20, 'bottom' => 40),
+                        'pagePadding'     => array('horizontal' => 32, 'top' => 20, 'bottom' => 136),
                         'maxContentWidth' => 1024,
                     ),
                 ),
             ),
 
             'theme' => $this->getSduiThemeTokens(),
-            'themes' => $this->buildIotModeThemes(),
+            'themes' => $this->buildIotModeThemes($userId),
 
             'typography' => $this->getSduiTypographyTokens(),
 
@@ -443,26 +443,26 @@ class IotSduiSchemaBuilder
                 'title'   => 'IoT Devices',
                 'route'   => '/iot/devices',
                 'layout'  => 'mobile-device-grid',
-                'padding' => array('horizontal' => 12, 'top' => 14, 'bottom' => 28),
+                'padding' => array('horizontal' => 12, 'top' => 14, 'bottom' => 136),
                 'scrollable'       => true,
                 'safeArea'         => true,
                 'keyboardAvoidance'=> false,
                 // Breakpoint overrides for the page container.
                 'responsiveLayout' => array(
                     'narrow'   => array(
-                        'padding'         => array('horizontal' => 10, 'top' => 12, 'bottom' => 24),
+                        'padding'         => array('horizontal' => 10, 'top' => 12, 'bottom' => 136),
                         'maxContentWidth' => null,
                     ),
                     'compact'  => array(
-                        'padding'         => array('horizontal' => 12, 'top' => 14, 'bottom' => 28),
+                        'padding'         => array('horizontal' => 12, 'top' => 14, 'bottom' => 136),
                         'maxContentWidth' => null,
                     ),
                     'medium'   => array(
-                        'padding'         => array('horizontal' => 20, 'top' => 16, 'bottom' => 32),
+                        'padding'         => array('horizontal' => 20, 'top' => 16, 'bottom' => 136),
                         'maxContentWidth' => 720,
                     ),
                     'expanded' => array(
-                        'padding'         => array('horizontal' => 32, 'top' => 20, 'bottom' => 40),
+                        'padding'         => array('horizontal' => 32, 'top' => 20, 'bottom' => 136),
                         'maxContentWidth' => 1024,
                     ),
                 ),
@@ -478,9 +478,9 @@ class IotSduiSchemaBuilder
                     'style'    => array(
                         'padding'       => array('top' => 4, 'right' => 2, 'bottom' => 12, 'left' => 2),
                         'gap'           => 10,
-                        'eyebrow'       => array('fontSize' => 12, 'fontWeight' => 600, 'lineHeight' => 1.2, 'color' => '#9ca3af'),
-                        'title'         => array('fontSize' => 22, 'fontWeight' => 900, 'lineHeight' => 1.08, 'color' => '#111827'),
-                        'subtitle'      => array('fontSize' => 12, 'fontWeight' => 400, 'lineHeight' => 1.3, 'color' => '#9ca3af'),
+                        'eyebrow'       => array('fontSize' => 12, 'fontWeight' => 600, 'lineHeight' => 1.2, 'color' => '#9ca3af', 'colorDark' => '#94a3b8'),
+                        'title'         => array('fontSize' => 22, 'fontWeight' => 900, 'lineHeight' => 1.08, 'color' => '#111827', 'colorDark' => '#f8fafc'),
+                        'subtitle'      => array('fontSize' => 12, 'fontWeight' => 400, 'lineHeight' => 1.3, 'color' => '#9ca3af', 'colorDark' => '#94a3b8'),
                         'avatarSize'    => 42,
                         'avatarRadius'  => 14,
                         'avatarIconSize'=> 22,
@@ -1308,9 +1308,13 @@ class IotSduiSchemaBuilder
         return 'device';
     }
 
-    private function buildIotModeThemes(): array
+    private function buildIotModeThemes(int $userId = 0): array
     {
         $accent = '#111827';
+        $activeMode = 'system';
+        if ($userId > 0 && class_exists(AppAppearance::class)) {
+            $activeMode = AppAppearance::resolve($userId);
+        }
         $light = array(
             'bg.primary' => '#ececec',
             'bg.surface' => '#ffffff',
@@ -1373,8 +1377,12 @@ class IotSduiSchemaBuilder
         );
 
         return array(
-            'serverControlled' => false,
-            'activeMode' => 'system',
+            'serverControlled' => ($activeMode !== 'system'),
+            'followSystem' => ($activeMode === 'system'),
+            'watchOsAppearance' => ($activeMode === 'system'),
+            'overrideSystemBrightness' => ($activeMode !== 'system'),
+            // Account appearance: system by default; light/dark if saved in Profile.
+            'activeMode' => $activeMode,
             'activeModeBinding' => array('$state' => 'global.themeMode'),
             'presets' => array(
                 'dark' => array('color' => $dark),
@@ -1422,26 +1430,37 @@ class IotSduiSchemaBuilder
         return array(
             'productTitle' => array(
                 'fontSize' => 13.5, 'fontWeight' => 800, 'lineHeight' => 1.28, 'letterSpacing' => -0.01,
-                'colorOnline' => '#ffffff', 'colorOffline' => '#111827', 'lineClamp' => 2,
+                'colorOnline' => '#ffffff', 'colorOffline' => '#111827',
+                'colorOfflineDark' => '#f8fafc', 'lineClamp' => 2,
             ),
             'brandText' => array(
                 'fontSize' => 11, 'fontWeight' => 600, 'lineHeight' => 1.25, 'letterSpacing' => 0.01,
                 'colorOnline' => 'rgba(255,255,255,.62)', 'colorOffline' => '#9ca3af',
+                'colorOfflineDark' => '#94a3b8',
             ),
             'deviceTypeText' => array(
                 'fontSize' => 10, 'fontWeight' => 600, 'lineHeight' => 1.2,
                 'colorOnline' => 'rgba(255,255,255,.42)', 'colorOffline' => '#cbd5e1',
+                'colorOfflineDark' => '#64748b',
             ),
             'statusText' => array(
                 'fontSize' => 10.5, 'fontWeight' => 800, 'lineHeight' => 1.2,
                 'colorOnline' => '#a3e635', 'colorOffline' => '#94a3b8',
+                'colorOfflineDark' => '#94a3b8',
             ),
             'powerLabel' => array(
                 'fontSize' => 12, 'fontWeight' => 800, 'lineHeight' => 1.2,
                 'colorOnline' => '#ffffff', 'colorOffline' => '#111827',
+                'colorOfflineDark' => '#f8fafc',
             ),
-            'summaryDate' => array('fontSize' => 11, 'fontWeight' => 700, 'lineHeight' => 1.2, 'color' => '#9ca3af'),
-            'summaryTitle' => array('fontSize' => 13, 'fontWeight' => 800, 'lineHeight' => 1.25, 'color' => '#111827'),
+            'summaryDate' => array(
+                'fontSize' => 11, 'fontWeight' => 700, 'lineHeight' => 1.2,
+                'color' => '#9ca3af', 'colorDark' => '#94a3b8',
+            ),
+            'summaryTitle' => array(
+                'fontSize' => 13, 'fontWeight' => 800, 'lineHeight' => 1.25,
+                'color' => '#111827', 'colorDark' => '#f8fafc',
+            ),
             'summaryValue' => array('fontSize' => 28, 'fontWeight' => 900, 'lineHeight' => 1.05, 'color' => '#84cc16'),
         );
     }
@@ -1718,6 +1737,16 @@ class IotSduiSchemaBuilder
                 'shadow'       => '0 8px 24px rgba(0,0,0,.06)',
                 'marginBottom' => 14,
                 'gap'          => 12,
+            ),
+            // Dark-mode surface so the summary card does not stay paper-white on a dark page.
+            'styleDark' => array(
+                'padding'      => array('top' => 14, 'right' => 16, 'bottom' => 14, 'left' => 16),
+                'borderRadius' => 24,
+                'background'   => '#1e293b',
+                'shadow'       => '0 8px 24px rgba(0,0,0,.28)',
+                'marginBottom' => 14,
+                'gap'          => 12,
+                'border'       => '1px solid rgba(255,255,255,.08)',
             ),
             'layout' => array('type' => 'row', 'justify' => 'space-between', 'align' => 'center'),
             // Summary card stays full-width on all breakpoints — no column changes needed.
@@ -2086,6 +2115,21 @@ class IotSduiSchemaBuilder
                         'class' => 'is-offline', 'background' => '#ffffff', 'color' => '#111827',
                         'shadow' => '0 8px 24px rgba(0,0,0,.07)', 'border' => '1.5px solid #e5e7eb',
                         'imageFilter' => 'grayscale(.35)', 'imageOpacity' => 0.72,
+                    ),
+                    'selected' => array(
+                        'class' => 'is-selected', 'outline' => '3px solid rgba(132,204,22,.55)', 'outlineOffset' => 2,
+                    ),
+                ),
+                // Dark-mode card states — offline cards use slate surfaces + light text.
+                'statesDark' => array(
+                    'online' => array(
+                        'class' => 'is-online', 'background' => '#1c1c1e', 'color' => '#ffffff',
+                        'shadow' => '0 12px 28px rgba(0,0,0,.28)',
+                    ),
+                    'offline' => array(
+                        'class' => 'is-offline', 'background' => '#1e293b', 'color' => '#f8fafc',
+                        'shadow' => '0 8px 24px rgba(0,0,0,.28)', 'border' => '1.5px solid rgba(255,255,255,.10)',
+                        'imageFilter' => 'grayscale(.25)', 'imageOpacity' => 0.78,
                     ),
                     'selected' => array(
                         'class' => 'is-selected', 'outline' => '3px solid rgba(132,204,22,.55)', 'outlineOffset' => 2,

@@ -67,11 +67,16 @@ class DeviceUiSchemaNormalizer
      * @param array  $schema  Decoded schema document.
      * @param string $modelNo Model the app actually requested.
      * @param string $nodeId  Node the app actually opened.
+     * @param int    $userId  Account id for Profile → Appearance (0 = resolve from request).
      */
-    public static function normalize(array $schema, $modelNo = '', $nodeId = '')
+    public static function normalize(array $schema, $modelNo = '', $nodeId = '', $userId = 0)
     {
         $modelNo = trim((string) $modelNo);
         $nodeId  = trim((string) $nodeId);
+        $userId  = (int) $userId;
+        if ($userId <= 0) {
+            $userId = self::resolveRequestUserId();
+        }
 
         $report = [
             'missingFrameValues' => [],
@@ -124,7 +129,7 @@ class DeviceUiSchemaNormalizer
         $schema = self::ensureRequiredIcons($schema);
         $schema = self::normalizeIcons($schema, $report);
         $schema = self::recordValidation($schema, $report);
-        $schema = self::attachModeThemes($schema);
+        $schema = self::attachModeThemes($schema, $userId);
         // Pixel parity last so later contract rewrites cannot wipe preview sizes
         // (e.g. sendButton rebuilt without width/height in normalizeControlContracts).
         $schema = self::applyPreviewPixelParity($schema);
@@ -132,6 +137,135 @@ class DeviceUiSchemaNormalizer
         $schema = self::enrichActionDataFields($schema);
 
         return $schema;
+    }
+
+    /**
+     * Resolve the account id for Appearance from the current HTTP request.
+     * Prefer explicit user_id, then Bearer access_token, then session.
+     */
+    public static function resolveRequestUserId(): int
+    {
+        foreach (['user_id', 'userId'] as $key) {
+            if (isset($_GET[$key]) && is_scalar($_GET[$key]) && (int) $_GET[$key] > 0) {
+                return (int) $_GET[$key];
+            }
+            if (isset($_REQUEST[$key]) && is_scalar($_REQUEST[$key]) && (int) $_REQUEST[$key] > 0) {
+                return (int) $_REQUEST[$key];
+            }
+        }
+
+        $token = self::requestBearerToken();
+        if ($token !== '') {
+            $fromToken = self::userIdForAccessToken($token);
+            if ($fromToken > 0) {
+                return $fromToken;
+            }
+        }
+
+        try {
+            if (class_exists('\\Config\\Services', false) || class_exists('\\Config\\Services')) {
+                $session = \Config\Services::session();
+                $sessionUserId = (int) ($session->get('user_id') ?? 0);
+                if ($sessionUserId > 0) {
+                    return $sessionUserId;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Ignore — fall through.
+        }
+
+        if (isset($_SESSION['user_id']) && (int) $_SESSION['user_id'] > 0) {
+            return (int) $_SESSION['user_id'];
+        }
+
+        return 0;
+    }
+
+    private static function requestBearerToken(): string
+    {
+        $header = '';
+        if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+            $header = (string) $_SERVER['HTTP_AUTHORIZATION'];
+        } elseif (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+            $header = (string) $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+        } elseif (function_exists('apache_request_headers')) {
+            $headers = apache_request_headers();
+            if (is_array($headers)) {
+                foreach ($headers as $name => $value) {
+                    if (strcasecmp((string) $name, 'Authorization') === 0) {
+                        $header = (string) $value;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (preg_match('/^\s*Bearer\s+(\S+)/i', $header, $m)) {
+            return trim($m[1]);
+        }
+
+        if (isset($_GET['access_token']) && is_scalar($_GET['access_token'])) {
+            return trim((string) $_GET['access_token']);
+        }
+
+        return '';
+    }
+
+    private static function userIdForAccessToken(string $token): int
+    {
+        $token = trim($token);
+        if ($token === '') {
+            return 0;
+        }
+
+        try {
+            if (!class_exists('\\Config\\Database', false) && !class_exists('\\Config\\Database')) {
+                return 0;
+            }
+            $row = \Config\Database::connect('default', false)->table('users')
+                ->select('id, status, deleted')
+                ->where('access_token', $token)
+                ->get()
+                ->getRowArray();
+            if (!is_array($row) || (int) ($row['deleted'] ?? 0) === 1) {
+                return 0;
+            }
+            if (isset($row['status']) && $row['status'] !== '' && $row['status'] !== 'active') {
+                return 0;
+            }
+
+            return (int) ($row['id'] ?? 0);
+        } catch (\Throwable $e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Account Profile → Appearance for device UI (same source as App Home / IoT / GRID).
+     * Default system until the user saves light/dark in web settings.
+     */
+    private static function resolveAccountAppearance(int $userId): string
+    {
+        if ($userId <= 0) {
+            return 'system';
+        }
+
+        try {
+            $appearanceFile = dirname(__DIR__) . '/Libraries/AppAppearance.php';
+            if (defined('APPPATH')) {
+                $appearanceFile = rtrim(str_replace('\\', '/', (string) APPPATH), '/') . '/Libraries/AppAppearance.php';
+            }
+            if (!class_exists('\\App\\Libraries\\AppAppearance', false) && is_file($appearanceFile)) {
+                require_once $appearanceFile;
+            }
+            if (class_exists('\\App\\Libraries\\AppAppearance')) {
+                return \App\Libraries\AppAppearance::resolve($userId);
+            }
+        } catch (\Throwable $e) {
+            // Keep system default.
+        }
+
+        return 'system';
     }
 
     /**
@@ -803,20 +937,44 @@ class DeviceUiSchemaNormalizer
     }
 
     /**
-     * Add dark and light presets without changing the colors the app already paints
-     * from theme / wifiProvisioning.theme.
+     * Add dark/light presets and the same runtime appearance contract App Home uses.
+     *
+     * Default: system (follow phone). If the account saved light/dark in web Profile
+     * settings, that value is applied via AppAppearance — never collapse system here.
      */
-    private static function attachModeThemes(array $schema): array
+    private static function attachModeThemes(array $schema, int $userId = 0): array
     {
         $theme = (isset($schema['theme']) && is_array($schema['theme'])) ? $schema['theme'] : array();
-        $schema['themes'] = self::buildModeThemes(self::devicePalettes($theme), 'system');
+        $activeMode = self::resolveAccountAppearance($userId);
+        $schema['themes'] = self::buildModeThemes(self::devicePalettes($theme), $activeMode);
+
+        if (!isset($schema['theme']) || !is_array($schema['theme'])) {
+            $schema['theme'] = array();
+        }
+        // Keep authored colors; switchable palettes live under themes.presets.
+        $schema['theme']['defaultMode'] = $activeMode;
+        $schema['theme']['mode'] = $activeMode;
+        if (array_key_exists('themeMode', $schema['theme'])) {
+            $schema['theme']['themeMode'] = $activeMode;
+        }
+
+        if (!isset($schema['state']) || !is_array($schema['state'])) {
+            $schema['state'] = array();
+        }
+        if (!isset($schema['state']['global']) || !is_array($schema['state']['global'])) {
+            $schema['state']['global'] = array();
+        }
+        $schema['state']['global']['themeMode'] = $activeMode;
+        $schema['state']['global']['themeServerControlled'] = ($activeMode !== 'system');
+        $schema['state']['global']['followSystem'] = ($activeMode === 'system');
+        $schema['state']['global']['watchOsAppearance'] = ($activeMode === 'system');
 
         if (isset($schema['wifiProvisioning']) && is_array($schema['wifiProvisioning'])) {
             $wifiTheme = (isset($schema['wifiProvisioning']['theme']) && is_array($schema['wifiProvisioning']['theme']))
                 ? $schema['wifiProvisioning']['theme']
                 : array();
             $wifiColors = (isset($wifiTheme['colors']) && is_array($wifiTheme['colors'])) ? $wifiTheme['colors'] : array();
-            $schema['wifiProvisioning']['themes'] = self::buildModeThemes(self::wifiPalettes($wifiColors), 'system');
+            $schema['wifiProvisioning']['themes'] = self::buildModeThemes(self::wifiPalettes($wifiColors), $activeMode);
         }
 
         return $schema;
@@ -824,9 +982,38 @@ class DeviceUiSchemaNormalizer
 
     private static function activeThemeMode(array $theme): string
     {
-        $mode = strtolower(trim((string) ($theme['mode'] ?? ($theme['themeMode'] ?? 'dark'))));
+        // studioMode keeps the authored Design Studio palette after runtime mode is "system".
+        $studio = strtolower(trim((string) ($theme['studioMode'] ?? '')));
+        if ($studio === 'light' || $studio === 'dark') {
+            return $studio;
+        }
 
-        return $mode === 'light' ? 'light' : 'dark';
+        $mode = strtolower(trim((string) ($theme['mode'] ?? ($theme['themeMode'] ?? 'dark'))));
+        if ($mode === 'light') {
+            return 'light';
+        }
+        if ($mode === 'dark') {
+            return 'dark';
+        }
+
+        // Runtime "system" (or unknown): infer from authored background when possible.
+        $background = '';
+        if (isset($theme['colors']['background']) && is_string($theme['colors']['background'])) {
+            $background = $theme['colors']['background'];
+        } elseif (isset($theme['backgroundColor']) && is_string($theme['backgroundColor'])) {
+            $background = $theme['backgroundColor'];
+        }
+        $hex = strtoupper(ltrim(trim($background), '#'));
+        if (preg_match('/^[0-9A-F]{6}$/', $hex)) {
+            $r = hexdec(substr($hex, 0, 2));
+            $g = hexdec(substr($hex, 2, 2));
+            $b = hexdec(substr($hex, 4, 2));
+            $luma = (0.2126 * $r) + (0.7152 * $g) + (0.0722 * $b);
+
+            return $luma >= 140 ? 'light' : 'dark';
+        }
+
+        return 'dark';
     }
 
     private static function buildModeThemes(array $palettes, string $activeMode): array
@@ -854,7 +1041,10 @@ class DeviceUiSchemaNormalizer
         }
 
         return array(
-            'serverControlled' => false,
+            'serverControlled' => ($activeMode !== 'system'),
+            'followSystem' => ($activeMode === 'system'),
+            'watchOsAppearance' => ($activeMode === 'system'),
+            'overrideSystemBrightness' => ($activeMode !== 'system'),
             'activeMode' => $activeMode,
             'activeModeBinding' => array('$state' => 'global.themeMode'),
             'presets' => array(

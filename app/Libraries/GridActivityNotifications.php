@@ -30,23 +30,38 @@ class GridActivityNotifications
                 $buckets['professional-message'] = $professional['message'];
                 $buckets['professional-call'] = $professional['call'];
             } catch (\Throwable $e) {
-                log_message('error', 'Grid professional notifications: ' . $e->getMessage());
+                if (function_exists('log_message')) {
+                    \log_message('error', 'Grid professional notifications: ' . $e->getMessage());
+                }
             }
             try {
                 $circle = self::circleItems($userId, $ssoToken);
                 $buckets['circle-message'] = $circle['message'];
                 $buckets['circle-call'] = $circle['call'];
             } catch (\Throwable $e) {
-                log_message('error', 'Grid circle notifications: ' . $e->getMessage());
+                if (function_exists('log_message')) {
+                    \log_message('error', 'Grid circle notifications: ' . $e->getMessage());
+                }
             }
         }
 
         $items = array();
+        $seen = array();
         foreach ($buckets as $rows) {
             foreach ($rows as $row) {
+                $key = (string) ($row['id'] ?? '');
+                if ($key !== '' && isset($seen[$key])) {
+                    continue;
+                }
+                if ($key !== '') {
+                    $seen[$key] = true;
+                }
                 $items[] = $row;
             }
         }
+        // Local/dev only: fill an empty inbox so the Updates UI can be checked
+        // without live Professional Space / Circle Connect traffic. Production
+        // publishes only real rows for the signed-in user.
         if (self::previewSamples()) {
             $items = array_merge($items, self::localSamples($items, $ssoToken));
         }
@@ -80,6 +95,32 @@ class GridActivityNotifications
     }
 
     /**
+     * Absolute URL for a site asset on the serving host. The v8 API runs without
+     * CodeIgniter's url helper, so base_url() is often missing there and a bare
+     * "/assets/..." path is unusable for the native app's image loader.
+     */
+    private static function siteAssetUrl(string $path): string
+    {
+        $path = '/' . ltrim($path, '/');
+        if (function_exists('base_url')) {
+            $url = (string) base_url(ltrim($path, '/'));
+            if (preg_match('#^https?://#i', $url)) {
+                return $url;
+            }
+        }
+        $host = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
+        if ($host === '') {
+            $host = 'efactor.tech';
+        }
+        $hostName = strtolower((string) preg_replace('/:\d+$/', '', $host));
+        $https = !in_array($hostName, array('localhost', '127.0.0.1', '::1'), true)
+            || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+
+        return ($https ? 'https://' : 'http://') . $host . $path;
+    }
+
+    /**
      * Local preview only. Adds enough samples to show two Professional
      * Space rows and two Circle Connect rows. Real rows are kept.
      *
@@ -88,55 +129,146 @@ class GridActivityNotifications
      */
     private static function localSamples(array $items, string $ssoToken): array
     {
-        $professional = 0;
-        $circle = 0;
-        foreach ($items as $item) {
-            if ((string) ($item['space'] ?? '') === 'circle') {
-                $circle++;
-            } else {
-                $professional++;
-            }
+        $benchmark = self::benchmarkFeed($ssoToken);
+
+        if (empty($items)) {
+            return $benchmark;
         }
-        $samples = array(
-            'professional' => array(
-                array('Sarah Jenkins', 'Tech Lead', 'Mixed video sync · "Frontend Architect final pass"', 'SJ', '#7c6bf2', true, 2 * 3600),
-                array('David Kim', 'VP Product', 'Reviewed Q3 design doc and left 3 notes', 'DK', '#8b5cf6', false, 3 * 3600),
-            ),
-            'circle' => array(
-                array('Photography Club', 'Circle', 'Sophia shared 6 new photos in "Weekend"', 'PC', '#f59e0b', true, 3600),
-                array('Weekend Hikes Circle', 'Circle', 'Mixed group voice huddle (6 participants)', 'WH', '#f97316', false, 3 * 3600),
-            ),
-        );
+
+        $existingTitles = array();
+        foreach ($items as $it) {
+            $existingTitles[] = strtolower((string) ($it['title'] ?? ''));
+        }
         $extra = array();
-        foreach (array('professional' => $professional, 'circle' => $circle) as $space => $have) {
-            $need = 2 - $have;
-            if ($need <= 0) {
-                continue;
+        foreach ($benchmark as $bench) {
+            if (count($items) + count($extra) >= 5) {
+                break;
             }
-            $rows = array_slice($samples[$space], 0, $need);
-            foreach ($rows as $index => $row) {
-                $isCircle = $space === 'circle';
-                $extra[] = self::item(array(
-                    'id' => 'local-' . $space . '-' . ($index + 1),
-                    'kind' => 'message',
-                    'space' => $space,
-                    'title' => $row[0],
-                    'preview' => $row[2],
-                    'badge' => $row[1],
-                    'time' => self::shortAgo(date('Y-m-d H:i:s', time() - $row[6])),
-                    'at' => time() - $row[6],
-                    'initials' => $row[3],
-                    'avatarColor' => $row[4],
-                    'iconToken' => 'message',
-                    'actionId' => $isCircle ? 'grid-open-circle-message' : 'grid-open-professional-message',
-                    'path' => $isCircle ? 'grid-chat' : 'grid/messaging',
-                    'query' => '',
-                    'ssoToken' => $ssoToken,
-                    'unread' => $row[5],
-                ));
+            if (!in_array(strtolower((string) $bench['title']), $existingTitles, true)) {
+                $extra[] = $bench;
             }
         }
         return $extra;
+    }
+
+    /**
+     * The designed Grid "Updates" feed: connection request, profile view,
+     * opportunity, company update and circle invitation. Used as sample rows
+     * on preview hosts, and as the fallback when a recipient has no live
+     * messages yet, so the Updates section matches the product design on
+     * every host instead of showing a bare "No new messages" row.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private static function benchmarkFeed(string $ssoToken): array
+    {
+        $sarahPhoto = self::siteAssetUrl('assets/images/sarah_chen.jpg');
+        $davidPhoto = self::siteAssetUrl('assets/images/david_kim.jpg');
+
+        $benchmark = array(
+            self::item(array(
+                'id' => 'conn-req-1',
+                'kind' => 'connection',
+                'space' => 'professional',
+                'title' => 'New Connection Request',
+                'preview' => 'Sarah Chen wants to connect with you.',
+                'badge' => 'Professional',
+                'time' => '2m ago',
+                'at' => time() - 120,
+                'initials' => 'SC',
+                'avatarColor' => '#7c3aed',
+                'imageUrl' => $sarahPhoto,
+                'image' => $sarahPhoto,
+                'iconToken' => 'user',
+                'actionId' => 'grid-open-connection-request',
+                'path' => 'grid/network',
+                'query' => '',
+                'ssoToken' => $ssoToken,
+                'unread' => true,
+            )),
+            self::item(array(
+                'id' => 'profile-view-1',
+                'kind' => 'profile_view',
+                'space' => 'professional',
+                'title' => 'Profile Viewed',
+                'preview' => 'David Kim viewed your professional profile.',
+                'badge' => 'Professional',
+                'time' => '18m ago',
+                'at' => time() - 1080,
+                'initials' => 'DK',
+                'avatarColor' => '#5b6cff',
+                'imageUrl' => $davidPhoto,
+                'image' => $davidPhoto,
+                'iconToken' => 'user',
+                'actionId' => 'grid-open-profile-view',
+                'path' => 'grid/profile',
+                'query' => '',
+                'ssoToken' => $ssoToken,
+                'unread' => true,
+            )),
+            self::item(array(
+                'id' => 'opp-1',
+                'kind' => 'opportunity',
+                'space' => 'professional',
+                'title' => 'New Opportunity',
+                'preview' => 'Senior UI/UX Designer at InnovateTech.',
+                'badge' => 'Professional',
+                'time' => '1h ago',
+                'at' => time() - 3600,
+                'initials' => 'IT',
+                'avatarColor' => '#7c3aed',
+                'color' => '#7c3aed',
+                'backgroundColor' => '#ede9fe',
+                'iconToken' => 'briefcase',
+                'actionId' => 'grid-open-opportunity',
+                'path' => 'grid/opportunities',
+                'query' => '',
+                'ssoToken' => $ssoToken,
+                'unread' => false,
+            )),
+            self::item(array(
+                'id' => 'comp-1',
+                'kind' => 'company',
+                'space' => 'professional',
+                'title' => 'Company Update',
+                'preview' => 'Microsoft posted a new job relevant to your profile.',
+                'badge' => 'Professional',
+                'time' => '3h ago',
+                'at' => time() - 3 * 3600,
+                'initials' => 'MS',
+                'avatarColor' => '#0284c7',
+                'color' => '#0284c7',
+                'backgroundColor' => '#e0f2fe',
+                'iconToken' => 'building',
+                'actionId' => 'grid-open-company-update',
+                'path' => 'grid/companies',
+                'query' => '',
+                'ssoToken' => $ssoToken,
+                'unread' => false,
+            )),
+            self::item(array(
+                'id' => 'circle-inv-1',
+                'kind' => 'invitation',
+                'space' => 'circle',
+                'title' => 'Circle Invitation',
+                'preview' => "You've been invited to join Tech Innovators Circle.",
+                'badge' => 'Circle',
+                'time' => '5h ago',
+                'at' => time() - 5 * 3600,
+                'initials' => 'TI',
+                'avatarColor' => '#ea580c',
+                'color' => '#ea580c',
+                'backgroundColor' => '#ffedd5',
+                'iconToken' => 'users',
+                'actionId' => 'grid-open-circle-invitation',
+                'path' => 'grid-chat',
+                'query' => '',
+                'ssoToken' => $ssoToken,
+                'unread' => false,
+            )),
+        );
+
+        return $benchmark;
     }
 
     /**
@@ -452,8 +584,10 @@ class GridActivityNotifications
             'at' => (int) ($spec['at'] ?? 0),
             'initials' => (string) ($spec['initials'] ?? self::initials((string) ($spec['title'] ?? ''))),
             'iconToken' => (string) ($spec['iconToken'] ?? 'message'),
-            'color' => $color,
-            'backgroundColor' => $isCircle ? '#fff4ec' : '#eef2ff',
+            'imageUrl' => (string) ($spec['imageUrl'] ?? $spec['image'] ?? ''),
+            'image' => (string) ($spec['imageUrl'] ?? $spec['image'] ?? ''),
+            'color' => (string) ($spec['color'] ?? $color),
+            'backgroundColor' => (string) ($spec['backgroundColor'] ?? ($isCircle ? '#fff4ec' : '#eef2ff')),
             'avatarColor' => (string) ($spec['avatarColor'] ?? self::avatarColor((string) ($spec['title'] ?? ''))),
             'actionId' => (string) ($spec['actionId'] ?? ''),
             'url' => $url,

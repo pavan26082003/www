@@ -314,6 +314,19 @@ $jsBundlePath = __DIR__ . '/react/dist/bundle.js';
         };
     </script>
 
+    <script>
+        (function () {
+            var theme = String(new URLSearchParams(window.location.search).get('theme') || '').toLowerCase();
+            if (theme !== 'dark' && theme !== 'light') return;
+            document.documentElement.setAttribute('data-theme', theme);
+            if (theme === 'dark') document.documentElement.classList.add('dark');
+            else document.documentElement.classList.remove('dark');
+            try {
+                localStorage.setItem('grid_theme', theme);
+                localStorage.setItem('grid_theme_manual', 'true');
+            } catch (e) {}
+        })();
+    </script>
     <!-- React 18 Application Bundle -->
     <?php if (file_exists($jsBundlePath)): ?>
         <script><?= file_get_contents($jsBundlePath) ?></script>
