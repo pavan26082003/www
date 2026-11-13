@@ -1287,10 +1287,10 @@
       homeHeader: {
         greetingFontSize: 13,
         greetingFontWeight: 600,
-        titleFontSize: 14,
-        titleFontWeight: 700,
-        titleLineHeight: 1.25,
-        titleLetterSpacing: -0.01,
+        titleFontSize: 15,
+        titleFontWeight: 800,
+        titleLineHeight: 1.15,
+        titleLetterSpacing: -0.02,
         subtitleFontSize: 11,
         subtitleFontWeight: 500,
         subtitleLineHeight: 1.25,
@@ -1388,7 +1388,7 @@
     var api = global.AhpStaticUi;
     if (api && typeof api.toSchema === 'function') {
       return api.toSchema(templateId, {
-        logoUrl: (cfg && cfg.logoUrl) || (api.logoUrl) || 'https://efactor.tech/assets/images/efactor-logo.jpg'
+        logoUrl: (cfg && cfg.logoUrl) || (api.logoUrl) || 'https://efactor.tech/assets/images/efactor-logo.png'
       });
     }
     return {
@@ -1397,7 +1397,7 @@
       templateId: templateId,
       brand: {
         name: 'eFactor',
-        logoUrl: (cfg && cfg.logoUrl) || 'https://efactor.tech/assets/images/efactor-logo.jpg'
+        logoUrl: (cfg && cfg.logoUrl) || 'https://efactor.tech/assets/images/efactor-logo.png'
       },
       rendererKey: 'staticHomeUi',
       note: 'Static home UI kit selected. Load AhpStaticUi for full kit metadata.'
@@ -1646,8 +1646,9 @@
         welcomeGradientEnd: theme.welcomeEnd || '#4f46e5',
         avatarGradientStart: theme.welcomeStart || '#7c3aed',
         avatarGradientEnd: theme.welcomeEnd || '#4f46e5',
-        navBackground: theme.navBg || '#000000',
-        navActive: theme.navActiveColor || '#3b82f6',
+        navBackground: theme.navBg || (isLight ? '#ffffff' : '#000000'),
+        navActive: theme.navActiveColor || (isLight ? '#111827' : '#93c5fd'),
+        navInactive: isLight ? '#64748b' : '#94a3b8',
         welcomeText: theme.welcomeTextColor || '#ffffff',
         logoutBackground: logout.background,
         logoutText: logout.text,
@@ -1659,7 +1660,7 @@
       },
       spacing: { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 24, gridGap: resolveGridGap(theme) },
       typography: {
-        brandTitle: { fontFamily: 'system', fontSize: 14, fontWeight: 700, lineHeight: 1.25, letterSpacing: -0.01, colorToken: 'colors.textPrimary', maxLines: 2, overflow: 'ellipsis', softWrap: true },
+        brandTitle: { fontFamily: 'Plus Jakarta Sans', fontSize: 15, fontWeight: 800, lineHeight: 1.15, letterSpacing: -0.02, colorToken: 'colors.textPrimary', maxLines: 2, overflow: 'ellipsis', softWrap: true },
         brandSubtitle: { fontFamily: 'system', fontSize: 11, fontWeight: 500, lineHeight: 1.25, colorToken: 'colors.textMuted', maxLines: 1, overflow: 'ellipsis', softWrap: true },
         welcomeGreeting: { fontFamily: 'system', fontSize: 15, fontWeight: 700, lineHeight: 1.2, colorToken: 'colors.welcomeText', maxLines: 2, overflow: 'clip', softWrap: true },
         welcomeEmail: { fontFamily: 'system', fontSize: 13, fontWeight: 600, lineHeight: 1.25, colorToken: 'colors.welcomeText', maxLines: 1, overflow: 'ellipsis' },
@@ -2137,8 +2138,8 @@
   }
 
   function avatarStateBinding(url) {
-    if (!url) return undefined;
-    return { '$state': 'session.user.avatarUrl', fallback: url };
+    // Always bind so a late-resolved session photo can paint profile/welcome.
+    return { '$state': 'session.user.avatarUrl', fallback: String(url || '').trim() };
   }
 
   function getProfileAvatarUrl(profile, cfg) {
@@ -2252,22 +2253,55 @@
     return defaultId;
   }
 
-  var NAV_CHROME_BOTTOM = 120;
+  var NAV_CHROME_BOTTOM = 136;
   var TAB_ROUTE_IDS = ['home', 'devices', 'grid', 'profile', 'category', 'alerts', 'reports', 'rooms'];
 
   function buildBottomNavAppearance(theme) {
     theme = theme || {};
+    // Always publish both palettes. Do not bake studio bgStyle into the only
+    // backgroundColor/activeColor — that is why light mode showed a black bar
+    // with dark-on-dark active tab colors.
+    var lightBg = '#ffffff';
+    var darkBg = '#000000';
+    var lightActive = '#111827';
+    var darkActive = '#93c5fd';
+    var lightInactive = '#64748b';
+    var darkInactive = '#94a3b8';
     return {
-      backgroundColor: theme.navBg || '#ffffff',
+      backgroundColorToken: 'colors.navBackground',
       activeColorToken: 'colors.navActive',
-      inactiveColorToken: 'colors.textMuted',
+      inactiveColorToken: 'colors.navInactive',
+      backgroundColor: lightBg,
+      backgroundColorLight: lightBg,
+      backgroundColorDark: darkBg,
+      activeColor: lightActive,
+      activeColorLight: lightActive,
+      activeColorDark: darkActive,
+      inactiveColor: lightInactive,
+      inactiveColorLight: lightInactive,
+      inactiveColorDark: darkInactive,
+      iconColor: lightInactive,
+      iconColorLight: lightInactive,
+      iconColorDark: darkInactive,
+      iconColorActive: lightActive,
+      iconColorActiveLight: lightActive,
+      iconColorActiveDark: darkActive,
+      labelColor: lightInactive,
+      labelColorLight: lightInactive,
+      labelColorDark: darkInactive,
+      labelColorActive: lightActive,
+      labelColorActiveLight: lightActive,
+      labelColorActiveDark: darkActive,
+      borderColorLight: 'rgba(17,24,39,.08)',
+      borderColorDark: 'rgba(255,255,255,.10)',
+      themeAware: true,
       showLabels: true,
       height: 62,
       marginHorizontal: 16,
       marginBottom: 12,
       borderRadius: 999,
       borderWidth: 1,
-      borderColor: theme.bgStyle === 'light' ? 'rgba(17,24,39,.08)' : 'rgba(255,255,255,.10)',
+      borderColor: 'rgba(17,24,39,.08)',
       paddingHorizontal: 10,
       paddingVertical: 8,
       safeAreaInsetBottom: true,
@@ -2359,6 +2393,8 @@
   }
 
   var HOME_BRAND_TITLE = 'One Intelligent Ecosystem';
+  var HOME_BRAND_TITLE_DISPLAY = 'One\nIntelligent Ecosystem';
+  var HOME_BRAND_TITLE_FONT = 'Plus Jakarta Sans';
   var LEGACY_HOME_BRAND_TITLES = {
     'eFactor · IoE': true,
     'Welcome to SmartHome!': true,
@@ -2383,10 +2419,12 @@
 
   function resolveHomeHeaderTitle(layout) {
     var header = (layout && layout.header) || {};
-    var title = String(header.title || '').trim();
+    var title = String(header.title || '').trim().replace(/\s*\n\s*/g, ' ');
     // Same fallback for every template/account — never emit empty / kit brand titles.
     if (isUnwantedHomeHeaderText(title)) title = '';
-    if (!title || LEGACY_HOME_BRAND_TITLES[title]) return HOME_BRAND_TITLE;
+    if (!title || LEGACY_HOME_BRAND_TITLES[title] || title === HOME_BRAND_TITLE) {
+      return HOME_BRAND_TITLE_DISPLAY;
+    }
     return title;
   }
 
@@ -2443,9 +2481,15 @@
     cfg = cfg || {};
     var titleText = resolveHomeHeaderTitle(layout);
     var subtitleText = resolveHomeHeaderSubtitle(layout);
-    var titleColor = theme.textPrimary || (theme.bgStyle === 'light' ? '#0f172a' : '#f8fafc');
-    var subtitleColor = theme.textMuted || (theme.bgStyle === 'light' ? '#64748b' : '#94a3b8');
-    var logoUrl = (cfg && cfg.logoUrl) || 'https://efactor.tech/assets/images/efactor-logo.jpg';
+    var isLightTheme = theme.bgStyle === 'light';
+    // Appearance chrome still needs concrete colors; title/subtitle blocks below
+    // also publish colorLight/colorDark so runtime theme switches stay readable.
+    var titleColor = theme.textPrimary || (isLightTheme ? '#0f172a' : '#f8fafc');
+    var subtitleColor = theme.textMuted || (isLightTheme ? '#64748b' : '#94a3b8');
+    // Always publish both logo assets. imageUrl = dark mark for light backgrounds;
+    // imageUrlDark = light mark for dark backgrounds. Do not bake studio bgStyle
+    // into imageUrl or light mode shows a white logo on a white page.
+    var logoUrl = (cfg && cfg.logoUrl) || 'https://efactor.tech/assets/images/efactor-logo.png';
     var logoUrlDark = (cfg && cfg.logoUrlDark) || 'https://efactor.tech/assets/images/efactor-logo_light.png';
     var profile = mergeLayoutProfile(layout, cfg);
     var greetingName = getProfileGreetingName(profile, cfg);
@@ -2457,7 +2501,14 @@
       overflowPolicy: 'ellipsis',
       logo: {
         imageUrl: logoUrl,
+        imageUrlLight: logoUrl,
         imageUrlDark: logoUrlDark,
+        // GRID-style aliases (same URLs) for clients that read logoUrl/logoUrlDark.
+        logoUrl: logoUrl,
+        logoUrlDark: logoUrlDark,
+        src: logoUrl,
+        srcDark: logoUrlDark,
+        themeAware: true,
         width: 88,
         height: 28,
         maxWidth: 88,
@@ -2472,14 +2523,18 @@
         'home.brandTitle',
         'typography.brandTitle',
         {
-          fontSize: 14,
-          fontWeight: 700,
-          lineHeight: 1.25,
-          letterSpacing: -0.01,
+          fontFamily: HOME_BRAND_TITLE_FONT,
+          fontSize: 15,
+          fontWeight: 800,
+          lineHeight: 1.15,
+          letterSpacing: -0.02,
           colorToken: 'colors.textPrimary',
-          color: titleColor
+          // Explicit light/dark colors so clients that ignore tokens stay readable.
+          color: '#0f172a',
+          colorLight: '#0f172a',
+          colorDark: '#f8fafc'
         },
-        RESPONSIVE_TEXT_OVERFLOW.title
+        { maxLines: 2, overflow: 'ellipsis', softWrap: true }
       ),
       subtitle: buildHomeHeaderTextBlock(
         subtitleText,
@@ -2490,7 +2545,9 @@
           fontWeight: 500,
           lineHeight: 1.25,
           colorToken: 'colors.textMuted',
-          color: subtitleColor
+          color: '#64748b',
+          colorLight: '#64748b',
+          colorDark: '#94a3b8'
         },
         { maxLines: 1, overflow: 'ellipsis', softWrap: true }
       ),
@@ -2511,24 +2568,45 @@
         overflow: 'hidden'
       },
       appearance: {
-        titleFontSize: 14,
-        titleFontWeight: 700,
-        titleLineHeight: 1.25,
-        titleLetterSpacing: -0.01,
-        titleColor: titleColor,
+        titleFontSize: 15,
+        titleFontWeight: 800,
+        titleLineHeight: 1.15,
+        titleLetterSpacing: -0.02,
+        titleColor: '#0f172a',
+        titleColorLight: '#0f172a',
+        titleColorDark: '#f8fafc',
         titleMaxLines: 2,
         subtitleFontSize: 11,
         subtitleFontWeight: 500,
         subtitleLineHeight: 1.25,
-        subtitleColor: subtitleColor,
+        subtitleColor: '#64748b',
+        subtitleColorLight: '#64748b',
+        subtitleColorDark: '#94a3b8',
         subtitleMaxLines: 1,
         logoWidth: 88,
         logoHeight: 28,
         logoMaxWidth: 88,
         logoMaxHeight: 28,
+        logoUrl: logoUrl,
+        imageUrl: logoUrl,
         layoutGap: 12,
         marginBottom: 12,
-        backgroundColor: 'transparent'
+        backgroundColor: 'transparent',
+        themeAware: true
+      },
+      appearanceLight: {
+        logoUrl: logoUrl,
+        imageUrl: logoUrl,
+        titleColor: '#0f172a',
+        subtitleColor: '#64748b'
+      },
+      appearanceDark: {
+        logoUrl: logoUrlDark,
+        logoUrlDark: logoUrlDark,
+        imageUrl: logoUrlDark,
+        imageUrlDark: logoUrlDark,
+        titleColor: '#f8fafc',
+        subtitleColor: '#94a3b8'
       }
     };
     // Market hides the welcome banner. Keep the same header row the app already
@@ -2653,6 +2731,8 @@
     usedIcons.profile = true;
     usedIcons.alerts = true;
     usedIcons.appearance = true;
+    usedIcons.mobile = true;
+    usedIcons.bolt = true;
     usedIcons.shield = true;
     usedIcons.star = true;
     usedIcons.logout = true;
@@ -2791,7 +2871,18 @@
           id: 'appearance',
           iconToken: 'appearance',
           label: { '$i18n': 'profile.appearance' },
-          subtitle: (themeModeFallback === 'system' ? 'System' : (themeModeFallback === 'dark' ? 'Dark' : 'Light')) + ' mode',
+          // Dynamic subtitle mirrors global.themeMode (same contract as Appearance
+          // page header). Keep the object inline — V2 scope cannot call V3 helpers.
+          subtitle: {
+            '$format': '{mode} mode',
+            '$bindings': {
+              mode: {
+                '$state': 'global.themeMode',
+                transform: 'capitalizeFirst',
+                fallback: themeModeFallback || 'system'
+              }
+            }
+          },
           subtitleBinding: { '$state': 'global.themeMode' },
           subtitleFormat: '{value} mode',
           subtitleTransform: 'capitalizeFirst',
@@ -3796,8 +3887,12 @@
       visibleWhen: { '$state': 'preferences.showAlerts', equals: true },
       iconToken: 'alerts',
       content: {
+        // Trailing space + valueSeparator keep "Live Alerts 0" readable when
+        // a client concatenates title+value without its own gap.
         title: 'Live Alerts',
         value: bind('dashboard.alerts.count', (layout.alerts && layout.alerts.count) != null ? layout.alerts.count : 0),
+        valueSeparator: ' ',
+        titleValueFormat: 'Live Alerts {value}',
         badge: (layout.alerts && layout.alerts.badgeText) || 'real-time',
         // Match web Live Alerts chrome (bell + date + new users + status pill).
         newUsers: bind(
@@ -3815,8 +3910,18 @@
         pill: (layout.alerts && layout.alerts.showBadge === false) ? null : 'now'
       },
       appearance: {
-        backgroundColorToken: 'colors.surface',
+        backgroundColorToken: 'colors.surfaceElevated',
+        backgroundColor: '#ffffff',
+        backgroundColorDark: '#1e293b',
         textColorToken: 'colors.textPrimary',
+        textColor: '#111827',
+        textColorDark: '#f8fafc',
+        mutedTextColor: '#64748b',
+        mutedTextColorDark: '#cbd5e1',
+        badgeBackground: 'rgba(124,58,237,.14)',
+        badgeBackgroundDark: 'rgba(167,139,250,.22)',
+        badgeTextColor: '#6d28d9',
+        badgeTextColorDark: '#ddd6fe',
         radiusToken: 'radius.card',
         iconToken: 'alerts',
         showIcon: true,
@@ -3835,13 +3940,16 @@
         independentScroll: false,
         width: '100%',
         maxWidth: '100%',
-        sizeFormula: 'slotWidth'
+        sizeFormula: 'slotWidth',
+        clipChildren: true,
+        overflow: 'hidden'
       }, homeGridLayouts(theme).compact),
       layouts: homeGridLayouts(theme),
       overflowPolicy: 'reflow',
       preventHorizontalOverflow: true,
       preserveChildOrder: true,
       clampChildColumnSpan: true,
+      clipChildren: true,
       style: 'metroMosaic',
       children: homeGridChildren
     };
@@ -4850,11 +4958,13 @@
   function buildApplyThemeAction(preset, mode, cfg) {
     cfg = cfg || {};
     var prefsApiBase = (cfg.apiBase ? String(cfg.apiBase).replace(/\/+$/, '') : '/index.php/app-home-page/api');
+    // Keep themeMode + themePreset identical (system|light|dark) so the
+    // appearance selector cannot mark two rows selected at once.
     return {
       type: 'sequence',
       actions: [
         { type: 'set-state', path: 'global.themeMode', value: mode },
-        { type: 'set-state', path: 'global.themePreset', value: preset },
+        { type: 'set-state', path: 'global.themePreset', value: mode },
         {
           type: 'request',
           request: {
@@ -4866,7 +4976,21 @@
           onSuccess: { type: 'show-snackbar', message: mode === 'system' ? 'Using system appearance' : ((mode === 'dark' ? 'Dark' : 'Light') + ' mode saved') },
           onError: { type: 'show-snackbar', message: 'Could not save appearance' }
         },
-        { type: 'host-action', actionId: 'apply-theme-preset', parameters: { preset: preset, mode: mode } },
+        {
+          type: 'host-action',
+          actionId: 'apply-theme-preset',
+          parameters: {
+            preset: mode,
+            mode: mode,
+            followSystem: mode === 'system',
+            watchOsAppearance: mode === 'system',
+            overrideSystemBrightness: mode !== 'system',
+            preserveNavigation: true,
+            keepCurrentRoute: true,
+            reloadSchema: false,
+            resetRoute: false
+          }
+        },
         { type: 'host-action', actionId: 'save-profile-preferences', parameters: { appearance: mode, themeMode: mode } }
       ]
     };
@@ -5194,10 +5318,12 @@
               properties: {
                 id: { type: 'string' },
                 preset: { type: 'string' },
-                mode: { type: 'string', enum: ['light', 'dark'] },
+                mode: { type: 'string', enum: ['light', 'dark', 'system'] },
                 label: { type: ['string', 'object'] },
                 subtitle: { type: ['string', 'object'] },
-                actionId: { type: 'string' }
+                iconToken: { type: 'string' },
+                actionId: { type: 'string' },
+                selectedWhen: { type: 'object' }
               }
             }
           },
@@ -5672,6 +5798,7 @@
           welcomeGradientEnd: '#f97316',
           navBackground: '#ffffff',
           navActive: '#111827',
+          navInactive: '#64748b',
           border: 'rgba(17,24,39,.08)',
           online: '#22c55e',
           offline: '#94a3b8'
@@ -5682,7 +5809,7 @@
         colors: {
           pageBackground: '#0b0f1a',
           surface: '#151b2e',
-          surfaceElevated: '#1c2438',
+          surfaceElevated: '#1e293b',
           textPrimary: '#ffffff',
           textSecondary: '#dbe4ef',
           textMuted: '#94a3b8',
@@ -5691,7 +5818,8 @@
           welcomeGradientStart: '#7c3aed',
           welcomeGradientEnd: '#4f46e5',
           navBackground: '#000000',
-          navActive: '#3b82f6',
+          navActive: '#93c5fd',
+          navInactive: '#94a3b8',
           border: 'rgba(255,255,255,.10)',
           online: '#22c55e',
           offline: '#64748b'
@@ -5774,13 +5902,15 @@
       colors: {
         pageBackground: theme.phoneBg || (isLight ? '#f3f4f6' : '#0b0f1a'),
         surface: theme.surfaceColor || theme.alertBg || (isLight ? '#ffffff' : '#151b2e'),
+        surfaceElevated: isLight ? '#ffffff' : '#1e293b',
         textPrimary: theme.textPrimary || (isLight ? '#111827' : '#ffffff'),
         textMuted: theme.textMuted || (isLight ? '#6b7280' : '#94a3b8'),
         accent: theme.accentColor || '#14b8a6',
         welcomeGradientStart: theme.welcomeStart || '#fbbf24',
         welcomeGradientEnd: theme.welcomeEnd || '#f97316',
         navBackground: theme.navBg || (isLight ? '#ffffff' : '#000000'),
-        navActive: theme.navActiveColor || (isLight ? '#111827' : '#2dd4bf'),
+        navActive: theme.navActiveColor || (isLight ? '#111827' : '#93c5fd'),
+        navInactive: isLight ? '#64748b' : '#94a3b8',
         logoutBackground: logout.background,
         logoutText: logout.text
       },
@@ -5995,8 +6125,7 @@
   }
 
   function buildScopedState(layout, cfg) {
-    var theme = layout.theme || {};
-    var bgStyle = theme.bgStyle || 'light';
+    var theme = (layout && layout.theme) || {};
     cfg = cfg || {};
     var v2 = global.AhpSchemaV2 || {};
     var profile = Object.assign({}, layout.profilePage || {}, cfg.loginUserProfile || {});
@@ -6009,9 +6138,13 @@
     return {
       global: {
         // Account appearance: system by default; light/dark if saved in web Profile settings.
+        // themePreset stays locked to the same account value so Appearance cannot
+        // dual-select against studio bgStyle ('light'|'dark').
         themeMode: accountAppearance,
-        themePreset: bgStyle,
-        themeServerControlled: false,
+        themePreset: accountAppearance,
+        themeServerControlled: accountAppearance !== 'system',
+        followSystem: accountAppearance === 'system',
+        watchOsAppearance: accountAppearance === 'system',
         locale: 'en-IN',
         networkStatus: 'online',
         apiEnvironment: 'production',
@@ -7301,33 +7434,40 @@
     out['profile-appearance-selector'] = {
       id: 'profile-appearance-selector',
       type: 'themeModeSelector',
+      // Both bindings read themeMode so studio bgStyle cannot mark a second row.
       selectedModeBinding: { '$state': 'global.themeMode' },
-      selectedPresetBinding: { '$state': 'global.themePreset' },
+      selectedPresetBinding: { '$state': 'global.themeMode' },
       appearance: profileAppearance,
       options: [
         {
           id: 'appearance-system',
           preset: 'system',
           mode: 'system',
+          iconToken: 'mobile',
           label: 'System Default',
           subtitle: 'Follow the device Light or Dark appearance',
-          actionId: 'apply-theme-system'
+          actionId: 'apply-theme-system',
+          selectedWhen: { equals: [{ '$state': 'global.themeMode' }, 'system'] }
         },
         {
           id: 'appearance-light',
           preset: 'light',
           mode: 'light',
+          iconToken: 'bolt',
           label: i18n('appearance.lightMode'),
           subtitle: i18n('appearance.lightModeHint'),
-          actionId: 'apply-theme-light'
+          actionId: 'apply-theme-light',
+          selectedWhen: { equals: [{ '$state': 'global.themeMode' }, 'light'] }
         },
         {
           id: 'appearance-dark',
           preset: 'dark',
           mode: 'dark',
+          iconToken: 'appearance',
           label: i18n('appearance.darkMode'),
           subtitle: i18n('appearance.darkModeHint'),
-          actionId: 'apply-theme-dark'
+          actionId: 'apply-theme-dark',
+          selectedWhen: { equals: [{ '$state': 'global.themeMode' }, 'dark'] }
         }
       ]
     };
@@ -7664,13 +7804,19 @@
         appearance: buildThemeAppearanceBlock(layout.theme || {})
       }),
       themes: {
+        // Design preset stays studio bgStyle for color authorship; runtime mode
+        // follows account appearance (system|light|dark) via activeModeBinding.
         activePreset: themePreset,
         activePresetBinding: stateRef('global.themePreset'),
-        // Account appearance: system by default; light/dark if saved in web Profile settings.
+        // Account appearance: system by default; light/dark if saved in Profile.
+        // Light/Dark are app-only. Only System follows the phone OS.
         activeMode: resolveAccountAppearance(layout, cfg),
         activeModeBinding: stateRef('global.themeMode'),
-        serverControlled: false,
-        userSelectable: false,
+        followSystem: resolveAccountAppearance(layout, cfg) === 'system',
+        watchOsAppearance: resolveAccountAppearance(layout, cfg) === 'system',
+        overrideSystemBrightness: resolveAccountAppearance(layout, cfg) !== 'system',
+        serverControlled: resolveAccountAppearance(layout, cfg) !== 'system',
+        userSelectable: true,
         appearance: buildThemeAppearanceBlock(layout.theme || {}),
         presets: buildThemePresetsCatalog(layout.theme || {})
       },
@@ -7709,7 +7855,7 @@
         bottomNavigationPosition: 'fixed',
         bottomNavigationOverlay: false,
         contentAvoidsBottomNavigation: true,
-        reservedBottomInset: 108,
+        reservedBottomInset: (global.AhpSchemaV2 && global.AhpSchemaV2.NAV_CHROME_BOTTOM) || 136,
         bottomNavigationVisibleWhen: exprEquals(stateRef('preferences.showBottomNav'), true)
       }),
       navigation: {
@@ -7717,9 +7863,18 @@
         unknownRouteActionId: 'show-route-error',
         backBehavior: 'history',
         preservePageState: true,
+        preserveRouteOnSchemaReload: true,
+        restoreLastRoute: true,
+        resetToInitialRouteOnReload: false,
         maximumHistoryEntries: 20,
         activeRouteBinding: stateRef('navigation.activeRouteId'),
         items: navItems
+      },
+      schemaReloadPolicy: {
+        preserveRoute: true,
+        preserveNavigation: true,
+        preservePageState: true,
+        resetToInitialRoute: false
       },
       pages: pages,
 

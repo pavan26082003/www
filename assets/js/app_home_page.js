@@ -3,9 +3,10 @@
 
   var cfg = window.AHP_CONFIG || {};
   var layout = JSON.parse(JSON.stringify(cfg.layout || {}));
-  var LOGO_URL_LIGHT = 'https://efactor.tech/assets/images/efactor-logo.jpg';
+  var LOGO_URL_LIGHT = 'https://efactor.tech/assets/images/efactor-logo.png';
   var LOGO_URL_DARK = 'https://efactor.tech/assets/images/efactor-logo_light.png';
   var DEFAULT_HEADER_TITLE = 'One Intelligent Ecosystem';
+  var DEFAULT_HEADER_TITLE_DISPLAY = 'One\nIntelligent Ecosystem';
   var DEFAULT_HEADER_SUBTITLE = 'Connected intelligence';
   var LEGACY_HOME_BRAND_TITLES = {
     'eFactor · IoE': true,
@@ -3555,7 +3556,7 @@
       textMuted = '#6b7280';
       phoneBg = '#f3f4f6';
       alertBg = '#ffffff';
-      navActive = t.navActiveColor || accent;
+      navActive = '#111827';
       navBg = '#ffffff';
       welcomeText = '#111827';
       surface = '#ffffff';
@@ -3586,11 +3587,12 @@
       '--ahp-card-shadow': cardShadow,
       '--ahp-welcome-start': t.welcomeStart || '#fbbf24',
       '--ahp-welcome-end': t.welcomeEnd || '#f97316',
-      '--ahp-alert-bg': alertBg,
+      '--ahp-alert-bg': isLight ? alertBg : '#1e293b',
       '--ahp-accent': accent,
       '--ahp-accent-green': accentGreen,
       '--ahp-nav-active': navActive,
       '--ahp-nav-bg': navBg,
+      '--ahp-nav-inactive': isLight ? '#64748b' : '#cbd5e1',
       '--ahp-text-primary': textPrimary,
       '--ahp-text-secondary': textSecondary,
       '--ahp-text-muted': textMuted,
@@ -3622,14 +3624,21 @@
     }
     root.querySelectorAll('.ahp-mobile').forEach(function (page) { page.style.background = 'transparent'; page.style.color = textPrimary; });
 
+    var logoLight = cfg.logoUrl || LOGO_URL_LIGHT;
+    var logoDark = cfg.logoUrlDark || LOGO_URL_DARK;
+    var logoUrl = resolveBrandLogoUrl(isLight);
     var logoEl = document.getElementById('ahpLogoIcon');
     if (logoEl) {
-      var logoUrl = resolveBrandLogoUrl(isLight);
-      var logoLight = cfg.logoUrl || LOGO_URL_LIGHT;
-      var logoDark = cfg.logoUrlDark || LOGO_URL_DARK;
       logoEl.classList.add('ahp-m-logo-img');
       logoEl.innerHTML = '<img src="' + esc(logoUrl) + '" alt="eFactor" data-logo-light="' + esc(logoLight) + '" data-logo-dark="' + esc(logoDark) + '">';
     }
+    // Keep any other themed brand marks in sync (static kits / cloned headers).
+    root.querySelectorAll('img[data-logo-light][data-logo-dark]').forEach(function (img) {
+      var next = isLight
+        ? (img.getAttribute('data-logo-light') || logoLight)
+        : (img.getAttribute('data-logo-dark') || logoDark);
+      if (next && img.getAttribute('src') !== next) img.setAttribute('src', next);
+    });
 
     var alerts = document.getElementById('ahpAlerts');
     var welcome = document.getElementById('ahpWelcome');
@@ -4332,6 +4341,14 @@
     return days[d.getDay()] + ', ' + d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
   }
 
+  function formatBrandTitleDisplay(title) {
+    var text = String(title || DEFAULT_HEADER_TITLE).trim().replace(/\s*\n\s*/g, ' ');
+    if (!text || LEGACY_HOME_BRAND_TITLES[text] || text === DEFAULT_HEADER_TITLE) {
+      return DEFAULT_HEADER_TITLE_DISPLAY;
+    }
+    return text;
+  }
+
   function renderHeader() {
     layout.header = normalizeHomeBrandHeader(layout.header || {});
     var h = layout.header || {};
@@ -4339,7 +4356,7 @@
 
     var titleEl = document.getElementById('ahpHeaderTitle');
     var subEl = document.getElementById('ahpHeaderSub');
-    if (titleEl) titleEl.textContent = h.title || DEFAULT_HEADER_TITLE;
+    if (titleEl) titleEl.textContent = formatBrandTitleDisplay(h.title || DEFAULT_HEADER_TITLE);
     if (subEl) {
       var subText = String(h.subtitle != null ? h.subtitle : DEFAULT_HEADER_SUBTITLE).trim();
       if (!subText) subText = DEFAULT_HEADER_SUBTITLE;

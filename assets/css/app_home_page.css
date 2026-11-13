@@ -207,7 +207,7 @@
   overflow-y:auto!important;
   overflow-x:hidden!important;
   /* Clear floating bottom nav so last metro row is fully reachable */
-  padding-bottom:118px!important;
+  padding-bottom:136px!important;
   overscroll-behavior:contain!important;
   -webkit-overflow-scrolling:touch!important;
 }
@@ -276,8 +276,10 @@
 }
 .ahp-card[data-card-id],.ahp-grid-slot[data-card-id]{
   overflow:hidden!important;
-  isolation:auto!important;
-  contain:none!important;
+  isolation:isolate!important;
+  /* Clip rotating cube faces so neighboring tiles do not bleed into each other. */
+  contain:paint!important;
+  clip-path:inset(0 round var(--ahp-card-radius,0px))!important;
   min-height:0!important;
   max-width:100%!important;
   container-type:size!important;
@@ -1512,11 +1514,21 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
   color:var(--ahp-accent-green,#22c55e)!important;
 }
 .ahp-alerts-compact .ahp-alerts p{color:var(--ahp-text-muted,#6b7280)!important;}
+.ahp-phone-screen[data-theme="dark"] .ahp-alerts-compact,
+.ahp-phone-screen[data-theme="dark"] .ahp-alerts{
+  background:var(--ahp-alert-bg,#1e293b)!important;
+  border-color:rgba(255,255,255,.10)!important;
+  color:var(--ahp-text-primary,#f8fafc)!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-alerts-compact .ahp-alerts p,
+.ahp-phone-screen[data-theme="dark"] .ahp-alerts p{
+  color:var(--ahp-text-muted,#cbd5e1)!important;
+}
 .ahp-phone-screen{
   background:var(--ahp-phone-bg,#f3f4f6)!important;
 }
 .ahp-phone-scroll{
-  padding:12px 0 118px!important;
+  padding:12px 0 136px!important;
   background:var(--ahp-phone-bg,#f3f4f6)!important;
 }
 .ahp-bottom-nav{
@@ -1532,11 +1544,17 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
   pointer-events:auto!important;
 }
 .ahp-nav-item{
-  color:var(--ahp-text-muted,#9ca3af)!important;
+  color:var(--ahp-nav-inactive,var(--ahp-text-muted,#64748b))!important;
   font-size:9px!important;font-weight:700!important;
 }
 .ahp-nav-item.active{color:var(--ahp-nav-active,#111827)!important;}
 .ahp-nav-item i{font-size:16px!important;}
+.ahp-phone-screen[data-theme="dark"] .ahp-nav-item{
+  color:var(--ahp-nav-inactive,#cbd5e1)!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-nav-item.active{
+  color:var(--ahp-nav-active,#3b82f6)!important;
+}
 .ahp-profile-page,.ahp-face-detail-page{
   background:var(--ahp-phone-bg,#f3f4f6)!important;
   color:var(--ahp-text-primary,#111827)!important;
@@ -1618,6 +1636,7 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
   background:#ececec!important;
   overflow-y:auto!important;
   overflow-x:hidden!important;
+  padding-bottom:136px!important;
 }
 .ahp-iot-sdui-page{font-family:Inter,Sora,system-ui,sans-serif!important;-webkit-font-smoothing:antialiased;}
 .ahp-iot-sdui-root .iot-phone-header{
@@ -1657,6 +1676,51 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
 }
 .ahp-iot-sdui-root .iot-device-card.is-online{background:#1c1c1e!important;color:#fff!important;box-shadow:0 12px 28px rgba(0,0,0,.18)!important;}
 .ahp-iot-sdui-root .iot-device-card.is-offline{background:#fff!important;color:#111827!important;box-shadow:0 8px 24px rgba(0,0,0,.07)!important;border:1.5px solid #e5e7eb!important;}
+
+/* IoT dark mode — follow phone data-theme so offline cards / titles stay readable */
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root{
+  background:#0b0f1a!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root .iot-phone-header h2{
+  color:#f8fafc!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root .iot-eyebrow,
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root .iot-phone-header p{
+  color:#94a3b8!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root .iot-stats-card{
+  background:#1e293b!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.28)!important;
+  border:1px solid rgba(255,255,255,.08)!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root .iot-stats-card-title{
+  color:#f8fafc!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root .iot-stats-card-label{
+  color:#94a3b8!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root .iot-device-card.is-offline{
+  background:#1e293b!important;
+  color:#f8fafc!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.28)!important;
+  border:1.5px solid rgba(255,255,255,.10)!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root .iot-device-card.is-offline .iot-device-name,
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root .iot-device-card.is-offline .iot-power-label{
+  color:#f8fafc!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root .iot-device-card.is-offline .iot-brand-name{
+  color:#94a3b8!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root .iot-device-card.is-offline .iot-card-icon{
+  background:#0f172a!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root .iot-device-card.is-offline .iot-card-signal svg{
+  stroke:#f8fafc!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-iot-sdui-root .iot-device-card.is-offline .iot-toggle{
+  background:#334155!important;
+}
 .ahp-iot-sdui-root .iot-card-top{display:flex!important;align-items:center!important;justify-content:space-between!important;margin-bottom:10px!important;position:relative!important;z-index:1!important;}
 .ahp-iot-sdui-root .iot-card-icon{width:38px!important;height:38px!important;border-radius:50%!important;display:flex!important;align-items:center!important;justify-content:center!important;overflow:hidden!important;flex-shrink:0!important;position:relative!important;}
 .ahp-iot-sdui-root .iot-device-card.is-online .iot-card-icon{background:#fff!important;}
@@ -2050,19 +2114,21 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
 }
 .ahp-m-brand h1{
   margin:0;
-  font-size:14px;
-  font-weight:700;
-  line-height:1.25;
-  letter-spacing:-0.01em;
+  font-family:"Plus Jakarta Sans",Sora,Inter,system-ui,sans-serif!important;
+  font-size:15px;
+  font-weight:800;
+  line-height:1.15;
+  letter-spacing:-0.02em;
   color:var(--ahp-text-primary,#0f172a)!important;
   display:-webkit-box;
   -webkit-box-orient:vertical;
   -webkit-line-clamp:2;
   overflow:hidden;
   text-overflow:ellipsis;
-  white-space:normal;
-  overflow-wrap:anywhere;
-  word-break:break-word;
+  white-space:pre-line;
+  overflow-wrap:normal;
+  word-break:normal;
+  max-width:11.5em;
 }
 .ahp-m-brand p{
   margin:2px 0 0;
@@ -2587,7 +2653,7 @@ body.ahp-icon-modal-open{overflow:hidden!important;}
   --gn-accent:#7c3aed;
   --gn-shadow:0 12px 30px rgba(15,23,42,.10),0 0 0 1px rgba(15,23,42,.05);
   --gn-font:'Plus Jakarta Sans',Inter,system-ui,sans-serif;
-  padding:18px 16px 30px!important;
+  padding:18px 16px 136px!important;
   display:flex!important;
   flex-direction:column!important;
   gap:18px!important;

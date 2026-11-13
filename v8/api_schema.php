@@ -231,7 +231,13 @@ $efactor_finalize_schema_response = static function (array $row, array $decoded)
             require_once $normalizerFile;
         }
         if (class_exists('\\App\\Services\\DeviceUiSchemaNormalizer', false)) {
-            $decoded = \App\Services\DeviceUiSchemaNormalizer::normalize($decoded, $requestedModelNo, $resolvedNodeId);
+            $schemaUserId = \App\Services\DeviceUiSchemaNormalizer::resolveRequestUserId();
+            $decoded = \App\Services\DeviceUiSchemaNormalizer::normalize(
+                $decoded,
+                $requestedModelNo,
+                $resolvedNodeId,
+                $schemaUserId
+            );
         }
     } catch (Throwable $exception) {
         error_log('v8 schema normalize failed: ' . $exception->getMessage());

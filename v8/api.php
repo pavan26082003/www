@@ -9873,8 +9873,18 @@ if (isset($_GET['action']) && $_GET['action']=='auto_get_nodes_params') {
     
     
  
-$nodeid =$_GET['node_id'];
-$deviceid=$_GET['device_id'];
+$nodeid = isset($_GET['node_id']) && is_scalar($_GET['node_id'])
+    ? (string) $_GET['node_id'] : '';
+$deviceid = isset($_GET['device_id']) && is_scalar($_GET['device_id'])
+    ? (string) $_GET['device_id'] : '';
+// Direct-node callers omit device_id; gateway callers retain their explicit device_id.
+if (trim($deviceid) === '') {
+    $deviceid = $nodeid;
+}  
+
+
+
+
 
 $header = apache_request_headers();  
 foreach ($header as $key => $val) {

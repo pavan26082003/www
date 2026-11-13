@@ -917,7 +917,9 @@
         initialRoute: 'device'
       },
       theme: {
-        mode: theme.themeMode || 'light',
+        // Runtime appearance: follow phone OS (presets attached server-side on serve).
+        mode: 'system',
+        defaultMode: 'system',
         backgroundType: theme.backgroundType || 'gradient',
         fontFamilies: { body: { family: fontFamily, asset: fontAsset } },
         colors: {

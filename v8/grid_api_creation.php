@@ -106,6 +106,8 @@ if (!function_exists('grid_api_json')) {
     function grid_api_load_builder(): bool
     {
         grid_api_load_class(\App\Libraries\GridWebSso::class, 'GridWebSso.php');
+        // Required by GridSduiSchemaBuilder::applyRecentNotifications (no CI autoload here).
+        grid_api_load_class(\App\Libraries\GridActivityNotifications::class, 'GridActivityNotifications.php');
         return grid_api_load_class(\App\Libraries\GridSduiSchemaBuilder::class, 'GridSduiSchemaBuilder.php');
     }
 
@@ -176,6 +178,14 @@ if (!function_exists('grid_api_json')) {
 
 grid_api_bootstrap_config();
 
+// Standalone v8 bootstrap has no CI helpers. Activity reads may call log_message().
+if (!function_exists('log_message')) {
+    function log_message($level, $message)
+    {
+        @error_log('[grid_api][' . $level . '] ' . $message);
+    }
+}
+
 if (!grid_api_load_builder()) {
     grid_api_json(array(
         'success' => false,
@@ -213,6 +223,7 @@ grid_api_json(array(
     'user_id' => $userId > 0 ? $userId : null,
     'pageId' => 'grid',
     'routeId' => 'grid',
+    'schema_rev' => (string) ($schema['schema_rev'] ?? ''),
     'schema_version' => $schema['schemaVersion'] ?? '3.0.0',
     'updated_at' => gmdate('c'),
     'contentHash' => is_string($schemaJson) ? hash('sha256', $schemaJson) : '',
