@@ -1476,13 +1476,16 @@
         )
       });
     }
-    ['home-header', 'welcome-banner', 'alerts-summary', 'home-grid'].forEach(function (id) {
+    ['home-header', 'welcome-banner', 'home-grid'].forEach(function (id) {
       if (!components[id]) return;
       components[id] = Object.assign({}, components[id], {
         visible: false,
         visibleWhen: { equals: [true, false] }
       });
     });
+    if (components['alerts-summary']) {
+      delete components['alerts-summary'];
+    }
     return staticUi;
   }
 
@@ -3781,7 +3784,7 @@
         padding: { left: 10, right: 10, top: 8, bottom: NAV_CHROME_BOTTOM },
         gap: gridGap
       }),
-      children: ['home-header', 'welcome-banner', 'alerts-summary', 'home-grid']
+      children: ['home-header', 'welcome-banner', 'home-grid']
     };
 
     components['home-header'] = buildHomeHeaderComponent(layout, cfg, theme, usedIcons);
@@ -3881,54 +3884,7 @@
       };
     })();
 
-    components['alerts-summary'] = {
-      id: 'alerts-summary',
-      type: 'summaryBanner',
-      visibleWhen: { '$state': 'preferences.showAlerts', equals: true },
-      iconToken: 'alerts',
-      content: {
-        // Trailing space + valueSeparator keep "Live Alerts 0" readable when
-        // a client concatenates title+value without its own gap.
-        title: 'Live Alerts',
-        value: bind('dashboard.alerts.count', (layout.alerts && layout.alerts.count) != null ? layout.alerts.count : 0),
-        valueSeparator: ' ',
-        titleValueFormat: 'Live Alerts {value}',
-        badge: (layout.alerts && layout.alerts.badgeText) || 'real-time',
-        // Match web Live Alerts chrome (bell + date + new users + status pill).
-        newUsers: bind(
-          'dashboard.alerts.newUsers',
-          (layout.alerts && layout.alerts.newUsers) != null ? layout.alerts.newUsers : 0
-        ),
-        meta: (function () {
-          var d = new Date();
-          var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          var dateLabel = days[d.getDay()] + ', ' + d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
-          var users = (layout.alerts && layout.alerts.newUsers) != null ? Number(layout.alerts.newUsers) : 0;
-          return dateLabel + ' · ' + users + ' new users';
-        })(),
-        pill: (layout.alerts && layout.alerts.showBadge === false) ? null : 'now'
-      },
-      appearance: {
-        backgroundColorToken: 'colors.surfaceElevated',
-        backgroundColor: '#ffffff',
-        backgroundColorDark: '#1e293b',
-        textColorToken: 'colors.textPrimary',
-        textColor: '#111827',
-        textColorDark: '#f8fafc',
-        mutedTextColor: '#64748b',
-        mutedTextColorDark: '#cbd5e1',
-        badgeBackground: 'rgba(124,58,237,.14)',
-        badgeBackgroundDark: 'rgba(167,139,250,.22)',
-        badgeTextColor: '#6d28d9',
-        badgeTextColorDark: '#ddd6fe',
-        radiusToken: 'radius.card',
-        iconToken: 'alerts',
-        showIcon: true,
-        showMeta: true,
-        showPill: (layout.alerts && layout.alerts.showBadge) !== false
-      }
-    };
+    // Live Alerts strip (alerts-summary) intentionally omitted from home.
 
     components['home-grid'] = {
       id: 'home-grid',
@@ -4467,7 +4423,7 @@
         animationsEnabled: true,
         preferences: {
           showWelcome: theme.showWelcome !== false,
-          showAlerts: theme.showAlerts !== false,
+          showAlerts: false,
           showBottomNav: theme.showBottomNav !== false
         },
         devices: {}
@@ -6196,7 +6152,7 @@
       },
       preferences: {
         showWelcome: theme.showWelcome !== false,
-        showAlerts: theme.showAlerts !== false,
+        showAlerts: false,
         showBottomNav: theme.showBottomNav !== false,
         animationsEnabled: true
       },
@@ -7052,35 +7008,13 @@
       });
     }
 
+    // Live Alerts strip removed from home — drop any leftover alerts-summary.
     if (out['alerts-summary']) {
-      var alerts = (layout && layout.alerts) || {};
-      var alertDate = (function () {
-        var d = new Date();
-        var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        return days[d.getDay()] + ', ' + d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
-      })();
-      var newUsers = alerts.newUsers != null ? Number(alerts.newUsers) : 0;
-      out['alerts-summary'] = Object.assign({}, out['alerts-summary'], {
-        visibleWhen: exprAnd([
-          exprEquals(stateRef('session.authenticated'), true),
-          exprEquals(stateRef('preferences.showAlerts'), true)
-        ]),
-        enabledWhen: exprEquals(stateRef('session.authenticated'), true),
-        iconToken: 'alerts',
-        content: Object.assign({}, (out['alerts-summary'].content || {}), {
-          title: i18n('home.liveAlerts'),
-          newUsers: bind('dashboard.alerts.newUsers', newUsers),
-          meta: alertDate + ' · ' + newUsers + ' new users',
-          pill: alerts.showBadge === false ? null : 'now',
-          badge: alerts.badgeText || (out['alerts-summary'].content && out['alerts-summary'].content.badge) || 'real-time'
-        }),
-        appearance: Object.assign({}, (out['alerts-summary'].appearance || {}), {
-          iconToken: 'alerts',
-          showIcon: true,
-          showMeta: true,
-          showPill: alerts.showBadge !== false
-        })
+      delete out['alerts-summary'];
+    }
+    if (out['home-page'] && Array.isArray(out['home-page'].children)) {
+      out['home-page'].children = out['home-page'].children.filter(function (id) {
+        return id !== 'alerts-summary';
       });
     }
 

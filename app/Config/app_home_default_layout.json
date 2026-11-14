@@ -38,7 +38,7 @@
         "cardSpeed": 24,
         "logoIcon": "fa-crosshairs",
         "showWelcome": true,
-        "showAlerts": true,
+        "showAlerts": false,
         "showBottomNav": true,
         "homeTemplate": "default",
         "staticUiTemplate": null

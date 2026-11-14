@@ -993,6 +993,15 @@ class IotDashboardModel
             $result['node_id'] = $resolvedNodeId;
         }
 
+        // Clients must treat HTTP 202 + success as accepted (do not roll back optimistic UI).
+        // Final hardware state comes from MQTT / WebSocket / getAllNodesStatus.
+        if (!empty($result['success'])) {
+            $result['accepted'] = true;
+            if (!isset($result['status']) || trim((string) $result['status']) === '') {
+                $result['status'] = 'accepted';
+            }
+        }
+
         return $result;
     }
 

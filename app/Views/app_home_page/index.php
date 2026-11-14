@@ -283,15 +283,6 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
                                         </button>
                                     </div>
 
-                                    <div class="ahp-alerts ahp-alerts-compact<?= ($layout['theme']['showAlerts'] ?? true) === false ? ' ahp-is-hidden' : '' ?>" id="ahpAlerts">
-                                        <div class="ahp-alerts-icon"><i class="fas fa-bell"></i><span class="ahp-alerts-count-badge<?= ((int) ($layout['alerts']['count'] ?? 0)) <= 0 ? ' ahp-is-hidden' : '' ?>" id="ahpAlertsCountBadge"><?= (int) ($layout['alerts']['count'] ?? 0) ?></span></div>
-                                        <div class="ahp-alerts-text">
-                                            <h3 id="ahpAlertCount">Live Alerts <?= (int) ($layout['alerts']['count'] ?? 0) ?></h3>
-                                            <p id="ahpAlertMeta"><?= date('D, j M Y') ?> · <?= (int) ($layout['alerts']['newUsers'] ?? 0) ?> new users</p>
-                                        </div>
-                                        <div class="ahp-alerts-badge" id="ahpAlertsBadge"><span class="dot"></span> <span id="ahpBadgeText">real-time</span></div>
-                                    </div>
-
                                     <div class="ahp-grid" id="ahpGrid"></div>
                                     <div class="ahp-static-ui-root ahp-is-hidden" id="ahpStaticUiRoot" aria-live="polite"></div>
                                 </div>
@@ -342,7 +333,7 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
                 <div class="ahp-tools">
                     <div class="ahp-tool-section active" data-tool="layout">
                         <div class="ahp-tool-title">Home Layout</div>
-                        <p class="ahp-tool-hint">Header, grid spacing, alerts strip, and cube rotation.</p>
+                        <p class="ahp-tool-hint">Header, grid spacing, and cube rotation.</p>
                         <div class="ahp-field">
                             <label for="toolHeaderTitle">Brand title</label>
                             <input type="text" id="toolHeaderTitle" value="<?= ahp_h($layout['header']['title'] ?? '') ?>" placeholder="One Intelligent Ecosystem">
@@ -437,26 +428,7 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
                             <label><input type="checkbox" id="toolShowWelcome" <?= ($layout['theme']['showWelcome'] ?? true) !== false ? 'checked' : '' ?>> Show welcome banner</label>
                         </div>
                         <div class="ahp-field ahp-check-field">
-                            <label><input type="checkbox" id="toolShowAlerts" <?= ($layout['theme']['showAlerts'] ?? true) !== false ? 'checked' : '' ?>> Show alerts strip</label>
-                        </div>
-                        <div class="ahp-field ahp-check-field">
                             <label><input type="checkbox" id="toolShowBottomNav" <?= ($layout['theme']['showBottomNav'] ?? true) !== false ? 'checked' : '' ?>> Show bottom navigation</label>
-                        </div>
-                        <div class="ahp-style-section-title" style="margin-top:14px">Alerts strip</div>
-                        <div class="ahp-field">
-                            <label for="toolAlertCount">Alert count</label>
-                            <input type="number" id="toolAlertCount" step="0.1" value="<?= ahp_h((string) ($layout['alerts']['count'] ?? 0)) ?>">
-                        </div>
-                        <div class="ahp-field">
-                            <label for="toolAlertUsers">New users subtitle</label>
-                            <input type="number" id="toolAlertUsers" value="<?= (int) ($layout['alerts']['newUsers'] ?? 0) ?>" placeholder="New users count">
-                        </div>
-                        <div class="ahp-field">
-                            <label for="toolAlertBadge">Badge text</label>
-                            <input type="text" id="toolAlertBadge" value="<?= ahp_h($layout['alerts']['badgeText'] ?? 'real-time') ?>">
-                        </div>
-                        <div class="ahp-field ahp-check-field">
-                            <label><input type="checkbox" id="toolShowAlertBadge" <?= !isset($layout['alerts']['showBadge']) || !empty($layout['alerts']['showBadge']) ? 'checked' : '' ?>> Show real-time badge</label>
                         </div>
                         <input type="hidden" id="toolWelcomeGreet" value="<?= ahp_h($layout['welcome']['greeting'] ?? '') ?>">
                         <input type="hidden" id="toolWelcomeEmail" value="<?= ahp_h($layout['welcome']['email'] ?? $userEmail) ?>">
@@ -522,7 +494,6 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
                         <?= ahp_color_field('toolWelcomeStart', 'Avatar Gradient Start', $layout['theme']['welcomeStart'] ?? '#fbbf24') ?>
                         <?= ahp_color_field('toolWelcomeEnd', 'Avatar Gradient End', $layout['theme']['welcomeEnd'] ?? '#f97316') ?>
                         <?= ahp_color_field('toolPhoneBg', 'Phone Background', $layout['theme']['phoneBg'] ?? '#f3f4f6') ?>
-                        <?= ahp_color_field('toolAlertBg', 'Alerts Background', $layout['theme']['alertBg'] ?? '#ffffff') ?>
                         <?= ahp_color_field('toolNavActiveColor', 'Nav Active Color', $layout['theme']['navActiveColor'] ?? '#111827') ?>
                         <?= ahp_color_field('toolTextPrimary', 'Primary Text Color', $layout['theme']['textPrimary'] ?? '#111827') ?>
                         <?= ahp_color_field('toolTextMuted', 'Muted Text Color', $layout['theme']['textMuted'] ?? '#6b7280') ?>

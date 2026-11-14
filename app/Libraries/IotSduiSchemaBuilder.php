@@ -367,7 +367,8 @@ class IotSduiSchemaBuilder
                         'alias'           => 'device.powerOn',
                         'enabledWhen'     => 'device.node_id != ""',
                         'stopPropagation' => true,
-                        'refreshAfter'    => array('getDevices', 'getAllNodesStatus'),
+                        // Live state only after toggle — do not full-refresh device catalog.
+                        'refreshAfter'    => array('getAllNodesStatus'),
                         'mutation'        => array(
                             'action' => 'device_power_toggle',
                             'method' => 'POST',
@@ -561,6 +562,8 @@ class IotSduiSchemaBuilder
                         'action'       => 'getAllNodesStatus',
                         'access_token' => $tokenBinding,
                     ),
+                    // Additive alias — same payload as getAllNodesStatus (existing query/params unchanged).
+                    'alias'    => 'get_iot_telemetry',
                     'auth'     => $authQuery,
                     'response' => array(
                         'root'             => 'all_nodes',
@@ -646,7 +649,8 @@ class IotSduiSchemaBuilder
                         ),
                         'note' => 'Flutter native: Bearer token in Authorization header. JSON body is node_id, command, and power.',
                     ),
-                    'refreshAfter' => array('getDevices', 'getAllNodesStatus'),
+                    // Live telemetry only — catalog (getDevices) is for membership changes, not toggles.
+                    'refreshAfter' => array('getAllNodesStatus'),
                     'optimisticUpdate' => array(
                         'statePath' => 'device.power',
                         'alias'     => 'device.powerOn',
@@ -735,6 +739,19 @@ class IotSduiSchemaBuilder
                         'note'    => 'Flutter native: Bearer token in Authorization header, node_id in JSON body only.',
                     ),
                     'note' => 'POST app-home-page/api/remove-node (web proxy) or v8/iot_api_creation.php?action=remove_node (native). Authorization header, JSON body {node_id}. Response includes refreshed devices[].',
+                ),
+            ),
+
+            // Additive sync contract — existing dataSources / params unchanged.
+            // Flutter should follow this instead of hardcoding full-catalog refresh loops.
+            'syncPolicy' => array(
+                'defaultLiveSource'   => 'getAllNodesStatus',
+                'afterToggleRefresh'  => 'getAllNodesStatus',
+                'catalogSource'       => 'getDevices',
+                'catalogRefreshWhen'  => array('firstLoad', 'addDevice', 'removeDevice', 'membershipChange'),
+                'pollFallback'        => array(
+                    'source'     => 'getAllNodesStatus',
+                    'pauseWhen'  => array('mqttConnected', 'websocketConnected'),
                 ),
             ),
 
@@ -1106,7 +1123,7 @@ class IotSduiSchemaBuilder
 
         $structural = array(
             'schemaVersion', 'kind', 'auth', 'layout', 'theme', 'themes', 'typography', 'icons', 'ui', 'overlays',
-            'deviceFields', 'nodeFields', 'schemaContract', 'page', 'dataSources', 'components', 'metrics',
+            'deviceFields', 'nodeFields', 'schemaContract', 'page', 'dataSources', 'syncPolicy', 'components', 'metrics',
         );
 
         foreach ($structural as $key) {
@@ -1154,6 +1171,93 @@ class IotSduiSchemaBuilder
 
         // Last-mile patch for cached schemas still publishing narrow.columns=1.
         $schema = $this->patchNarrowDeviceGridColumns($schema);
+        // Last-mile latency/sync patches for cached schemas (no key renames / body param changes).
+        $schema = $this->patchLatencySyncContract($schema);
+
+        return $schema;
+    }
+
+    /**
+     * Ensure power-toggle / live-sync contract on cached schemas without renaming keys
+     * or changing API body parameters (node_id, command, power).
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    private function patchLatencySyncContract(array $schema): array
+    {
+        if (!isset($schema['syncPolicy']) || !is_array($schema['syncPolicy'])) {
+            $schema['syncPolicy'] = array();
+        }
+        if (empty($schema['syncPolicy']['defaultLiveSource'])) {
+            $schema['syncPolicy']['defaultLiveSource'] = 'getAllNodesStatus';
+        }
+        if (empty($schema['syncPolicy']['afterToggleRefresh'])) {
+            $schema['syncPolicy']['afterToggleRefresh'] = 'getAllNodesStatus';
+        }
+        if (empty($schema['syncPolicy']['catalogSource'])) {
+            $schema['syncPolicy']['catalogSource'] = 'getDevices';
+        }
+        if (empty($schema['syncPolicy']['catalogRefreshWhen']) || !is_array($schema['syncPolicy']['catalogRefreshWhen'])) {
+            $schema['syncPolicy']['catalogRefreshWhen'] = array('firstLoad', 'addDevice', 'removeDevice', 'membershipChange');
+        }
+        if (empty($schema['syncPolicy']['pollFallback']) || !is_array($schema['syncPolicy']['pollFallback'])) {
+            $schema['syncPolicy']['pollFallback'] = array(
+                'source'    => 'getAllNodesStatus',
+                'pauseWhen' => array('mqttConnected', 'websocketConnected'),
+            );
+        }
+
+        if (isset($schema['dataSources']['getAllNodesStatus']) && is_array($schema['dataSources']['getAllNodesStatus'])) {
+            if (empty($schema['dataSources']['getAllNodesStatus']['alias'])) {
+                $schema['dataSources']['getAllNodesStatus']['alias'] = 'get_iot_telemetry';
+            }
+        }
+
+        if (isset($schema['dataSources']['powerToggle']) && is_array($schema['dataSources']['powerToggle'])) {
+            $schema['dataSources']['powerToggle']['refreshAfter'] = array('getAllNodesStatus');
+        }
+
+        if (isset($schema['schemaContract']['interactions']['powerToggle']) && is_array($schema['schemaContract']['interactions']['powerToggle'])) {
+            $schema['schemaContract']['interactions']['powerToggle']['refreshAfter'] = array('getAllNodesStatus');
+        }
+
+        if (isset($schema['components']) && is_array($schema['components'])) {
+            foreach ($schema['components'] as &$component) {
+                if (!is_array($component)) {
+                    continue;
+                }
+                $type = (string) ($component['type'] ?? '');
+                $id = (string) ($component['id'] ?? '');
+                if ($type === 'deviceGrid' || $id === 'iot-device-grid') {
+                    $component['liveStatusSource'] = 'getAllNodesStatus';
+                    $component['refreshWith'] = array('getAllNodesStatus');
+                }
+
+                $fields = $component['card']['fields'] ?? null;
+                if (is_array($fields) && isset($fields['powerToggle']) && is_array($fields['powerToggle'])) {
+                    if (isset($fields['powerToggle']['mutation']) && is_array($fields['powerToggle']['mutation'])) {
+                        $fields['powerToggle']['mutation']['refreshAfter'] = array('getAllNodesStatus');
+                    }
+                    if (isset($fields['powerToggle']['action']) && is_array($fields['powerToggle']['action'])) {
+                        $fields['powerToggle']['action']['refreshAfter'] = array('getAllNodesStatus');
+                    }
+                    if (isset($fields['powerToggle']['onTap']) && is_array($fields['powerToggle']['onTap'])) {
+                        $fields['powerToggle']['onTap']['refreshAfter'] = array('getAllNodesStatus');
+                    }
+                    $component['card']['fields'] = $fields;
+                }
+
+                $back = $component['card']['flip']['back']['fields'] ?? null;
+                if (is_array($back) && isset($back['backPowerToggle']) && is_array($back['backPowerToggle'])) {
+                    if (isset($back['backPowerToggle']['action']) && is_array($back['backPowerToggle']['action'])) {
+                        $back['backPowerToggle']['action']['refreshAfter'] = array('getAllNodesStatus');
+                    }
+                    $component['card']['flip']['back']['fields'] = $back;
+                }
+            }
+            unset($component);
+        }
 
         return $schema;
     }
@@ -1248,7 +1352,7 @@ class IotSduiSchemaBuilder
             }
         }
 
-        $parts = array('iot-ui-20261012');
+        $parts = array('iot-ui-20261113-latency-sync');
         foreach ($files as $file) {
             $hash = @hash_file('sha256', $file);
             if (is_string($hash) && $hash !== '') {
@@ -1805,7 +1909,8 @@ class IotSduiSchemaBuilder
             'sort'       => 'onlineFirst',
             'dataSource' => 'getDevices',
             'liveStatusSource' => 'getAllNodesStatus',
-            'refreshWith'      => array('getDevices', 'getAllNodesStatus'),
+            // Live grid sync uses telemetry only; getDevices remains the catalog dataSource.
+            'refreshWith'      => array('getAllNodesStatus'),
             // Breakpoint-specific grid columns and gap.
             // Flutter reads these and picks the matching entry from its LayoutBuilder.
             // The base columns/gap above remain the compact default.
@@ -1923,7 +2028,7 @@ class IotSduiSchemaBuilder
                                     'type'            => 'callApi',
                                     'source'          => 'powerToggle',
                                     'stopPropagation' => true,
-                                    'refreshAfter'    => array('getDevices', 'getAllNodesStatus'),
+                                    'refreshAfter'    => array('getAllNodesStatus'),
                                 ),
                             ),
                             'backFlipHint' => array(
@@ -2073,7 +2178,7 @@ class IotSduiSchemaBuilder
                                 'power' => '{{toggle_next}}',
                             ),
                             'responsePowerField' => 'power',
-                            'refreshAfter' => array('getDevices', 'getAllNodesStatus'),
+                            'refreshAfter' => array('getAllNodesStatus'),
                         ),
                         'width' => 44, 'height' => 26, 'borderRadius' => 999,
                         'thumb' => array(
@@ -2094,13 +2199,13 @@ class IotSduiSchemaBuilder
                             'type'            => 'callApi',
                             'source'          => 'powerToggle',
                             'stopPropagation' => true,
-                            'refreshAfter'    => array('getDevices', 'getAllNodesStatus'),
+                            'refreshAfter'    => array('getAllNodesStatus'),
                         ),
                         'onTap' => array(
                             'action'          => 'callApi',
                             'source'          => 'powerToggle',
                             'stopPropagation' => true,
-                            'refreshAfter'    => array('getDevices', 'getAllNodesStatus'),
+                            'refreshAfter'    => array('getAllNodesStatus'),
                         ),
                         'deviceActionFallback' => 'device.actions.onPowerToggle',
                     ),

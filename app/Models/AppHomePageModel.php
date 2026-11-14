@@ -141,7 +141,7 @@ class AppHomePageModel
                 'cardSpeed' => 16,
                 'logoIcon' => 'fa-crosshairs',
                 'showWelcome' => true,
-                'showAlerts' => true,
+                'showAlerts' => false,
                 'showBottomNav' => true,
                 'homeTemplate' => 'default',
             ),
@@ -719,6 +719,12 @@ class AppHomePageModel
             $merged['theme']['showWelcome'] = true;
         }
 
+        // Live Alerts strip removed from home — keep preference off for all layouts.
+        if (!isset($merged['theme']) || !is_array($merged['theme'])) {
+            $merged['theme'] = array();
+        }
+        $merged['theme']['showAlerts'] = false;
+
         if (array_key_exists('cards', $saved) && is_array($saved['cards'])) {
             $normalizedCards = $this->normalizeSavedCards($saved['cards']);
             $merged['cards'] = !empty($normalizedCards)
@@ -1173,29 +1179,8 @@ class AppHomePageModel
             $navApp['themeAware'] = true;
             unset($navApp);
         }
-        if (isset($schema['components']['alerts-summary']['content']) && is_array($schema['components']['alerts-summary']['content'])) {
-            $alertContent =& $schema['components']['alerts-summary']['content'];
-            if (array_key_exists('valueSeparator', $alertContent)) {
-                $alertContent['valueSeparator'] = ' ';
-            }
-            if (array_key_exists('titleValueFormat', $alertContent)) {
-                $alertContent['titleValueFormat'] = 'Live Alerts {value}';
-            }
-            unset($alertContent);
-        }
-        if (isset($schema['components']['alerts-summary']['appearance']) && is_array($schema['components']['alerts-summary']['appearance'])) {
-            $alertAppearance =& $schema['components']['alerts-summary']['appearance'];
-            if (array_key_exists('backgroundColorDark', $alertAppearance)) {
-                $alertAppearance['backgroundColorDark'] = '#1e293b';
-            }
-            if (array_key_exists('textColorDark', $alertAppearance)) {
-                $alertAppearance['textColorDark'] = '#f8fafc';
-            }
-            if (array_key_exists('backgroundColorToken', $alertAppearance)) {
-                $alertAppearance['backgroundColorToken'] = 'colors.surfaceElevated';
-            }
-            unset($alertAppearance);
-        }
+        // Live Alerts strip removed — strip from stored schemas so the app never renders it.
+        $schema = $this->stripAlertsSummaryFromSchema($schema);
         if (isset($schema['designTokens']) && is_array($schema['designTokens'])) {
             if (array_key_exists('themeMode', $schema['designTokens'])) {
                 $schema['designTokens']['themeMode'] = $mode;
@@ -1282,6 +1267,43 @@ class AppHomePageModel
                     );
                 }
             }
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Remove the Live Alerts strip (alerts-summary) from a home schema.
+     * Safe for already-published schemas so the mobile app stops rendering it
+     * without requiring a studio re-save.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    private function stripAlertsSummaryFromSchema(array $schema): array
+    {
+        if (isset($schema['components']) && is_array($schema['components'])) {
+            unset($schema['components']['alerts-summary']);
+            if (isset($schema['components']['home-page']['children'])
+                && is_array($schema['components']['home-page']['children'])) {
+                $schema['components']['home-page']['children'] = array_values(array_filter(
+                    $schema['components']['home-page']['children'],
+                    static function ($id) {
+                        return $id !== 'alerts-summary';
+                    }
+                ));
+            }
+        }
+
+        if (isset($schema['state']['preferences']) && is_array($schema['state']['preferences'])) {
+            $schema['state']['preferences']['showAlerts'] = false;
+        }
+        if (isset($schema['preferences']) && is_array($schema['preferences'])) {
+            $schema['preferences']['showAlerts'] = false;
+        }
+        if (isset($schema['state']['global']) && is_array($schema['state']['global'])
+            && array_key_exists('showAlerts', $schema['state']['global'])) {
+            $schema['state']['global']['showAlerts'] = false;
         }
 
         return $schema;
@@ -2211,6 +2233,8 @@ class AppHomePageModel
         if (!isset($layout['theme']) || !is_array($layout['theme'])) {
             $layout['theme'] = array();
         }
+        // Live Alerts strip removed from home.
+        $layout['theme']['showAlerts'] = false;
         $staticUi = trim((string) ($layout['staticUiTemplate'] ?? ($layout['theme']['staticUiTemplate'] ?? '')));
         if ($staticUi !== '') {
             $layout['staticUiTemplate'] = $staticUi;

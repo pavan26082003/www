@@ -378,7 +378,8 @@ class AppHomePageController extends Security_Controller
                     $payload = array();
                 }
                 $result = $iotModel->toggleDevicePower($userId, $payload);
-                return $this->jsonResponse($result, !empty($result['success']) ? 200 : 422);
+                // 202 Accepted = command validated/queued; keep success=true so optimistic UI stays on.
+                return $this->jsonResponse($result, !empty($result['success']) ? 202 : 422);
 
             case 'remove-node':
                 if (strtolower($this->request->getMethod()) !== 'post') {

@@ -4208,15 +4208,8 @@
     } else if (publishedSchemaHasWelcomeBanner()) {
       layout.theme.showWelcome = true;
     }
-    if (prefs && prefs.showAlerts === false && !publishedSchemaHasAlertsBanner()) {
-      layout.theme.showAlerts = false;
-    } else if (publishedSchemaHasAlertsBanner()) {
-      layout.theme.showAlerts = true;
-    } else if (prefs && prefs.showAlerts !== false) {
-      layout.theme.showAlerts = true;
-    } else if (layout.theme.showAlerts == null) {
-      layout.theme.showAlerts = true;
-    }
+    // Live Alerts strip removed from home.
+    layout.theme.showAlerts = false;
   }
 
   function normalizeWelcomeBannerPreference() {
@@ -4227,8 +4220,7 @@
 
   function normalizeAlertsBannerPreference() {
     var t = getTheme();
-    if (t.showAlerts == null) t.showAlerts = true;
-    migrateLegacyAlertsDefault();
+    t.showAlerts = false;
   }
 
   function migrateLegacyWelcomeDefault() {
@@ -4251,13 +4243,7 @@
   }
 
   function migrateLegacyAlertsDefault() {
-    var t = getTheme();
-    if (t.showAlerts !== false) return;
-    if (publishedSchemaHasAlertsBanner()) {
-      t.showAlerts = true;
-      return;
-    }
-    t.showAlerts = true;
+    getTheme().showAlerts = false;
   }
 
   function shouldShowWelcomeBanner() {
@@ -4265,7 +4251,7 @@
   }
 
   function shouldShowAlertsStrip() {
-    return getTheme().showAlerts !== false;
+    return false;
   }
 
   function resolveWelcomeGreetingText(raw) {
@@ -6061,7 +6047,7 @@
     if (isNaN(t.cardBorderRadius)) t.cardBorderRadius = 0;
     t.cardBorderRadius = Math.max(0, Math.min(72, t.cardBorderRadius));
     t.cardSpeed = cardSpeedFromFaceSeconds(getVal('toolCardFaceSec') || faceSecondsFromCardSpeed(t.cardSpeed));
-    t.showAlerts = getCheck('toolShowAlerts');
+    t.showAlerts = false;
     t.showBottomNav = getCheck('toolShowBottomNav');
     t.bgStyle = getVal('toolBgStyle') || t.bgStyle || 'light';
     if (document.getElementById('toolShowWelcome')) {
@@ -8821,10 +8807,6 @@
     });
     bindField('toolShowWelcome', function () {
       getTheme().showWelcome = getCheck('toolShowWelcome');
-      applyTheme();
-    });
-    bindField('toolShowAlerts', function () {
-      getTheme().showAlerts = getCheck('toolShowAlerts');
       applyTheme();
     });
     bindField('toolShowBottomNav', function () {

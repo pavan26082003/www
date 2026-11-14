@@ -290,7 +290,8 @@ class IotDashboard extends Security_Controller
             }
 
             $result = $this->iotDashboardModel->toggleDevicePower($userId, $payload, $isAdmin);
-            return $this->jsonResponse($result, !empty($result['success']) ? 200 : 422);
+            // 202 Accepted = command validated/queued; keep success=true so optimistic UI stays on.
+            return $this->jsonResponse($result, !empty($result['success']) ? 202 : 422);
         }
 
         if ($action === 'nodes-status') {

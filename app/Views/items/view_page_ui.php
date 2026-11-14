@@ -465,6 +465,21 @@ if (!function_exists('view_ui_resolve_brand_logo_asset')) {
 $brand_logo_asset = view_ui_resolve_brand_logo_asset(
     (isset($brand_logo_asset) && is_array($brand_logo_asset)) ? $brand_logo_asset : []
 );
+// Only fill missing eFactor companions when the active mark is already the eFactor brand pair.
+$brand_logo_is_efactor = ((string) ($brand_logo_asset['source'] ?? '') === 'cdn')
+    || stripos((string) ($brand_logo_asset['url'] ?? ''), 'efactor-logo') !== false
+    || stripos((string) ($brand_logo_asset['previewUrl'] ?? ''), 'efactor-logo') !== false
+    || stripos((string) ($brand_logo_asset['fileName'] ?? ''), 'efactor-logo') !== false;
+if ($brand_logo_is_efactor) {
+    if (empty($brand_logo_asset['url']) && empty($brand_logo_asset['previewUrl'])) {
+        $brand_logo_asset['url'] = 'https://efactor.tech/assets/images/efactor-logo.png';
+        $brand_logo_asset['previewUrl'] = 'https://efactor.tech/assets/images/efactor-logo.png';
+    }
+    if (empty($brand_logo_asset['urlDark']) && empty($brand_logo_asset['previewUrlDark'])) {
+        $brand_logo_asset['urlDark'] = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+        $brand_logo_asset['previewUrlDark'] = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+    }
+}
 $brand_logo_preview_url = (string) ($brand_logo_asset['previewUrl'] ?? ($brand_logo_asset['url'] ?? ''));
 $account_appearance_mode = 'system';
 try {
@@ -478,6 +493,15 @@ try {
 } catch (\Throwable $e) {
     $account_appearance_mode = 'system';
 }
+// SSR preview mode: honor forced light/dark from account. System falls back to studio until JS reads OS.
+$account_appearance_mode = strtolower(trim((string) $account_appearance_mode));
+if ($account_appearance_mode !== 'light' && $account_appearance_mode !== 'dark' && $account_appearance_mode !== 'system') {
+    $account_appearance_mode = 'system';
+}
+$preview_display_theme_mode = $account_appearance_mode === 'light' || $account_appearance_mode === 'dark'
+    ? $account_appearance_mode
+    : ($is_dark_ui_theme ? 'dark' : 'light');
+$is_preview_dark_ui = $preview_display_theme_mode === 'dark';
 $request_for_view = service('request');
 $active_scan_username = trim((string) ($request_for_view ? $request_for_view->getGet('username') : ''));
 if ($active_scan_username === '') {
@@ -2303,7 +2327,7 @@ if (!function_exists('view_ui_icon')) {
       padding: 2px 4px;
       border: 0;
       border-radius: 6px;
-      background: #fff;
+      background: transparent;
       box-shadow: none;
     }
 
@@ -2904,7 +2928,7 @@ if (!function_exists('view_ui_icon')) {
       padding: 2px 4px;
       border: 0;
       border-radius: 6px;
-      background: #fff;
+      background: transparent;
       box-shadow: none;
       overflow: hidden;
     }
@@ -9258,7 +9282,20 @@ if (!function_exists('view_ui_icon')) {
   
 
 </head>
-<body data-studio-theme-mode="<?= esc(strtolower((string) ($active_ui_theme['themeMode'] ?? 'dark'))) ?>">
+<body data-studio-theme-mode="<?= esc($preview_display_theme_mode ?? ($is_dark_ui_theme ? 'dark' : 'light')) ?>">
+  <script>
+    (function () {
+      try {
+        var mode = <?= json_encode($account_appearance_mode ?? 'system', JSON_UNESCAPED_SLASHES) ?>;
+        var dark = mode === 'dark';
+        if (mode === 'system' || (mode !== 'light' && mode !== 'dark')) {
+          dark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        }
+        document.body.setAttribute('data-studio-theme-mode', dark ? 'dark' : 'light');
+        window.__viewPagePreviewDark = dark;
+      } catch (e) {}
+    })();
+  </script>
   <nav class="desktop-flow-actions" aria-label="Linked UI actions">
     <a href="#" class="desktop-flow-btn" id="view-page-ui-back"><?= view_ui_icon('chevron-left') ?> Back</a>
     <button type="button" class="desktop-flow-btn desktop-flow-studio" id="open-studio-btn" onclick="if (window.openViewPageStudio) { window.openViewPageStudio(event); }"><?= view_ui_icon('palette') ?> Studio</button>
@@ -9325,12 +9362,23 @@ if (!function_exists('view_ui_icon')) {
     <?php
       $brand_logo_light_url = (string) ($brand_logo_asset['url'] ?? ($brand_logo_asset['previewUrl'] ?? $brand_logo_preview_url));
       $brand_logo_dark_url = (string) ($brand_logo_asset['urlDark'] ?? ($brand_logo_asset['previewUrlDark'] ?? 'https://efactor.tech/assets/images/efactor-logo_light.png'));
-      $brand_logo_initial_url = $is_dark_ui_theme ? $brand_logo_dark_url : $brand_logo_light_url;
+      $brand_logo_initial_url = !empty($is_preview_dark_ui) ? $brand_logo_dark_url : $brand_logo_light_url;
     ?>
     <section class="brand-strip">
       <div class="brand-mark">
-        <img src="<?= esc($brand_logo_initial_url) ?>" alt="<?= esc($brand_logo_asset['alt'] ?? 'Brand') ?>" width="110" height="28" data-logo-light="<?= esc($brand_logo_light_url) ?>" data-logo-dark="<?= esc($brand_logo_dark_url) ?>">
+        <img src="<?= esc($brand_logo_initial_url) ?>" alt="<?= esc($brand_logo_asset['alt'] ?? 'Brand') ?>" width="110" height="28" data-logo-light="<?= esc($brand_logo_light_url) ?>" data-logo-dark="<?= esc($brand_logo_dark_url) ?>" id="view-page-brand-logo">
       </div>
+      <script>
+        (function () {
+          try {
+            var img = document.getElementById('view-page-brand-logo');
+            if (!img) return;
+            var dark = !!window.__viewPagePreviewDark;
+            var next = dark ? (img.getAttribute('data-logo-dark') || '') : (img.getAttribute('data-logo-light') || '');
+            if (next) img.setAttribute('src', next);
+          } catch (e) {}
+        })();
+      </script>
       <div class="brand-copy">
         <strong><?= esc($modelno ?: 'Linked UI') ?></strong>
         <span><?= $is_row_view ? 'Row preview' : count($pages) . ' linked page' . (count($pages) === 1 ? '' : 's') ?></span>
@@ -10846,7 +10894,9 @@ if (!function_exists('view_ui_icon')) {
       const numericValue = parseFloat(currentValue);
       const clampedValue = Number.isFinite(numericValue) ? Math.max(safeMin, Math.min(safeMax, numericValue)) : safeMin;
       const labels = buildSliderRangeLabels(safeMin, safeMax, config);
-      const isDark = String(currentTheme.themeMode || '').toLowerCase() === 'dark';
+      const isDark = (typeof isPreviewDarkTheme === 'function')
+        ? isPreviewDarkTheme()
+        : (String(currentTheme.themeMode || '').toLowerCase() === 'dark');
       const cardBg = colors.cardColor || currentTheme.cardColor;
       const shellBg = currentTheme.shellColor || currentTheme.backgroundColor;
       const defaultBg = isDark
@@ -10855,9 +10905,11 @@ if (!function_exists('view_ui_icon')) {
       const specs = {
         default: {
           background: defaultBg,
-          trackGradient: 'linear-gradient(90deg,' + colors.accentColor + ' 0%,' + colors.accentColor + ' var(--range-progress), #E2E8F0 var(--range-progress), #E2E8F0 100%)',
+          trackGradient: isDark
+            ? 'linear-gradient(90deg,' + colors.accentColor + ' 0%,' + colors.accentColor + ' var(--range-progress), #475569 var(--range-progress), #475569 100%)'
+            : 'linear-gradient(90deg,' + colors.accentColor + ' 0%,' + colors.accentColor + ' var(--range-progress), #E2E8F0 var(--range-progress), #E2E8F0 100%)',
           activeTrackColor: colors.accentColor,
-          inactiveTrackColor: '#E2E8F0',
+          inactiveTrackColor: isDark ? '#475569' : '#E2E8F0',
           thumbColor: colors.accentColor
         },
         brightness: {
@@ -15005,6 +15057,11 @@ if (!function_exists('view_ui_icon')) {
     }
 
     function isStudioDarkTheme() {
+      // Preview chrome/inputs follow account appearance, not Studio preset alone.
+      // Saved schema still uses currentTheme.themeMode via studioMode export.
+      if (typeof isPreviewDarkTheme === 'function') {
+        return isPreviewDarkTheme();
+      }
       return String(currentTheme.themeMode || '').toLowerCase() === 'dark';
     }
 
@@ -18308,6 +18365,21 @@ if (!function_exists('view_ui_icon')) {
         activeMode: mode,
         activeModeBinding: { '$state': 'global.themeMode' }
       };
+    }
+    // Preview paint mode only (does not mutate saved Studio themeMode / schema studioMode).
+    function resolveDisplayThemeMode() {
+      const mode = resolveAccountAppearanceMode();
+      if (mode === 'light' || mode === 'dark') {
+        return mode;
+      }
+      try {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      } catch (e) {
+        return 'light';
+      }
+    }
+    function isPreviewDarkTheme() {
+      return resolveDisplayThemeMode() === 'dark';
     }
     const initialDeviceOnline = <?= $device_online ? 'true' : 'false' ?>;
     const initialDeviceOnlineLabel = <?= json_encode($device_online_label, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
@@ -22189,10 +22261,20 @@ if (!function_exists('view_ui_icon')) {
 
     function systemDisplayTheme(theme) {
       var source = theme || {};
+      // Honor account appearance: light/dark force; system follows OS.
+      // Never rewrite currentTheme — only the paint snapshot returned here.
       var dark = false;
       try {
-        dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      } catch (e) {}
+        dark = (typeof isPreviewDarkTheme === 'function') ? isPreviewDarkTheme() : false;
+        if (typeof isPreviewDarkTheme !== 'function') {
+          dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        }
+      } catch (e) {
+        dark = false;
+      }
+      try {
+        window.__viewPagePreviewDark = !!dark;
+      } catch (e2) {}
       var chrome = dark ? {
         themeMode: 'dark',
         backgroundType: 'gradient',
@@ -22227,7 +22309,7 @@ if (!function_exists('view_ui_icon')) {
       return Object.assign({}, source, chrome);
     }
 
-    // Theme Application. Paint follows the device Light/Dark setting.
+    // Theme Application. Paint follows account appearance (light/dark/system).
     // currentTheme itself is not rewritten, so saved schema colors stay as authored.
     function applyTheme(theme, options) {
       theme = systemDisplayTheme(theme);
@@ -22378,7 +22460,7 @@ if (!function_exists('view_ui_icon')) {
         brand.style.boxShadow = '';
       });
 
-      // Theme-aware Efactor brand mark: light theme → efactor-logo.png, dark → efactor-logo_light.png.
+      // Theme-aware Efactor brand mark: light → efactor-logo.png, dark → efactor-logo_light.png.
       (function syncBrandLogoForTheme() {
         const isDarkMode = String(theme.themeMode || '').toLowerCase() === 'dark';
         const lightFallback = (brandLogo && (brandLogo.url || brandLogo.previewUrl)) || 'https://efactor.tech/assets/images/efactor-logo.png';
@@ -22394,7 +22476,7 @@ if (!function_exists('view_ui_icon')) {
           }
         });
         queryPreviewAll('.brand-mark').forEach(function(mark) {
-          mark.style.background = isDarkMode ? 'transparent' : '';
+          mark.style.background = 'transparent';
         });
       })();
 
@@ -24529,7 +24611,7 @@ if (!function_exists('view_ui_icon')) {
           '.app-back-btn,.back-btn,.icon-btn{display:inline-flex;align-items:center;justify-content:center;height:36px;border:0;border-radius:999px;background:' + headerChromeFromTheme(currentTheme).backBackground + ';color:' + headerChromeFromTheme(currentTheme).backForeground + ';box-shadow:none;}.app-back-btn,.back-btn{width:auto;min-width:42px;padding:0 12px;gap:2px;font-size:13px;font-weight:600;}.icon-btn{width:36px;border-radius:50%;}',
           '.top-title h1{margin:0;color:' + headerChromeFromTheme(currentTheme).titleColor + ';font-size:16px;line-height:1.2;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.top-title p,.top-title-device{margin:2px 0 0;color:' + headerChromeFromTheme(currentTheme).deviceColor + ';font-size:12px;line-height:1.25;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.top-actions{display:flex;align-items:center;gap:6px;}',
           '.brand-strip{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;margin:10px 16px 12px;padding:10px 16px;border:0;border-radius:999px;background:' + currentTheme.cardColor + ';box-shadow:0 10px 28px rgba(15,23,42,.12);color:' + currentTheme.textColor + ';}',
-          '.brand-mark{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:2px 4px;border:0;border-radius:6px;background:' + (String(currentTheme.themeMode || '').toLowerCase() === 'dark' ? 'transparent' : '#fff') + ';overflow:hidden}.brand-mark img{display:block;height:28px;width:auto;max-width:118px;object-fit:contain}.brand-copy strong{display:block;color:' + currentTheme.textColor + ';font-size:14px;line-height:1.2;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.brand-copy span{display:block;margin-top:2px;color:' + currentTheme.mutedTextColor + ';font-size:11px;font-weight:700;}.online-state{display:inline-flex;align-items:center;gap:7px;color:' + currentTheme.successColor + ';font-size:12px;font-weight:900;}',
+          '.brand-mark{display:inline-flex;align-items:center;justify-content:center;height:32px;padding:2px 4px;border:0;border-radius:6px;background:transparent;overflow:hidden}.brand-mark img{display:block;height:28px;width:auto;max-width:118px;object-fit:contain}.brand-copy strong{display:block;color:' + currentTheme.textColor + ';font-size:14px;line-height:1.2;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.brand-copy span{display:block;margin-top:2px;color:' + currentTheme.mutedTextColor + ';font-size:11px;font-weight:700;}.online-state{display:inline-flex;align-items:center;gap:7px;color:' + currentTheme.successColor + ';font-size:12px;font-weight:900;}',
           '.page-slide{padding:' + px(currentTheme.pagePadding, 18) + ' ' + px(currentTheme.pagePadding, 18) + ' 4px}.slide-hero{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end;min-height:112px;margin-bottom:14px;padding:18px;border-radius:calc(' + px(currentTheme.borderRadius, 18) + ' + 6px);background:linear-gradient(145deg,' + currentTheme.topbarColor + ',' + currentTheme.secondaryColor + ');color:#fff;box-shadow:0 18px 38px rgba(18,50,70,.16);overflow:hidden;}.slide-hero:after{content:"";position:absolute;right:-36px;top:-36px;width:112px;height:112px;border-radius:50%;border:24px solid rgba(209,250,255,.16);}',
           '.slide-hero-kicker{display:inline-flex;align-items:center;gap:6px;margin-bottom:8px;color:rgba(255,255,255,.72);font-size:11px;font-weight:800;text-transform:uppercase}.slide-hero h2{margin:0;color:#fff;font-size:22px;line-height:1.1;font-weight:900;overflow-wrap:anywhere}.slide-hero p{margin:6px 0 0;color:rgba(255,255,255,.68);font-size:12px;font-weight:700}.slide-count{position:relative;z-index:1;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;width:58px;height:58px;border-radius:20px;background:rgba(255,255,255,.12);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);}',
           '.device-card,.param-card{border:' + px(currentTheme.borderSize, 1) + ' solid ' + currentTheme.borderColor + ';border-radius:' + px(currentTheme.borderRadius, 18) + ';background:' + currentTheme.cardColor + ';box-shadow:0 12px 28px rgba(18,50,70,.1);}.name-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:' + px(currentTheme.cardPadding, 16) + ';}.field-label{display:block;margin-bottom:4px;color:' + currentTheme.mutedTextColor + ';font-size:10px;line-height:1.15;font-weight:600;text-transform:uppercase;letter-spacing:.08em;text-align:left}.field-value{display:block;min-width:0;color:' + currentTheme.textColor + ';font-size:15px;line-height:1.35;font-weight:600;overflow-wrap:anywhere;text-align:left}.edit-link{color:' + currentTheme.accentColor + ';font-size:12px;font-weight:800;text-decoration:none;}',
@@ -24539,7 +24621,9 @@ if (!function_exists('view_ui_icon')) {
         componentTemplates: {
           appTopbar: '<button class="app-back-btn">{{icon:chevron-left}}<span class="app-back-label">Back</span></button><div class="top-title"><h1>Page {{page.pageNo}}. {{page.pageName}}</h1><p class="top-title-device">{{modelNo}}</p></div><div class="top-actions">{{actionIcons}}</div>',
           brandStrip: (function() {
-            const brandThemeDark = String(currentTheme.themeMode || '').toLowerCase() === 'dark';
+            const brandThemeDark = (typeof isPreviewDarkTheme === 'function')
+              ? isPreviewDarkTheme()
+              : (String(currentTheme.themeMode || '').toLowerCase() === 'dark');
             const brandLightUrl = (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || 'https://efactor.tech/assets/images/efactor-logo.png';
             const brandDarkUrl = (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png';
             const brandActiveUrl = brandThemeDark ? brandDarkUrl : brandLightUrl;
@@ -27557,12 +27641,15 @@ if (!function_exists('view_ui_icon')) {
     bindStudioColorRows(document.getElementById('studio-general-section'));
     applyTheme(currentTheme, { reinitializeComponents: true });
     try {
-      var systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      var repaintSystemTheme = function () {
-        applyTheme(currentTheme, { reinitializeComponents: false });
-      };
-      if (systemThemeQuery.addEventListener) systemThemeQuery.addEventListener('change', repaintSystemTheme);
-      else if (systemThemeQuery.addListener) systemThemeQuery.addListener(repaintSystemTheme);
+      // Only watch OS when account appearance is System; forced light/dark ignore OS flips.
+      if (resolveAccountAppearanceMode() === 'system') {
+        var systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        var repaintSystemTheme = function () {
+          applyTheme(currentTheme, { reinitializeComponents: false });
+        };
+        if (systemThemeQuery.addEventListener) systemThemeQuery.addEventListener('change', repaintSystemTheme);
+        else if (systemThemeQuery.addListener) systemThemeQuery.addListener(repaintSystemTheme);
+      }
     } catch (e) {}
     resetThemeHistoryBaseline();
     refreshStudioParameterPanels();

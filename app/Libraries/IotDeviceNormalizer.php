@@ -246,7 +246,8 @@ class IotDeviceNormalizer
                     'command' => '{{toggle_next|off:on}}',
                     'power'   => '{{toggle_next}}',
                 ),
-                'refreshAfter' => array('getDevices', 'getAllNodesStatus'),
+                // Live telemetry only after toggle — catalog refresh is for add/remove/membership.
+                'refreshAfter' => array('getAllNodesStatus'),
                 'responsePowerField' => 'power',
             ),
         );
