@@ -1,0 +1,338 @@
+{
+    "summary": {
+        "same_top_envelope": true,
+        "legacy_cooker_top": [
+            "node_details",
+            "nodes"
+        ],
+        "legacy_fan_top": [
+            "node_details",
+            "nodes"
+        ],
+        "v2_fan_top": [
+            "status",
+            "message",
+            "model_no",
+            "node_details",
+            "v2_node_details",
+            "nodes",
+            "source"
+        ],
+        "v2_extra_top_keys": [
+            "status",
+            "message",
+            "model_no",
+            "v2_node_details",
+            "source"
+        ],
+        "legacy_extra_top_keys": [],
+        "node_detail_keys_legacy": [
+            "id",
+            "config",
+            "role",
+            "status"
+        ],
+        "node_detail_keys_v2": [
+            "id",
+            "config",
+            "role",
+            "status"
+        ],
+        "node_detail_keys_only_legacy": [],
+        "node_detail_keys_only_v2": [],
+        "config_keys_legacy": [
+            "attributes",
+            "config_version",
+            "devices",
+            "info",
+            "node_id"
+        ],
+        "config_keys_v2": [
+            "attributes",
+            "config_version",
+            "devices",
+            "info",
+            "node_id"
+        ],
+        "device_keys_legacy": [
+            "name",
+            "total_pages",
+            "attributes",
+            "Device Id",
+            "pages",
+            "primary",
+            "type",
+            "brand_logo",
+            "brand_logo_dark",
+            "Need_Help",
+            "chat_status",
+            "device_image",
+            "device_p2p_control",
+            "Device Communication",
+            "Status"
+        ],
+        "device_keys_v2": [
+            "name",
+            "total_pages",
+            "attributes",
+            "Device Id",
+            "pages",
+            "primary",
+            "type",
+            "brand_logo",
+            "brand_logo_dark",
+            "Need_Help",
+            "chat_status",
+            "device_image",
+            "device_p2p_control",
+            "Device Communication",
+            "Status"
+        ],
+        "device_keys_only_legacy": [],
+        "device_keys_only_v2": [],
+        "pages_legacy_cooker": [
+            "Device Communication",
+            "Page1.Operation",
+            "Configure.Config",
+            "Status"
+        ],
+        "pages_legacy_fan": [
+            "Device Communication"
+        ],
+        "pages_v2_fan": [
+            "Home.operation",
+            "Status.operation",
+            "Device Communication"
+        ],
+        "cmd_keys_common_count": 17,
+        "cmd_keys_only_legacy": [],
+        "cmd_keys_only_v2": [
+            "bitwise_mode",
+            "end_bit",
+            "field_level",
+            "id",
+            "parent_field_id",
+            "start_bit"
+        ],
+        "empty_handling": {
+            "legacy_cooker": {
+                "null_value": 1,
+                "empty_value": 3,
+                "null_asperui": 33,
+                "empty_asperui_arrays": 56,
+                "samples_empty_asperui": [
+                    {
+                        "page": "Page1.Operation",
+                        "frame": "name",
+                        "name": "name",
+                        "value": "cooker_7E0004F2",
+                        "asperui_value": "cooker_7E0004F2",
+                        "asperui": []
+                    },
+                    {
+                        "page": "Page1.Operation",
+                        "frame": "remaining time",
+                        "name": "remaining time",
+                        "value": "00",
+                        "asperui_value": 0,
+                        "asperui": []
+                    },
+                    {
+                        "page": "Page1.Operation",
+                        "frame": "running temperature",
+                        "name": "running temperature",
+                        "value": "003B",
+                        "asperui_value": 59,
+                        "asperui": []
+                    },
+                    {
+                        "page": "Page1.Operation",
+                        "frame": "Get status",
+                        "name": "remaining time",
+                        "value": "00",
+                        "asperui_value": 0,
+                        "asperui": []
+                    },
+                    {
+                        "page": "Page1.Operation",
+                        "frame": "Get status",
+                        "name": "running temperature",
+                        "value": "003b",
+                        "asperui_value": 59,
+                        "asperui": []
+                    }
+                ],
+                "samples_null_empty": [
+                    {
+                        "page": "Configure.Config",
+                        "frame": "wifi config",
+                        "name": "cooker-recipe",
+                        "value": "",
+                        "asperui_value": "",
+                        "asperui": [
+                            "RICE",
+                            "BROWNRICE",
+                            "FRY",
+                            "MILK",
+                            "SOUP",
+                            "BIRIYANI",
+                            "IDLY",
+                            "DHAL",
+                            "HARDVEG",
+                            "WATER",
+                            "POPCORN",
+                            "CAKE",
+                            "MAGGI",
+                            "NOODLES",
+                            "DIY"
+                        ],
+                        "ui": "Drop Down"
+                    },
+                    {
+                        "page": "Configure.Config",
+                        "frame": "wifi config",
+                        "name": "OK",
+                        "value": "",
+                        "asperui_value": null,
+                        "asperui": null,
+                        "ui": "Button"
+                    },
+                    {
+                        "page": "Status",
+                        "frame": "Command Get Status",
+                        "name": "Command Get Status",
+                        "value": "",
+                        "asperui_value": null,
+                        "asperui": null,
+                        "ui": "Button"
+                    },
+                    {
+                        "page": "Status",
+                        "frame": "Display Log",
+                        "name": "DisplayLog",
+                        "value": null,
+                        "asperui_value": null,
+                        "asperui": [
+                            "false"
+                        ],
+                        "ui": "Button"
+                    }
+                ]
+            },
+            "legacy_fan": {
+                "null_value": 0,
+                "empty_value": 3,
+                "null_asperui": 6,
+                "empty_asperui_arrays": 0,
+                "samples_empty_asperui": [],
+                "samples_null_empty": [
+                    {
+                        "page": "Device Communication",
+                        "frame": "BAUDRATE",
+                        "name": "baudrate",
+                        "value": "",
+                        "asperui_value": "",
+                        "asperui": [
+                            "4800",
+                            "9600",
+                            "38400",
+                            "57600",
+                            "115200",
+                            "230400"
+                        ],
+                        "ui": "Drop Down"
+                    },
+                    {
+                        "page": "Device Communication",
+                        "frame": "Uart msg ID",
+                        "name": "uartmsgid",
+                        "value": "",
+                        "asperui_value": "",
+                        "asperui": [
+                            "disable",
+                            "enable"
+                        ],
+                        "ui": "Drop Down"
+                    },
+                    {
+                        "page": "Device Communication",
+                        "frame": "Error Code",
+                        "name": "errorcode",
+                        "value": "",
+                        "asperui_value": "",
+                        "asperui": [
+                            "disable",
+                            "enable"
+                        ],
+                        "ui": "Drop Down"
+                    }
+                ]
+            },
+            "v2_fan": {
+                "null_value": 0,
+                "empty_value": 3,
+                "null_asperui": 31,
+                "empty_asperui_arrays": 0,
+                "samples_empty_asperui": [],
+                "samples_null_empty": []
+            }
+        },
+        "frame_counts": {
+            "legacy_cooker": 16,
+            "legacy_fan": 3,
+            "v2_fan": 10
+        },
+        "connectivity": {
+            "legacy_cooker": {
+                "connected": false,
+                "timestamp": 1794904199742
+            },
+            "legacy_fan": {
+                "connected": false,
+                "timestamp": 1794904203465
+            },
+            "v2_fan": {
+                "connected": false,
+                "timestamp": 1794904205444
+            }
+        }
+    },
+    "legacy_fan_vs_v2_fan_pages": {
+        "legacy": [
+            "Device Communication"
+        ],
+        "v2": [
+            "Home.operation",
+            "Status.operation",
+            "Device Communication"
+        ],
+        "same_pages": false
+    },
+    "legacy_fan_frames": [
+        "Device Communication / BAUDRATE cmds=3 resp=0",
+        "Device Communication / Uart msg ID cmds=3 resp=0",
+        "Device Communication / Error Code cmds=3 resp=0"
+    ],
+    "v2_fan_frames": [
+        "Home.operation / Power cmds=5 resp=0",
+        "Home.operation / Timer cmds=5 resp=0",
+        "Home.operation / Speed cmds=5 resp=0",
+        "Status.operation / Send Data cmds=2 resp=0",
+        "Status.operation / Display Log cmds=2 resp=0",
+        "Status.operation / Command Get Status cmds=5 resp=6",
+        "Status.operation / Display cmds=2 resp=0",
+        "Device Communication / BAUDRATE cmds=3 resp=0",
+        "Device Communication / Uart msg ID cmds=3 resp=0",
+        "Device Communication / Error Code cmds=3 resp=0"
+    ],
+    "http": {
+        "legacy_cooker": 200,
+        "legacy_fan": 200,
+        "v2_fan": 200,
+        "bytes": {
+            "legacy_cooker": 40847,
+            "legacy_fan": 4261,
+            "v2_fan": 33223
+        }
+    }
+}

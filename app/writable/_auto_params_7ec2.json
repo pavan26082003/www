@@ -1,0 +1,4 @@
+
+
+
+{"url":"action=auto_get_nodes_params","token":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwaG9uZV92ZXJpZmllZCI6dHJ1ZSwiY3VzdG9tOnVzZXJfaWQiOiI3NjIiLCJ0b2tlbl91c2UiOiJpZCIsImF1dGhfdGltZSI6MTY2NzAyMjI0MiwiZXhwIjoxNjY3MDI1ODQyLCJpYXQiOjE2NjcwMjIyNDIsInBob25lIjoiNzgxNTgyNzQwMCJ9.nTmKhTf58o93mMoC3fh5GDxPUkUy06hEZSnJAUC4dLo","node_id":"FFFFFFFFFFFFFFFF7EC200000003BC00","device_id":"FFFFFFFFFFFFFFFF7EC200000003BC00","payload":"DEE7000401000000FE00000000000000393ED70A3D438E00000001000201000043800A","connected":"false","FAN_7E0003BC":{"Page1.Operation":{"name":"null","power":"false","Speed":2,"Buzzer":"true","Current(A)":0.42,"Voltage":284,"rpm":0,"Direction":"1"}}}

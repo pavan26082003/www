@@ -1,0 +1,2203 @@
+{
+    "status": true,
+    "message": "V2 node_details built",
+    "model_no": "Ef-fan-hv-d-15-10",
+    "node_details": [
+        {
+            "id": "FFFFFFFFFFFFFFFF7EC200000005E800",
+            "config": {
+                "attributes": [
+                    {
+                        "name": "serial_num",
+                        "value": "1345"
+                    },
+                    {
+                        "name": "model",
+                        "value": "wifi"
+                    }
+                ],
+                "config_version": "2020-03-20",
+                "devices": [
+                    {
+                        "name": "fan_7E0005E8",
+                        "total_pages": "3",
+                        "attributes": [
+                            {
+                                "name": "Device Id",
+                                "value": "FFFFFFFFFFFFFFFF7EC200000005E800"
+                            },
+                            {
+                                "name": "mac",
+                                "value": "A4:CF:12:C8:B8:19"
+                            }
+                        ],
+                        "Device Id": "FFFFFFFFFFFFFFFF7EC200000005E800",
+                        "pages": {
+                            "Home.operation": [
+                                {
+                                    "frame": {
+                                        "name": "Power",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "false",
+                                            "response": "false",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "commandId",
+                                                "value": "00",
+                                                "Field_description": "commandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24482,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "functionCode",
+                                                "value": "00",
+                                                "Field_description": "functionCode",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24483,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Power",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "data",
+                                                "type": "range value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "toggle switch",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "off",
+                                                    "on"
+                                                ],
+                                                "sno_asperui": [
+                                                    "1"
+                                                ],
+                                                "asperui_values": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "ui_description": "read/write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "0",
+                                                    "max": "0"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24484,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "terminatorCrc",
+                                                "value": "00",
+                                                "Field_description": "terminatorCrc",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24485,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Timer",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "false",
+                                            "response": "false",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "commandId",
+                                                "value": "00",
+                                                "Field_description": "commandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24598,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "functionCode",
+                                                "value": "00",
+                                                "Field_description": "functionCode",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24599,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "terminatorCrc",
+                                                "value": "00",
+                                                "Field_description": "terminatorCrc",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24600,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Timer",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "data",
+                                                "type": "range value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "slider",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "0",
+                                                    "0"
+                                                ],
+                                                "sno_asperui": [
+                                                    "1"
+                                                ],
+                                                "asperui_values": [
+                                                    "1"
+                                                ],
+                                                "ui_description": "read/write",
+                                                "slider_step_value": "1",
+                                                "display_value": {
+                                                    "min": "00",
+                                                    "max": "255"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24601,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Speed",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "false",
+                                            "response": "false",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "commandId",
+                                                "value": "00",
+                                                "Field_description": "commandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24634,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "functionCode",
+                                                "value": "00",
+                                                "Field_description": "functionCode",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24635,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Speed",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "data",
+                                                "type": "range value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "slider",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "0",
+                                                    "0"
+                                                ],
+                                                "sno_asperui": [
+                                                    "1"
+                                                ],
+                                                "asperui_values": [
+                                                    "1"
+                                                ],
+                                                "ui_description": "read/write",
+                                                "slider_step_value": "1",
+                                                "display_value": {
+                                                    "min": "1",
+                                                    "max": "5"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24636,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "terminatorCrc",
+                                                "value": "00",
+                                                "Field_description": "terminatorCrc",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24637,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                }
+                            ],
+                            "Status.operation": [
+                                {
+                                    "frame": {
+                                        "name": "Send Data",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "false",
+                                            "response": "false",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "Data",
+                                                "value": "000000",
+                                                "asperui_value": "1",
+                                                "Field_description": "data",
+                                                "type": "range value",
+                                                "data_type": "string",
+                                                "no_of_bytes": 3,
+                                                "byte_start_position": 1,
+                                                "ui_type": "text",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "1"
+                                                ],
+                                                "sno_asperui": [],
+                                                "asperui_values": null,
+                                                "ui_description": "read/write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "",
+                                                    "max": ""
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 9756,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Display Log",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "false",
+                                            "response": "false",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "Data",
+                                                "value": "000000",
+                                                "asperui_value": 0,
+                                                "Field_description": "data",
+                                                "type": "fixed value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 3,
+                                                "byte_start_position": 1,
+                                                "ui_type": "button",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": null,
+                                                "sno_asperui": [],
+                                                "asperui_values": null,
+                                                "ui_description": "read/write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "",
+                                                    "max": ""
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 9757,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Command Get Status",
+                                        "multiple_ui": [
+                                            "true",
+                                            "true",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "true",
+                                            "response": "true",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "Data",
+                                                "value": "000000",
+                                                "asperui_value": 0,
+                                                "Field_description": "data",
+                                                "type": "fixed value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 3,
+                                                "byte_start_position": 1,
+                                                "ui_type": "button",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": null,
+                                                "sno_asperui": [],
+                                                "asperui_values": null,
+                                                "ui_description": "read/write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "0",
+                                                    "max": "0"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24434,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "commandId",
+                                                "value": "00",
+                                                "Field_description": "commandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24435,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "functionCode",
+                                                "value": "00",
+                                                "Field_description": "functionCode",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "None",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24436,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "terminatorCrc",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "terminatorCrc",
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "None",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": null,
+                                                "sno_asperui": [],
+                                                "asperui_values": null,
+                                                "ui_description": null,
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "0",
+                                                    "max": "0"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24437,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [
+                                            {
+                                                "default_name": "commandId",
+                                                "value": "00",
+                                                "Field_description": "commandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 0,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24438,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "functionCode",
+                                                "value": "00",
+                                                "Field_description": "functionCode",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24439,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "terminatorCrc",
+                                                "value": "00",
+                                                "Field_description": "terminatorCrc",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 5,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24440,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Power",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "Power",
+                                                "type": "range value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "toggle switch",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "off",
+                                                    "on"
+                                                ],
+                                                "sno_asperui": [
+                                                    "1"
+                                                ],
+                                                "asperui_values": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "ui_description": "read",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "0",
+                                                    "max": "0"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24441,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Timer",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "Timer",
+                                                "type": "range value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "slider",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "0",
+                                                    "0"
+                                                ],
+                                                "sno_asperui": [
+                                                    "1"
+                                                ],
+                                                "asperui_values": [
+                                                    "1"
+                                                ],
+                                                "ui_description": "read",
+                                                "slider_step_value": "1",
+                                                "display_value": {
+                                                    "min": "0",
+                                                    "max": "255"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24442,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Speed",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "Speed",
+                                                "type": "range value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "slider",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "0",
+                                                    "0"
+                                                ],
+                                                "sno_asperui": [
+                                                    "1"
+                                                ],
+                                                "asperui_values": [
+                                                    "1"
+                                                ],
+                                                "ui_description": "read",
+                                                "slider_step_value": "1",
+                                                "display_value": {
+                                                    "min": "01",
+                                                    "max": "05"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24443,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            }
+                                        ],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Display",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "false",
+                                            "response": "false",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "commandId",
+                                                "value": "000000",
+                                                "Field_description": "commandId",
+                                                "no_of_bytes": 3,
+                                                "byte_start_position": 1,
+                                                "ui_type": "console",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 9762,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null,
+                                                "asperui": null,
+                                                "asperui_values": null,
+                                                "sno_asperui": []
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                }
+                            ],
+                            "Device Communication": [
+                                {
+                                    "frame": {
+                                        "name": "BAUDRATE",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "CommandId",
+                                                "value": "BC",
+                                                "Field_description": "CommandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            },
+                                            {
+                                                "default_name": "baudrate",
+                                                "asperui_value": 18432,
+                                                "value": "",
+                                                "Field_description": "Data",
+                                                "type": "Range Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "Drop Down",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "4800",
+                                                    "9600",
+                                                    "38400",
+                                                    "57600",
+                                                    "115200",
+                                                    "230400"
+                                                ],
+                                                "sno_asperui": [
+                                                    "00",
+                                                    "01",
+                                                    "02",
+                                                    "03",
+                                                    "04",
+                                                    "05"
+                                                ],
+                                                "asperui_values": [
+                                                    "31",
+                                                    "32",
+                                                    "33",
+                                                    "34",
+                                                    "35",
+                                                    "36"
+                                                ],
+                                                "ui_description": "Read/Write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "",
+                                                    "max": ""
+                                                }
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "value": "0A",
+                                                "Field_description": "Terminator",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Uart msg ID",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "CommandId",
+                                                "value": "D6",
+                                                "Field_description": "CommandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            },
+                                            {
+                                                "default_name": "uartmsgid",
+                                                "asperui_value": "disable",
+                                                "value": "",
+                                                "Field_description": "Data",
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "Drop Down",
+                                                "local_control": "enable",
+                                                "ui_ids": 2,
+                                                "asperui": [
+                                                    "disable",
+                                                    "enable"
+                                                ],
+                                                "sno_asperui": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "asperui_values": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "ui_description": "Read/Write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "",
+                                                    "max": ""
+                                                }
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "value": "0A",
+                                                "Field_description": "Terminator",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Error Code",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "CommandId",
+                                                "value": "E3",
+                                                "Field_description": "CommandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            },
+                                            {
+                                                "default_name": "errorcode",
+                                                "asperui_value": "disable",
+                                                "value": "",
+                                                "Field_description": "Data",
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "Drop Down",
+                                                "local_control": "enable",
+                                                "ui_ids": 3,
+                                                "asperui": [
+                                                    "disable",
+                                                    "enable"
+                                                ],
+                                                "sno_asperui": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "asperui_values": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "ui_description": "Read/Write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "",
+                                                    "max": ""
+                                                }
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "value": "0A",
+                                                "Field_description": "Terminator",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                }
+                            ]
+                        },
+                        "primary": "Power",
+                        "type": "efactor.device.fan",
+                        "brand_logo": "https://efactor.tech/v8/files/brand_logo/6af15fc847d7c.png",
+                        "brand_logo_dark": "https://efactor.tech/files/brand_logo_dark/6af15fc847d7c.png",
+                        "Need_Help": "https://efactor.tech/v8/call_services.php?node_id=FFFFFFFFFFFFFFFF7EC200000005E800",
+                        "chat_status": null,
+                        "device_image": "https://efactor.tech/files/brand_logo/input_output.jpg",
+                        "device_p2p_control": null,
+                        "Device Communication": null,
+                        "Status": null
+                    }
+                ],
+                "info": {
+                    "fw_version": "1.5.1",
+                    "model": "Ef-fan-hv-d-15-10",
+                    "name": "fan_7E0005E8",
+                    "type": "WIFI",
+                    "product_type": "IOT",
+                    "SSID": "AP_76B09260002_2.4",
+                    "Access_Point": "EWIFI_7E0005E8",
+                    "Guarantee_Card": "https://efactor.tech/v8/api.php?action=guarantee_card_display&",
+                    "Video": "https://efactor.tech/v8/user_guide_support.php?product=fan",
+                    "Need_Help": "https://efactor.tech/v8/call_services.php?node_id=FFFFFFFFFFFFFFFF7EC200000005E800",
+                    "chat_status": 0,
+                    "Auto_Test": "https://efactor.tech/v8/auto_test.php?"
+                },
+                "node_id": "FFFFFFFFFFFFFFFF7EC200000005E800"
+            },
+            "role": "primary",
+            "status": {
+                "connectivity": {
+                    "connected": false,
+                    "timestamp": 1794904205444
+                }
+            }
+        }
+    ],
+    "v2_node_details": [
+        {
+            "id": "FFFFFFFFFFFFFFFF7EC200000005E800",
+            "config": {
+                "attributes": [
+                    {
+                        "name": "serial_num",
+                        "value": "1345"
+                    },
+                    {
+                        "name": "model",
+                        "value": "wifi"
+                    }
+                ],
+                "config_version": "2020-03-20",
+                "devices": [
+                    {
+                        "name": "fan_7E0005E8",
+                        "total_pages": "3",
+                        "attributes": [
+                            {
+                                "name": "Device Id",
+                                "value": "FFFFFFFFFFFFFFFF7EC200000005E800"
+                            },
+                            {
+                                "name": "mac",
+                                "value": "A4:CF:12:C8:B8:19"
+                            }
+                        ],
+                        "Device Id": "FFFFFFFFFFFFFFFF7EC200000005E800",
+                        "pages": {
+                            "Home.operation": [
+                                {
+                                    "frame": {
+                                        "name": "Power",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "false",
+                                            "response": "false",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "commandId",
+                                                "value": "00",
+                                                "Field_description": "commandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24482,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "functionCode",
+                                                "value": "00",
+                                                "Field_description": "functionCode",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24483,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Power",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "data",
+                                                "type": "range value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "toggle switch",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "off",
+                                                    "on"
+                                                ],
+                                                "sno_asperui": [
+                                                    "1"
+                                                ],
+                                                "asperui_values": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "ui_description": "read/write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "0",
+                                                    "max": "0"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24484,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "terminatorCrc",
+                                                "value": "00",
+                                                "Field_description": "terminatorCrc",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24485,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Timer",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "false",
+                                            "response": "false",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "commandId",
+                                                "value": "00",
+                                                "Field_description": "commandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24598,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "functionCode",
+                                                "value": "00",
+                                                "Field_description": "functionCode",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24599,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "terminatorCrc",
+                                                "value": "00",
+                                                "Field_description": "terminatorCrc",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24600,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Timer",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "data",
+                                                "type": "range value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "slider",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "0",
+                                                    "0"
+                                                ],
+                                                "sno_asperui": [
+                                                    "1"
+                                                ],
+                                                "asperui_values": [
+                                                    "1"
+                                                ],
+                                                "ui_description": "read/write",
+                                                "slider_step_value": "1",
+                                                "display_value": {
+                                                    "min": "00",
+                                                    "max": "255"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24601,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Speed",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "false",
+                                            "response": "false",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "commandId",
+                                                "value": "00",
+                                                "Field_description": "commandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24634,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "functionCode",
+                                                "value": "00",
+                                                "Field_description": "functionCode",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24635,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Speed",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "data",
+                                                "type": "range value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "slider",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "0",
+                                                    "0"
+                                                ],
+                                                "sno_asperui": [
+                                                    "1"
+                                                ],
+                                                "asperui_values": [
+                                                    "1"
+                                                ],
+                                                "ui_description": "read/write",
+                                                "slider_step_value": "1",
+                                                "display_value": {
+                                                    "min": "1",
+                                                    "max": "5"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24636,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "terminatorCrc",
+                                                "value": "00",
+                                                "Field_description": "terminatorCrc",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24637,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                }
+                            ],
+                            "Status.operation": [
+                                {
+                                    "frame": {
+                                        "name": "Send Data",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "false",
+                                            "response": "false",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "Data",
+                                                "value": "000000",
+                                                "asperui_value": "1",
+                                                "Field_description": "data",
+                                                "type": "range value",
+                                                "data_type": "string",
+                                                "no_of_bytes": 3,
+                                                "byte_start_position": 1,
+                                                "ui_type": "text",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "1"
+                                                ],
+                                                "sno_asperui": [],
+                                                "asperui_values": null,
+                                                "ui_description": "read/write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "",
+                                                    "max": ""
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 9756,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Display Log",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "false",
+                                            "response": "false",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "Data",
+                                                "value": "000000",
+                                                "asperui_value": 0,
+                                                "Field_description": "data",
+                                                "type": "fixed value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 3,
+                                                "byte_start_position": 1,
+                                                "ui_type": "button",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": null,
+                                                "sno_asperui": [],
+                                                "asperui_values": null,
+                                                "ui_description": "read/write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "",
+                                                    "max": ""
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 9757,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Command Get Status",
+                                        "multiple_ui": [
+                                            "true",
+                                            "true",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "true",
+                                            "response": "true",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "Data",
+                                                "value": "000000",
+                                                "asperui_value": 0,
+                                                "Field_description": "data",
+                                                "type": "fixed value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 3,
+                                                "byte_start_position": 1,
+                                                "ui_type": "button",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": null,
+                                                "sno_asperui": [],
+                                                "asperui_values": null,
+                                                "ui_description": "read/write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "0",
+                                                    "max": "0"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24434,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "commandId",
+                                                "value": "00",
+                                                "Field_description": "commandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24435,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "functionCode",
+                                                "value": "00",
+                                                "Field_description": "functionCode",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "None",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24436,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "terminatorCrc",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "terminatorCrc",
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "None",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": null,
+                                                "sno_asperui": [],
+                                                "asperui_values": null,
+                                                "ui_description": null,
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "0",
+                                                    "max": "0"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24437,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [
+                                            {
+                                                "default_name": "commandId",
+                                                "value": "00",
+                                                "Field_description": "commandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 0,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24438,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "functionCode",
+                                                "value": "00",
+                                                "Field_description": "functionCode",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24439,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "terminatorCrc",
+                                                "value": "00",
+                                                "Field_description": "terminatorCrc",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 5,
+                                                "ui_type": "none",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24440,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Power",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "Power",
+                                                "type": "range value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "toggle switch",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "off",
+                                                    "on"
+                                                ],
+                                                "sno_asperui": [
+                                                    "1"
+                                                ],
+                                                "asperui_values": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "ui_description": "read",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "0",
+                                                    "max": "0"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24441,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Timer",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "Timer",
+                                                "type": "range value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "slider",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "0",
+                                                    "0"
+                                                ],
+                                                "sno_asperui": [
+                                                    "1"
+                                                ],
+                                                "asperui_values": [
+                                                    "1"
+                                                ],
+                                                "ui_description": "read",
+                                                "slider_step_value": "1",
+                                                "display_value": {
+                                                    "min": "0",
+                                                    "max": "255"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24442,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            },
+                                            {
+                                                "default_name": "Speed",
+                                                "value": "00",
+                                                "asperui_value": 0,
+                                                "Field_description": "Speed",
+                                                "type": "range value",
+                                                "data_type": "unsigned integer",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "slider",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "0",
+                                                    "0"
+                                                ],
+                                                "sno_asperui": [
+                                                    "1"
+                                                ],
+                                                "asperui_values": [
+                                                    "1"
+                                                ],
+                                                "ui_description": "read",
+                                                "slider_step_value": "1",
+                                                "display_value": {
+                                                    "min": "01",
+                                                    "max": "05"
+                                                },
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 24443,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null
+                                            }
+                                        ],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Display",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "multiple_ui_by_source": {
+                                            "command": "false",
+                                            "response": "false",
+                                            "error": "false"
+                                        },
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "commandId",
+                                                "value": "000000",
+                                                "Field_description": "commandId",
+                                                "no_of_bytes": 3,
+                                                "byte_start_position": 1,
+                                                "ui_type": "console",
+                                                "local_control": "enable",
+                                                "field_level": "bytewise",
+                                                "parent_field_id": 0,
+                                                "id": 9762,
+                                                "bitwise_mode": "Bytewise",
+                                                "start_bit": null,
+                                                "end_bit": null,
+                                                "asperui": null,
+                                                "asperui_values": null,
+                                                "sno_asperui": []
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "Field_description": "Terminator",
+                                                "value": "0A",
+                                                "asperui_value": 10,
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 4,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                }
+                            ],
+                            "Device Communication": [
+                                {
+                                    "frame": {
+                                        "name": "BAUDRATE",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "CommandId",
+                                                "value": "BC",
+                                                "Field_description": "CommandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            },
+                                            {
+                                                "default_name": "baudrate",
+                                                "asperui_value": 18432,
+                                                "value": "",
+                                                "Field_description": "Data",
+                                                "type": "Range Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "Drop Down",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "4800",
+                                                    "9600",
+                                                    "38400",
+                                                    "57600",
+                                                    "115200",
+                                                    "230400"
+                                                ],
+                                                "sno_asperui": [
+                                                    "00",
+                                                    "01",
+                                                    "02",
+                                                    "03",
+                                                    "04",
+                                                    "05"
+                                                ],
+                                                "asperui_values": [
+                                                    "31",
+                                                    "32",
+                                                    "33",
+                                                    "34",
+                                                    "35",
+                                                    "36"
+                                                ],
+                                                "ui_description": "Read/Write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "",
+                                                    "max": ""
+                                                }
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "value": "0A",
+                                                "Field_description": "Terminator",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Uart msg ID",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "CommandId",
+                                                "value": "D6",
+                                                "Field_description": "CommandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            },
+                                            {
+                                                "default_name": "uartmsgid",
+                                                "asperui_value": "disable",
+                                                "value": "",
+                                                "Field_description": "Data",
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "Drop Down",
+                                                "local_control": "enable",
+                                                "ui_ids": 2,
+                                                "asperui": [
+                                                    "disable",
+                                                    "enable"
+                                                ],
+                                                "sno_asperui": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "asperui_values": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "ui_description": "Read/Write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "",
+                                                    "max": ""
+                                                }
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "value": "0A",
+                                                "Field_description": "Terminator",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Error Code",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "CommandId",
+                                                "value": "E3",
+                                                "Field_description": "CommandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            },
+                                            {
+                                                "default_name": "errorcode",
+                                                "asperui_value": "disable",
+                                                "value": "",
+                                                "Field_description": "Data",
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "Drop Down",
+                                                "local_control": "enable",
+                                                "ui_ids": 3,
+                                                "asperui": [
+                                                    "disable",
+                                                    "enable"
+                                                ],
+                                                "sno_asperui": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "asperui_values": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "ui_description": "Read/Write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "",
+                                                    "max": ""
+                                                }
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "value": "0A",
+                                                "Field_description": "Terminator",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                }
+                            ]
+                        },
+                        "primary": "Power",
+                        "type": "efactor.device.fan",
+                        "brand_logo": "https://efactor.tech/v8/files/brand_logo/6af15fc847d7c.png",
+                        "brand_logo_dark": "https://efactor.tech/files/brand_logo_dark/6af15fc847d7c.png",
+                        "Need_Help": "https://efactor.tech/v8/call_services.php?node_id=FFFFFFFFFFFFFFFF7EC200000005E800",
+                        "chat_status": null,
+                        "device_image": "https://efactor.tech/files/brand_logo/input_output.jpg",
+                        "device_p2p_control": null,
+                        "Device Communication": null,
+                        "Status": null
+                    }
+                ],
+                "info": {
+                    "fw_version": "1.5.1",
+                    "model": "Ef-fan-hv-d-15-10",
+                    "name": "fan_7E0005E8",
+                    "type": "WIFI",
+                    "product_type": "IOT",
+                    "SSID": "AP_76B09260002_2.4",
+                    "Access_Point": "EWIFI_7E0005E8",
+                    "Guarantee_Card": "https://efactor.tech/v8/api.php?action=guarantee_card_display&",
+                    "Video": "https://efactor.tech/v8/user_guide_support.php?product=fan",
+                    "Need_Help": "https://efactor.tech/v8/call_services.php?node_id=FFFFFFFFFFFFFFFF7EC200000005E800",
+                    "chat_status": 0,
+                    "Auto_Test": "https://efactor.tech/v8/auto_test.php?"
+                },
+                "node_id": "FFFFFFFFFFFFFFFF7EC200000005E800"
+            },
+            "role": "primary",
+            "status": {
+                "connectivity": {
+                    "connected": false,
+                    "timestamp": 1794904205444
+                }
+            }
+        }
+    ],
+    "nodes": "FFFFFFFFFFFFFFFF7EC200000005E800",
+    "source": "v2_test_nodes"
+}

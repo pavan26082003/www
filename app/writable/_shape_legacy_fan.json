@@ -1,0 +1,290 @@
+{
+    "node_details": [
+        {
+            "id": "FFFFFFFFFFFFFFFF7EC200000005E800",
+            "config": {
+                "attributes": [
+                    {
+                        "name": "serial_num",
+                        "value": "1345"
+                    },
+                    {
+                        "name": "model",
+                        "value": "wifi"
+                    }
+                ],
+                "config_version": "2020-03-20",
+                "devices": [
+                    {
+                        "name": "fan_7E0005E8",
+                        "total_pages": "0",
+                        "attributes": [
+                            {
+                                "name": "Device Id",
+                                "value": "FFFFFFFFFFFFFFFF7EC200000005E800"
+                            },
+                            {
+                                "name": "mac",
+                                "value": "A4:CF:12:C8:B8:19"
+                            }
+                        ],
+                        "Device Id": "FFFFFFFFFFFFFFFF7EC200000005E800",
+                        "pages": {
+                            "Device Communication": [
+                                {
+                                    "frame": {
+                                        "name": "BAUDRATE",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "CommandId",
+                                                "value": "BC",
+                                                "Field_description": "CommandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            },
+                                            {
+                                                "default_name": "baudrate",
+                                                "asperui_value": "",
+                                                "value": "",
+                                                "Field_description": "Data",
+                                                "type": "Range Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "Drop Down",
+                                                "local_control": "enable",
+                                                "ui_ids": 1,
+                                                "asperui": [
+                                                    "4800",
+                                                    "9600",
+                                                    "38400",
+                                                    "57600",
+                                                    "115200",
+                                                    "230400"
+                                                ],
+                                                "sno_asperui": [
+                                                    "00",
+                                                    "01",
+                                                    "02",
+                                                    "03",
+                                                    "04",
+                                                    "05"
+                                                ],
+                                                "asperui_values": [
+                                                    "31",
+                                                    "32",
+                                                    "33",
+                                                    "34",
+                                                    "35",
+                                                    "36"
+                                                ],
+                                                "ui_description": "Read/Write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "",
+                                                    "max": ""
+                                                }
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "value": "0A",
+                                                "Field_description": "Terminator",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Uart msg ID",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "CommandId",
+                                                "value": "D6",
+                                                "Field_description": "CommandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            },
+                                            {
+                                                "default_name": "uartmsgid",
+                                                "asperui_value": "",
+                                                "value": "",
+                                                "Field_description": "Data",
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "Drop Down",
+                                                "local_control": "enable",
+                                                "ui_ids": 2,
+                                                "asperui": [
+                                                    "disable",
+                                                    "enable"
+                                                ],
+                                                "sno_asperui": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "asperui_values": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "ui_description": "Read/Write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "",
+                                                    "max": ""
+                                                }
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "value": "0A",
+                                                "Field_description": "Terminator",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                },
+                                {
+                                    "frame": {
+                                        "name": "Error Code",
+                                        "multiple_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "trigger_ui": [
+                                            "false",
+                                            "false",
+                                            "false"
+                                        ],
+                                        "commands": [
+                                            {
+                                                "default_name": "CommandId",
+                                                "value": "E3",
+                                                "Field_description": "CommandId",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 1,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            },
+                                            {
+                                                "default_name": "errorcode",
+                                                "asperui_value": "",
+                                                "value": "",
+                                                "Field_description": "Data",
+                                                "type": "Fixed Value",
+                                                "data_type": "UnsignedInt",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 2,
+                                                "ui_type": "Drop Down",
+                                                "local_control": "enable",
+                                                "ui_ids": 3,
+                                                "asperui": [
+                                                    "disable",
+                                                    "enable"
+                                                ],
+                                                "sno_asperui": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "asperui_values": [
+                                                    "00",
+                                                    "01"
+                                                ],
+                                                "ui_description": "Read/Write",
+                                                "slider_step_value": 0,
+                                                "display_value": {
+                                                    "min": "",
+                                                    "max": ""
+                                                }
+                                            },
+                                            {
+                                                "default_name": "Terminator",
+                                                "value": "0A",
+                                                "Field_description": "Terminator",
+                                                "no_of_bytes": 1,
+                                                "byte_start_position": 3,
+                                                "ui_type": "None",
+                                                "local_control": "enable"
+                                            }
+                                        ],
+                                        "response": [],
+                                        "error": []
+                                    }
+                                }
+                            ]
+                        },
+                        "primary": "power",
+                        "type": "efactor.device.",
+                        "brand_logo": "https://efactor.tech/files/brand_logo/Skytec.jpg",
+                        "brand_logo_dark": "https://efactor.tech/files/brand_logo_dark/Skytec.jpg",
+                        "Need_Help": "https://efactor.tech/v8/call_services.php?node_id=FFFFFFFFFFFFFFFF7EC200000005E800",
+                        "chat_status": null,
+                        "device_image": "https://efactor.tech/files/brand_logo/input_output.jpg",
+                        "device_p2p_control": null,
+                        "Device Communication": null,
+                        "Status": null
+                    }
+                ],
+                "info": {
+                    "fw_version": "1.5.1",
+                    "model": "Ef-fan-hv-d-15-10",
+                    "name": "fan_7E0005E8",
+                    "type": "WIFI",
+                    "product_type": "IOT",
+                    "SSID": "AP_76B09260002_2.4",
+                    "Access_Point": "EWIFI_7E0005E8",
+                    "Guarantee_Card": "https://efactor.tech/v8/api.php?action=guarantee_card_display&",
+                    "Video": "https://efactor.tech/v8/user_guide_support.php?product=fan",
+                    "Need_Help": "https://efactor.tech/v8/call_services.php?node_id=FFFFFFFFFFFFFFFF7EC200000005E800",
+                    "chat_status": null,
+                    "Auto_Test": "https://efactor.tech/v8/auto_test.php?"
+                },
+                "node_id": "FFFFFFFFFFFFFFFF7EC200000005E800"
+            },
+            "role": "primary",
+            "status": {
+                "connectivity": {
+                    "connected": false,
+                    "timestamp": 1794904203465
+                }
+            }
+        }
+    ],
+    "nodes": "FFFFFFFFFFFFFFFF7EC200000005E800"
+}
