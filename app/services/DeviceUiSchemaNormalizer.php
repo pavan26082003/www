@@ -87,8 +87,12 @@ class DeviceUiSchemaNormalizer
         ];
 
         if ($nodeId !== '') {
-            $schema = self::applyTestNodesNodeDetails($schema, $nodeId);
+            $schema = self::applyTestNodesNodeDetails($schema, $nodeId, $modelNo);
         }
+
+        // V2: convert remaining wire-hex display fields into typed asperui values.
+        // No-op when values are already human-readable (legacy-safe).
+        $schema = self::applyV2DisplayHandlers($schema);
 
         if ($nodeId !== '' || $modelNo !== '') {
             $schema = self::applyRequestedNode($schema, $modelNo, $nodeId);
@@ -102,8 +106,6 @@ class DeviceUiSchemaNormalizer
         $schema = self::applyGroupCountVisibility($schema);
         // Drop duplicate "Page N.Operation" header subtitle (keep title + model only).
         $schema = self::stripDuplicatePageHeaderSubtitle($schema);
-        // Wire padding / empty live values → valueLoading (additive flags only).
-        $schema = self::applyLiveValueLoadingFlags($schema);
 
         $schema = self::normalizeDeviceFrames($schema, $report);
         // Fill CommandId / Function Code / ActionId from protocolMeta when the
@@ -135,6 +137,26 @@ class DeviceUiSchemaNormalizer
         $schema = self::applyPreviewPixelParity($schema);
         // Ensure actions.update_*.input.dataField carries bitwise + access for Flutter.
         $schema = self::enrichActionDataFields($schema);
+
+        // LAST: strip junk user-facing values after all frame rebuilds
+        // ([00][01], [false][true], padding, name-as-value) + ensure liveStatePath.
+        // Must run after ensureDeviceConfigPagesFromControls / repairPublishedFrames
+        // or those steps reintroduce option-list dumps into asperui_value.
+        $schema = self::applyDisplaySanitizer($schema);
+        // Frame rebuilds / sanitizer may leave wire hex or empty asperui again —
+        // convert once more so sensors show typed 0 instead of Loading forever.
+        $schema = self::applyV2DisplayHandlers($schema);
+        $schema = self::syncControlDisplayFromFrames($schema);
+        // Wire padding / empty / junk cleared above → valueLoading flags.
+        $schema = self::applyLiveValueLoadingFlags($schema);
+        // Keep MQTT enableWhen + Flutter state.online in sync with connectivity.
+        $schema = self::syncOnlineStateFromConnectivity($schema);
+
+        if (!isset($schema['meta']) || !is_array($schema['meta'])) {
+            $schema['meta'] = [];
+        }
+        $schema['meta']['schemaBuildVersion'] = '2026-11-14.6';
+        $schema['meta']['normalizerBuild'] = '2026-11-14.6';
 
         return $schema;
     }
@@ -586,21 +608,15 @@ class DeviceUiSchemaNormalizer
             if (!is_array($control)) {
                 continue;
             }
-            if (!empty($control['valueLoading'])) {
-                continue;
-            }
             $type = strtolower((string) ($control['componentType'] ?? $control['catalogComponentType'] ?? ''));
             $typeKey = str_replace(['_', '-'], '', $type);
-            if (in_array($typeKey, ['toggleswitch', 'switch', 'button', 'pushbutton', 'elevatedbutton'], true)) {
-                continue;
-            }
+            $skipLoadingTypes = in_array($typeKey, ['toggleswitch', 'switch', 'button', 'pushbutton', 'elevatedbutton'], true);
             $writable = self::isWritableControl($control);
-            if ($writable && in_array($typeKey, ['entertext', 'textfield', 'cmd'], true)) {
-                continue;
-            }
+            $skipWritableText = $writable && in_array($typeKey, ['entertext', 'textfield', 'cmd'], true);
+
             $value = '';
             foreach (['value', 'initialValue', 'displayValue'] as $key) {
-                if (isset($control[$key]) && is_scalar($control[$key])) {
+                if (isset($control[$key]) && is_scalar($control[$key]) && trim((string) $control[$key]) !== '') {
                     $value = trim((string) $control[$key]);
                     break;
                 }
@@ -608,10 +624,30 @@ class DeviceUiSchemaNormalizer
             if ($value === '' && isset($control['component']['initialValue']) && is_scalar($control['component']['initialValue'])) {
                 $value = trim((string) $control['component']['initialValue']);
             }
-            $needsLoading = self::valueNeedsLiveLoading($value);
+            if ($value === '' && isset($control['component']['displayValue']) && is_scalar($control['component']['displayValue'])) {
+                $value = trim((string) $control['component']['displayValue']);
+            }
+
+            $needsLoading = !$skipLoadingTypes && !$skipWritableText && self::valueNeedsLiveLoading($value);
+
+            // Clear stale Loading flags when sanitizer already resolved a real value.
             if (!$needsLoading) {
+                if (!empty($control['valueLoading'])) {
+                    $control['valueLoading'] = false;
+                    $control['loadingText'] = null;
+                    if (isset($control['component']) && is_array($control['component'])) {
+                        $control['component']['valueLoading'] = false;
+                        if (isset($control['component']['props']) && is_array($control['component']['props'])) {
+                            $control['component']['props']['valueLoading'] = false;
+                            $control['component']['props']['loading'] = false;
+                            unset($control['component']['props']['loadingText'], $control['component']['props']['placeholder']);
+                        }
+                    }
+                    $schema['controls'][$index] = $control;
+                }
                 continue;
             }
+
             $control['valueLoading'] = true;
             $control['loadingText'] = 'Loading…';
             $control['preferLiveState'] = true;
@@ -647,12 +683,224 @@ class DeviceUiSchemaNormalizer
 
     private static function valueNeedsLiveLoading($value): bool
     {
+        // Typed numeric/bool zeros are real readings (power off / 0V), not "still loading".
+        if (is_bool($value) || is_int($value) || is_float($value)) {
+            return false;
+        }
         $text = trim((string) $value);
         if ($text === '' || $text === '--' || strtolower($text) === 'null' || strtolower($text) === 'undefined') {
             return true;
         }
+        // Option-list dumps are not real readings.
+        if (class_exists(DeviceUiDisplaySanitizer::class, false)
+            && DeviceUiDisplaySanitizer::isBracketOptionList($text)
+        ) {
+            return true;
+        }
+        if (preg_match('/^(\[[^\]]*\]){2,}$/', $text)) {
+            return true;
+        }
         $raw = strtoupper(preg_replace('/[\s:_-]+/', '', preg_replace('/^0x/i', '', $text)));
         return $raw !== '' && strlen($raw) >= 2 && (bool) preg_match('/^[0-9A-F]+$/', $raw) && (bool) preg_match('/^0+$/', $raw);
+    }
+
+    /**
+     * Push typed frame/deviceFrame asperui into controls + state.parameters so
+     * sensors show 0/OFF instead of staying on valueLoading after sanitizer.
+     */
+    private static function syncControlDisplayFromFrames(array $schema): array
+    {
+        if (!isset($schema['controls']) || !is_array($schema['controls'])) {
+            return $schema;
+        }
+
+        $frameDisplayByKey = [];
+        $collect = static function (array $pages) use (&$frameDisplayByKey) {
+            foreach ($pages as $frames) {
+                if (!is_array($frames)) {
+                    continue;
+                }
+                foreach ($frames as $item) {
+                    if (!is_array($item)) {
+                        continue;
+                    }
+                    $frame = isset($item['frame']) && is_array($item['frame']) ? $item['frame'] : $item;
+                    if (!is_array($frame)) {
+                        continue;
+                    }
+                    $name = trim((string) ($frame['name'] ?? ''));
+                    if ($name === '') {
+                        continue;
+                    }
+                    $display = null;
+                    foreach (['commands', 'response', 'error'] as $bucket) {
+                        foreach ($frame[$bucket] ?? [] as $field) {
+                            if (!is_array($field)) {
+                                continue;
+                            }
+                            $desc = strtolower(trim((string) (
+                                $field['Field_description']
+                                ?? $field['field_description']
+                                ?? $field['default_name']
+                                ?? ''
+                            )));
+                            if (!in_array($desc, ['data', 'trigger'], true)) {
+                                continue;
+                            }
+                            if (array_key_exists('asperui_value', $field)
+                                && $field['asperui_value'] !== null
+                                && $field['asperui_value'] !== ''
+                            ) {
+                                $display = $field['asperui_value'];
+                                break 2;
+                            }
+                        }
+                    }
+                    if ($display === null || $display === '') {
+                        continue;
+                    }
+                    $key = class_exists(DeviceUiDisplaySanitizer::class, false)
+                        ? DeviceUiDisplaySanitizer::frameNameKey($name)
+                        : strtolower(preg_replace('/[^a-z0-9]+/', '', $name));
+                    if ($key !== '') {
+                        $frameDisplayByKey[$key] = $display;
+                    }
+                }
+            }
+        };
+
+        if (isset($schema['deviceConfig']['devices'][0]['pages']) && is_array($schema['deviceConfig']['devices'][0]['pages'])) {
+            $collect($schema['deviceConfig']['devices'][0]['pages']);
+        }
+
+        foreach ($schema['controls'] as $index => $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+
+            $display = null;
+            if (isset($control['deviceFrame']) && is_array($control['deviceFrame'])) {
+                foreach (['commands', 'response', 'error'] as $bucket) {
+                    foreach ($control['deviceFrame'][$bucket] ?? [] as $field) {
+                        if (!is_array($field)) {
+                            continue;
+                        }
+                        $desc = strtolower(trim((string) (
+                            $field['Field_description']
+                            ?? $field['field_description']
+                            ?? $field['default_name']
+                            ?? ''
+                        )));
+                        if (!in_array($desc, ['data', 'trigger'], true)) {
+                            continue;
+                        }
+                        if (array_key_exists('asperui_value', $field)
+                            && $field['asperui_value'] !== null
+                            && $field['asperui_value'] !== ''
+                        ) {
+                            $display = $field['asperui_value'];
+                            break 2;
+                        }
+                    }
+                }
+            }
+
+            if ($display === null || $display === '') {
+                $name = trim((string) ($control['parameterName'] ?? $control['parameter'] ?? $control['label'] ?? ''));
+                $key = class_exists(DeviceUiDisplaySanitizer::class, false)
+                    ? DeviceUiDisplaySanitizer::frameNameKey($name)
+                    : strtolower(preg_replace('/[^a-z0-9]+/', '', $name));
+                if ($key !== '' && array_key_exists($key, $frameDisplayByKey)) {
+                    $display = $frameDisplayByKey[$key];
+                }
+            }
+
+            if ($display === null || $display === '') {
+                continue;
+            }
+            // Don't overwrite a good non-hex control value with frame display.
+            $current = $control['value'] ?? ($control['initialValue'] ?? null);
+            $currentOk = $current !== null && $current !== ''
+                && !(is_string($current) && self::valueNeedsLiveLoading($current));
+            if ($currentOk && !self::valueNeedsLiveLoading($display) && !is_bool($display) && !is_int($display) && !is_float($display)) {
+                // keep existing human text
+            } else {
+                $control['value'] = $display;
+                $control['initialValue'] = $display;
+                if (isset($control['component']) && is_array($control['component'])) {
+                    $control['component']['initialValue'] = $display;
+                    $control['component']['displayValue'] = is_scalar($display) ? (string) $display : $display;
+                }
+            }
+
+            $paramKey = trim((string) ($control['parameterKey'] ?? ''));
+            if ($paramKey !== '') {
+                if (!isset($schema['state']) || !is_array($schema['state'])) {
+                    $schema['state'] = [];
+                }
+                if (!isset($schema['state']['parameters']) || !is_array($schema['state']['parameters'])) {
+                    $schema['state']['parameters'] = [];
+                }
+                $existing = $schema['state']['parameters'][$paramKey] ?? null;
+                if (is_array($existing)) {
+                    $existing['value'] = $display;
+                    $schema['state']['parameters'][$paramKey] = $existing;
+                } else {
+                    $schema['state']['parameters'][$paramKey] = ['value' => $display];
+                }
+            }
+
+            $schema['controls'][$index] = $control;
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Apply DeviceUiDisplaySanitizer across schema (legacy + V2).
+     */
+    private static function applyDisplaySanitizer(array $schema): array
+    {
+        if (!self::loadDisplaySanitizer()) {
+            // Minimal fallback: still ensure liveStatePath.
+            if (!isset($schema['deviceState']) || !is_array($schema['deviceState'])) {
+                $schema['deviceState'] = [];
+            }
+            if (empty($schema['deviceState']['liveStatePath'])) {
+                $schema['deviceState']['liveStatePath'] = 'node_details[0].config.devices[0]';
+            }
+            if (!array_key_exists('preferLiveState', $schema['deviceState'])) {
+                $schema['deviceState']['preferLiveState'] = true;
+            }
+
+            return $schema;
+        }
+
+        try {
+            return DeviceUiDisplaySanitizer::sanitizeSchema($schema);
+        } catch (\Throwable $exception) {
+            return $schema;
+        }
+    }
+
+    private static function loadDisplaySanitizer(): bool
+    {
+        if (class_exists(DeviceUiDisplaySanitizer::class, false)) {
+            return true;
+        }
+        $candidates = [
+            __DIR__ . '/DeviceUiDisplaySanitizer.php',
+            dirname(__DIR__) . '/services/DeviceUiDisplaySanitizer.php',
+            dirname(__DIR__) . '/Services/DeviceUiDisplaySanitizer.php',
+        ];
+        foreach ($candidates as $file) {
+            if (is_file($file)) {
+                require_once $file;
+                return class_exists(DeviceUiDisplaySanitizer::class, false);
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -918,19 +1166,51 @@ class DeviceUiSchemaNormalizer
             }
         }
 
-        $online = false;
-        if (isset($schema['state']['online'])) {
-            $online = (bool) $schema['state']['online'];
-        } elseif (isset($schema['state']['deviceConnectivity']['online'])) {
-            $online = (bool) $schema['state']['deviceConnectivity']['online'];
-        }
+        $schema = self::syncOnlineStateFromConnectivity($schema);
 
+        $online = !empty($schema['state']['online']);
         if (isset($schema['state']['wifiProvisioning']) && is_array($schema['state']['wifiProvisioning'])) {
             if ($online) {
                 $schema['state']['wifiProvisioning']['onlineConfirmed'] = true;
             } elseif (!array_key_exists('onlineConfirmed', $schema['state']['wifiProvisioning'])) {
                 $schema['state']['wifiProvisioning']['onlineConfirmed'] = false;
             }
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Prefer live connectivity.connected over a stale state.online=false baked at publish time.
+     */
+    private static function syncOnlineStateFromConnectivity(array $schema): array
+    {
+        $connected = null;
+        if (isset($schema['node_details'][0]['status']['connectivity']['connected'])) {
+            $connected = (bool) $schema['node_details'][0]['status']['connectivity']['connected'];
+        } elseif (isset($schema['state']['deviceConnectivity']['online'])) {
+            $connected = (bool) $schema['state']['deviceConnectivity']['online'];
+        }
+
+        if ($connected === null) {
+            return $schema;
+        }
+
+        if (!isset($schema['state']) || !is_array($schema['state'])) {
+            $schema['state'] = [];
+        }
+        $schema['state']['online'] = $connected;
+
+        if (!isset($schema['state']['deviceConnectivity']) || !is_array($schema['state']['deviceConnectivity'])) {
+            $schema['state']['deviceConnectivity'] = [];
+        }
+        $schema['state']['deviceConnectivity']['online'] = $connected;
+
+        if (isset($schema['extensions']['serverDrivenUi']['state']) && is_array($schema['extensions']['serverDrivenUi']['state'])) {
+            $schema['extensions']['serverDrivenUi']['state']['online'] = $connected;
+        }
+        if (isset($schema['extensions']['universal']['data']['state']) && is_array($schema['extensions']['universal']['data']['state'])) {
+            $schema['extensions']['universal']['data']['state']['online'] = $connected;
         }
 
         return $schema;
@@ -2037,17 +2317,48 @@ class DeviceUiSchemaNormalizer
     // ---------------------------------------------------------------- node ids
 
     /**
-     * Fetches `test_nodes` for the opened node_id and maps that payload's
-     * `node_details` onto the schema. A different node's stored details are not used.
+     * Fetches node_details for the opened node_id and maps onto the schema.
+     *
+     * V2: prefer /v8/v2_test_nodes.php (same envelope as legacy test_nodes).
+     * Legacy: keep /v8/newapi.php?action=test_nodes unchanged.
      */
-    private static function applyTestNodesNodeDetails(array $schema, $nodeId)
+    private static function applyTestNodesNodeDetails(array $schema, $nodeId, $modelNo = '')
     {
         $nodeId = trim((string) $nodeId);
+        $modelNo = trim((string) $modelNo);
         if ($nodeId === '') {
             return $schema;
         }
 
-        $payload = self::fetchTestNodesPayload($nodeId);
+        $existingConfig = isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])
+            ? $schema['deviceConfig']
+            : [];
+        $preferStoredV2 = self::schemaPrefersV2NodeDetails($schema);
+        if ($modelNo === '') {
+            $modelNo = trim((string) (
+                $schema['meta']['app']['modelNo']
+                ?? $schema['node_id']['modelNo']
+                ?? $schema['node_id']['model_id']
+                ?? ''
+            ));
+        }
+
+        $usedV2Api = false;
+        $payload = [];
+        if ($preferStoredV2 || $modelNo !== '') {
+            $payload = self::fetchV2TestNodesPayload($nodeId, $modelNo);
+            if (self::isValidTestNodesPayload($payload, $nodeId)) {
+                $usedV2Api = true;
+            } else {
+                $payload = [];
+            }
+        }
+
+        // Legacy path only when V2 API did not supply node_details.
+        if (!$usedV2Api) {
+            $payload = self::fetchTestNodesPayload($nodeId);
+        }
+
         $rawDetails = isset($payload['node_details']) && is_array($payload['node_details'])
             ? $payload['node_details']
             : [];
@@ -2062,18 +2373,78 @@ class DeviceUiSchemaNormalizer
             return $schema;
         }
 
-        $schema['node_details'] = $ordered;
-        $schema['nodes'] = $nodeId;
+        $remoteStatus = isset($ordered[0]['status']) && is_array($ordered[0]['status'])
+            ? $ordered[0]['status']
+            : null;
         $config = isset($ordered[0]['config']) && is_array($ordered[0]['config'])
             ? $ordered[0]['config']
             : [];
-        if (!empty($config)) {
-            // Preserve any pages already published in the stored schema; test_nodes
-            // often only ships Page 1 and would otherwise wipe secondary pages.
-            $existingConfig = isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])
-                ? $schema['deviceConfig']
-                : [];
-            $schema['deviceConfig'] = self::mergeDeviceConfigPages($config, $existingConfig);
+
+        if ($usedV2Api) {
+            // V2 API is authority for pages/values (like legacy test_nodes for legacy).
+            $schema['node_details'] = $ordered;
+            $schema['v2_node_details'] = $ordered;
+            if (!empty($config)) {
+                $schema['deviceConfig'] = self::mergeDeviceConfigPages($config, $existingConfig);
+                if (isset($schema['node_details'][0]) && is_array($schema['node_details'][0])) {
+                    $schema['node_details'][0]['config'] = $schema['deviceConfig'];
+                }
+                if (isset($schema['v2_node_details'][0]) && is_array($schema['v2_node_details'][0])) {
+                    $schema['v2_node_details'][0]['config'] = $schema['deviceConfig'];
+                }
+            }
+            if (!isset($schema['meta']) || !is_array($schema['meta'])) {
+                $schema['meta'] = [];
+            }
+            $schema['meta']['v2DisplayHandlers'] = true;
+            if (!isset($schema['meta']['app']) || !is_array($schema['meta']['app'])) {
+                $schema['meta']['app'] = [];
+            }
+            $schema['meta']['app']['v2DisplayHandlers'] = true;
+        } elseif ($preferStoredV2 && !empty($existingConfig)) {
+            // Stored V2 pages/frames win; legacy test_nodes only fills missing pages + status.
+            $mergedConfig = self::mergeDeviceConfigPages($existingConfig, $config);
+            $schema['deviceConfig'] = $mergedConfig;
+            $storedDetails = isset($schema['v2_node_details']) && is_array($schema['v2_node_details'])
+                ? $schema['v2_node_details']
+                : (isset($schema['node_details']) && is_array($schema['node_details']) ? $schema['node_details'] : []);
+            $storedOrdered = self::orderNodeDetailsForNode($storedDetails, $nodeId);
+            if (!$storedOrdered) {
+                $storedOrdered = [[
+                    'id' => $nodeId,
+                    'config' => $mergedConfig,
+                    'role' => 'primary',
+                    'status' => [
+                        'connectivity' => [
+                            'connected' => false,
+                            'timestamp' => (int) round(microtime(true) * 1000),
+                        ],
+                    ],
+                ]];
+            }
+            $storedOrdered[0]['config'] = $mergedConfig;
+            if ($remoteStatus !== null) {
+                $storedOrdered[0]['status'] = $remoteStatus;
+            }
+            if ($nodeId !== '') {
+                $storedOrdered[0]['id'] = $nodeId;
+            }
+            $schema['node_details'] = $storedOrdered;
+            $schema['v2_node_details'] = $storedOrdered;
+        } else {
+            $schema['node_details'] = $ordered;
+            if (!empty($config)) {
+                // Preserve any pages already published in the stored schema; test_nodes
+                // often only ships Page 1 and would otherwise wipe secondary pages.
+                $schema['deviceConfig'] = self::mergeDeviceConfigPages($config, $existingConfig);
+                if (isset($schema['node_details'][0]) && is_array($schema['node_details'][0])) {
+                    $schema['node_details'][0]['config'] = $schema['deviceConfig'];
+                }
+            }
+        }
+
+        $schema['nodes'] = $nodeId;
+        if (isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])) {
             if (isset($schema['state']['device']) && is_array($schema['state']['device'])) {
                 $schema['state']['device']['config'] = $schema['deviceConfig'];
                 $schema['state']['device']['node_id'] = $nodeId;
@@ -2088,6 +2459,173 @@ class DeviceUiSchemaNormalizer
         }
 
         return $schema;
+    }
+
+    private static function isValidTestNodesPayload($payload, $nodeId): bool
+    {
+        if (!is_array($payload) || empty($payload['node_details']) || !is_array($payload['node_details'])) {
+            return false;
+        }
+        return self::orderNodeDetailsForNode($payload['node_details'], $nodeId) !== [];
+    }
+
+    /**
+     * Load V2 node_details from /v8/v2_test_nodes.php (or in-process builder).
+     * Does not use api.php.
+     */
+    private static function fetchV2TestNodesPayload($nodeId, $modelNo = '')
+    {
+        static $cache = [];
+        $nodeId = trim((string) $nodeId);
+        $modelNo = trim((string) $modelNo);
+        $cacheKey = strtolower($nodeId) . '|' . strtolower($modelNo);
+        if ($nodeId === '' && $modelNo === '') {
+            return [];
+        }
+        if (isset($cache[$cacheKey])) {
+            return $cache[$cacheKey];
+        }
+
+        // Prefer in-process builder when CI model is already available (api_schema path).
+        if (class_exists(\App\Models\View_page_model::class, false)) {
+            try {
+                $model = new \App\Models\View_page_model();
+                $payload = $model->buildV2TestNodesPayload($nodeId, $modelNo);
+                if (self::isValidTestNodesPayload($payload, $nodeId !== '' ? $nodeId : (string) ($payload['nodes'] ?? ''))) {
+                    $cache[$cacheKey] = $payload;
+                    return $payload;
+                }
+                // If node id was empty but payload has nodes, accept it.
+                if (is_array($payload) && !empty($payload['node_details']) && is_array($payload['node_details'])) {
+                    $cache[$cacheKey] = $payload;
+                    return $payload;
+                }
+            } catch (\Throwable $exception) {
+                // fall through to HTTP
+            }
+        }
+
+        $encodedNode = rawurlencode($nodeId);
+        $encodedModel = rawurlencode($modelNo);
+        $query = 'node_id=' . $encodedNode;
+        if ($modelNo !== '') {
+            $query .= '&model_no=' . $encodedModel;
+        }
+
+        $urls = [
+            'https://efactor.tech/v8/v2_test_nodes.php?' . $query,
+        ];
+        $host = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
+        $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+        $scheme = $https ? 'https' : 'http';
+        if ($host !== '') {
+            $urls[] = $scheme . '://' . $host . '/v8/v2_test_nodes.php?' . $query;
+        }
+        $urls[] = 'http://localhost/v8/v2_test_nodes.php?' . $query;
+
+        $seen = [];
+        foreach ($urls as $url) {
+            if (isset($seen[$url])) {
+                continue;
+            }
+            $seen[$url] = true;
+            $payload = self::decodeTestNodesPayload(self::fetchUrl($url));
+            if (self::isValidTestNodesPayload($payload, $nodeId) || (!empty($payload['node_details']) && is_array($payload['node_details']))) {
+                $cache[$cacheKey] = $payload;
+                return $payload;
+            }
+        }
+
+        $cache[$cacheKey] = [];
+        return [];
+    }
+
+    /**
+     * Detect schemas that carry V2 handler-built node details.
+     */
+    private static function schemaPrefersV2NodeDetails(array $schema)
+    {
+        if (isset($schema['v2_node_details']) && is_array($schema['v2_node_details']) && $schema['v2_node_details'] !== []) {
+            return true;
+        }
+        if (!empty($schema['meta']['v2DisplayHandlers'])) {
+            return true;
+        }
+        if (!empty($schema['meta']['app']['v2DisplayHandlers'])) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Load V2ValueHandlers and enrich deviceConfig / node_details display values.
+     */
+    private static function applyV2DisplayHandlers(array $schema)
+    {
+        if (!self::loadV2ValueHandlers()) {
+            return $schema;
+        }
+
+        try {
+            if (isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])) {
+                $schema['deviceConfig'] = V2ValueHandlers::enrichDeviceConfig($schema['deviceConfig']);
+            }
+            if (isset($schema['node_details']) && is_array($schema['node_details'])) {
+                $schema['node_details'] = V2ValueHandlers::enrichNodeDetails($schema['node_details']);
+            }
+            if (isset($schema['v2_node_details']) && is_array($schema['v2_node_details'])) {
+                $schema['v2_node_details'] = V2ValueHandlers::enrichNodeDetails($schema['v2_node_details']);
+            }
+            if (isset($schema['controls']) && is_array($schema['controls'])) {
+                foreach ($schema['controls'] as $index => $control) {
+                    if (!is_array($control) || !isset($control['deviceFrame']) || !is_array($control['deviceFrame'])) {
+                        continue;
+                    }
+                    $schema['controls'][$index]['deviceFrame'] = V2ValueHandlers::enrichFrame($control['deviceFrame']);
+                }
+            }
+            if (isset($schema['node_details'][0]['config']) && is_array($schema['node_details'][0]['config'])
+                && isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])
+            ) {
+                $schema['node_details'][0]['config'] = $schema['deviceConfig'];
+            }
+            if (isset($schema['state']['device']) && is_array($schema['state']['device'])
+                && isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])
+            ) {
+                $schema['state']['device']['config'] = $schema['deviceConfig'];
+            }
+            if (isset($schema['deviceState']) && is_array($schema['deviceState'])
+                && isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])
+            ) {
+                $schema['deviceState']['config'] = $schema['deviceConfig'];
+            }
+        } catch (\Throwable $exception) {
+            // Keep schema intact if handlers fail.
+        }
+
+        return $schema;
+    }
+
+    private static function loadV2ValueHandlers()
+    {
+        if (class_exists(V2ValueHandlers::class, false)) {
+            return true;
+        }
+
+        $candidates = [
+            __DIR__ . '/V2ValueHandlers.php',
+            dirname(__DIR__) . '/services/V2ValueHandlers.php',
+            dirname(__DIR__) . '/Services/V2ValueHandlers.php',
+        ];
+        foreach ($candidates as $file) {
+            if (is_file($file)) {
+                require_once $file;
+                return class_exists(V2ValueHandlers::class, false);
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -2438,6 +2976,8 @@ class DeviceUiSchemaNormalizer
             if ($ordered) {
                 $schema['node_details'] = $ordered;
             }
+            // Contract topics must match the opened node (Studio may have baked another id).
+            $schema = self::rewriteTransportNodeTopics($schema, $nodeId);
         }
 
         if ($modelNo !== '') {
@@ -2456,6 +2996,51 @@ class DeviceUiSchemaNormalizer
 
         if ($nodeId !== '') {
             $schema['meta']['app']['nodeId'] = $nodeId;
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Force mqtt / websocket / clientIdPattern onto device/{openedNodeId}/…
+     * App may key off opened node_id already; this keeps schema contract correct.
+     */
+    private static function rewriteTransportNodeTopics(array $schema, $nodeId): array
+    {
+        $nodeId = trim((string) $nodeId);
+        if ($nodeId === '') {
+            return $schema;
+        }
+
+        $rewriteTopic = static function ($topic) use ($nodeId) {
+            $topic = (string) $topic;
+            if ($topic === '') {
+                return $topic;
+            }
+            $replaced = preg_replace('#^device/[^/]+/#', 'device/' . $nodeId . '/', $topic);
+            return is_string($replaced) ? $replaced : $topic;
+        };
+
+        if (isset($schema['mqtt']) && is_array($schema['mqtt'])) {
+            if (!isset($schema['mqtt']['topics']) || !is_array($schema['mqtt']['topics'])) {
+                $schema['mqtt']['topics'] = [];
+            }
+            foreach (['command', 'state', 'telemetry', 'presence'] as $kind) {
+                $current = trim((string) ($schema['mqtt']['topics'][$kind] ?? ''));
+                $schema['mqtt']['topics'][$kind] = $current !== ''
+                    ? $rewriteTopic($current)
+                    : ('device/' . $nodeId . '/' . $kind);
+            }
+            $schema['mqtt']['clientIdPattern'] = 'efactor_' . $nodeId . '_{clientId}';
+        }
+
+        if (isset($schema['websocket']['subscriptions']) && is_array($schema['websocket']['subscriptions'])) {
+            foreach ($schema['websocket']['subscriptions'] as $index => $subscription) {
+                if (!is_array($subscription) || empty($subscription['topic'])) {
+                    continue;
+                }
+                $schema['websocket']['subscriptions'][$index]['topic'] = $rewriteTopic($subscription['topic']);
+            }
         }
 
         return $schema;

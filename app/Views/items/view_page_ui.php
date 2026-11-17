@@ -1307,6 +1307,26 @@ if (!function_exists('view_ui_pick_display_default')) {
     function view_ui_pick_display_default($wireValue, $asperuiValue, $fallback = null)
     {
         $reserved = ['command' => true, 'response' => true, 'error' => true];
+        $isBracketList = static function ($value) {
+            $text = trim((string) $value);
+            if ($text === '' || $text[0] !== '[') {
+                return false;
+            }
+            if ($text === '[]') {
+                return true;
+            }
+            return (bool) preg_match('/^(\[[^\]]*\]){1,}$/', $text);
+        };
+        $isJunk = static function ($value) use ($reserved, $isBracketList) {
+            $text = trim((string) $value);
+            if ($text === '' || isset($reserved[strtolower($text)]) || $isBracketList($text)) {
+                return true;
+            }
+            if (function_exists('view_ui_value_looks_like_wire_padding') && view_ui_value_looks_like_wire_padding($text)) {
+                return true;
+            }
+            return false;
+        };
         $wire = is_array($wireValue) ? reset($wireValue) : $wireValue;
         $asperui = is_array($asperuiValue) ? reset($asperuiValue) : $asperuiValue;
         $wire = trim((string) ($wire ?? ''));
@@ -1314,20 +1334,18 @@ if (!function_exists('view_ui_pick_display_default')) {
         $fallback = is_array($fallback) ? reset($fallback) : $fallback;
         $fallback = trim((string) ($fallback ?? ''));
 
-        $wireBad = $wire === ''
-            || view_ui_value_looks_like_wire_padding($wire)
-            || isset($reserved[strtolower($wire)]);
-        if (!$wireBad) {
+        if (!$isJunk($wire)) {
             return $wire;
         }
-        if ($asperui !== '' && !isset($reserved[strtolower($asperui)]) && !view_ui_value_looks_like_wire_padding($asperui)) {
+        if (!$isJunk($asperui)) {
             return $asperui;
         }
-        if ($fallback !== '' && !isset($reserved[strtolower($fallback)]) && !view_ui_value_looks_like_wire_padding($fallback)) {
+        if (!$isJunk($fallback)) {
             return $fallback;
         }
 
-        return $asperui !== '' ? $asperui : ($wire !== '' ? $wire : $fallback);
+        // Never return bracket dumps / padding to the UI.
+        return '';
     }
 }
 
@@ -10772,10 +10790,26 @@ if (!function_exists('view_ui_icon')) {
      * control value — that made TUNING's three rows all read "Error".
      * Also prefer asperui / option labels over wire padding like 00.
      */
+    function isBracketOptionListDisplay(value) {
+      const text = value == null ? '' : String(value).trim();
+      if (!text || text.charAt(0) !== '[') return false;
+      if (text === '[]') return true;
+      return /^(\[[^\]]*\]){1,}$/.test(text);
+    }
+
     function sanitizeControlDisplayValue(rawValue, meta, label) {
       let value = rawValue == null ? '' : String(rawValue).trim();
       const source = String((meta && meta.ui_type_source) || '').toLowerCase();
-      const reserved = { command: true, response: true, error: true };
+      const reserved = { command: true, response: true, error: true, data: true, trigger: true, frame: true };
+      const isJunk = function(text) {
+        const t = text == null ? '' : String(text).trim();
+        if (!t) return true;
+        if (reserved[t.toLowerCase()]) return true;
+        if (isBracketOptionListDisplay(t)) return true;
+        const hex = t.replace(/[^0-9A-Fa-f]/g, '');
+        if (hex.length >= 2 && /^[0-9A-Fa-f]+$/i.test(hex) && /^0+$/i.test(hex) && /^[0-9A-Fa-fxX\s:_-]+$/.test(t)) return true;
+        return false;
+      };
       const pickFallback = function() {
         const candidates = [
           meta && meta.asperui_value,
@@ -10785,21 +10819,22 @@ if (!function_exists('view_ui_icon')) {
         ];
         for (let i = 0; i < candidates.length; i += 1) {
           const text = candidates[i] == null ? '' : String(candidates[i]).trim();
-          if (!text) continue;
-          if (reserved[text.toLowerCase()]) continue;
-          if (/^0+$/i.test(text.replace(/[^0-9A-Fa-f]/g, '')) && /^[0-9A-Fa-f]+$/.test(text.replace(/[^0-9A-Fa-f]/g, ''))) continue;
+          if (isJunk(text)) continue;
+          if (label && text.toLowerCase() === String(label).toLowerCase()) continue;
           return text;
         }
         return '';
       };
-      // Never publish API source-row names (Command / Response / Error) as values —
-      // that made TUNING's three rows all show "Error".
-      if (reserved[value.toLowerCase()] || (/^0+$/i.test(value.replace(/[^0-9A-Fa-f]/g, '')) && value.replace(/[^0-9A-Fa-f]/g, '') !== '' && /^[0-9A-Fa-f]+$/i.test(value.replace(/[^0-9A-Fa-f]/g, '')))) {
+      // Never publish API source-row names, padding, or option dumps like [00][01].
+      if (isJunk(value)) {
         value = pickFallback();
       }
-      if (label && value.toLowerCase() === String(label).toLowerCase() && (source || reserved[String(label).toLowerCase()])) {
+      if (label && value && value.toLowerCase() === String(label).toLowerCase()) {
         const fallback = pickFallback();
         value = (!fallback || fallback.toLowerCase() === String(label).toLowerCase()) ? '' : fallback;
+      }
+      if (isBracketOptionListDisplay(value)) {
+        value = '';
       }
       return value;
     }
@@ -10812,6 +10847,12 @@ if (!function_exists('view_ui_icon')) {
     function isUnresolvedDeviceDisplayValue(value) {
       const text = value == null ? '' : String(value).trim();
       if (!text || text === '--' || text.toLowerCase() === 'null' || text.toLowerCase() === 'undefined') {
+        return true;
+      }
+      if (typeof isBracketOptionListDisplay === 'function' && isBracketOptionListDisplay(text)) {
+        return true;
+      }
+      if (text === '[]' || /^(\[[^\]]*\]){1,}$/.test(text)) {
         return true;
       }
       const hex = text.replace(/^0x/i, '').replace(/[\s:_-]+/g, '');
@@ -26162,7 +26203,8 @@ if (!function_exists('view_ui_icon')) {
         meta: {
           source: 'studio',
           // Keep in sync with View_page_model::DEVICE_UI_SCHEMA_BUILD_VERSION
-          schemaBuildVersion: '2026-11-10.1',
+          schemaBuildVersion: '2026-11-14.6',
+          v2DisplayHandlers: !!(deviceUiInfo && Array.isArray(deviceUiInfo.v2_node_details) && deviceUiInfo.v2_node_details.length),
           app: {
             id: 'efactor_' + slug(modelNo, 'device_ui'),
             name: (modelNo || 'Efactor Device') + ' Control',
@@ -26170,7 +26212,8 @@ if (!function_exists('view_ui_icon')) {
             model_id: modelNo,
             nodeId: resolvedNodeId,
             modalId: modalId,
-            entryWidgetId: 'phone_shell'
+            entryWidgetId: 'phone_shell',
+            v2DisplayHandlers: !!(deviceUiInfo && Array.isArray(deviceUiInfo.v2_node_details) && deviceUiInfo.v2_node_details.length)
           },
           generatedFromActivePageIndex: activeIndex,
           generatedFromActivePageNo: activePageNo,
@@ -26315,6 +26358,11 @@ if (!function_exists('view_ui_icon')) {
         pages: navigationPages,
         deviceConfig: deviceConfig,
         node_details: deviceNodeDetails,
+        // V2 debug/authority alias — same shape as node_details. Lets api_schema
+        // normalizer keep V2 pages when legacy test_nodes would overwrite them.
+        v2_node_details: (deviceUiInfo && Array.isArray(deviceUiInfo.v2_node_details) && deviceUiInfo.v2_node_details.length)
+          ? deviceUiInfo.v2_node_details
+          : undefined,
         nodes: resolvedNodeId || (deviceUiInfo && deviceUiInfo.nodes) || '',
         dataSources: {
           deviceInfo: {

@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Services\DeviceUiDisplaySanitizer;
 use App\Services\DeviceUiSchemaGenerator;
+use App\Services\V2ValueHandlers;
 use CodeIgniter\Model;
 
 class View_page_model extends Model
@@ -24,12 +26,14 @@ class View_page_model extends Model
      * Bump when Device UI schema generator / normalizer output shape changes.
      * Stale models auto-rebuild on next getDeviceUiSchema / API fetch.
      */
-    private const DEVICE_UI_SCHEMA_BUILD_VERSION = '2026-11-10.1';
+    private const DEVICE_UI_SCHEMA_BUILD_VERSION = '2026-11-14.6';
 
     public function __construct()
     {
         parent::__construct();
         self::loadDeviceUiSchemaGenerator();
+        self::loadV2ValueHandlers();
+        self::loadDeviceUiDisplaySanitizer();
     }
 
     public static function loadDeviceUiSchemaGenerator()
@@ -51,6 +55,56 @@ class View_page_model extends Model
             if (is_file($file)) {
                 require_once $file;
                 return class_exists(DeviceUiSchemaGenerator::class, false);
+            }
+        }
+
+        return false;
+    }
+
+    public static function loadV2ValueHandlers()
+    {
+        if (class_exists(V2ValueHandlers::class, false)) {
+            return true;
+        }
+
+        $candidates = [
+            __DIR__ . '/../services/V2ValueHandlers.php',
+            __DIR__ . '/../Services/V2ValueHandlers.php',
+        ];
+        if (defined('APPPATH')) {
+            $candidates[] = APPPATH . 'services/V2ValueHandlers.php';
+            $candidates[] = APPPATH . 'Services/V2ValueHandlers.php';
+        }
+
+        foreach ($candidates as $file) {
+            if (is_file($file)) {
+                require_once $file;
+                return class_exists(V2ValueHandlers::class, false);
+            }
+        }
+
+        return false;
+    }
+
+    public static function loadDeviceUiDisplaySanitizer()
+    {
+        if (class_exists(DeviceUiDisplaySanitizer::class, false)) {
+            return true;
+        }
+
+        $candidates = [
+            __DIR__ . '/../services/DeviceUiDisplaySanitizer.php',
+            __DIR__ . '/../Services/DeviceUiDisplaySanitizer.php',
+        ];
+        if (defined('APPPATH')) {
+            $candidates[] = APPPATH . 'services/DeviceUiDisplaySanitizer.php';
+            $candidates[] = APPPATH . 'Services/DeviceUiDisplaySanitizer.php';
+        }
+
+        foreach ($candidates as $file) {
+            if (is_file($file)) {
+                require_once $file;
+                return class_exists(DeviceUiDisplaySanitizer::class, false);
             }
         }
 
@@ -1373,7 +1427,311 @@ private function buildDeviceUiApiMetadataFromTree($configId)
         return [];
     }
 
-    return $this->buildDeviceUiApiMetadata($pseudoRow);
+    $metadata = $this->buildDeviceUiApiMetadata($pseudoRow);
+
+    // V2-only: convert wire hex + data_type into typed asperui/default display
+    // values. Legacy product_api path is unchanged.
+    return $this->enrichV2ApiMetadataDisplayValues($metadata);
+}
+
+/**
+ * True when this model has at least one V2 API config row.
+ * Used to gate V2 display-handler / node_details behavior without touching legacy.
+ */
+private function modelHasV2ApiConfigs($modelno)
+{
+    $modelno = trim((string) $modelno);
+    if ($modelno === '' || !$this->db->tableExists('api_product_configs')) {
+        return false;
+    }
+
+    try {
+        $row = $this->db->table('api_product_configs')
+            ->select('id')
+            ->where('model_name', $modelno)
+            ->limit(1)
+            ->get()
+            ->getRowArray();
+
+        return !empty($row['id']);
+    } catch (\Throwable $exception) {
+        return false;
+    }
+}
+
+/**
+ * Public V2 equivalent of legacy test_nodes.
+ * Same envelope: { node_details, nodes } (+ v2_node_details alias).
+ * Built from V2 tables + handlers, with auto_get_nodes_params live overlay.
+ */
+public function buildV2TestNodesPayload($nodeId = '', $modelNo = '')
+{
+    $nodeId = trim((string) $nodeId);
+    $modelNo = trim((string) $modelNo);
+
+    if ($modelNo === '' && $nodeId !== '') {
+        $modelNo = $this->resolveDeviceUiModelNoFromNodeId($nodeId);
+    }
+    if ($nodeId === '' && $modelNo !== '') {
+        $nodeId = $this->resolveDeviceUiNodeId($modelNo, '');
+    }
+
+    if ($modelNo === '') {
+        return [
+            'status' => false,
+            'message' => 'model_no or resolvable node_id is required',
+            'node_details' => [],
+            'nodes' => $nodeId,
+            'source' => 'v2_test_nodes',
+        ];
+    }
+
+    if (!$this->modelHasV2ApiConfigs($modelNo)) {
+        return [
+            'status' => false,
+            'message' => 'Model is not V2 (no api_product_configs rows)',
+            'model_no' => $modelNo,
+            'node_details' => [],
+            'nodes' => $nodeId,
+            'source' => 'v2_test_nodes',
+        ];
+    }
+
+    $info = $this->getDeviceUiInfo($modelNo, $nodeId);
+    if (!is_array($info) || empty($info['node_details']) || !is_array($info['node_details'])) {
+        return [
+            'status' => false,
+            'message' => 'Unable to build V2 node_details',
+            'model_no' => $modelNo,
+            'node_details' => [],
+            'nodes' => $nodeId,
+            'source' => 'v2_test_nodes',
+        ];
+    }
+
+    $deviceConfig = isset($info['deviceConfig']) && is_array($info['deviceConfig'])
+        ? $info['deviceConfig']
+        : (isset($info['node_details'][0]['config']) && is_array($info['node_details'][0]['config'])
+            ? $info['node_details'][0]['config']
+            : []);
+
+    // Overlay live human values from auto_get_nodes_params (same source the app polls).
+    $deviceConfig = $this->overlayDeviceUiAutoGetParams($deviceConfig, $nodeId);
+    $deviceConfig = $this->enrichV2DeviceConfigDisplayValues($deviceConfig);
+    $deviceConfig = $this->sanitizeDeviceUiDisplayConfig($deviceConfig);
+
+    $nodeDetails = $info['node_details'];
+    if (!isset($nodeDetails[0]) || !is_array($nodeDetails[0])) {
+        $nodeDetails = [[
+            'id' => $nodeId,
+            'config' => $deviceConfig,
+            'role' => 'primary',
+            'status' => [
+                'connectivity' => [
+                    'connected' => false,
+                    'timestamp' => (int) round(microtime(true) * 1000),
+                ],
+            ],
+        ]];
+    } else {
+        $nodeDetails[0]['config'] = $deviceConfig;
+        if ($nodeId !== '') {
+            $nodeDetails[0]['id'] = $nodeId;
+        }
+    }
+
+    $nodeDetails = $this->enrichV2NodeDetailsDisplayValues($nodeDetails);
+    $nodeDetails = $this->sanitizeDeviceUiDisplayNodeDetails($nodeDetails);
+    $nodes = $nodeId !== '' ? $nodeId : (string) ($info['nodes'] ?? '');
+
+    return [
+        'status' => true,
+        'message' => 'V2 node_details built',
+        'model_no' => $modelNo,
+        'node_details' => $nodeDetails,
+        'v2_node_details' => $nodeDetails,
+        'nodes' => $nodes,
+        'source' => 'v2_test_nodes',
+    ];
+}
+
+/**
+ * Resolve model_name / model_number for a node from efactorproduct / device tables.
+ */
+public function resolveDeviceUiModelNoFromNodeId($nodeId)
+{
+    $nodeId = trim((string) $nodeId);
+    if ($nodeId === '') {
+        return '';
+    }
+
+    if ($this->db->tableExists('efactorproduct')) {
+        try {
+            $row = $this->db->table('efactorproduct')
+                ->select('model_number, model_name')
+                ->where('node_id', $nodeId)
+                ->orderBy('id', 'DESC')
+                ->get()
+                ->getRowArray();
+            if (is_array($row)) {
+                $model = trim((string) ($row['model_number'] ?? ''));
+                if ($model === '') {
+                    $model = trim((string) ($row['model_name'] ?? ''));
+                }
+                if ($model !== '') {
+                    return $model;
+                }
+            }
+        } catch (\Throwable $exception) {
+            // fall through
+        }
+    }
+
+    try {
+        $row = $this->db->table('product_api')
+            ->select('model_name')
+            ->where('node_id', $nodeId)
+            ->orderBy('selected', 'DESC')
+            ->orderBy('id', 'DESC')
+            ->get()
+            ->getRowArray();
+        $model = trim((string) ($row['model_name'] ?? ''));
+        if ($model !== '') {
+            return $model;
+        }
+    } catch (\Throwable $exception) {
+        // ignore
+    }
+
+    return '';
+}
+
+/**
+ * Apply V2ValueHandlers to api metadata (frame fields + defaults).
+ */
+private function enrichV2ApiMetadataDisplayValues(array $metadata)
+{
+    if ($metadata === []) {
+        return $metadata;
+    }
+    self::loadV2ValueHandlers();
+    if (!class_exists(V2ValueHandlers::class, false)) {
+        return $metadata;
+    }
+
+    try {
+        return V2ValueHandlers::enrichApiMetadata($metadata);
+    } catch (\Throwable $exception) {
+        log_message('error', 'V2ValueHandlers enrichApiMetadata failed: ' . $exception->getMessage());
+        return $metadata;
+    }
+}
+
+/**
+ * Apply V2ValueHandlers to deviceConfig pages (node_details config shape).
+ */
+private function enrichV2DeviceConfigDisplayValues(array $deviceConfig)
+{
+    if ($deviceConfig === []) {
+        return $deviceConfig;
+    }
+    self::loadV2ValueHandlers();
+    if (!class_exists(V2ValueHandlers::class, false)) {
+        return $deviceConfig;
+    }
+
+    try {
+        return V2ValueHandlers::enrichDeviceConfig($deviceConfig);
+    } catch (\Throwable $exception) {
+        log_message('error', 'V2ValueHandlers enrichDeviceConfig failed: ' . $exception->getMessage());
+        return $deviceConfig;
+    }
+}
+
+/**
+ * Apply V2ValueHandlers across node_details[].config.
+ */
+private function enrichV2NodeDetailsDisplayValues(array $nodeDetails)
+{
+    if ($nodeDetails === []) {
+        return $nodeDetails;
+    }
+    self::loadV2ValueHandlers();
+    if (!class_exists(V2ValueHandlers::class, false)) {
+        return $nodeDetails;
+    }
+
+    try {
+        return V2ValueHandlers::enrichNodeDetails($nodeDetails);
+    } catch (\Throwable $exception) {
+        log_message('error', 'V2ValueHandlers enrichNodeDetails failed: ' . $exception->getMessage());
+        return $nodeDetails;
+    }
+}
+
+/**
+ * After legacy test_nodes overwrites schema node_details, restore V2 page/frame
+ * display values as the authority while keeping remote connectivity/status.
+ */
+private function restoreV2DeviceConfigAfterTestNodes(array $schema, array $v2DeviceConfig, $modelno, $nodeId)
+{
+    $modelno = trim((string) $modelno);
+    $nodeId = trim((string) $nodeId);
+    if ($v2DeviceConfig === []) {
+        return $schema;
+    }
+
+    $remoteConfig = isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])
+        ? $schema['deviceConfig']
+        : [];
+    // Local V2 config is "live" so its pages/frames win on shared keys.
+    $merged = $this->mergeDeviceUiNodeConfig($v2DeviceConfig, $remoteConfig, $modelno, $nodeId);
+    $merged = $this->enrichV2DeviceConfigDisplayValues($merged);
+    $schema['deviceConfig'] = $merged;
+
+    if (isset($schema['node_details']) && is_array($schema['node_details']) && !empty($schema['node_details'])) {
+        $schema['node_details'] = $this->orderDeviceUiNodeDetails($schema['node_details'], $nodeId);
+        if (!isset($schema['node_details'][0]) || !is_array($schema['node_details'][0])) {
+            $schema['node_details'] = [[
+                'id' => $nodeId,
+                'config' => $merged,
+                'role' => 'primary',
+                'status' => [
+                    'connectivity' => [
+                        'connected' => false,
+                        'timestamp' => (int) round(microtime(true) * 1000),
+                    ],
+                ],
+            ]];
+        } else {
+            $schema['node_details'][0]['config'] = $merged;
+            if ($nodeId !== '' && empty($schema['node_details'][0]['id'])) {
+                $schema['node_details'][0]['id'] = $nodeId;
+            }
+        }
+        $schema['node_details'] = $this->enrichV2NodeDetailsDisplayValues($schema['node_details']);
+    } else {
+        $schema['node_details'] = [[
+            'id' => $nodeId,
+            'config' => $merged,
+            'role' => 'primary',
+            'status' => [
+                'connectivity' => [
+                    'connected' => false,
+                    'timestamp' => (int) round(microtime(true) * 1000),
+                ],
+            ],
+        ]];
+    }
+
+    if (isset($schema['state']['device']) && is_array($schema['state']['device'])) {
+        $schema['state']['device']['config'] = $merged;
+    }
+    if (isset($schema['deviceState']) && is_array($schema['deviceState'])) {
+        $schema['deviceState']['config'] = $merged;
+    }
+
+    return $schema;
 }
 
 private function appendDeviceUiTreeFieldToPseudoRow(array &$pseudoRow, $prefix, array $field)
@@ -1900,7 +2258,18 @@ private function collectDeviceUiApiComponents(array $frames, $parameterName = ''
                 'field_index' => $selectedIndex,
                 'field_description' => $fieldDescription,
                 // UI default prefers human asperui_value; wire hex stays on deviceFrame.value.
-                'default' => $this->deviceUiFirstNonEmpty($field['asperui_value'] ?? null, $field['value'] ?? null),
+                // Skip junk dumps like [00][01] and padding.
+                'default' => $this->deviceUiSanitizeUiDefault(
+                    $field['asperui_value'] ?? null,
+                    $field['value'] ?? null,
+                    [
+                        'label' => $fieldDescription !== '' ? $fieldDescription : $parameterName,
+                        'labels' => is_array($field['asperui'] ?? null) ? $field['asperui'] : [],
+                        'item_values' => is_array($field['asperui_values'] ?? null) ? $field['asperui_values'] : [],
+                        'componentType' => $uiType,
+                        'wire' => $field['value'] ?? null,
+                    ]
+                ),
                 'items' => is_array($field['asperui'] ?? null) ? array_values(array_filter($field['asperui'], static function ($value) { return $value !== ''; })) : [],
                 'item_values' => is_array($field['asperui_values'] ?? null) ? array_values(array_filter($field['asperui_values'], static function ($value) { return $value !== ''; })) : [],
                 'sno_asperui' => is_array($field['sno_asperui'] ?? null) ? array_values(array_filter($field['sno_asperui'], static function ($value) { return $value !== ''; })) : [],
@@ -2235,13 +2604,36 @@ private function buildDeviceUiFrameFieldList(array $row, $prefix)
                 $field['asperui_values'] = $choiceValues;
             }
             // Prefer numeric asperui default for the UI; keep wire hex on value.
+            // Never publish option dumps like [00][01] as the display value.
             $publishedValues = is_array($field['asperui_values'] ?? null) ? $field['asperui_values'] : [];
-            if (!$this->deviceUiFrameValueIsEmpty($publishedValues[0] ?? null)) {
-                $field['asperui_value'] = $publishedValues[0];
+            $publishedLabels = is_array($field['asperui'] ?? null) ? $field['asperui'] : [];
+            $candidate = null;
+            if (!$this->deviceUiFrameValueIsEmpty($publishedValues[0] ?? null)
+                && !$this->deviceUiDisplayLooksLikeBracketList($publishedValues[0])
+            ) {
+                $candidate = $publishedValues[0];
+            } elseif (!$this->deviceUiFrameValueIsEmpty($publishedLabels[0] ?? null)
+                && !$this->deviceUiDisplayLooksLikeBracketList($publishedLabels[0])
+            ) {
+                $candidate = $publishedLabels[0];
+            }
+            if ($candidate !== null) {
+                $field['asperui_value'] = $candidate;
             } elseif ($this->deviceUiFrameValueIsEmpty($field['asperui_value'] ?? null)
                 || $this->deviceUiValueLooksLikeProtocolHex($field['asperui_value'])
+                || $this->deviceUiDisplayLooksLikeBracketList($field['asperui_value'] ?? null)
             ) {
-                $field['asperui_value'] = $wireValue;
+                // Prefer empty over junk dumps / padding so UI can show Loading…
+                if ($this->deviceUiValueLooksLikeProtocolHex($wireValue) && $this->deviceUiValueLooksLikeWirePadding($wireValue)) {
+                    $field['asperui_value'] = '';
+                } elseif ($this->deviceUiDisplayLooksLikeBracketList($wireValue)) {
+                    $field['asperui_value'] = '';
+                } else {
+                    $field['asperui_value'] = $wireValue;
+                }
+            }
+            if ($this->deviceUiDisplayLooksLikeBracketList($field['asperui_value'] ?? null)) {
+                $field['asperui_value'] = '';
             }
         }
 
@@ -2266,6 +2658,77 @@ private function deviceUiValueLooksLikeProtocolHex($value)
     }
 
     return (bool) preg_match('/^[0-9A-F]+$/', $value);
+}
+
+/**
+ * True for junk dumps like [00][01] or [3][0][0][1].
+ */
+private function deviceUiDisplayLooksLikeBracketList($value)
+{
+    self::loadDeviceUiDisplaySanitizer();
+    if (class_exists(DeviceUiDisplaySanitizer::class, false)) {
+        return DeviceUiDisplaySanitizer::isBracketOptionList($value);
+    }
+    $text = trim((string) $value);
+    if ($text === '' || $text[0] !== '[') {
+        return false;
+    }
+    if ($text === '[]') {
+        return true;
+    }
+
+    return (bool) preg_match('/^(\[[^\]]*\]){1,}$/', $text);
+}
+
+/**
+ * True for wire padding like 00 / 0000 / 00000000 (not a single "0").
+ */
+private function deviceUiValueLooksLikeWirePadding($value)
+{
+    self::loadDeviceUiDisplaySanitizer();
+    if (class_exists(DeviceUiDisplaySanitizer::class, false)) {
+        return DeviceUiDisplaySanitizer::looksLikeWirePadding($value);
+    }
+    $raw = strtoupper(preg_replace('/[\s:_-]+/', '', preg_replace('/^0x/i', '', trim((string) $value))));
+
+    return $raw !== '' && strlen($raw) >= 2 && (bool) preg_match('/^[0-9A-F]+$/', $raw) && (bool) preg_match('/^0+$/', $raw);
+}
+
+/**
+ * Pick a user-safe UI default from asperui/wire without publishing junk dumps.
+ */
+private function deviceUiSanitizeUiDefault($asperuiValue, $wireValue, array $context = [])
+{
+    self::loadDeviceUiDisplaySanitizer();
+    $context = array_merge([
+        'wire' => $wireValue,
+    ], $context);
+    if (class_exists(DeviceUiDisplaySanitizer::class, false)) {
+        $clean = DeviceUiDisplaySanitizer::sanitizeDisplayValue($asperuiValue, $context);
+        if ($clean !== '' && $clean !== null) {
+            return $clean;
+        }
+        $cleanWire = DeviceUiDisplaySanitizer::sanitizeDisplayValue($wireValue, $context);
+        if ($cleanWire !== '' && $cleanWire !== null) {
+            return $cleanWire;
+        }
+
+        return null;
+    }
+    if (!$this->deviceUiDisplayLooksLikeBracketList($asperuiValue)
+        && !$this->deviceUiFrameValueIsEmpty($asperuiValue)
+        && !$this->deviceUiValueLooksLikeWirePadding($asperuiValue)
+    ) {
+        return $asperuiValue;
+    }
+    if (!$this->deviceUiDisplayLooksLikeBracketList($wireValue)
+        && !$this->deviceUiFrameValueIsEmpty($wireValue)
+        && !$this->deviceUiValueLooksLikeWirePadding($wireValue)
+    ) {
+        return $wireValue;
+    }
+
+    return null;
 }
 
 /**
@@ -5015,12 +5478,30 @@ private function refreshDeviceUiSchemaApiDetails($modelno, array $schema, $nodeI
     if (!$skipRemote) {
         $testNodes = $this->fetchDeviceUiTestNodes($nodeId);
     }
+    $isV2Model = $this->modelHasV2ApiConfigs($modelno);
+    // Snapshot V2-built config before remote test_nodes can overwrite pages/values.
+    $v2DeviceConfigSnapshot = $isV2Model ? $deviceConfig : [];
     if ($this->isDeviceUiTestNodesPayload($testNodes, $nodeId)) {
         $schema = $this->applyDeviceUiTestNodesToSchema($schema, $testNodes, $nodeId);
         $outputNodeId = isset($schema['nodes']) && $schema['nodes'] !== ''
             ? $schema['nodes']
             : $outputNodeId;
+        if ($isV2Model && !empty($v2DeviceConfigSnapshot)) {
+            $schema = $this->restoreV2DeviceConfigAfterTestNodes(
+                $schema,
+                $v2DeviceConfigSnapshot,
+                $modelno,
+                $liveNodeId
+            );
+            $deviceConfig = isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])
+                ? $schema['deviceConfig']
+                : $deviceConfig;
+        }
     } else {
+        if ($isV2Model) {
+            $deviceConfig = $this->enrichV2DeviceConfigDisplayValues($deviceConfig);
+            $schema['deviceConfig'] = $deviceConfig;
+        }
         $schema['node_details'] = [[
             'id' => $liveNodeId,
             'config' => $deviceConfig,
@@ -9156,6 +9637,7 @@ private function mergeDeviceUiNodeConfig(array $liveConfig, array $existingConfi
 private function mergeDeviceUiNodePages(array $livePages, array $existingPages)
 {
     $existingByName = [];
+    $existingByKey = [];
     foreach ($existingPages as $pageFrames) {
         if (!is_array($pageFrames)) {
             continue;
@@ -9169,6 +9651,10 @@ private function mergeDeviceUiNodePages(array $livePages, array $existingPages)
                 continue;
             }
             $existingByName[$name] = $item['frame'];
+            $key = $this->deviceUiFrameNameKey($name);
+            if ($key !== '' && !isset($existingByKey[$key])) {
+                $existingByKey[$key] = $item['frame'];
+            }
         }
     }
 
@@ -9179,13 +9665,20 @@ private function mergeDeviceUiNodePages(array $livePages, array $existingPages)
         foreach ($frames as $index => $item) {
             $frame = is_array($item['frame'] ?? null) ? $item['frame'] : [];
             $name = strtolower(trim((string) ($frame['name'] ?? '')));
+            $nameKey = $this->deviceUiFrameNameKey($name);
             $liveCommands = isset($frame['commands']) && is_array($frame['commands']) ? $frame['commands'] : [];
+            $existingFrame = null;
             if ($name !== '' && isset($existingByName[$name])) {
                 $existingFrame = $existingByName[$name];
+            } elseif ($nameKey !== '' && isset($existingByKey[$nameKey])) {
+                // Fuzzy match: "Voltage" ↔ "Voltage (V)", "Current" ↔ "Current (A)"
+                $existingFrame = $existingByKey[$nameKey];
+            }
+            if ($existingFrame !== null) {
                 if (empty($liveCommands) || $this->deviceUiFrameScore($existingFrame) > $this->deviceUiFrameScore($frame)) {
                     $livePages[$pageName][$index]['frame'] = $this->normalizeDeviceUiFrame(
                         $this->mergeDeviceUiFrameValues($existingFrame, $frame),
-                        $frame['name'] ?? $name
+                        $frame['name'] ?? ($existingFrame['name'] ?? $name)
                     );
                     continue;
                 }
@@ -9200,6 +9693,22 @@ private function mergeDeviceUiNodePages(array $livePages, array $existingPages)
     }
 
     return $livePages;
+}
+
+/**
+ * Fuzzy frame key so test_nodes "Voltage" matches schema "Voltage (V)".
+ */
+private function deviceUiFrameNameKey($name)
+{
+    self::loadDeviceUiDisplaySanitizer();
+    if (class_exists(DeviceUiDisplaySanitizer::class, false)) {
+        return DeviceUiDisplaySanitizer::frameNameKey($name);
+    }
+    $name = strtolower(trim((string) $name));
+    $name = preg_replace('/\([^)]*\)/', '', $name);
+    $name = preg_replace('/[^a-z0-9]+/', '', $name);
+
+    return (string) $name;
 }
 
 private function deviceUiFrameScore(array $frame)
@@ -9387,6 +9896,222 @@ private function fetchDeviceUiTestNodes($nodeId)
     return [];
 }
 
+/**
+ * Fetch auto_get_nodes_params JSON for live human page values.
+ */
+private function fetchDeviceUiAutoGetNodesParams($nodeId)
+{
+    $nodeId = trim((string) $nodeId);
+    if ($nodeId === '') {
+        return [];
+    }
+
+    static $cache = [];
+    $cacheKey = strtolower($nodeId);
+    if (isset($cache[$cacheKey])) {
+        return $cache[$cacheKey];
+    }
+
+    $encoded = rawurlencode($nodeId);
+    $origin = $this->deviceUiNodeDetailsOrigin();
+    $urls = [
+        $origin . '/v8/api.php?action=auto_get_nodes_params&node_id=' . $encoded . '&device_id=' . $encoded,
+    ];
+    $host = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
+    if ($host !== '' && stripos($origin, $host) === false) {
+        $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+        $scheme = $https ? 'https' : 'http';
+        $urls[] = $scheme . '://' . $host . '/v8/api.php?action=auto_get_nodes_params&node_id='
+            . $encoded . '&device_id=' . $encoded;
+    }
+    $urls[] = 'http://localhost/v8/api.php?action=auto_get_nodes_params&node_id='
+        . $encoded . '&device_id=' . $encoded;
+
+    $seen = [];
+    foreach ($urls as $url) {
+        if (isset($seen[$url])) {
+            continue;
+        }
+        $seen[$url] = true;
+        $raw = $this->fetchDeviceUiUrl($url);
+        if (!is_string($raw) || trim($raw) === '') {
+            continue;
+        }
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            $start = strpos($raw, '{');
+            if ($start !== false) {
+                $decoded = json_decode(substr($raw, $start), true);
+            }
+        }
+        if (!is_array($decoded) || $decoded === []) {
+            continue;
+        }
+        // Need at least one page block or a non-null payload marker.
+        foreach ($decoded as $value) {
+            if (is_array($value)) {
+                foreach ($value as $pageName => $pageVals) {
+                    if (is_string($pageName) && stripos($pageName, 'Page') === 0 && is_array($pageVals)) {
+                        $cache[$cacheKey] = $decoded;
+                        return $decoded;
+                    }
+                }
+            }
+        }
+        if (!empty($decoded['payload'])) {
+            $cache[$cacheKey] = $decoded;
+            return $decoded;
+        }
+    }
+
+    $cache[$cacheKey] = [];
+    return [];
+}
+
+/**
+ * Map auto_get Page*.* human values onto deviceConfig frame Data/Trigger fields.
+ * Never clears existing values with null/empty.
+ */
+private function overlayDeviceUiAutoGetParams(array $deviceConfig, $nodeId)
+{
+    $nodeId = trim((string) $nodeId);
+    if ($nodeId === '' || empty($deviceConfig['devices'][0]['pages']) || !is_array($deviceConfig['devices'][0]['pages'])) {
+        return $deviceConfig;
+    }
+
+    $auto = $this->fetchDeviceUiAutoGetNodesParams($nodeId);
+    if ($auto === []) {
+        return $deviceConfig;
+    }
+
+    $liveByFrameKey = [];
+    foreach ($auto as $key => $block) {
+        if (!is_array($block)) {
+            continue;
+        }
+        foreach ($block as $pageName => $pageVals) {
+            if (!is_string($pageName) || stripos($pageName, 'Page') !== 0 || !is_array($pageVals)) {
+                continue;
+            }
+            foreach ($pageVals as $paramName => $paramValue) {
+                if (!is_string($paramName) && !is_int($paramName)) {
+                    continue;
+                }
+                $name = trim((string) $paramName);
+                if ($name === '' || strcasecmp($name, 'name') === 0) {
+                    continue;
+                }
+                if ($paramValue === null || $paramValue === '') {
+                    continue;
+                }
+                $frameKey = $this->deviceUiFrameNameKey($name);
+                if ($frameKey === '') {
+                    continue;
+                }
+                $liveByFrameKey[$frameKey] = $paramValue;
+            }
+        }
+    }
+
+    if ($liveByFrameKey === []) {
+        return $deviceConfig;
+    }
+
+    foreach ($deviceConfig['devices'][0]['pages'] as $pageName => $frames) {
+        if (!is_array($frames)) {
+            continue;
+        }
+        foreach ($frames as $fIdx => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $frame = isset($item['frame']) && is_array($item['frame']) ? $item['frame'] : $item;
+            if (!is_array($frame)) {
+                continue;
+            }
+            $frameName = trim((string) ($frame['name'] ?? ''));
+            $frameKey = $this->deviceUiFrameNameKey($frameName);
+            if ($frameKey === '' || !array_key_exists($frameKey, $liveByFrameKey)) {
+                continue;
+            }
+            $liveValue = $liveByFrameKey[$frameKey];
+            $frame = $this->applyLiveValueToDeviceUiFrame($frame, $liveValue);
+            if (isset($item['frame'])) {
+                $item['frame'] = $frame;
+            } else {
+                $item = $frame;
+            }
+            $deviceConfig['devices'][0]['pages'][$pageName][$fIdx] = $item;
+        }
+    }
+
+    return $deviceConfig;
+}
+
+/**
+ * Write a live human/bool/number onto the Data (or Trigger) slot as asperui_value.
+ * Keeps wire `value` when it is already protocol hex; otherwise leaves wire untouched.
+ */
+private function applyLiveValueToDeviceUiFrame(array $frame, $liveValue)
+{
+    $display = $liveValue;
+    if (is_bool($liveValue)) {
+        $display = $liveValue ? 'ON' : 'OFF';
+    } elseif (is_int($liveValue) || is_float($liveValue)) {
+        $display = $liveValue;
+    } elseif (is_string($liveValue)) {
+        $trim = trim($liveValue);
+        if ($trim === '') {
+            return $frame;
+        }
+        $lower = strtolower($trim);
+        if (in_array($lower, ['true', 'false'], true)) {
+            $display = $lower === 'true' ? 'ON' : 'OFF';
+        } else {
+            $display = $trim;
+        }
+    } else {
+        return $frame;
+    }
+
+    foreach (['commands', 'response', 'error'] as $bucket) {
+        if (!isset($frame[$bucket]) || !is_array($frame[$bucket])) {
+            continue;
+        }
+        foreach ($frame[$bucket] as $index => $field) {
+            if (!is_array($field)) {
+                continue;
+            }
+            $desc = strtolower(trim((string) (
+                $field['Field_description']
+                ?? $field['field_description']
+                ?? $field['default_name']
+                ?? ''
+            )));
+            if (!in_array($desc, ['data', 'trigger'], true)) {
+                continue;
+            }
+            $field['asperui_value'] = $display;
+            // Booleanish live → common wire bytes when current wire is empty/padding.
+            $wire = isset($field['value']) ? trim((string) $field['value']) : '';
+            $wireHex = strtoupper(preg_replace('/[\s:_-]+/', '', preg_replace('/^0x/i', '', $wire)));
+            $isPadding = $wireHex !== '' && (bool) preg_match('/^0+$/', $wireHex);
+            if (is_bool($liveValue) || (is_string($liveValue) && in_array(strtolower(trim((string) $liveValue)), ['true', 'false', 'on', 'off'], true))) {
+                $on = is_bool($liveValue)
+                    ? $liveValue
+                    : in_array(strtolower(trim((string) $liveValue)), ['true', 'on', '1'], true);
+                if ($wire === '' || $isPadding) {
+                    $field['value'] = $on ? '01' : '00';
+                }
+            }
+            $frame[$bucket][$index] = $field;
+            return $frame;
+        }
+    }
+
+    return $frame;
+}
+
 private function applyDeviceUiTestNodesToSchema(array $schema, array $testNodes, $requestedNodeId)
 {
     $requestedNodeId = trim((string) $requestedNodeId);
@@ -9419,6 +10144,24 @@ private function applyDeviceUiTestNodesToSchema(array $schema, array $testNodes,
     if (isset($schema['state']) && is_array($schema['state'])) {
         $schema['state']['node_id'] = $outputNodes;
     }
+    if (isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])) {
+        $schema['deviceConfig'] = $this->sanitizeDeviceUiDisplayConfig($schema['deviceConfig']);
+        if (isset($schema['node_details'][0]) && is_array($schema['node_details'][0])) {
+            $schema['node_details'][0]['config'] = $schema['deviceConfig'];
+        }
+    }
+    if (isset($schema['node_details']) && is_array($schema['node_details'])) {
+        $schema['node_details'] = $this->sanitizeDeviceUiDisplayNodeDetails($schema['node_details']);
+    }
+    // Guarantee live-state contract on every test_nodes merge.
+    if (!isset($schema['deviceState']) || !is_array($schema['deviceState'])) {
+        $schema['deviceState'] = [];
+    }
+    if (empty($schema['deviceState']['liveStatePath'])) {
+        $schema['deviceState']['liveStatePath'] = 'node_details[0].config.devices[0]';
+    }
+    $schema['deviceState']['preferLiveState'] = true;
+
     return $schema;
 }
 
@@ -10805,6 +11548,7 @@ public function getDeviceUiInfo($modelno, $nodeId = '', array $options = [])
 
     $nodeId = $this->resolveDeviceUiNodeId($modelno, $nodeId);
     $skipRemote = !empty($options['skipRemote']);
+    $isV2Model = $this->modelHasV2ApiConfigs($modelno);
     $product = null;
     try {
         $product = $this->db->table('product_api')
@@ -10831,8 +11575,9 @@ public function getDeviceUiInfo($modelno, $nodeId = '', array $options = [])
         : [];
     $rows = is_array($mapping['rows'] ?? null) ? $mapping['rows'] : [];
 
-    // Studio open: skip remote test_nodes (up to ~4s). Live values still come from the app/schema API.
-    if (!$skipRemote) {
+    // Legacy-only: keep the original early return from remote test_nodes.
+    // V2 models must not use that payload as the sole source of page/frame values.
+    if (!$skipRemote && !$isV2Model) {
         $testNodes = $this->fetchDeviceUiTestNodes($nodeId);
         if ($this->isDeviceUiTestNodesPayload($testNodes, $nodeId)) {
             $nodeDetails = $this->orderDeviceUiNodeDetails($testNodes['node_details'], $nodeId);
@@ -10842,6 +11587,18 @@ public function getDeviceUiInfo($modelno, $nodeId = '', array $options = [])
             $deviceConfig = isset($nodeDetails[0]['config']) && is_array($nodeDetails[0]['config'])
                 ? $nodeDetails[0]['config']
                 : [];
+            // Merge local mapping pages so Studio/schema frame names still align
+            // with test_nodes values (Voltage vs Voltage (V)).
+            $localConfig = $this->buildDeviceUiNodeConfig($modelno, $product ?: [], $pageNames, $rows, $nodeId);
+            if (!empty($localConfig)) {
+                $deviceConfig = $this->mergeDeviceUiNodeConfig($deviceConfig, $localConfig, $modelno, $nodeId);
+            }
+            $deviceConfig = $this->enrichDeviceUiInfoFromProduct($deviceConfig, $product ?: []);
+            $deviceConfig = $this->sanitizeDeviceUiDisplayConfig($deviceConfig);
+            if (isset($nodeDetails[0]) && is_array($nodeDetails[0])) {
+                $nodeDetails[0]['config'] = $deviceConfig;
+            }
+            $nodeDetails = $this->sanitizeDeviceUiDisplayNodeDetails($nodeDetails);
             $info = is_array($deviceConfig['info'] ?? null) ? $deviceConfig['info'] : [];
             return [
                 'info' => $info,
@@ -10852,8 +11609,42 @@ public function getDeviceUiInfo($modelno, $nodeId = '', array $options = [])
         }
     }
     $deviceConfig = $this->buildDeviceUiNodeConfig($modelno, $product ?: [], $pageNames, $rows, $nodeId);
+    if ($isV2Model) {
+        $deviceConfig = $this->enrichV2DeviceConfigDisplayValues($deviceConfig);
+    }
+    $deviceConfig = $this->enrichDeviceUiInfoFromProduct($deviceConfig, $product ?: []);
+    $deviceConfig = $this->sanitizeDeviceUiDisplayConfig($deviceConfig);
 
     $live = $skipRemote ? [] : $this->loadDeviceUiLiveProductContext($modelno, $nodeId);
+    $connected = !empty($live['connected']);
+    $outputNodes = !empty($live['output_node_id']) ? $live['output_node_id'] : $nodeId;
+    $statusTimestamp = (int) round(microtime(true) * 1000);
+
+    // V2: optionally pull connectivity/status from test_nodes, but keep V2 pages/values.
+    if (!$skipRemote && $isV2Model) {
+        $testNodes = $this->fetchDeviceUiTestNodes($nodeId);
+        if ($this->isDeviceUiTestNodesPayload($testNodes, $nodeId)) {
+            $remoteDetails = $this->orderDeviceUiNodeDetails($testNodes['node_details'], $nodeId);
+            if (!$remoteDetails && isset($testNodes['node_details'][0]) && is_array($testNodes['node_details'][0])) {
+                $remoteDetails = $testNodes['node_details'];
+            }
+            $remoteConfig = isset($remoteDetails[0]['config']) && is_array($remoteDetails[0]['config'])
+                ? $remoteDetails[0]['config']
+                : [];
+            $deviceConfig = $this->mergeDeviceUiNodeConfig($deviceConfig, $remoteConfig, $modelno, $nodeId);
+            $deviceConfig = $this->enrichV2DeviceConfigDisplayValues($deviceConfig);
+            if (isset($remoteDetails[0]['status']['connectivity']['connected'])) {
+                $connected = !empty($remoteDetails[0]['status']['connectivity']['connected']);
+            }
+            if (!empty($remoteDetails[0]['status']['connectivity']['timestamp'])) {
+                $statusTimestamp = (int) $remoteDetails[0]['status']['connectivity']['timestamp'];
+            }
+            if (!empty($testNodes['nodes'])) {
+                $outputNodes = $testNodes['nodes'];
+            }
+        }
+    }
+
     $info = [
         'brand' => $deviceConfig['info']['brand'] ?? ($product['brand_name'] ?? null),
         'product' => $deviceConfig['info']['product'] ?? ($product['product_name'] ?? null),
@@ -10881,22 +11672,94 @@ public function getDeviceUiInfo($modelno, $nodeId = '', array $options = [])
         return $value !== null && $value !== '' && $value !== [];
     });
 
+    $nodeDetails = [[
+        'id' => $nodeId,
+        'config' => $deviceConfig,
+        'role' => 'primary',
+        'status' => [
+            'connectivity' => [
+                'connected' => $connected,
+                'timestamp' => $statusTimestamp,
+            ],
+        ],
+    ]];
+    $nodeDetails = $this->sanitizeDeviceUiDisplayNodeDetails($nodeDetails);
+    if ($isV2Model) {
+        $nodeDetails = $this->enrichV2NodeDetailsDisplayValues($nodeDetails);
+        $nodeDetails = $this->sanitizeDeviceUiDisplayNodeDetails($nodeDetails);
+        // Optional debug alias only — UI/app still read node_details.
+        return [
+            'info' => $info,
+            'deviceConfig' => $deviceConfig,
+            'node_details' => $nodeDetails,
+            'v2_node_details' => $nodeDetails,
+            'nodes' => $outputNodes,
+        ];
+    }
+
     return [
         'info' => $info,
         'deviceConfig' => $deviceConfig,
-        'node_details' => [[
-            'id' => $nodeId,
-            'config' => $deviceConfig,
-            'role' => 'primary',
-            'status' => [
-                'connectivity' => [
-                    'connected' => !empty($live['connected']),
-                    'timestamp' => (int) round(microtime(true) * 1000),
-                ],
-            ],
-        ]],
-        'nodes' => !empty($live['output_node_id']) ? $live['output_node_id'] : $nodeId,
+        'node_details' => $nodeDetails,
+        'nodes' => $outputNodes,
     ];
+}
+
+/**
+ * Fill missing brand/product/model info from product_api row.
+ */
+private function enrichDeviceUiInfoFromProduct(array $deviceConfig, array $product)
+{
+    if (!isset($deviceConfig['info']) || !is_array($deviceConfig['info'])) {
+        $deviceConfig['info'] = [];
+    }
+    $info = &$deviceConfig['info'];
+    $map = [
+        'brand' => $product['brand_name'] ?? null,
+        'product' => $product['product_name'] ?? null,
+        'model' => $product['model_name'] ?? null,
+        'name' => $product['product_name'] ?? null,
+    ];
+    foreach ($map as $key => $value) {
+        $value = is_scalar($value) ? trim((string) $value) : '';
+        if ($value === '') {
+            continue;
+        }
+        if (!isset($info[$key]) || $info[$key] === null || $info[$key] === '') {
+            $info[$key] = $value;
+        }
+    }
+    if (!array_key_exists('chat_status', $info) || $info['chat_status'] === null || $info['chat_status'] === '') {
+        $info['chat_status'] = 0;
+    }
+
+    return $deviceConfig;
+}
+
+private function sanitizeDeviceUiDisplayConfig(array $deviceConfig)
+{
+    self::loadDeviceUiDisplaySanitizer();
+    if (!class_exists(DeviceUiDisplaySanitizer::class, false) || $deviceConfig === []) {
+        return $deviceConfig;
+    }
+    try {
+        return DeviceUiDisplaySanitizer::sanitizeDeviceConfig($deviceConfig);
+    } catch (\Throwable $exception) {
+        return $deviceConfig;
+    }
+}
+
+private function sanitizeDeviceUiDisplayNodeDetails(array $nodeDetails)
+{
+    self::loadDeviceUiDisplaySanitizer();
+    if (!class_exists(DeviceUiDisplaySanitizer::class, false) || $nodeDetails === []) {
+        return $nodeDetails;
+    }
+    try {
+        return DeviceUiDisplaySanitizer::sanitizeNodeDetails($nodeDetails);
+    } catch (\Throwable $exception) {
+        return $nodeDetails;
+    }
 }
 
 public function getDeviceUiBrandLogoAsset($modelno = '', $nodeId = '', $vendorProductId = 0)
