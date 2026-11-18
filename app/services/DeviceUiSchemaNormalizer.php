@@ -151,6 +151,23 @@ class DeviceUiSchemaNormalizer
         $schema = self::applyLiveValueLoadingFlags($schema);
         // Keep MQTT enableWhen + Flutter state.online in sync with connectivity.
         $schema = self::syncOnlineStateFromConnectivity($schema);
+        // Last: bytewise command slots that share a byte cannot be packed.
+        // Move only the later colliding slot. Same keys, no invented protocol bytes.
+        $overlapReport = ['repairedByteFields' => []];
+        $schema = self::repairKnownCommandFrames($schema, $overlapReport);
+        if (!empty($overlapReport['repairedByteFields'])
+            && isset($schema['meta']['canonicalValidation'])
+            && is_array($schema['meta']['canonicalValidation'])
+        ) {
+            $existingRepairs = isset($schema['meta']['canonicalValidation']['repairedByteFields'])
+                && is_array($schema['meta']['canonicalValidation']['repairedByteFields'])
+                ? $schema['meta']['canonicalValidation']['repairedByteFields']
+                : [];
+            $schema['meta']['canonicalValidation']['repairedByteFields'] = array_values(array_unique(array_merge(
+                $existingRepairs,
+                $overlapReport['repairedByteFields']
+            )));
+        }
 
         if (!isset($schema['meta']) || !is_array($schema['meta'])) {
             $schema['meta'] = [];
@@ -3276,7 +3293,233 @@ class DeviceUiSchemaNormalizer
             $normalized[] = $field;
         }
 
+        if ($bucket === 'commands') {
+            $normalized = self::separateOverlappingBytewiseSlots(
+                $normalized,
+                $report,
+                ($frameName !== '' ? $frameName : 'frame') . '.commands'
+            );
+        }
+
         return $normalized;
+    }
+
+    /**
+     * Two bytewise command slots on the same byte cannot be packed into one frame.
+     * Keep field order, names, values and lengths. When a later bytewise slot
+     * overlaps an earlier one, move that later slot to the next free byte and
+     * shift only the slots that then collide. Bitwise slots stay put so a shared
+     * byte with different bit ranges remains valid. Gaps that do not overlap
+     * are left alone. Nothing is added, removed, renamed, or invented.
+     */
+    private static function separateOverlappingBytewiseSlots(array $fields, array &$report, $label)
+    {
+        $ranges = [];
+        foreach ($fields as $index => $field) {
+            if (!is_array($field)) {
+                continue;
+            }
+            $name = self::frameFieldName($field);
+            $bytes = self::resolveCommandByteCount($field);
+            $start = isset($field['byte_start_position']) ? (int) $field['byte_start_position'] : 0;
+            if ($start === 0 && $name === 'trigger') {
+                continue;
+            }
+            $level = strtolower(trim((string) (
+                isset($field['field_level']) ? $field['field_level'] : (isset($field['fieldLevel']) ? $field['fieldLevel'] : '')
+            )));
+            if ($level === 'bitwise' || $start < 1 || $bytes < 1) {
+                continue;
+            }
+
+            $end = $start + $bytes;
+            $overlaps = false;
+            foreach ($ranges as $range) {
+                if ($start < $range[1] && $end > $range[0]) {
+                    $overlaps = true;
+                    break;
+                }
+            }
+            if ($overlaps) {
+                $nextFree = 1;
+                foreach ($ranges as $range) {
+                    if ($range[1] > $nextFree) {
+                        $nextFree = $range[1];
+                    }
+                }
+                $start = $nextFree;
+                $end = $start + $bytes;
+                $field['byte_start_position'] = $start;
+                $fields[$index] = $field;
+                $report['repairedByteFields'][] = $label . '.' . (self::frameFieldLabel($field) ?: 'field') . '.byteOverlap';
+            }
+            $ranges[] = [$start, $end];
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Apply the overlap repair to every command list the app can pack from.
+     * Response and error lists are not command frames and are left unchanged.
+     */
+    private static function repairKnownCommandFrames(array $schema, array &$report)
+    {
+        if (isset($schema['controls']) && is_array($schema['controls'])) {
+            foreach ($schema['controls'] as $index => $control) {
+                if (!is_array($control)) {
+                    continue;
+                }
+                $id = trim((string) (isset($control['id']) ? $control['id'] : ('controls[' . $index . ']')));
+                $schema['controls'][$index] = self::repairControlCommandFrames($control, $report, $id);
+            }
+        }
+
+        if (isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])) {
+            $schema['deviceConfig'] = self::repairConfigCommandFrames($schema['deviceConfig'], $report, 'deviceConfig');
+        }
+        if (isset($schema['state']['device']['config']) && is_array($schema['state']['device']['config'])) {
+            $schema['state']['device']['config'] = self::repairConfigCommandFrames(
+                $schema['state']['device']['config'],
+                $report,
+                'state.device.config'
+            );
+        }
+        if (isset($schema['deviceState']['config']) && is_array($schema['deviceState']['config'])) {
+            $schema['deviceState']['config'] = self::repairConfigCommandFrames(
+                $schema['deviceState']['config'],
+                $report,
+                'deviceState.config'
+            );
+        }
+        foreach (['node_details', 'v2_node_details'] as $listKey) {
+            if (!isset($schema[$listKey]) || !is_array($schema[$listKey])) {
+                continue;
+            }
+            foreach ($schema[$listKey] as $index => $detail) {
+                if (!is_array($detail) || !isset($detail['config']) || !is_array($detail['config'])) {
+                    continue;
+                }
+                $schema[$listKey][$index]['config'] = self::repairConfigCommandFrames(
+                    $detail['config'],
+                    $report,
+                    $listKey . '[' . $index . '].config'
+                );
+            }
+        }
+        if (isset($schema['extensions']['serverDrivenUi']) && is_array($schema['extensions']['serverDrivenUi'])) {
+            $sdui = $schema['extensions']['serverDrivenUi'];
+            if (isset($sdui['controls']) && is_array($sdui['controls'])) {
+                foreach ($sdui['controls'] as $index => $control) {
+                    if (!is_array($control)) {
+                        continue;
+                    }
+                    $id = trim((string) (isset($control['id']) ? $control['id'] : ('sdui.controls[' . $index . ']')));
+                    $sdui['controls'][$index] = self::repairControlCommandFrames($control, $report, $id);
+                }
+            }
+            if (isset($sdui['deviceConfig']) && is_array($sdui['deviceConfig'])) {
+                $sdui['deviceConfig'] = self::repairConfigCommandFrames($sdui['deviceConfig'], $report, 'sdui.deviceConfig');
+            }
+            $schema['extensions']['serverDrivenUi'] = $sdui;
+        }
+
+        return $schema;
+    }
+
+    private static function repairControlCommandFrames(array $control, array &$report, $label)
+    {
+        if (isset($control['deviceFrame']['commands']) && is_array($control['deviceFrame']['commands'])) {
+            $control['deviceFrame']['commands'] = self::separateOverlappingBytewiseSlots(
+                $control['deviceFrame']['commands'],
+                $report,
+                $label . '.deviceFrame.commands'
+            );
+        }
+        if (isset($control['protocolMeta']['frame']['commands']) && is_array($control['protocolMeta']['frame']['commands'])) {
+            $control['protocolMeta']['frame']['commands'] = self::separateOverlappingBytewiseSlots(
+                $control['protocolMeta']['frame']['commands'],
+                $report,
+                $label . '.protocolMeta.frame.commands'
+            );
+        }
+        if (isset($control['commands']) && self::looksLikeCommandFieldList($control['commands'])) {
+            $control['commands'] = self::separateOverlappingBytewiseSlots(
+                $control['commands'],
+                $report,
+                $label . '.commands'
+            );
+        }
+        if (isset($control['protocolMeta']['ui_components']) && is_array($control['protocolMeta']['ui_components'])) {
+            foreach ($control['protocolMeta']['ui_components'] as $index => $component) {
+                if (!is_array($component) || !isset($component['frame']['commands']) || !is_array($component['frame']['commands'])) {
+                    continue;
+                }
+                $component['frame']['commands'] = self::separateOverlappingBytewiseSlots(
+                    $component['frame']['commands'],
+                    $report,
+                    $label . '.ui_components[' . $index . '].frame.commands'
+                );
+                $control['protocolMeta']['ui_components'][$index] = $component;
+            }
+        }
+
+        return $control;
+    }
+
+    private static function repairConfigCommandFrames(array $config, array &$report, $label)
+    {
+        if (!isset($config['devices']) || !is_array($config['devices'])) {
+            return $config;
+        }
+        foreach ($config['devices'] as $deviceIndex => $device) {
+            if (!is_array($device) || !isset($device['pages']) || !is_array($device['pages'])) {
+                continue;
+            }
+            foreach ($device['pages'] as $pageKey => $pageFrames) {
+                if (!is_array($pageFrames)) {
+                    continue;
+                }
+                foreach ($pageFrames as $frameIndex => $item) {
+                    if (!is_array($item)) {
+                        continue;
+                    }
+                    $path = $label . '.devices[' . $deviceIndex . '].pages.' . $pageKey . '[' . $frameIndex . ']';
+                    if (isset($item['frame']['commands']) && is_array($item['frame']['commands'])) {
+                        $item['frame']['commands'] = self::separateOverlappingBytewiseSlots(
+                            $item['frame']['commands'],
+                            $report,
+                            $path . '.frame.commands'
+                        );
+                    } elseif (self::looksLikeCommandFieldList(isset($item['commands']) ? $item['commands'] : null)) {
+                        $item['commands'] = self::separateOverlappingBytewiseSlots(
+                            $item['commands'],
+                            $report,
+                            $path . '.commands'
+                        );
+                    }
+                    $config['devices'][$deviceIndex]['pages'][$pageKey][$frameIndex] = $item;
+                }
+            }
+        }
+
+        return $config;
+    }
+
+    private static function looksLikeCommandFieldList($fields)
+    {
+        if (!self::isList($fields) || $fields === []) {
+            return false;
+        }
+        $sample = $fields[0];
+        if (!is_array($sample)) {
+            return false;
+        }
+
+        return array_key_exists('byte_start_position', $sample)
+            || array_key_exists('no_of_bytes', $sample)
+            || array_key_exists('default_name', $sample)
+            || array_key_exists('Field_description', $sample);
     }
 
     private static function isEmptyFrameSlot(array $field)

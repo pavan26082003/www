@@ -1037,8 +1037,17 @@ class AppHomePageModel
     public function getSchema(int $userId): array
     {
         $this->ensureTable();
-        $this->ensureUserDefaults($userId);
-        $this->syncSchemaFromLayout($userId);
+        try {
+            $this->ensureUserDefaults($userId);
+        } catch (\Throwable $e) {
+            log_message('error', 'App home ensureUserDefaults failed for user_id=' . $userId . ': ' . $e->getMessage());
+        }
+        try {
+            $this->syncSchemaFromLayout($userId);
+        } catch (\Throwable $e) {
+            // Never block serving a previously saved schema if sync/rebuild fails.
+            log_message('error', 'App home syncSchemaFromLayout failed for user_id=' . $userId . ': ' . $e->getMessage());
+        }
         $record = $this->getRecord($userId);
 
         if (!$record || $record['schema_json'] === null || $record['schema_json'] === '') {
@@ -1051,20 +1060,41 @@ class AppHomePageModel
         }
 
         // Live identity + Recent Activity on top of the saved Home schema.
-        $data = $this->applyLiveUserProfileToSchema($data, $userId);
-        if (class_exists(\App\Libraries\GridSduiSchemaBuilder::class)) {
-            $ssoToken = '';
-            if ($userId > 0 && class_exists(\App\Libraries\GridWebSso::class)) {
-                $ssoToken = \App\Libraries\GridWebSso::issue($userId);
+        try {
+            $data = $this->applyLiveUserProfileToSchema($data, $userId);
+            if (class_exists(\App\Libraries\GridSduiSchemaBuilder::class)) {
+                $ssoToken = '';
+                if ($userId > 0 && class_exists(\App\Libraries\GridWebSso::class)) {
+                    $ssoToken = \App\Libraries\GridWebSso::issue($userId);
+                }
+                $data = \App\Libraries\GridSduiSchemaBuilder::patchRecentActivity($data, $userId, $ssoToken);
             }
-            $data = \App\Libraries\GridSduiSchemaBuilder::patchRecentActivity($data, $userId, $ssoToken);
+
+            $schema = $this->attachGridDataSource($this->normalizeSmartphoneBreakpoints($data), $userId);
+            $schema = $this->prepareRatingOpenUrlForClient($schema, $userId);
+            $schema = $this->applyAccountAppearanceToSchema($schema, $userId);
+
+            return \App\Libraries\AppHomeSchemaSigner::attachSignature($schema);
+        } catch (\Throwable $e) {
+            log_message('error', 'App home live enrich failed for user_id=' . $userId . ': ' . $e->getMessage());
+            // Fall back to the last published schema_json so the public API still works.
+            return $data;
         }
+    }
 
-        $schema = $this->attachGridDataSource($this->normalizeSmartphoneBreakpoints($data), $userId);
-        $schema = $this->prepareRatingOpenUrlForClient($schema, $userId);
-        $schema = $this->applyAccountAppearanceToSchema($schema, $userId);
+    /**
+     * Last saved schema_json only (no sync / live enrich). Used as API fallback.
+     */
+    public function getStoredSchemaOnly(int $userId): array
+    {
+        $this->ensureTable();
+        $record = $this->getRecord($userId);
+        if (!$record || $record['schema_json'] === null || $record['schema_json'] === '') {
+            return array();
+        }
+        $data = json_decode((string) $record['schema_json'], true);
 
-        return \App\Libraries\AppHomeSchemaSigner::attachSignature($schema);
+        return is_array($data) ? $data : array();
     }
 
     /**

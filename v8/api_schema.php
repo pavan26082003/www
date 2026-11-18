@@ -19,6 +19,8 @@ if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS
 }
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/schema_http_helpers.php';
+require_once __DIR__ . '/schema_compact_helpers.php';
 
 if (!isset($db)) {
     echo json_encode([
@@ -72,9 +74,15 @@ if ($page_no === '' && isset($_GET['pageNo'])) {
 }
 $requestedModelNo = $model_no;
 $requestedNodeId = $node_id;
+$wantCompact = function_exists('efactor_schema_wants_compact') && efactor_schema_wants_compact();
+$revisionOnly = function_exists('efactor_schema_is_revision_only') && efactor_schema_is_revision_only($part);
 $deliveryMode = class_exists('\\App\\Services\\DeviceUiSchemaPageSlicer', false)
     ? \App\Services\DeviceUiSchemaPageSlicer::resolveMode($part, $page_no)
     : 'full';
+if ($revisionOnly) {
+    // Override slicer "full" when client asks for revision-only probe.
+    $deliveryMode = 'revision';
+}
 
 if ($model_no === '') {
     echo json_encode([
@@ -84,42 +92,121 @@ if ($model_no === '') {
     exit();
 }
 
-// Always create/refresh from current pages+APIs before serving.
-// Previously this ran only when no device_ui_schemas row existed, so models with
-// an older saved schema kept serving stale UI until Design Studio "Save Changes".
-try {
-    require_once __DIR__ . '/bootstrap_device_ui_schema.php';
-    if (function_exists('efactor_ensure_device_ui_schema')) {
-        efactor_ensure_device_ui_schema($model_no, $node_id);
-    }
-} catch (Throwable $exception) {
-    error_log('v8 auto schema sync failed: ' . $exception->getMessage());
-}
-
 $model_no_sql = $db->escape($model_no);
-$sql = "SELECT *
+
+// Cheap metadata read first so a warm cache can skip ensure/normalize (same JSON shape).
+$schemaMetaSql = "SELECT id, updated_at, node_id
         FROM device_ui_schemas
         WHERE model_name = '$model_no_sql'";
-
 if ($node_id !== '') {
     $node_id_sql = $db->escape($node_id);
-    $sql .= " AND node_id = '$node_id_sql'";
+    $schemaMetaSql .= " AND node_id = '$node_id_sql'";
 }
-
-$sql .= ' ORDER BY updated_at DESC, id DESC LIMIT 1';
-$schema = $db->get_row($sql);
-
-// If the requested node_id is not stored on the row, still serve the latest model schema.
-if (!$schema && $requestedNodeId !== '') {
-    $sql = "SELECT *
+$schemaMetaSql .= ' ORDER BY updated_at DESC, id DESC LIMIT 1';
+$schemaMeta = $db->get_row($schemaMetaSql);
+if (!$schemaMeta && $requestedNodeId !== '') {
+    $schemaMetaSql = "SELECT id, updated_at, node_id
             FROM device_ui_schemas
             WHERE model_name = '$model_no_sql'
             ORDER BY updated_at DESC, id DESC
             LIMIT 1";
-    $schema = $db->get_row($sql);
+    $schemaMeta = $db->get_row($schemaMetaSql);
 }
 
-if (!$schema) {
+$schemaUpdatedAtEarly = is_array($schemaMeta) && isset($schemaMeta['updated_at'])
+    ? (string) $schemaMeta['updated_at']
+    : '';
+
+// Tiny revision-only probe — no ensure/normalize/full JSON (for future app short-circuit).
+if ($revisionOnly) {
+    $revision = 0;
+    if ($schemaUpdatedAtEarly !== '') {
+        $ts = strtotime($schemaUpdatedAtEarly);
+        if ($ts) {
+            $revision = (int) $ts;
+        }
+    }
+    $revisionBody = json_encode([
+        'status' => $revision > 0,
+        'message' => $revision > 0 ? 'Schema revision' : 'Schema not found',
+        'model_no' => $requestedModelNo,
+        'node_id' => $requestedNodeId !== '' ? $requestedNodeId : null,
+        'schemaRevision' => $revision,
+        'revision' => $revision,
+        'updated_at' => $schemaUpdatedAtEarly !== '' ? $schemaUpdatedAtEarly : null,
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    if (!is_string($revisionBody)) {
+        $revisionBody = '{"status":false,"message":"Schema revision encode failed"}';
+    }
+    if (!headers_sent()) {
+        header('X-Schema-Part: revision');
+        if ($revision > 0) {
+            header('ETag: "rev-' . $revision . '"');
+        }
+    }
+    efactor_schema_emit_json_body($revisionBody);
+    exit();
+}
+
+$schemaCacheKey = '';
+$cachedBody = null;
+if ($schemaUpdatedAtEarly !== '') {
+    $schemaCacheKey = efactor_schema_cache_key([
+        'api_schema',
+        $requestedModelNo,
+        $requestedNodeId,
+        $deliveryMode,
+        $part,
+        $page_no,
+        $wantCompact ? 'compact-v1' : 'full',
+        $schemaUpdatedAtEarly,
+    ]);
+    // 10 minutes: layout rarely changes; Studio save bumps updated_at and misses cache.
+    $cachedBody = efactor_schema_cache_get($schemaCacheKey, 600);
+}
+
+$body = false;
+$schemaUpdatedAt = $schemaUpdatedAtEarly;
+$servedFromCache = false;
+
+if (is_string($cachedBody) && $cachedBody !== '') {
+    $body = $cachedBody;
+    $servedFromCache = true;
+} else {
+    // Create/refresh from current pages+APIs before serving (cache miss / first publish).
+    try {
+        require_once __DIR__ . '/bootstrap_device_ui_schema.php';
+        if (function_exists('efactor_ensure_device_ui_schema')) {
+            efactor_ensure_device_ui_schema($model_no, $node_id);
+        }
+    } catch (Throwable $exception) {
+        error_log('v8 auto schema sync failed: ' . $exception->getMessage());
+    }
+
+    $sql = "SELECT *
+            FROM device_ui_schemas
+            WHERE model_name = '$model_no_sql'";
+
+    if ($node_id !== '') {
+        $node_id_sql = $db->escape($node_id);
+        $sql .= " AND node_id = '$node_id_sql'";
+    }
+
+    $sql .= ' ORDER BY updated_at DESC, id DESC LIMIT 1';
+    $schema = $db->get_row($sql);
+
+    // If the requested node_id is not stored on the row, still serve the latest model schema.
+    if (!$schema && $requestedNodeId !== '') {
+        $sql = "SELECT *
+                FROM device_ui_schemas
+                WHERE model_name = '$model_no_sql'
+                ORDER BY updated_at DESC, id DESC
+                LIMIT 1";
+        $schema = $db->get_row($sql);
+    }
+}
+
+if (!$servedFromCache && empty($schema)) {
     // Tell the caller why, so a missing schema can be traced to a model name or a
     // node that was never published instead of looking like a transport failure.
     $knownNodes = [];
@@ -171,20 +258,22 @@ if (!$schema) {
 }
 
 $storedSchemaJson = '';
-if (isset($schema['schema_json']) && is_string($schema['schema_json'])) {
-    $storedSchemaJson = $schema['schema_json'];
-    unset($schema['schema_json']);
+if (!$servedFromCache) {
+    if (isset($schema['schema_json']) && is_string($schema['schema_json'])) {
+        $storedSchemaJson = $schema['schema_json'];
+        unset($schema['schema_json']);
+    }
+
+    $schemaUpdatedAt = isset($schema['updated_at']) ? (string) $schema['updated_at'] : $schemaUpdatedAt;
+    if ($requestedNodeId !== '') {
+        $schema['node_id'] = $requestedNodeId;
+    }
 }
 
 $isSplitSchema = $storedSchemaJson !== ''
     && strpos($storedSchemaJson, '"schemaStorage"') !== false
     && strpos($storedSchemaJson, 'split-v1') !== false;
-$serveStoredJson = $storedSchemaJson !== '' && !$isSplitSchema && $deliveryMode === 'full';
-
-$schemaUpdatedAt = isset($schema['updated_at']) ? (string) $schema['updated_at'] : '';
-if ($requestedNodeId !== '') {
-    $schema['node_id'] = $requestedNodeId;
-}
+$serveStoredJson = !$servedFromCache && $storedSchemaJson !== '' && !$isSplitSchema && $deliveryMode === 'full';
 
 /**
  * Build absolute api_schema.php URL for paging links.
@@ -216,7 +305,8 @@ $efactor_finalize_schema_response = static function (array $row, array $decoded)
     $part,
     $page_no,
     $schemaUpdatedAt,
-    $efactor_schema_api_base
+    $efactor_schema_api_base,
+    $wantCompact
 ) {
     $resolvedNodeId = $requestedNodeId !== ''
         ? $requestedNodeId
@@ -249,6 +339,25 @@ $efactor_finalize_schema_response = static function (array $row, array $decoded)
             $decoded['state']['node_id'] = $resolvedNodeId;
         }
     }
+
+    // Additive revision for app layout cache (numeric; app skips re-sync when ≤ cached).
+    // Does not remove any fields — older clients ignore unknown keys.
+    $revision = 0;
+    if ($schemaUpdatedAt !== '') {
+        $revisionTs = strtotime($schemaUpdatedAt);
+        if ($revisionTs) {
+            $revision = (int) $revisionTs;
+        }
+    }
+    if ($revision <= 0) {
+        $revision = (int) time();
+    }
+    $decoded['schemaRevision'] = $revision;
+    $decoded['revision'] = $revision;
+    if (!isset($decoded['meta']) || !is_array($decoded['meta'])) {
+        $decoded['meta'] = [];
+    }
+    $decoded['meta']['schemaRevision'] = $revision;
 
     $paging = null;
     $message = 'Schema found';
@@ -291,6 +400,12 @@ $efactor_finalize_schema_response = static function (array $row, array $decoded)
         $activeMode = $sliced['mode'] ?? $activeMode;
     }
 
+    // Phase B opt-in compact projection (default remains full for older apps).
+    if ($wantCompact && function_exists('efactor_schema_apply_compact')) {
+        $decoded = efactor_schema_apply_compact($decoded, $requestedModelNo, $resolvedNodeId);
+        $message = 'Schema found (compact-v1)';
+    }
+
     $row['schema_json'] = $decoded;
     $payload = [
         'status' => true,
@@ -305,6 +420,9 @@ $efactor_finalize_schema_response = static function (array $row, array $decoded)
             $payload['paging'] = $paging;
         }
     }
+    if ($wantCompact) {
+        $payload['projection'] = 'compact-v1';
+    }
 
     $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     unset($decoded, $row, $paging);
@@ -312,71 +430,88 @@ $efactor_finalize_schema_response = static function (array $row, array $decoded)
     return ['body' => $body, 'ok' => true];
 };
 
-$body = false;
+if (!$servedFromCache) {
+    $body = false;
 
-if ($serveStoredJson) {
-    // Fast path used to splice raw schema_json. Still normalize so contract
-    // fixes (send icon, sendButton, empty props {}, ParameterCard children)
-    // reach the app without requiring a republish.
-    $decodedFast = null;
-    if (class_exists('\\App\\Services\\DeviceUiSchemaGenerator', false)) {
-        $decodedFast = \App\Services\DeviceUiSchemaGenerator::decode($storedSchemaJson);
-    } else {
-        $decodedFast = json_decode($storedSchemaJson, true);
-        if (json_last_error() !== JSON_ERROR_NONE || !is_array($decodedFast)) {
-            $decodedFast = null;
-        }
-    }
-
-    if (is_array($decodedFast)) {
-        $finalized = $efactor_finalize_schema_response($schema, $decodedFast);
-        $body = $finalized['body'];
-        unset($decodedFast, $storedSchemaJson, $schema);
-    } else {
-        $rowJson = json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if ($rowJson !== false && substr($rowJson, -1) === '}') {
-            $body = '{"status":true,"message":"Schema found","data":'
-                . substr($rowJson, 0, -1)
-                . ',"schema_json":' . $storedSchemaJson
-                . '}}';
-            unset($storedSchemaJson, $rowJson, $schema);
+    if ($serveStoredJson) {
+        // Fast path used to splice raw schema_json. Still normalize so contract
+        // fixes (send icon, sendButton, empty props {}, ParameterCard children)
+        // reach the app without requiring a republish.
+        $decodedFast = null;
+        if (class_exists('\\App\\Services\\DeviceUiSchemaGenerator', false)) {
+            $decodedFast = \App\Services\DeviceUiSchemaGenerator::decode($storedSchemaJson);
         } else {
-            unset($rowJson);
-            $body = false;
+            $decodedFast = json_decode($storedSchemaJson, true);
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($decodedFast)) {
+                $decodedFast = null;
+            }
         }
-    }
-} else {
-    $decoded = null;
-    if ($storedSchemaJson !== '' && class_exists('\\App\\Services\\DeviceUiSchemaGenerator', false)) {
-        $decoded = \App\Services\DeviceUiSchemaGenerator::decode($storedSchemaJson);
-    } elseif ($storedSchemaJson !== '') {
-        $decoded = json_decode($storedSchemaJson, true);
-        if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
-            $decoded = null;
-        }
-    }
-    unset($storedSchemaJson);
 
-    if (is_array($decoded)) {
-        $finalized = $efactor_finalize_schema_response($schema, $decoded);
-        $body = $finalized['body'];
-        unset($decoded, $schema);
+        if (is_array($decodedFast)) {
+            $finalized = $efactor_finalize_schema_response($schema, $decodedFast);
+            $body = $finalized['body'];
+            unset($decodedFast, $storedSchemaJson, $schema);
+        } else {
+            $rowJson = json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if ($rowJson !== false && substr($rowJson, -1) === '}') {
+                $body = '{"status":true,"message":"Schema found","data":'
+                    . substr($rowJson, 0, -1)
+                    . ',"schema_json":' . $storedSchemaJson
+                    . '}}';
+                unset($storedSchemaJson, $rowJson, $schema);
+            } else {
+                unset($rowJson);
+                $body = false;
+            }
+        }
     } else {
-        $body = json_encode([
-            'status' => true,
-            'message' => 'Schema found',
-            'data' => $schema,
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        unset($schema);
-    }
-}
+        $decoded = null;
+        if ($storedSchemaJson !== '' && class_exists('\\App\\Services\\DeviceUiSchemaGenerator', false)) {
+            $decoded = \App\Services\DeviceUiSchemaGenerator::decode($storedSchemaJson);
+        } elseif ($storedSchemaJson !== '') {
+            $decoded = json_decode($storedSchemaJson, true);
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+                $decoded = null;
+            }
+        }
+        unset($storedSchemaJson);
 
-if ($body === false) {
-    echo json_encode([
-        'status' => false,
-        'message' => 'Schema encode failed',
-    ]);
-    exit();
+        if (is_array($decoded)) {
+            $finalized = $efactor_finalize_schema_response($schema, $decoded);
+            $body = $finalized['body'];
+            unset($decoded, $schema);
+        } else {
+            $body = json_encode([
+                'status' => true,
+                'message' => 'Schema found',
+                'data' => $schema,
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            unset($schema);
+        }
+    }
+
+    if ($body === false) {
+        echo json_encode([
+            'status' => false,
+            'message' => 'Schema encode failed',
+        ]);
+        exit();
+    }
+
+    // Refresh cache key if ensure/sync bumped updated_at.
+    if ($schemaUpdatedAt !== '') {
+        $schemaCacheKey = efactor_schema_cache_key([
+            'api_schema',
+            $requestedModelNo,
+            $requestedNodeId,
+            $deliveryMode,
+            $part,
+            $page_no,
+            $wantCompact ? 'compact-v1' : 'full',
+            $schemaUpdatedAt,
+        ]);
+        efactor_schema_cache_set($schemaCacheKey, $body);
+    }
 }
 
 // ETag must be stable for identical schema content. Every request re-stamps
@@ -428,7 +563,8 @@ if ($ifNoneMatch !== '') {
 }
 
 if (!headers_sent()) {
-    header('Content-Length: ' . strlen($body));
+    header('X-Schema-Cache: ' . ($servedFromCache ? 'HIT' : 'MISS'));
+    header('X-Schema-Projection: ' . ($wantCompact ? 'compact-v1' : 'full'));
 }
-echo $body;
+efactor_schema_emit_json_body($body);
 exit();

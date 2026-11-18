@@ -14,6 +14,14 @@ header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Accept, Authorization, X-Requested-With');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: private, no-cache, max-age=0, must-revalidate');
+header('Vary: Accept-Encoding');
+
+@ini_set('display_errors', '0');
+@ini_set('memory_limit', '512M');
+@ini_set('max_execution_time', '120');
+@set_time_limit(120);
+
+require_once __DIR__ . '/schema_http_helpers.php';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
     http_response_code(204);
@@ -23,7 +31,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
 function api_creation_json(array $payload, int $status = 200): void
 {
     http_response_code($status);
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($body)) {
+        $body = '{"success":false,"message":"Schema encode failed"}';
+        http_response_code(500);
+    }
+    efactor_schema_emit_json_body($body);
     exit;
 }
 
@@ -74,6 +87,30 @@ if ($userId < 1) {
     ), 400);
 }
 
+// Warm cache: same JSON shape; keyed by user + schema contentHash/updated stamp when known.
+$homeCacheProbeKey = efactor_schema_cache_key(array('api_creation', 'get_schema', (string) $userId));
+// Probe uses a short-lived sticky key; real key includes contentHash after build.
+$cachedHome = efactor_schema_cache_get($homeCacheProbeKey, 60);
+if (is_string($cachedHome) && $cachedHome !== '' && strpos($cachedHome, '"success":true') !== false) {
+    $cachedHash = '';
+    if (preg_match('/"contentHash":"([a-f0-9]+)"/', $cachedHome, $hashMatch)) {
+        $cachedHash = substr($hashMatch[1], 0, 32);
+    }
+    if (!headers_sent()) {
+        header('X-Schema-Cache: HIT');
+        if ($cachedHash !== '') {
+            header('ETag: "' . $cachedHash . '"');
+        }
+    }
+    $ifNoneMatch = trim((string) ($_SERVER['HTTP_IF_NONE_MATCH'] ?? ''));
+    if ($ifNoneMatch !== '' && $cachedHash !== '' && trim($ifNoneMatch, '"') === $cachedHash) {
+        http_response_code(304);
+        exit;
+    }
+    efactor_schema_emit_json_body($cachedHome);
+    exit;
+}
+
 api_creation_require_bootstrap();
 
 try {
@@ -85,12 +122,32 @@ try {
         ), 500);
     }
 
-    $schema = $model->getSchema($userId);
+    $schema = array();
+    $loadError = '';
+    try {
+        $schema = $model->getSchema($userId);
+    } catch (Throwable $e) {
+        $loadError = $e->getMessage();
+        error_log('api_creation getSchema failed user_id=' . $userId . ': ' . $loadError);
+        if (method_exists($model, 'getStoredSchemaOnly')) {
+            $schema = $model->getStoredSchemaOnly($userId);
+        }
+    }
+    if ((!is_array($schema) || empty($schema)) && method_exists($model, 'getStoredSchemaOnly')) {
+        $schema = $model->getStoredSchemaOnly($userId);
+    }
     if (!is_array($schema) || empty($schema)) {
+        $meta = method_exists($model, 'getSettingsMeta') ? $model->getSettingsMeta($userId) : array();
         api_creation_json(array(
             'success' => false,
             'message' => 'No saved App Home schema was found for this user.',
             'user_id' => $userId,
+            'has_layout' => !empty($meta['has_layout']),
+            'has_schema' => !empty($meta['has_schema']),
+            'hint' => !empty($meta['has_layout']) && empty($meta['has_schema'])
+                ? 'Layout exists but schema_json is empty. Click Save again in App Home Designer after Schema is generated.'
+                : 'No app_home_page_settings row / schema for this user_id.',
+            'error' => $loadError !== '' ? $loadError : null,
         ), 404);
     }
 
@@ -101,20 +158,60 @@ try {
 
     $version = (string) ($schema['schemaVersion'] ?? $schema['schema_version'] ?? '1.0.0');
     $updatedAt = (string) ($schema['generatedAt'] ?? $schema['updated_at'] ?? '');
+
+    // Additive revision for layout freshness (older clients ignore unknown keys).
+    $revision = 0;
+    if ($updatedAt !== '') {
+        $ts = strtotime(preg_replace('/\s+IST$/', '', $updatedAt));
+        if ($ts) {
+            $revision = (int) $ts;
+        }
+    }
+    if (!isset($schema['schemaRevision'])) {
+        $schema['schemaRevision'] = $revision > 0 ? $revision : 1;
+    }
+    if (!isset($schema['revision'])) {
+        $schema['revision'] = $schema['schemaRevision'];
+    }
+    $revision = (int) $schema['schemaRevision'];
+
     $hashSource = json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $contentHash = is_string($hashSource) ? hash('sha256', $hashSource) : '';
 
-    api_creation_json(array(
+    $payload = array(
         'success' => true,
         'user_id' => $userId,
         'schema_version' => $version,
         'updated_at' => $updatedAt !== '' ? $updatedAt : null,
         'contentHash' => $contentHash,
+        'schemaRevision' => $revision,
+        'revision' => $revision,
         'schema' => $schema,
-    ));
+    );
+    $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($body)) {
+        api_creation_json(array(
+            'success' => false,
+            'message' => 'Unable to encode the app home schema.',
+        ), 500);
+    }
+
+    efactor_schema_cache_set($homeCacheProbeKey, $body);
+    if (!headers_sent()) {
+        header('X-Schema-Cache: MISS');
+        if ($contentHash !== '') {
+            header('ETag: "' . substr($contentHash, 0, 32) . '"');
+        }
+    }
+    http_response_code(200);
+    efactor_schema_emit_json_body($body);
+    exit;
 } catch (Throwable $e) {
+    error_log('api_creation get_schema failed: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
     api_creation_json(array(
         'success' => false,
         'message' => 'Unable to load the app home schema.',
+        'error' => $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine(),
+        'user_id' => $userId,
     ), 500);
 }

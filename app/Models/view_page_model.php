@@ -10975,11 +10975,14 @@ private function ensureDeviceUiWriteFieldSlots(array $commands, array $meta = []
 /**
  * Gives every surviving command slot a positive byte_start_position and a
  * no_of_bytes of at least 1. Trigger may legitimately sit at position 0.
+ * Bytewise slots that share a byte are separated in existing order so the
+ * app can pack the frame. Bitwise slots are not moved.
  */
 private function repairDeviceUiFrameBytePositions(array $fields)
 {
     $nextPosition = 1;
     $repaired = [];
+    $ranges = [];
     foreach ($fields as $field) {
         if (!is_array($field)) {
             continue;
@@ -10997,6 +11000,24 @@ private function repairDeviceUiFrameBytePositions(array $fields)
         }
         if ($start < 1) {
             $start = $nextPosition;
+        }
+        $level = strtolower(trim((string) ($field['field_level'] ?? ($field['fieldLevel'] ?? ''))));
+        if ($level !== 'bitwise') {
+            $end = $start + $bytes;
+            foreach ($ranges as $range) {
+                if ($start < $range[1] && $end > $range[0]) {
+                    $nextFree = 1;
+                    foreach ($ranges as $placed) {
+                        if ($placed[1] > $nextFree) {
+                            $nextFree = $placed[1];
+                        }
+                    }
+                    $start = $nextFree;
+                    $end = $start + $bytes;
+                    break;
+                }
+            }
+            $ranges[] = [$start, $end];
         }
         $field['no_of_bytes'] = $bytes;
         $field['byte_start_position'] = $start;
