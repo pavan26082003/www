@@ -248,6 +248,262 @@ function get_vendorproducts($user_id)
 
     return $this->db->query($sql);
 }
+
+    /**
+     * Ensure the factory model has its legacy `name` API metadata.
+     *
+     * Eligibility uses ONLY vendorproducts.modelname and user_id. The real
+     * vendorproducts.id is used as a foreign-key link, never as a fixed test.
+     * Safe to call repeatedly: returns without inserting when name exists.
+     *
+     * This restores known metadata, NOT missing command/frame definitions.
+     * There is intentionally no guessed hardware command.
+     *
+     * @return array{eligible:bool,created:bool,exists:bool,error:string}
+     */
+    public function ensureFactoryDefaultNameApi()
+    {
+        $result = array('eligible' => false, 'created' => false, 'exists' => false, 'error' => '');
+        $inTransaction = false;
+        try {
+            foreach (array('vendorproducts', 'product_api') as $table) {
+                if (!$this->db->tableExists($table)) {
+                    throw new \RuntimeException('Missing database table: ' . $table);
+                }
+            }
+            $vendorFields = $this->db->getFieldNames('vendorproducts');
+            $apiFields = $this->db->getFieldNames('product_api');
+            foreach (array('id', 'modelname', 'user_id') as $field) {
+                if (!in_array($field, $vendorFields, true)) {
+                    throw new \RuntimeException('vendorproducts.' . $field . ' is missing.');
+                }
+            }
+            foreach (array('itemid', 'model_name', 'parameter_name') as $field) {
+                if (!in_array($field, $apiFields, true)) {
+                    throw new \RuntimeException('product_api.' . $field . ' is missing.');
+                }
+            }
+
+            // A row-level lock prevents duplicate inserts from two requests.
+            // Requires the same MySQL/InnoDB tables used by the application.
+            $this->db->transBegin();
+            $inTransaction = true;
+            $vendorTable = $this->db->prefixTable('vendorproducts');
+            $models = $this->db->query(
+                'SELECT * FROM ' . $vendorTable
+                . ' WHERE modelname = ? AND user_id = ? ORDER BY id ASC FOR UPDATE',
+                array('EFDEFLT V1.0', 1)
+            )->getResultArray();
+
+            if (!$models) {
+                $this->db->transCommit();
+                $inTransaction = false;
+                return $result;
+            }
+            $result['eligible'] = true;
+            foreach ($models as $factory) {
+                $realItemId = (int) ($factory['id'] ?? 0);
+                if ($realItemId < 1) {
+                    throw new \RuntimeException('The EFDEFLT V1.0 model has an invalid database ID.');
+                }
+                // Legacy rows can retain itemid from a prior environment;
+                // check the saved parameter by model name, not model ID.
+                $exists = $this->db->table('product_api')
+                    ->where('model_name', 'EFDEFLT V1.0')
+                    ->where('parameter_name', 'name')
+                    ->countAllResults() > 0;
+                if ($exists) {
+                    $result['exists'] = true;
+                    continue;
+                }
+
+                // Do not fabricate a name API if this server has no factory
+                // API records at all. The correct fix in that case is to restore
+                // the original six records, including hardware configuration.
+                $existingCount = $this->db->table('product_api')
+                    ->where('model_name', 'EFDEFLT V1.0')
+                    ->countAllResults();
+                if ($existingCount === 0) {
+                    throw new \RuntimeException(
+                        'No original EFDEFLT V1.0 API data exists here. '
+                        . 'Export the six configured product_api records from localhost '
+                        . 'and import them into this server database. '
+                        . 'Refusing to fabricate empty hardware API definitions.'
+                    );
+                }
+
+                // These fields are grounded in the old `name` record and the
+                // factory model. Never copy another API's command/payload.
+                $record = array(
+                    'itemid'              => $realItemId,
+                    'model_name'          => 'EFDEFLT V1.0',
+                    'parameter_name'      => 'name',
+                    'user_id'             => 1,
+                    'brand_name'          => (string) ($factory['brand'] ?? ''),
+                    'product_name'        => (string) ($factory['category'] ?? ''),
+                    'product_description' => (string) ($factory['description'] ?? ''),
+                    'number_of_pages'     => 1,
+                    'page_names'          => 'Page1.Operation',
+                    'date'                => date('Y-m-d'),
+                );
+                $record = array_intersect_key($record, array_fill_keys($apiFields, true));
+                if (!$this->db->table('product_api')->insert($record)) {
+                    $error = $this->db->error();
+                    throw new \RuntimeException(
+                        'Could not create the missing name API: ' . ($error['message'] ?? 'database insert failed')
+                    );
+                }
+                $result['exists'] = true;
+                $result['created'] = true;
+            }
+            if ($this->db->transStatus() === false) {
+                throw new \RuntimeException('Database transaction failed while restoring the name API.');
+            }
+            $this->db->transCommit();
+            $inTransaction = false;
+        } catch (\Throwable $e) {
+            if ($inTransaction) {
+                $this->db->transRollback();
+            }
+            $result['created'] = false;
+            $result['error'] = $e->getMessage();
+            log_message('error', 'vendor_modal::ensureFactoryDefaultNameApi: ' . $e->getMessage());
+        }
+        return $result;
+    }
+
+    /**
+     * Read-only API library for the admin's EFDEFLT V1.0 model.
+     * The six original APIs live in the legacy product_api table (NOT necessarily
+     * api_product_configs); opening this page NEVER inserts/updates an API.
+     */
+    public function getAdminDefaultApiOverview($itemId, $userId)
+    {
+        $itemId = (int) $itemId;
+        if ((int) $userId !== 1 || $itemId < 1 || !$this->db->tableExists('vendorproducts')) {
+            return null;
+        }
+
+        $model = $this->db->table('vendorproducts')
+            ->select('id, modelname, modelno')
+            ->where('id', $itemId)
+            ->groupStart()
+                ->where('modelname', 'EFDEFLT V1.0')
+                ->orWhere('modelno', 'EFDEFLT V1.0')
+            ->groupEnd()
+            ->get()
+            ->getRowArray();
+        if (!$model) {
+            return null;
+        }
+
+        // Preserve existing stored parameters. Only the visual spelling changes.
+        $labels = array(
+            'senddata'          => 'Send Data',
+            'displaylog'        => 'Display Log',
+            'commandgetstatus'  => 'Command Get Status',
+            'name'              => 'name',
+            'power'             => 'power',
+            'display'           => 'Display',
+        );
+        $order = array_flip(array_keys($labels));
+        $apiRows = array();
+        $seen = array();
+
+        $addRow = static function (array $api, $source) use (&$apiRows, &$seen, $labels, $order) {
+            $name = trim((string) ($api['parameter_name'] ?? ''));
+            if ($name === '') {
+                return;
+            }
+            $key = preg_replace('/[^a-z0-9]/', '', strtolower($name));
+            if (isset($seen[$key])) {
+                return; // A V2 mirror must not duplicate the saved legacy entry.
+            }
+            $seen[$key] = true;
+            $details = array();
+            foreach ($api as $field => $value) {
+                if (is_scalar($value) && $value !== null && $value !== '') {
+                    $value = (string) $value;
+                    $details[$field] = strlen($value) > 12000
+                        ? substr($value, 0, 12000) . "\n[Value truncated for preview]"
+                        : $value;
+                }
+            }
+            $apiRows[] = array(
+                'id'          => (int) ($api['id'] ?? 0),
+                'parameter'   => $name,
+                'label'       => $labels[$key] ?? $name,
+                'page'        => trim((string) ($api['page_names'] ?? '')),
+                'page_no'     => trim((string) ($api['page_no'] ?? $api['page_number'] ?? '')),
+                'source'      => $source,
+                'read_only'   => true,
+                'sort_order'  => $order[$key] ?? (100 + count($apiRows)),
+                'details'     => $details,
+            );
+        };
+
+        // The six historical APIs shown in phpMyAdmin are stored here.
+        if ($this->db->tableExists('product_api')) {
+            $fields = $this->db->getFieldNames('product_api');
+            $query = $this->db->table('product_api');
+            if (in_array('model_name', $fields, true)) {
+                $query->where('model_name', 'EFDEFLT V1.0');
+            } elseif (in_array('itemid', $fields, true)) {
+                $query->where('itemid', $itemId);
+            } else {
+                $query = null; // Fail closed: never list unrelated models.
+            }
+            if ($query !== null) {
+                if (in_array('id', $fields, true)) {
+                    $query->orderBy('id', 'ASC');
+                }
+                foreach ($query->get()->getResultArray() as $api) {
+                    $addRow($api, 'product_api');
+                }
+            }
+        }
+
+        // Also show any new APIs saved through the V2 editor; all are read-only
+        // on this special View APIs page, without changing the underlying data.
+        if ($this->db->tableExists('api_product_configs')) {
+            $fields = $this->db->getFieldNames('api_product_configs');
+            $query = $this->db->table('api_product_configs');
+            if (in_array('item_id', $fields, true)) {
+                $query->where('item_id', $itemId);
+            } elseif (in_array('model_name', $fields, true)) {
+                $query->where('model_name', 'EFDEFLT V1.0');
+            } else {
+                $query = null;
+            }
+            if ($query !== null) {
+                if (in_array('deleted_at', $fields, true)) {
+                    $query->where('deleted_at', null);
+                }
+                if (in_array('id', $fields, true)) {
+                    $query->orderBy('id', 'ASC');
+                }
+                foreach ($query->get()->getResultArray() as $api) {
+                    $payload = json_decode((string) ($api['raw_payload_json'] ?? ''), true);
+                    if (is_array($payload) && isset($payload['product']) && is_array($payload['product'])) {
+                        $api['page_names'] = $payload['product']['page_names'] ?? '';
+                    }
+                    $addRow($api, 'api_product_configs');
+                }
+            }
+        }
+        usort($apiRows, static function ($a, $b) {
+            return ($a['sort_order'] <=> $b['sort_order']) ?: ($a['id'] <=> $b['id']);
+        });
+
+        return array(
+            'item_id'     => $itemId,
+            'model_name'  => 'EFDEFLT V1.0',
+            'model_no'    => (string) ($model['modelno'] ?? 'EFDEFLT V1.0'),
+            'api_rows'    => $apiRows,
+        );
+    }
+
+
 function savevendorproduct($data, $user_id, $id = 0)
 {
     $id = (int) $id;
@@ -715,8 +971,8 @@ public function createDefaultApisForModel($itemId, $modelData, $userId) {
                     array(
                         'start'                => 2,
                         'end'                  => 3,
-                        'partition_name'       => 'terminatorCrc',
-                        'field_name'           => 'Terminator / CRC',
+                        'partition_name'       => 'terminator',
+                        'field_name'           => 'Terminator',
                         'data_type'            => 'unsigned integer',
                         'value_definition'     => 'fixed value',
                         'ui_type'              => 'none',
@@ -1302,6 +1558,8 @@ private function insertDefaultApiFrameTree($configId, $frameGroup, $apiName, arr
         return false;
     }
 
+    $frameHex = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', $frameCode));
+
     foreach ($partitions as $rowSequence => $definition) {
         $start = max(0, (int) ($definition['start'] ?? 0));
         $end = max($start + 1, (int) ($definition['end'] ?? ($start + 1)));
@@ -1311,6 +1569,23 @@ private function insertDefaultApiFrameTree($configId, $frameGroup, $apiName, arr
         $partitionName = (string) ($definition['partition_name'] ?? '');
         $messageCount = (string) ($definition['message_count'] ?? '');
         $uiValues = (string) ($definition['ui_values'] ?? '');
+
+        // Canonicalize terminator labels so schema does not emit terminatorCrc + Terminator.
+        $partitionKey = preg_replace('/[^a-z0-9]+/', '', strtolower($partitionName . $fieldName));
+        if ($partitionKey === 'terminatorcrc' || $partitionKey === 'crc' || strpos($partitionKey, 'terminator') === 0) {
+            $fieldName = 'Terminator';
+            $partitionName = 'Terminator';
+        }
+
+        // Slice real protocol bytes from frame_code (e.g. A1E70A → A1, E7, 0A).
+        $slice = substr($frameHex, $start * 2, $numberOfBytes * 2);
+        if ($partitionName === 'Terminator' || $fieldName === 'Terminator') {
+            $wireHex = ($slice !== '' && strtoupper($slice) !== str_repeat('0', strlen($slice)))
+                ? strtoupper($slice)
+                : '0A';
+        } else {
+            $wireHex = $slice !== '' ? strtoupper($slice) : str_repeat('00', $numberOfBytes);
+        }
 
         $rawField = array(
             'name'                => $fieldName,
@@ -1324,52 +1599,47 @@ private function insertDefaultApiFrameTree($configId, $frameGroup, $apiName, arr
             'uiDescriptionInOut'  => (string) ($definition['ui_in_out'] ?? 'read'),
             'asperui'             => $messageCount,
             'sno_asperui'         => $messageCount !== '' ? '1' : '',
-            'asperuivalue'        => $uiValues
+            'asperuivalue'        => $uiValues,
+            'valueInHexMin'       => $wireHex,
+            'defaultvalue'        => $wireHex,
+            'startBytePosition'   => $start,
+            'numberOfBytes'       => $numberOfBytes
         );
 
+        // Map only to real api_frame_fields columns (wrong legacy names were filtered out and lost).
         $fieldData = array(
             'frame_id'              => $frameId,
+            'config_id'             => (int) $configId,
             'parent_field_id'       => null,
             'field_level'           => 'bytewise',
             'row_sequence'          => $rowSequence + 1,
             'sub_field_sequence'    => 0,
-            'start_byte_position'   => $start,
-            'byte_start_position'   => $start,
-            'end_byte_position'     => $end - 1,
-            'number_of_bytes'       => $numberOfBytes,
-            'no_of_bytes'           => $numberOfBytes,
-            'bit_size'              => $numberOfBytes * 8,
-            'field_name'            => $fieldName,
-            'default_name'          => $fieldName,
-            'field_description'     => $partitionName,
+            'bitwise_mode'          => 'Bytewise',
+            'start_byte'            => (string) $start,
+            'end_byte'              => (string) ($end - 1),
+            'no_of_bytes'           => (string) $numberOfBytes,
+            'bit_size'              => (string) ($numberOfBytes * 8),
+            'name'                  => $fieldName !== '' ? $fieldName : $partitionName,
+            'field_description'     => $partitionName !== '' ? $partitionName : $fieldName,
             'data_type'             => (string) ($definition['data_type'] ?? ''),
             'value_definition'      => (string) ($definition['value_definition'] ?? ''),
-            'type'                  => (string) ($definition['value_definition'] ?? ''),
-            'default_value'         => $fieldName,
-            'value'                 => $fieldName,
+            'default_value'         => $wireHex,
             'display_value_min'     => null,
             'display_value_max'     => null,
-            'value_in_hex_min'      => '0x' . str_repeat('00', $numberOfBytes),
-            'value_in_hex_max'      => '0x' . str_repeat('FF', $numberOfBytes),
+            'value_in_hex_min'      => $wireHex,
+            'value_in_hex_max'      => $wireHex,
             'ui_type'               => (string) ($definition['ui_type'] ?? 'none'),
-            'uiType'                => (string) ($definition['ui_type'] ?? 'none'),
             'ui_id'                 => '1',
-            'ui_ids'                => '1',
             'ui_description_in_out' => (string) ($definition['ui_in_out'] ?? 'read'),
-            'ui_description'        => (string) ($definition['ui_in_out'] ?? 'read'),
             'as_per_ui'             => $messageCount,
-            'asperui'               => $messageCount,
-            'sno_as_per_ui'         => $messageCount !== '' ? '1' : '',
-            'sno_asperui'           => $messageCount !== '' ? '1' : '',
+            'ui_serial_no'          => $messageCount !== '' ? '1' : '',
             'ui_values'             => $uiValues,
-            'asperui_value'         => $uiValues,
-            'asperui_values'        => $uiValues,
             'slider_step_value'     => null,
             'developer_notes'       => '',
             'notification_enable'   => (string) ($definition['notification_enable'] ?? 'Yes'),
             'notification_message'  => (string) ($definition['notification_message'] ?? ''),
             'scaling'               => null,
-            'raw_field_json'        => json_encode($rawField, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            'raw_row_json'          => json_encode($rawField, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         );
 
         if (!$this->defaultApiInsertRow('api_frame_fields', $fieldData)) {
@@ -1882,6 +2152,7 @@ protected function copyApiFrameTree($oldConfigId, $newConfigId)
             $oldParent = isset($field['parent_field_id']) ? (int) $field['parent_field_id'] : 0;
             unset($field['id'], $field['created_at'], $field['updated_at']);
             $field['frame_id'] = $newFrameId;
+            $field['config_id'] = $newConfigId;
 
             if ($oldParent > 0 && isset($idMap[$oldParent])) {
                 $field['parent_field_id'] = $idMap[$oldParent];

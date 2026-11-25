@@ -1305,15 +1305,23 @@ class GridSduiSchemaBuilder
         );
 
         $avatarInitial = (string) ($header['avatarInitial'] ?? 'S');
+        if ($avatarInitial === '') {
+            $avatarInitial = 'S';
+        }
         $avatarColor = (string) ($header['avatarColor'] ?? '#7c3aed');
         $avatarUrl = trim((string) ($header['avatarUrl'] ?? ''));
+        // Tap destination is always an image: real photo, or generated initials.
+        // Never a Profile route — the header avatar is preview-only.
+        $avatarPreviewUrl = $avatarUrl !== ''
+            ? $avatarUrl
+            : self::initialsImageUrl($avatarInitial, $avatarColor);
         // Decorative animated globe now belongs to the header hero (shown to the
         // right of the welcome text), not the Circle Connect card.
         $headerOrbitGlobeUrl = trim((string) ($content['orbitGlobeUrl'] ?? ''));
         if ($headerOrbitGlobeUrl === '') {
             $headerOrbitGlobeUrl = self::orbitGlobeAssetUrl();
         }
-        // Avatar tap opens only the account photo (url/route point at the image).
+        // Avatar tap opens only the image preview (url/route point at the image).
         // Hidden-chrome WebView is used as the app's image preview surface.
         $profileWebView = array(
             'javaScriptEnabled' => true,
@@ -1512,14 +1520,14 @@ class GridSduiSchemaBuilder
                     'actionId' => 'navigate-profile',
                     // Photo preview only. The action id stays 'navigate-profile'
                     // so the web overlay and any existing app handlers keep
-                    // working; the destination is the account photo (or empty
-                    // when there is no image), never the Profile page.
+                    // working; the destination is always an image (photo or
+                    // initials), never the Profile page / Sign In / settings.
                     'previewMode' => 'imageOnly',
-                    'previewImageUrl' => $avatarUrl,
-                    'url' => $avatarUrl !== '' ? $avatarUrl : null,
-                    'route' => $avatarUrl !== '' ? $avatarUrl : null,
-                    'openIn' => $avatarUrl !== '' ? 'inAppWebView' : null,
-                    'webView' => $avatarUrl !== '' ? $profileWebView : null,
+                    'previewImageUrl' => $avatarPreviewUrl,
+                    'url' => $avatarPreviewUrl,
+                    'route' => $avatarPreviewUrl,
+                    'openIn' => 'inAppWebView',
+                    'webView' => $profileWebView,
                     'events' => array('tap' => array('actionId' => 'navigate-profile')),
                     'fontSize' => 15,
                     'action' => array(
@@ -2089,22 +2097,24 @@ class GridSduiSchemaBuilder
             }
             $notificationActions[$actionId] = self::inAppWebViewAction($itemUrl, $hiddenWebView);
         }
-        // GRID header avatar only: enlarge the account photo. Never open the
+        // GRID header avatar only: enlarge the account image. Never open the
         // Profile page, Sign In, or an external site from this action id.
         // Web intercepts 'navigate-profile' for its photo overlay before this
         // URL is used. Home Profile tab keeps its own navigate-profile action
         // in the home schema and is unchanged.
+        // Always open-url to an image (real photo or generated initials).
+        // Do not emit host-action "preview-grid-avatar" (unsupported) and do
+        // not emit type "navigate" to routeId "profile".
         $avatarPhotoUrl = trim((string) ($content['header']['avatarUrl'] ?? ''));
-        $profileAction = $avatarPhotoUrl !== ''
-            ? self::inAppWebViewAction($avatarPhotoUrl, $hiddenWebView)
-            : array(
-                'type' => 'host-action',
-                'actionId' => 'preview-grid-avatar',
-                'destination' => array(
-                    'previewMode' => 'imageOnly',
-                    'imageUrl' => '',
-                ),
-            );
+        $avatarInitial = trim((string) ($content['header']['avatarInitial'] ?? 'S'));
+        if ($avatarInitial === '') {
+            $avatarInitial = 'S';
+        }
+        $avatarColor = trim((string) ($content['header']['avatarColor'] ?? '#7c3aed'));
+        $avatarPreviewUrl = $avatarPhotoUrl !== ''
+            ? $avatarPhotoUrl
+            : self::initialsImageUrl($avatarInitial, $avatarColor);
+        $profileAction = self::inAppWebViewAction($avatarPreviewUrl, $hiddenWebView);
 
         return array(
             'navigate-grid' => array('type' => 'navigate', 'destination' => array('routeId' => 'grid')),
@@ -2308,29 +2318,23 @@ class GridSduiSchemaBuilder
     }
 
     /**
-     * The app paints the Grid section stored in the saved home schema.
-     * Replace only that section with the live Recent Activity rows.
+     * Recent Activity rows are Grid components (type featureCard). Home's
+     * allow-list does not include that type, and the Home renderer does not
+     * paint it. Leave those components on the Grid schema. Only refresh
+     * Home actions, exploring content, and icons from the live Grid feed.
      */
     public static function patchRecentActivity(array $schema, int $userId, string $ssoToken = ''): array
     {
         if (!isset($schema['components']) || !is_array($schema['components'])) {
             return $schema;
         }
+        // Drop a Grid explore component already stored on Home when Home's own
+        // allow-list rejects its type (featureCard, section, …). Do not add keys.
+        $schema = self::omitDisallowedGridExploreComponents($schema);
         $fresh = self::build(array(
             'userId' => $userId,
             'ssoToken' => $ssoToken,
         ));
-        $freshComponents = is_array($fresh['components'] ?? null) ? $fresh['components'] : array();
-        foreach (array_keys($schema['components']) as $key) {
-            if ($key === 'grid-explore-section' || $key === 'grid-explore-row' || strpos((string) $key, 'grid-explore-') === 0) {
-                unset($schema['components'][$key]);
-            }
-        }
-        foreach ($freshComponents as $key => $component) {
-            if ($key === 'grid-explore-section' || $key === 'grid-explore-row' || strpos((string) $key, 'grid-explore-') === 0) {
-                $schema['components'][$key] = $component;
-            }
-        }
         if (!isset($schema['actions']) || !is_array($schema['actions'])) {
             $schema['actions'] = array();
         }
@@ -2358,6 +2362,60 @@ class GridSduiSchemaBuilder
                 if (isset($fresh['iconRegistry'][$iconKey])) {
                     $schema['iconRegistry'][$iconKey] = $fresh['iconRegistry'][$iconKey];
                 }
+            }
+        }
+        return self::omitDisallowedGridExploreComponents($schema);
+    }
+
+    /**
+     * Home schema must not contain Grid explore components the Home allow-list rejects.
+     * featureCard is only implemented by the Grid renderer.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    public static function omitDisallowedGridExploreComponents(array $schema): array
+    {
+        if (!isset($schema['components']) || !is_array($schema['components'])) {
+            return $schema;
+        }
+        $allowed = array();
+        if (isset($schema['security']['allowedComponentTypes']) && is_array($schema['security']['allowedComponentTypes'])) {
+            foreach ($schema['security']['allowedComponentTypes'] as $type) {
+                $type = trim((string) $type);
+                if ($type !== '') {
+                    $allowed[$type] = true;
+                }
+            }
+        }
+        $removed = array();
+        foreach (array_keys($schema['components']) as $key) {
+            if (strpos((string) $key, 'grid-explore-') !== 0) {
+                continue;
+            }
+            $component = $schema['components'][$key];
+            $type = is_array($component) ? trim((string) ($component['type'] ?? '')) : '';
+            // featureCard is a Grid type. Also drop any other grid-explore type Home does not allow.
+            if ($type === 'featureCard' || ($allowed !== array() && !isset($allowed[$type]))) {
+                unset($schema['components'][$key]);
+                $removed[(string) $key] = true;
+            }
+        }
+        if ($removed === array()) {
+            return $schema;
+        }
+        foreach ($schema['components'] as $key => $component) {
+            if (!is_array($component) || !isset($component['children']) || !is_array($component['children'])) {
+                continue;
+            }
+            $children = array();
+            foreach ($component['children'] as $childId) {
+                if (!isset($removed[(string) $childId])) {
+                    $children[] = $childId;
+                }
+            }
+            if (count($children) !== count($component['children'])) {
+                $schema['components'][$key]['children'] = array_values($children);
             }
         }
         return $schema;

@@ -893,56 +893,56 @@ $routes->post('items/remove_device_node', 'View_page_controller::remove_device_n
 
 
 
+/*
+|--------------------------------------------------------------------------
+| Modal API form (items/modal_api.php) — dedicated controller + model_apiform
+|--------------------------------------------------------------------------
+*/
 $routes->get(
     'items/modal_api/(:num)',
-    'Items::modal_api/$1'
+    'modal_api_controller::modal/$1'
 );
-
 
 // Save new API or update existing API
 $routes->post(
     'items/saveapi',
-    'Items::saveapi'
+    'modal_api_controller::save'
 );
 
-
-// Delete complete API configuration
+// Delete complete API configuration (modal form)
 $routes->post(
     'items/delete_api_config/(:num)',
-    'Items::delete_api_config/$1'
+    'modal_api_controller::delete/$1'
 );
-
 
 // Brand / Product / Model / image metadata used by modal_api.php
 $routes->get(
     'items/modal_api_vendor_meta/(:num)',
-    'Items::vendorMeta/$1'
+    'modal_api_controller::vendorMeta/$1'
 );
-
 
 // Optional clean URLs for the same dedicated module.
 $routes->get(
     'modal-api/(:num)',
-    'Items::modal_api/$1'
+    'modal_api_controller::modal/$1'
 );
 
 $routes->post(
     'modal-api/save',
-    'Items::saveapi'
+    'modal_api_controller::save'
 );
 
 $routes->post(
     'modal-api/delete/(:num)',
-    'Items::delete_api_config/$1'
+    'modal_api_controller::delete/$1'
 );
 
 $routes->get(
     'modal-api/vendor-meta/(:num)',
-    'Items::vendorMeta/$1'
+    'modal_api_controller::vendorMeta/$1'
 );
 
-
-
+// Config modal (still served by Items)
 $routes->get(
     'items/modal_config',
     'Items::modal_config'
@@ -996,6 +996,12 @@ $routes->post(
     'vendor_controller::deletevendorproduct'
 );
 
+// Copy Model (vendor_controller)
+$routes->get('items/copy_modal', 'vendor_controller::copy_modal');
+$routes->post('items/save_copy_modal', 'vendor_controller::save_copy_modal');
+$routes->get('items/copy_modal_preview', 'vendor_controller::copy_modal_preview');
+$routes->post('items/copy_modal_preview', 'vendor_controller::copy_modal_preview');
+
 /***********GRID**********************************/
 $gridRoutesFile = APPPATH . 'Config/GRID_Config/Routes.php';
 if (is_file($gridRoutesFile)) {
@@ -1016,6 +1022,18 @@ $routes->post('grid-chat/api/call/decline', 'DevicePushController::declineCall')
 $routes->post('grid_chat/api/call/decline', 'DevicePushController::declineCall');
 $routes->post('grid-chat/api/call/notify', 'DevicePushController::notifyCall');
 $routes->post('grid_chat/api/call/notify', 'DevicePushController::notifyCall');
+
+// GPS Tracking Phase 0 — /index.php/api/track/* (Bearer auth, no CSRF).
+$routes->group('api/track', static function ($routes) {
+	$routes->get('me', 'TrackApiController::me');
+	$routes->post('command', 'TrackApiController::command');
+	$routes->put('policies/(:num)', 'TrackApiController::updatePolicy/$1');
+	$routes->get('effective-policy', 'TrackApiController::effectivePolicy');
+	$routes->post('breadcrumbs/batch', 'TrackApiController::breadcrumbsBatch');
+	$routes->post('events', 'TrackApiController::events');
+	$routes->get('live', 'TrackApiController::live');
+	$routes->get('history', 'TrackApiController::history');
+});
 
 // -----------------------------------------------------------------------------
 // GRID CHAT Module (Config: Config/GRID_CHAT_CONFIG/Routes.php | Controller: Controllers/GRID_CHAT_CONTROLLERS)

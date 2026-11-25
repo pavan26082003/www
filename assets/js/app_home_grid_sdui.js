@@ -141,9 +141,6 @@
     }) || {};
     var logoUrl = header.logoUrl || header.image || (content.header && content.header.logoUrl) || content.logoUrl
       || 'https://efactor.tech/assets/images/GRID_Logo.png';
-    var logoUrlDark = header.logoUrlDark
-      || (header.appearanceDark && header.appearanceDark.logoUrlDark)
-      || 'https://efactor.tech/assets/images/dark_grid.png';
 
     var featuresHtml = featureIds.map(function (id) {
       var card = components[id] || {};
@@ -325,8 +322,7 @@
     return '<div class="ahp-gn-page font-sans antialiased" data-grid-sdui="1">'
       + '<header class="ahp-gn-header">'
       + '<div class="ahp-gn-brand">'
-      + '<img class="ahp-gn-logo" src="' + esc(logoUrl) + '" alt="GRID" width="160" height="48"'
-      + ' data-logo-light="' + esc(logoUrl) + '" data-logo-dark="' + esc(logoUrlDark) + '">'
+      + '<img class="ahp-gn-logo" src="' + esc(logoUrl) + '" alt="GRID" width="120" height="36">'
       + '</div>'
       + '<div class="ahp-gn-header-actions">'
       // GRID has no theme toggle. Appearance follows the account's Appearance
@@ -392,20 +388,8 @@
 
   function applyPhoneTheme(host, theme) {
     if (!host) return;
-    var resolved = theme === 'dark' ? 'dark' : 'light';
-    host.setAttribute('data-theme', resolved);
-    host.classList.toggle('dark', resolved === 'dark');
-    var logos = host.querySelectorAll ? host.querySelectorAll('.ahp-gn-logo') : [];
-    for (var i = 0; i < logos.length; i++) {
-      var img = logos[i];
-      var next = resolved === 'dark'
-        ? (img.getAttribute('data-logo-dark') || '')
-        : (img.getAttribute('data-logo-light') || '');
-      if (next && img.getAttribute('src') !== next) img.setAttribute('src', next);
-    }
-    try {
-      host.dispatchEvent(new CustomEvent('grid-theme', { bubbles: true, detail: { theme: resolved } }));
-    } catch (e) {}
+    host.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
+    host.classList.toggle('dark', theme === 'dark');
   }
 
   // GRID has no theme toggle. Appearance is driven entirely by the account's

@@ -1642,6 +1642,7 @@ class AuthUiSchemaBuilder
             'email' => ['path' => 'email', 'type' => 'string', 'required' => false],
             'user_type' => ['path' => 'user_type', 'type' => 'string', 'required' => false],
             'user_id' => ['path' => 'user_id', 'type' => 'string', 'required' => false],
+            'tenant_id' => ['path' => 'tenant_id', 'type' => 'string', 'required' => false],
         ];
     }
 
@@ -1668,6 +1669,7 @@ class AuthUiSchemaBuilder
             'email' => ['path' => 'email', 'stateKey' => 'auth.email'],
             'user_type' => ['path' => 'user_type', 'stateKey' => 'auth.user_type'],
             'user_id' => ['path' => 'user_id', 'stateKey' => 'auth.user_id'],
+            'tenant_id' => ['path' => 'tenant_id', 'stateKey' => 'auth.tenant_id'],
         ];
     }
 

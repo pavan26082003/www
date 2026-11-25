@@ -47,6 +47,14 @@ $response = array();
 include('config.php');
 include('functions.php');
 include('phpMQTT.php');
+// GPS Track helpers (tenant_id on login + refreshtoken action). Safe if missing.
+if (is_file(__DIR__ . '/gps_track_auth_helpers.php')) {
+    include_once __DIR__ . '/gps_track_auth_helpers.php';
+}
+// Add/Verify JSON only. Does nothing for every other action. Safe if the file is missing.
+if (is_file(__DIR__ . '/ef_add_verify_response.php')) {
+    include_once __DIR__ . '/ef_add_verify_response.php';
+}
 header('Content-Type: application/json');
 
 header('Content-Type: application/x-www-form-urlencoded');
@@ -1807,6 +1815,9 @@ $db->query("update users set id_token='$jwt',access_token='$jwt_access',refresh_
        $response['username']=$phone;
       $response['email']=$email; 
       $response['user_type']=$usertype;
+      if (function_exists('gps_track_append_login_identity')) {
+        gps_track_append_login_identity($response, $row, $userid);
+      }
 
       
 
@@ -1838,7 +1849,12 @@ $db->query("update users set id_token='$jwt',access_token='$jwt_access',refresh_
 
 }
 
-
+/************************************refreshtoken**********************************/
+if (function_exists('gps_track_handle_refreshtoken') && gps_track_handle_refreshtoken($db, $response)) {
+  header('Content-Type: application/json');
+  echo json_encode($response);
+  exit;
+}
 
 /*****************************apiversions***********************************/
 

@@ -68,6 +68,8 @@ public $globals = [
                 'app-home-page/api',
                 'app-home-page/api/*',
                 'app-web-entry/open',
+                'api/track',
+                'api/track/*',
                 
             ]
         ],
@@ -109,6 +111,7 @@ public $globals = [
                 'grid_chat/*',
                 'app-web-entry/open',
                 'app-home-page/rating',
+                'app-home-page/profile-photo',
             ],
         ],
         'mobilepush' => [
@@ -130,6 +133,8 @@ public $globals = [
                 'grid_chat/api/chat/call_invite',
                 'app-home-page/api',
                 'app-home-page/api/*',
+                'api/track',
+                'api/track/*',
             ],
         ],
     ];

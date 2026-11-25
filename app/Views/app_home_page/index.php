@@ -295,6 +295,12 @@ $ahpAppJsReadable = is_readable(ahp_asset_file_path('assets/js/app_home_page.js'
                                 <!-- Grid network page (schema via get_grid) -->
                                 <div class="ahp-mobile ahp-page ahp-grid-page ahp-is-hidden" id="ahpGridPage" data-page="grid">
                                     <div id="ahpGridRoot" class="ahp-grid-network-root" aria-live="polite"></div>
+                                    <div class="ahp-gn-photo" id="ahpGridPhoto" aria-hidden="true">
+                                        <div class="ahp-gn-photo-bar">
+                                            <button type="button" id="ahpGridPhotoClose">&#8592; Back</button>
+                                        </div>
+                                        <div class="ahp-gn-photo-stage" id="ahpGridPhotoStage"></div>
+                                    </div>
                                     <div class="ahp-gn-browser" id="ahpGridBrowser" aria-hidden="true">
                                         <div class="ahp-gn-browser-bar">
                                             <button type="button" id="ahpGridBrowserBackBtn">&#8592; Back</button>

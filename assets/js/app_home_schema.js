@@ -2803,6 +2803,10 @@
         initials: profileInitials,
         imageUrl: profileAvatarUrl || undefined,
         imageUrlBinding: avatarStateBinding(profileAvatarUrl),
+        // Tap the photo only. Name, email, and phone stay as they are.
+        actionId: 'profile-photo-options',
+        accessibilityLabel: 'Edit profile photo',
+        events: { tap: { actionId: 'profile-photo-options' } },
         appearance: {
           width: profileAppearance.avatarSize || 64,
           height: profileAppearance.avatarSize || 64,
@@ -2845,6 +2849,66 @@
         layoutVariant: 'studioIdentity',
         neverPromotePhoneToTitle: true
       })
+    };
+
+    // Same scrollPage + pageHeader + profileMenu shapes as Edit profile.
+    // Not a child of profile-page, so the Account menu itself is unchanged.
+    components['profile-photo-page'] = {
+      id: 'profile-photo-page',
+      type: 'scrollPage',
+      layout: withNavSafeScrollLayout({
+        safeArea: true,
+        padding: {
+          left: profilePad,
+          right: profilePad,
+          top: profilePad,
+          bottom: profileBottomPad
+        },
+        gap: profileAppearance.pageGap,
+        overflowX: 'hidden',
+        overflowY: 'auto',
+        contentAvoidsBottomNavigation: true,
+        reservedBottomInset: profileBottomPad,
+        minHeight: '100%'
+      }),
+      children: ['profile-photo-header', 'profile-photo-menu']
+    };
+    components['profile-photo-header'] = {
+      id: 'profile-photo-header',
+      type: 'pageHeader',
+      title: 'Edit profile photo',
+      subtitle: 'Change, remove, or upload your profile photo'
+    };
+    components['profile-photo-menu'] = {
+      id: 'profile-photo-menu',
+      type: 'profileMenu',
+      appearance: profileAppearance,
+      items: [
+        {
+          id: 'profile-photo-change',
+          iconToken: 'profile',
+          label: 'Change profile',
+          subtitle: 'Take a new profile photo',
+          trailingIconToken: 'chevron-right',
+          actionId: 'profile-photo-change'
+        },
+        {
+          id: 'profile-photo-remove',
+          iconToken: 'alerts',
+          label: 'Remove profile',
+          subtitle: 'Remove the current profile photo',
+          trailingIconToken: 'chevron-right',
+          actionId: 'profile-photo-remove'
+        },
+        {
+          id: 'profile-photo-upload',
+          iconToken: 'shield',
+          label: 'Upload profile',
+          subtitle: 'Choose a photo from your device',
+          trailingIconToken: 'chevron-right',
+          actionId: 'profile-photo-upload'
+        }
+      ]
     };
 
     components['profile-menu'] = {
@@ -6050,6 +6114,7 @@
 
   var PROFILE_SUB_ROUTES = [
     { routeId: 'profile-edit', titleKey: 'profile.edit', subtitleKey: 'profile.editSubtitle' },
+    { routeId: 'profile-photo', titleKey: 'profile.edit', subtitleKey: 'profile.editSubtitle' },
     { routeId: 'profile-notifications', titleKey: 'profile.notifications', subtitleKey: 'profile.notificationsSubtitle' },
     { routeId: 'profile-appearance', titleKey: 'profile.appearance', subtitleKey: 'profile.appearanceSubtitle' },
     { routeId: 'profile-privacy', titleKey: 'profile.privacy', subtitleKey: 'profile.privacySubtitle' }
@@ -6062,10 +6127,53 @@
     if (!url || /\/(?:v8\/)?(?:api_creation|grid_api_creation|iot_api_creation)\.php(?=\/|\?|$)/i.test(url)) {
       return '';
     }
-    if (/app-home-page\/rating/i.test(url) || /app-home-page\/api/i.test(url)) {
+    if (/app-home-page\/rating/i.test(url) || /app-home-page\/profile-photo/i.test(url) || /app-home-page\/api/i.test(url)) {
       return url;
     }
     return url;
+  }
+
+  function resolveProfilePhotoPageUrl(cfg) {
+    cfg = cfg || {};
+    var url = sanitizeAppHomeWebUrl(cfg.profilePhotoPageUrl || '', 'app-home-page/profile-photo');
+    if (url) return url;
+    var apiBase = sanitizeAppHomeWebUrl(String(cfg.apiBase || '').replace(/\/+$/, ''), 'app-home-page/api');
+    if (apiBase) {
+      var fromApi = apiBase.replace(/\/api$/i, '') + '/profile-photo';
+      if (sanitizeAppHomeWebUrl(fromApi, 'app-home-page/profile-photo')) return fromApi;
+    }
+    return '/index.php/app-home-page/profile-photo';
+  }
+
+  function profilePhotoOpenAction(intent, title, cfg) {
+    var base = resolveProfilePhotoPageUrl(cfg);
+    var url = base + (base.indexOf('?') >= 0 ? '&' : '?') + 'intent=' + intent;
+    var webView = {
+      javaScriptEnabled: true,
+      sharedCookies: true,
+      clearCache: false,
+      showAppBar: false,
+      showToolbar: false,
+      hideAppBar: true,
+      displayMode: 'fullscreen'
+    };
+    return {
+      type: 'open-url',
+      url: url,
+      route: url,
+      title: title,
+      openIn: 'inAppWebView',
+      webView: webView,
+      destination: {
+        url: url,
+        openIn: 'inAppWebView',
+        title: title,
+        sharedCookies: true,
+        showAppBar: false,
+        showToolbar: false,
+        hideAppBar: true
+      }
+    };
   }
 
   function resolveRatingPageUrl(cfg) {
@@ -6314,6 +6422,11 @@
     out['navigate-grid'] = { type: 'navigate', destination: { routeId: 'grid' } };
 
     out['profile-edit'] = { type: 'navigate', destination: { routeId: 'profile-edit' } };
+    // Same open-url WebView shape as Rating — avatar tap opens the photo sheet in-app.
+    out['profile-photo-options'] = profilePhotoOpenAction('change', 'Profile picture', cfg);
+    out['profile-photo-change'] = profilePhotoOpenAction('change', 'Change profile', cfg);
+    out['profile-photo-remove'] = profilePhotoOpenAction('remove', 'Remove profile', cfg);
+    out['profile-photo-upload'] = profilePhotoOpenAction('upload', 'Upload profile', cfg);
     out['profile-notifications'] = { type: 'navigate', destination: { routeId: 'profile-notifications' } };
     out['profile-appearance'] = { type: 'navigate', destination: { routeId: 'profile-appearance' } };
     out['profile-privacy'] = { type: 'navigate', destination: { routeId: 'profile-privacy' } };

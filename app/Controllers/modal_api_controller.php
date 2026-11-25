@@ -2,7 +2,7 @@
 
 namespace App\Controllers;
 
-use App\Models\Modal_api_model;
+use App\Models\model_apiform;
 
 /**
  * Dedicated controller for app/Views/items/modal_api.php.
@@ -15,24 +15,12 @@ use App\Models\Modal_api_model;
  */
 class modal_api_controller extends Security_Controller
 {
-    private Modal_api_model $apiConfigurationModel;
+    private model_apiform $apiConfigurationModel;
 
     public function __construct()
     {
         parent::__construct();
-
-        $class = '\\App\\Models\\Modal_api_model';
-        if (!class_exists($class, false)) {
-            foreach (array('Modal_api_model.php', 'modal_api_model.php') as $fileName) {
-                $modelFile = APPPATH . 'Models/' . $fileName;
-                if (is_file($modelFile)) {
-                    require_once $modelFile;
-                    break;
-                }
-            }
-        }
-
-        $this->apiConfigurationModel = new $class();
+        $this->apiConfigurationModel = new model_apiform();
     }
 
     private function currentUserId(): ?int
@@ -71,12 +59,22 @@ class modal_api_controller extends Security_Controller
         $existingParameterNames = $this->apiConfigurationModel
             ->getCommandGetStatusResponseParameterNames($itemId, $userId);
 
+        // Existing Parameter values may be used only once by saved APIs.
+        // While editing, keep the current API's own name selectable.
+        $usedExistingParameterNames = $this->apiConfigurationModel
+            ->getUsedCommandGetStatusResponseParameterNames(
+                $itemId,
+                $userId,
+                $editConfigId
+            );
+
         $viewData = [
             'itemid'           => $itemId,
             'id'               => $itemId,
             'edit_config_id'   => $editConfigId,
             'edit_config_data' => null,
             'existing_parameter_names' => $existingParameterNames,
+            'used_existing_parameter_names' => $usedExistingParameterNames,
 
             'brand'         => (string) ($product->brand ?? ''),
             'category'      => (string) ($product->category ?? ''),
@@ -284,6 +282,20 @@ class modal_api_controller extends Security_Controller
             return $this->response->setJSON(['data' => []]);
         }
 
+        // Also return the live Existing Parameter source. This lets an already
+        // open Add API tab refresh immediately after Command Get Status ->
+        // Response -> Field Configuration -> Name is saved in another tab.
+        $existingParameterNames = $this->apiConfigurationModel
+            ->getCommandGetStatusResponseParameterNames((int) $itemId, $userId);
+
+        $excludeConfigId = (int) ($this->request->getGet('exclude_config_id') ?? 0);
+        $usedExistingParameterNames = $this->apiConfigurationModel
+            ->getUsedCommandGetStatusResponseParameterNames(
+                (int) $itemId,
+                $userId,
+                $excludeConfigId
+            );
+
         return $this->response->setJSON([
             'data' => [[
                 'id'            => (int) ($product->id ?? $itemId),
@@ -294,6 +306,8 @@ class modal_api_controller extends Security_Controller
                 'brand_image'   => (string) ($product->brand_image ?? ''),
                 'product_image' => (string) ($product->product_image ?? ''),
             ]],
+            'existing_parameter_names' => array_values($existingParameterNames),
+            'used_existing_parameter_names' => array_values($usedExistingParameterNames),
         ]);
     }
 }

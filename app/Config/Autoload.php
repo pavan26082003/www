@@ -5,64 +5,70 @@ namespace Config;
 use CodeIgniter\Config\AutoloadConfig;
 
 /**
- * -------------------------------------------------------------------
- * AUTO-LOADER
- * -------------------------------------------------------------------
+ * Shared local / production autoloader configuration.
  *
- * This file defines the namespaces and class maps so the Autoloader
- * can find the files as needed.
- *
- * NOTE: If you use an identical key in $psr4 or $classmap, then
- * the values in this file will overwrite the framework's values.
+ * Keeps the module-specific class maps from both environments and supports
+ * CI4 controllers stored in the project's physical API/V1 directory.
+ * Does not contain or modify database configuration.
  */
 class Autoload extends AutoloadConfig
 {
-	/**
-	 * -------------------------------------------------------------------
-	 * Namespaces
-	 * -------------------------------------------------------------------
-	 * This maps the locations of any namespaces in your application to
-	 * their location on the file system. These are used by the autoloader
-	 * to locate files the first time they have been instantiated.
-	 *
-	 * The '/app' and '/system' directories are already mapped for you.
-	 * you may change the name of the 'App' namespace if you wish,
-	 * but this should be done prior to creating any namespaced classes,
-	 * else you will need to modify all of those classes for this to work.
-	 *
-	 * Prototype:
-	 *
-	 *   $psr4 = [
-	 *       'CodeIgniter' => SYSTEMPATH,
-	 *       'App'	       => APPPATH
-	 *   ];
-	 *
-	 * @var array<string, string>
-	 */
-	public $psr4 = [
-		APP_NAMESPACE => APPPATH, // For custom app namespace
-		'Config'      => APPPATH . 'Config',
-	];
+    /**
+     * PSR-4 namespace mappings.
+     * Both Api\V1\* and APIs\V1\* are used by existing modules.
+     * Directory capitalization matters on Linux: physical folder is API/.
+     *
+     * @var array<string, string>
+     */
+    public $psr4 = [
+        APP_NAMESPACE => APPPATH,
+        'Config'      => APPPATH . 'Config',
+        'Api'         => ROOTPATH . 'API/',
+        'APIs'        => ROOTPATH . 'API/',
+    ];
 
-	/**
-	 * -------------------------------------------------------------------
-	 * Class Map
-	 * -------------------------------------------------------------------
-	 * The class map provides a map of class names and their exact
-	 * location on the drive. Classes loaded in this manner will have
-	 * slightly faster performance because they will not have to be
-	 * searched for within one or more directories as they would if they
-	 * were being autoloaded through a namespace.
-	 *
-	 * Prototype:
-	 *
-	 *   $classmap = [
-	 *       'MyClass'   => '/path/to/class/file.php'
-	 *   ];
-	 *
-	 * @var array<string, string>
-	 */
-	public $classmap = [
-		'App\\Libraries\\AppHomeSchemaBuilder' => APPPATH . 'Libraries/AppHomeSchemaBuilder.php',
-	];
+    /**
+     * Preserve class mappings previously found in either environment.
+     * Missing environment-specific files are skipped in __construct().
+     *
+     * @var array<string, string>
+     */
+    public $classmap = [
+        // Existing production mapping.
+        'App\\Libraries\\AppHomeSchemaBuilder' => APPPATH . 'Libraries/AppHomeSchemaBuilder.php',
+
+        // Existing local mappings.
+        'App\\Services\\Erp\\ErpFactorUserProvisionService' => __DIR__ . '/ErpFactorUserProvisionBootstrap.php',
+        'App\\Services\\Sales\\SalesContextService' => __DIR__ . '/../Services/Sales/SalesContextService.php',
+        'App\\Models\\finance\\FinanceBaseModel' => __DIR__ . '/../Models/finance/FinanceBaseModel.php',
+        'App\\Services\\finance\\FinanceDashboardAggregationService' => __DIR__ . '/../Services/finance/FinanceDashboardAggregationService.php',
+        'App\\Services\\ERP\\CanonicalBrandId' => __DIR__ . '/../Services/Erp/CanonicalBrandId.php',
+        'App\\Services\\ERP\\FactorBranchId' => __DIR__ . '/../Services/Erp/FactorBranchId.php',
+        'App\\Services\\ERP\\FactorSchema' => __DIR__ . '/../Services/Erp/FactorSchema.php',
+        'App\\Services\\ERP\\ErpFactorIdentityVerifier' => __DIR__ . '/../Services/Erp/ErpFactorIdentityVerifier.php',
+    ];
+
+    public function __construct()
+    {
+        parent::__construct();
+
+        // Some environment-specific files are not deployed everywhere.
+        // Do not register a class map that points to a non-existent file.
+        foreach ($this->classmap as $class => $path) {
+            if (!is_file($path)) {
+                unset($this->classmap[$class]);
+            }
+        }
+
+        // Preserve the production DeviceUiSchemaNormalizer casing workaround.
+        // Windows is case-insensitive; on Linux the lowercase folder may be
+        // the canonical copy when both Services/ and services/ exist.
+        $normalizerLower = APPPATH . 'services/DeviceUiSchemaNormalizer.php';
+        $normalizerUpper = APPPATH . 'Services/DeviceUiSchemaNormalizer.php';
+        if (is_file($normalizerLower)) {
+            $this->classmap['App\\Services\\DeviceUiSchemaNormalizer'] = $normalizerLower;
+        } elseif (is_file($normalizerUpper)) {
+            $this->classmap['App\\Services\\DeviceUiSchemaNormalizer'] = $normalizerUpper;
+        }
+    }
 }

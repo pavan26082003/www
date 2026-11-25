@@ -158,27 +158,8 @@ class Viewapis_controller extends Security_Controller {
 
     function delete_api_config($config_id = 0) {
         $user_id = $this->currentUserId();
-        $configId = (int) $config_id;
-        if ($configId <= 0) {
-            $configId = (int) $this->request->getVar('config_id');
-        }
-
-        $tree = ($this->Viewapis_model && $configId > 0)
-            ? $this->Viewapis_model->getApiTreeConfigFull($configId)
-            : null;
-        $parameterName = (is_array($tree) && !empty($tree['config']['parameter_name']))
-            ? $tree['config']['parameter_name']
-            : '';
-
-        if ($parameterName !== '' && $this->isProtectedDefaultApi($parameterName)) {
-            return $this->response->setJSON(array(
-                'success' => false,
-                'message' => 'Default APIs cannot be deleted.'
-            ));
-        }
-
         $deleted = ($this->Viewapis_model)
-            ? $this->Viewapis_model->deleteApiTreeConfig($configId, $user_id)
+            ? $this->Viewapis_model->deleteApiTreeConfig($config_id, $user_id)
             : false;
 
         return $this->response->setJSON(array(
@@ -191,59 +172,19 @@ class Viewapis_controller extends Security_Controller {
         return strtolower(trim((string) $modelName)) . '|' . strtolower(trim((string) $parameterName)) . '|' . strtolower(trim((string) $productName));
     }
 
-    private function normalizeApiParameterName($parameterName)
-    {
-        $normalized = html_entity_decode((string) $parameterName, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $normalized = preg_replace('/[^a-zA-Z]+/u', ' ', $normalized);
-        $normalized = strtolower(trim(preg_replace('/\s+/u', ' ', $normalized)));
-
-        return $normalized;
-    }
-
-    private function isReadOnlyDefaultApi($parameterName)
-    {
-        $normalized = $this->normalizeApiParameterName($parameterName);
-        $compact = preg_replace('/\s+/', '', $normalized);
-
-        return in_array($normalized, array('send data', 'display log', 'display'), true)
-            || in_array($compact, array('senddata', 'displaylog', 'display'), true);
-    }
-
-    private function isProtectedDefaultApi($parameterName)
-    {
-        $normalized = $this->normalizeApiParameterName($parameterName);
-        $compact = preg_replace('/\s+/', '', $normalized);
-
-        return $this->isReadOnlyDefaultApi($parameterName)
-            || $normalized === 'command get status'
-            || $compact === 'commandgetstatus';
-    }
-
     private function _make_api_tree_row($data) {
         $configId = (int) (isset($data->id) ? $data->id : 0);
         $itemId = (int) (isset($data->item_id) ? $data->item_id : 0);
         $parameterLabel = (!empty($data->parameter_name)) ? $data->parameter_name : 'N/A';
-        $isReadOnly = $this->isReadOnlyDefaultApi($parameterLabel);
-        $isProtected = $this->isProtectedDefaultApi($parameterLabel);
 
         $action = '<button type="button" class="api-action-btn view-api-btn" data-config-id="' . $configId . '" data-item-id="' . $itemId . '">View API</button>';
-
-        if ($isReadOnly) {
-            $editControl = '<button type="button" class="api-update-btn api-edit-btn api-locked-btn" disabled="disabled" data-locked="1" title="This default API is read-only">Locked</button>';
-        } else {
-            $editControl = '<button type="button" class="api-update-btn api-edit-btn" data-config-id="' . $configId . '" data-item-id="' . $itemId . '">Edit</button>';
-        }
-
-        if ($isProtected) {
-            $deleteControl = '<button type="button" class="api-update-btn api-delete-btn api-locked-btn" disabled="disabled" data-locked="1" title="Default APIs cannot be deleted">Locked</button>';
-        } else {
-            $deleteControl = '<button type="button" class="api-update-btn api-delete-btn" data-config-id="' . $configId . '">Delete</button>';
-        }
+        $update = '<button type="button" class="api-update-btn api-edit-btn" data-config-id="' . $configId . '" data-item-id="' . $itemId . '">Edit</button>'
+            . '<button type="button" class="api-update-btn api-delete-btn" data-config-id="' . $configId . '">Delete</button>';
 
         return array(
             '<b>' . htmlspecialchars($parameterLabel, ENT_QUOTES, 'UTF-8') . '</b> <span class="api-version-badge api-version-v2">V2</span>',
             $action,
-            $editControl . $deleteControl
+            $update
         );
     }
 

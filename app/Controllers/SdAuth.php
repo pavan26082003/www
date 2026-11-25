@@ -384,6 +384,23 @@ class SdAuth extends Security_Controller
 
         $issuedAt = (string) time();
 
+        $tenantId = 'tenant_demo_001';
+        try {
+            $tenantRow = \Config\Database::connect()->table('users')
+                ->select('tenant_id, client_id')
+                ->where('id', $appUserId)
+                ->get()
+                ->getRowArray();
+            if (is_array($tenantRow)) {
+                $tenantId = \App\Models\TrackApiModel::resolveTenantId(
+                    trim((string) ($tenantRow['tenant_id'] ?? '')),
+                    (int) ($tenantRow['client_id'] ?? 0)
+                );
+            }
+        } catch (\Throwable $e) {
+            // keep demo tenant fallback
+        }
+
         return $this->authStatus(true, 'Account created successfully.', null, [
             'accesstoken' => $accessToken,
             'idtoken' => $idToken,
@@ -392,6 +409,7 @@ class SdAuth extends Security_Controller
             'email' => $email,
             'user_type' => 'User',
             'user_id' => (string) $appUserId,
+            'tenant_id' => $tenantId,
             'issued_at' => $issuedAt,
             'redirect' => site_url('sd-dashboard'),
         ]);

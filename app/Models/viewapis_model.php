@@ -176,6 +176,10 @@ class Viewapis_model extends Model
         if (!empty($frameIds)) {
             $this->db->table('api_frame_fields')->whereIn('frame_id', $frameIds)->delete();
         }
+        // Also clear any denormalized config_id rows if the column exists.
+        if ($this->db->fieldExists('config_id', 'api_frame_fields')) {
+            $this->db->table('api_frame_fields')->where('config_id', $configId)->delete();
+        }
 
         $this->db->table('api_frames')->where('config_id', $configId)->delete();
 

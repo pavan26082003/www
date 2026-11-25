@@ -10,5 +10,6 @@
 
 $routes->get('app-home-page', 'AppHomePageController::index');
 $routes->get('app-home-page/rating', 'AppHomePageController::rating');
+$routes->get('app-home-page/profile-photo', 'AppHomePageController::profilePhoto');
 $routes->match(['get', 'post', 'put', 'patch'], 'app-home-page/api/(:segment)', 'AppHomePageController::api/$1');
 $routes->get('app-web-entry/open', 'AppWebEntry::open');

@@ -67,7 +67,7 @@ class DeviceUiSchemaNormalizer
      * @param array  $schema  Decoded schema document.
      * @param string $modelNo Model the app actually requested.
      * @param string $nodeId  Node the app actually opened.
-     * @param int    $userId  Account id for Profile → Appearance (0 = resolve from request).
+     * @param int    $userId  Account id for Profile -> Appearance (0 = resolve from request).
      */
     public static function normalize(array $schema, $modelNo = '', $nodeId = '', $userId = 0)
     {
@@ -102,6 +102,9 @@ class DeviceUiSchemaNormalizer
         $schema = self::unlockOnlineDeviceControl($schema);
         // Match web preview: single-UI groups keep the group title only.
         $schema = self::stripGroupedSingleInnerLabels($schema);
+        // Multi-control groups keep each field name (Power, Timer, Speed).
+        $schema = self::restoreMultiControlLabels($schema);
+        $schema = self::pruneStaleControlIconMaps($schema);
         // Hide "1 Control" badge on single-control groups.
         $schema = self::applyGroupCountVisibility($schema);
         // Drop duplicate "Page N.Operation" header subtitle (keep title + model only).
@@ -110,7 +113,7 @@ class DeviceUiSchemaNormalizer
         $schema = self::normalizeDeviceFrames($schema, $report);
         // Fill CommandId / Function Code / ActionId from protocolMeta when the
         // slot exists but is empty, or insert the slot when meta has the value.
-        // Inventing bytes is still forbidden — only copy known product_api values.
+        // Inventing bytes is still forbidden - only copy known product_api values.
         // Terminator is protocol-fixed (0A) when the slot is present but empty.
         $schema = self::hydrateWriteFieldsFromMeta($schema, $report);
         $schema = self::repairPublishedFrames($schema);
@@ -122,6 +125,9 @@ class DeviceUiSchemaNormalizer
         $schema = self::normalizeControlContracts($schema);
         // Rebuild missing multi-page hardware frames after controls are normalized.
         $schema = self::ensureDeviceConfigPagesFromControls($schema);
+        // V2/legacy-safe: push richer deviceConfig/v2_node_details frames onto
+        // controls[].deviceFrame so app controlFramePath matches page wires.
+        $schema = self::syncControlDeviceFramesFromConfigPages($schema);
         $schema = self::applyCanonicalHeader($schema);
         $schema = self::applyCanonicalValueColors($schema);
         // Timer schemaSlider with min/max labels and a kicker fails Flutter validation
@@ -143,11 +149,13 @@ class DeviceUiSchemaNormalizer
         // Must run after ensureDeviceConfigPagesFromControls / repairPublishedFrames
         // or those steps reintroduce option-list dumps into asperui_value.
         $schema = self::applyDisplaySanitizer($schema);
-        // Frame rebuilds / sanitizer may leave wire hex or empty asperui again —
+        // Frame rebuilds / sanitizer may leave wire hex or empty asperui again -
         // convert once more so sensors show typed 0 instead of Loading forever.
         $schema = self::applyV2DisplayHandlers($schema);
         $schema = self::syncControlDisplayFromFrames($schema);
-        // Wire padding / empty / junk cleared above → valueLoading flags.
+        // Re-sync after display/frame rebuilds so controlFramePath stays operable.
+        $schema = self::syncControlDeviceFramesFromConfigPages($schema);
+        // Wire padding / empty / junk cleared above -> valueLoading flags.
         $schema = self::applyLiveValueLoadingFlags($schema);
         // Keep MQTT enableWhen + Flutter state.online in sync with connectivity.
         $schema = self::syncOnlineStateFromConnectivity($schema);
@@ -155,6 +163,9 @@ class DeviceUiSchemaNormalizer
         // Move only the later colliding slot. Same keys, no invented protocol bytes.
         $overlapReport = ['repairedByteFields' => []];
         $schema = self::repairKnownCommandFrames($schema, $overlapReport);
+        // Recompute writeReady / missingFrameValues AFTER overlap repair so the
+        // app does not see stale overlap errors or null writeReady flags.
+        $schema = self::recordValidation($schema, $report);
         if (!empty($overlapReport['repairedByteFields'])
             && isset($schema['meta']['canonicalValidation'])
             && is_array($schema['meta']['canonicalValidation'])
@@ -172,10 +183,63 @@ class DeviceUiSchemaNormalizer
         if (!isset($schema['meta']) || !is_array($schema['meta'])) {
             $schema['meta'] = [];
         }
-        $schema['meta']['schemaBuildVersion'] = '2026-11-14.6';
-        $schema['meta']['normalizerBuild'] = '2026-11-14.6';
+        // Authoritative build stamp for app gating. schemaBuildVersion mirrors it.
+        $schema['meta']['normalizerBuild'] = '2026-11-19.3';
+        $schema['meta']['schemaBuildVersion'] = '2026-11-19.3';
+        $schema['meta']['writeContract'] = self::writeTransportContractDoc();
+        // Linked Studio pages are the only screens. Drop device-only pages and
+        // a second copy of the same page title before the app reads the schema.
+        $schema = self::alignPublishedUiPages($schema);
+        // One node payload. V2 is meta.v2DisplayHandlers, not a second copy of node_details.
+        $schema = self::publishSingleNodeDetails($schema);
+        // After frame display sync: direction buttons follow the byte, and
+        // raw [08][08] / 00 / 01 text is not a card title.
+        $schema = self::repairDirectionControls($schema);
 
         return $schema;
+    }
+
+    /**
+     * Documented write contract for Flutter. Cloud writes use the existing
+     * binding `update` action — not meta.links.parameters (schema GET) and not
+     * apiContracts.deviceCommands (device frame packer).
+     */
+    private static function writeTransportContractDoc()
+    {
+        return [
+            'version' => '2026-11-19.3',
+            'authoritativeBuildField' => 'meta.normalizerBuild',
+            'device' => [
+                'when' => 'control.writeReady === true && control.deviceWriteSupported === true',
+                'preferredTransport' => 'device',
+                'actionType' => 'send',
+                'dataSource' => 'deviceCommands',
+                'apiContract' => 'apiContracts.deviceCommands',
+                'framePath' => 'controls[].deviceFrame',
+                'notes' => 'Pack deviceFrame only. Do not invent CommandId/Function Code.',
+            ],
+            'cloud' => [
+                'when' => 'control.preferredTransport === "cloud" || control.deviceWriteSupported === false',
+                'preferredTransport' => 'cloud',
+                'actionType' => 'update',
+                'bindingPath' => 'control.binding',
+                'bindingExample' => 'device.parameters.{parameterKey}',
+                'valuePath' => 'state.parameters.{parameterKey}.value',
+                'doNotUse' => [
+                    'meta.links.parameters',
+                    'apiContracts.parameters',
+                    'apiContracts.deviceCommands',
+                    'dataSources.deviceCommands',
+                ],
+                'notes' => 'Use the existing Cloud/TAP DISPATCHED parameter update on the control binding. No protocol frame. No CommandId/Function Code body.',
+            ],
+            'fieldTypes' => [
+                'writeReady' => 'boolean',
+                'deviceWriteSupported' => 'boolean',
+                'preferredTransport' => 'device|cloud',
+                'missingFrameValues' => 'string[]',
+            ],
+        ];
     }
 
     /**
@@ -210,7 +274,7 @@ class DeviceUiSchemaNormalizer
                 }
             }
         } catch (\Throwable $e) {
-            // Ignore — fall through.
+            // Ignore - fall through.
         }
 
         if (isset($_SESSION['user_id']) && (int) $_SESSION['user_id'] > 0) {
@@ -280,7 +344,7 @@ class DeviceUiSchemaNormalizer
     }
 
     /**
-     * Account Profile → Appearance for device UI (same source as App Home / IoT / GRID).
+     * Account Profile -> Appearance for device UI (same source as App Home / IoT / GRID).
      * Default system until the user saves light/dark in web settings.
      */
     private static function resolveAccountAppearance(int $userId): string
@@ -426,7 +490,10 @@ class DeviceUiSchemaNormalizer
             $uiCount = isset($control['uiCount']) ? (int) $control['uiCount'] : 0;
             $groupName = trim((string) ($control['groupParameter'] ?? ''));
             $groupKey = trim((string) ($control['pageNo'] ?? '')) . '::' . strtolower($groupName);
-            $isSingle = $uiCount === 1 || ($groupName !== '' && ($groupCounts[$groupKey] ?? 0) === 1);
+            // uiCount is 1 on every row of a multi-control group (Get Status).
+            // Only a group that really has one control hides its inner title.
+            $groupSize = $groupName !== '' ? (int) ($groupCounts[$groupKey] ?? 0) : 0;
+            $isSingle = $groupSize === 1 || ($groupName === '' && $uiCount === 1);
             if (!$isSingle) {
                 continue;
             }
@@ -464,8 +531,481 @@ class DeviceUiSchemaNormalizer
     }
 
     /**
+     * A Get Status group has several rows that each store uiCount 1.
+     * Those rows need their own field name. Protocol roles (Command, commandId,
+     * Terminator) are not names a person can use.
+     */
+    private static function restoreMultiControlLabels(array $schema): array
+    {
+        if (!isset($schema['controls']) || !is_array($schema['controls'])) {
+            return $schema;
+        }
+
+        $groupCounts = [];
+        foreach ($schema['controls'] as $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+            $groupName = trim((string) ($control['groupParameter'] ?? ''));
+            if ($groupName === '') {
+                continue;
+            }
+            $groupKey = trim((string) ($control['pageNo'] ?? '')) . '::' . strtolower($groupName);
+            $groupCounts[$groupKey] = ($groupCounts[$groupKey] ?? 0) + 1;
+        }
+
+        $labelsById = [];
+        foreach ($schema['controls'] as $index => $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+            $type = strtolower(str_replace(['_', '-'], '', (string) ($control['componentType'] ?? '')));
+            if (strpos($type, 'slider') !== false) {
+                $step = $control['constraints']['step'] ?? null;
+                if ($step === null || $step === '' || (is_numeric($step) && (float) $step <= 0)) {
+                    if (!isset($control['constraints']) || !is_array($control['constraints'])) {
+                        $control['constraints'] = [];
+                    }
+                    $control['constraints']['step'] = 1;
+                    if (isset($control['component']['props']) && is_array($control['component']['props'])) {
+                        $control['component']['props']['step'] = 1;
+                    }
+                }
+            }
+
+            $groupName = trim((string) ($control['groupParameter'] ?? ''));
+            $groupKey = trim((string) ($control['pageNo'] ?? '')) . '::' . strtolower($groupName);
+            if ($groupName === '' || (int) ($groupCounts[$groupKey] ?? 0) < 2) {
+                $schema['controls'][$index] = $control;
+                $labelsById[(string) ($control['id'] ?? '')] = trim((string) ($control['parameterName'] ?? $control['parameter'] ?? ''));
+                continue;
+            }
+
+            $label = self::humanControlLabel($control);
+            $control['label'] = $label;
+            $control['fieldLabel'] = $label;
+            if (!isset($control['component']) || !is_array($control['component'])) {
+                $control['component'] = [];
+            }
+            if (!isset($control['component']['props']) || !is_array($control['component']['props'])) {
+                $control['component']['props'] = [];
+            }
+            $control['component']['props']['label'] = $label;
+            $control['component']['props']['title'] = $label;
+            $control['component']['props']['showTitle'] = true;
+            $control['component']['props']['hideLabel'] = false;
+            if (isset($control['component']['widgetTree']['properties']['props'])
+                && is_array($control['component']['widgetTree']['properties']['props'])) {
+                $props = &$control['component']['widgetTree']['properties']['props'];
+                $props['label'] = $label;
+                $props['title'] = $label;
+                $props['showTitle'] = true;
+                $props['hideLabel'] = false;
+                if (isset($props['metaChip']) && is_array($props['metaChip'])) {
+                    $props['metaChip']['label'] = $label;
+                    $props['metaChip']['text'] = $label;
+                    $props['metaChip']['title'] = $label;
+                }
+                unset($props);
+            }
+            $schema['controls'][$index] = $control;
+            $labelsById[(string) ($control['id'] ?? '')] = $label;
+        }
+
+        return self::syncPreviewSnapshotLabels($schema, $labelsById);
+    }
+
+    private static function humanControlLabel(array $control): string
+    {
+        $parameter = trim((string) ($control['parameterName'] ?? $control['parameter'] ?? ''));
+        $meta = isset($control['protocolMeta']) && is_array($control['protocolMeta']) ? $control['protocolMeta'] : [];
+        $candidates = [
+            $meta['field_description'] ?? '',
+            $meta['field_name'] ?? '',
+            $control['fieldLabel'] ?? '',
+            $control['label'] ?? '',
+        ];
+        $frame = isset($control['deviceFrame']) && is_array($control['deviceFrame'])
+            ? $control['deviceFrame']
+            : (isset($meta['frame']) && is_array($meta['frame']) ? $meta['frame'] : null);
+        $source = strtolower(trim((string) ($meta['ui_type_source'] ?? 'command')));
+        $bucket = $source === 'response' ? 'response' : ($source === 'error' ? 'error' : 'commands');
+        $index = $meta['field_index'] ?? null;
+        if (is_array($frame) && isset($frame[$bucket][$index]) && is_array($frame[$bucket][$index])) {
+            $field = $frame[$bucket][$index];
+            $candidates[] = $field['Field_description'] ?? '';
+            $candidates[] = $field['field_description'] ?? '';
+            $candidates[] = $field['default_name'] ?? '';
+        }
+        foreach ($candidates as $candidate) {
+            $text = trim((string) $candidate);
+            if ($text !== '' && !self::labelIsProtocolRole($text)) {
+                return $text;
+            }
+        }
+
+        return $parameter;
+    }
+
+    private static function labelIsProtocolRole($name): bool
+    {
+        $name = strtolower(trim((string) $name));
+        $name = str_replace(['_', '-'], ' ', $name);
+
+        return in_array($name, [
+            '', 'data', 'trigger', 'command', 'response', 'error', 'none', 'field',
+            'commandid', 'command id', 'functioncode', 'function code', 'terminator',
+            'actionid', 'action id',
+        ], true);
+    }
+
+    private static function syncPreviewSnapshotLabels(array $schema, array $labelsById): array
+    {
+        $pages = $schema['extensions']['universalUi']['extensions']['exactHtmlPreview']['pages'] ?? null;
+        if (!is_array($pages)) {
+            return $schema;
+        }
+        foreach ($pages as $pageIndex => $page) {
+            if (!is_array($page) || !isset($page['controls']) || !is_array($page['controls'])) {
+                continue;
+            }
+            foreach ($page['controls'] as $controlIndex => $previewControl) {
+                if (!is_array($previewControl)) {
+                    continue;
+                }
+                $id = (string) ($previewControl['id'] ?? '');
+                $label = ($id !== '' && isset($labelsById[$id])) ? $labelsById[$id] : '';
+                if ($label === '' && self::labelIsProtocolRole($previewControl['label'] ?? '')) {
+                    $parts = explode(':', $id);
+                    $label = isset($parts[1]) ? trim($parts[1]) : '';
+                }
+                if ($label === '') {
+                    continue;
+                }
+                $previewControl['label'] = $label;
+                $previewControl['name'] = $label;
+                $previewControl['fieldLabel'] = $label;
+                $pages[$pageIndex]['controls'][$controlIndex] = $previewControl;
+            }
+        }
+        $schema['extensions']['universalUi']['extensions']['exactHtmlPreview']['pages'] = $pages;
+
+        return $schema;
+    }
+
+    /**
+     * Drop icon entries for controls that are no longer on a page
+     * (old Home.operation Power / Buzzer / Speed / Timer rows).
+     */
+    private static function pruneStaleControlIconMaps(array $schema): array
+    {
+        $keys = [];
+        foreach ($schema['controls'] ?? [] as $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+            foreach (['id', 'parameterKey', 'parameter', 'parameterName'] as $field) {
+                $value = trim((string) ($control[$field] ?? ''));
+                if ($value !== '') {
+                    $keys[$value] = true;
+                }
+            }
+            $pageNo = trim((string) ($control['pageNo'] ?? ''));
+            $name = trim((string) ($control['parameterName'] ?? $control['parameter'] ?? ''));
+            if ($pageNo !== '' && $name !== '') {
+                $keys[$pageNo . ':' . $name] = true;
+            }
+        }
+        if ($keys === []) {
+            return $schema;
+        }
+
+        $mapPaths = [
+            ['settings', 'parameterIcons'],
+            ['settings', 'componentOverrides'],
+            ['theme', 'parameterIcons'],
+            ['extensions', 'universalUi', 'designSystem', 'icons', 'overrides'],
+            ['extensions', 'universalUi', 'extensions', 'exactHtmlPreview', 'theme', 'parameterIcons'],
+            ['extensions', 'universalUi', 'extensions', 'exactHtmlPreview', 'theme', 'componentOverrides'],
+        ];
+        foreach ($mapPaths as $path) {
+            $schema = self::pruneMapAtPath($schema, $path, $keys);
+        }
+
+        $listPaths = [
+            ['extensions', 'universalUi', 'extensions', 'exactHtmlPreview', 'xmlHints', 'parameterIconReferences'],
+            ['extensions', 'universalUi', 'extensions', 'exactHtmlPreview', 'xmlHints', 'parameterMetaIconReferences'],
+        ];
+        foreach ($listPaths as $path) {
+            $schema = self::pruneIconListAtPath($schema, $path, $keys);
+        }
+
+        return $schema;
+    }
+
+    private static function pruneMapAtPath(array $schema, array $path, array $keys): array
+    {
+        $cursor = &$schema;
+        $last = count($path) - 1;
+        foreach ($path as $depth => $segment) {
+            if (!isset($cursor[$segment]) || !is_array($cursor[$segment])) {
+                unset($cursor);
+                return $schema;
+            }
+            if ($depth === $last) {
+                $kept = [];
+                foreach ($cursor[$segment] as $key => $value) {
+                    if (isset($keys[(string) $key])) {
+                        $kept[$key] = $value;
+                    }
+                }
+                $cursor[$segment] = $kept;
+                unset($cursor);
+                return $schema;
+            }
+            $cursor = &$cursor[$segment];
+        }
+        unset($cursor);
+
+        return $schema;
+    }
+
+    private static function pruneIconListAtPath(array $schema, array $path, array $keys): array
+    {
+        $cursor = &$schema;
+        $last = count($path) - 1;
+        foreach ($path as $depth => $segment) {
+            if (!isset($cursor[$segment]) || !is_array($cursor[$segment])) {
+                unset($cursor);
+                return $schema;
+            }
+            if ($depth === $last) {
+                $kept = [];
+                foreach ($cursor[$segment] as $item) {
+                    if (!is_array($item)) {
+                        continue;
+                    }
+                    $key = trim((string) ($item['parameterKey'] ?? ''));
+                    if ($key !== '' && isset($keys[$key])) {
+                        $kept[] = $item;
+                    }
+                }
+                $cursor[$segment] = $kept;
+                unset($cursor);
+                return $schema;
+            }
+            $cursor = &$cursor[$segment];
+        }
+        unset($cursor);
+
+        return $schema;
+    }
+
+    /**
+     * Direction buttons follow the fan byte: 00 anti-clockwise, 01 clockwise.
+     * A stored label "Clockwise" on byte 00 is rewritten. Bracket dumps and
+     * the raw byte are not shown as the card title. The active mode is not
+     * sent again.
+     */
+    private static function repairDirectionControls(array $schema): array
+    {
+        if (!isset($schema['controls']) || !is_array($schema['controls'])) {
+            return $schema;
+        }
+
+        foreach ($schema['controls'] as $index => $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+            $name = trim((string) ($control['parameterName'] ?? $control['parameter'] ?? $control['groupParameter'] ?? ''));
+            if (!self::isDirectionControlName($name)) {
+                continue;
+            }
+
+            $source = strtolower(trim((string) ($control['protocolMeta']['ui_type_source'] ?? '')));
+            if (in_array($source, ['response', 'error'], true)) {
+                continue;
+            }
+
+            $options = self::directionOptionsForControl($control);
+            $raw = trim((string) ($control['value'] ?? ($control['initialValue'] ?? '')));
+            $selected = self::matchDirectionOptionValue($options, $raw);
+            $control['options'] = $options;
+            $control['value'] = $selected;
+            $control['initialValue'] = $selected;
+            $control['displayValue'] = '';
+            foreach (['label', 'fieldLabel', 'componentLabel', 'subtitle', 'title'] as $textKey) {
+                if (self::isDirectionJunkText($control[$textKey] ?? '')) {
+                    $control[$textKey] = '';
+                }
+            }
+
+            if (!isset($control['component']) || !is_array($control['component'])) {
+                $control['component'] = [];
+            }
+            $control['component']['options'] = $options;
+            $control['component']['initialValue'] = $selected;
+            $control['component']['displayValue'] = '';
+            if (!isset($control['component']['props']) || !is_array($control['component']['props'])) {
+                $control['component']['props'] = [];
+            }
+            $props = &$control['component']['props'];
+            $props['options'] = $options;
+            $props['value'] = $selected;
+            $props['hideValue'] = true;
+            $props['showValue'] = false;
+            $props['hideRawValue'] = true;
+            $props['allowReselect'] = false;
+            $props['sendOnReselect'] = false;
+            if (self::isDirectionJunkText($props['label'] ?? '')) {
+                $props['label'] = '';
+            }
+            if (self::isDirectionJunkText($props['title'] ?? '')) {
+                $props['title'] = '';
+            }
+            unset($props);
+
+            if (isset($control['component']['widgetTree']['properties']['props'])
+                && is_array($control['component']['widgetTree']['properties']['props'])
+            ) {
+                $treeProps = &$control['component']['widgetTree']['properties']['props'];
+                $treeProps['options'] = $options;
+                $treeProps['value'] = $selected;
+                $treeProps['hideValue'] = true;
+                $treeProps['showValue'] = false;
+                $treeProps['hideRawValue'] = true;
+                $treeProps['allowReselect'] = false;
+                $treeProps['sendOnReselect'] = false;
+                unset($treeProps);
+            }
+
+            $schema['controls'][$index] = $control;
+        }
+
+        return $schema;
+    }
+
+    private static function isDirectionControlName($name)
+    {
+        $name = strtolower(trim((string) $name));
+        if ($name === '' || strpos($name, 'data flow') !== false || strpos($name, 'dataflow') !== false) {
+            return false;
+        }
+
+        return $name === 'direction' || (bool) preg_match('/(^|[^a-z0-9])direction([^a-z0-9]|$)/', $name);
+    }
+
+    private static function isDirectionJunkText($value)
+    {
+        $text = trim((string) $value);
+        if ($text === '') {
+            return false;
+        }
+        if (preg_match('/^(\[[^\]]*\])+$/', $text)) {
+            return true;
+        }
+
+        return (bool) preg_match('/^(0|1|00|01|08)$/i', $text);
+    }
+
+    private static function directionOptionsForControl(array $control)
+    {
+        $pairs = [];
+        $existing = isset($control['options']) && is_array($control['options']) ? $control['options'] : [];
+        foreach ($existing as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            $pairs[] = [
+                'label' => (string) ($option['label'] ?? ''),
+                'value' => (string) ($option['value'] ?? ''),
+            ];
+        }
+        if (count($pairs) < 2) {
+            $meta = isset($control['protocolMeta']) && is_array($control['protocolMeta']) ? $control['protocolMeta'] : [];
+            $labels = isset($meta['items']) && is_array($meta['items']) ? $meta['items'] : [];
+            $values = isset($meta['item_values']) && is_array($meta['item_values']) ? $meta['item_values'] : [];
+            $pairs = [];
+            if ($labels === []) {
+                $pairs = [
+                    ['label' => '0', 'value' => '00'],
+                    ['label' => '1', 'value' => '01'],
+                ];
+            } else {
+                foreach ($labels as $index => $label) {
+                    $pairs[] = [
+                        'label' => (string) $label,
+                        'value' => array_key_exists($index, $values) ? (string) $values[$index] : (string) $label,
+                    ];
+                }
+            }
+        }
+
+        $mapped = [];
+        foreach ($pairs as $index => $pair) {
+            $token = strtolower((string) preg_replace('/[^a-z0-9]+/', '', (string) $pair['label']));
+            $valueToken = strtolower((string) preg_replace('/[^a-z0-9]+/', '', (string) $pair['value']));
+            if (in_array($valueToken, ['0', '00'], true) || in_array($token, ['0', '00'], true)) {
+                $isAnti = true;
+                $wire = '00';
+            } elseif (in_array($valueToken, ['1', '01'], true) || in_array($token, ['1', '01'], true)) {
+                $isAnti = false;
+                $wire = '01';
+            } elseif (in_array($token, ['ccw', 'anticlockwise', 'anticlock', 'counterclockwise', 'counterclock', 'reverse', 'rev'], true)) {
+                $isAnti = true;
+                $wire = $pair['value'] !== '' ? (string) $pair['value'] : '00';
+            } elseif (in_array($token, ['cw', 'clockwise', 'clock', 'forward', 'fwd'], true)) {
+                $isAnti = false;
+                $wire = $pair['value'] !== '' ? (string) $pair['value'] : '01';
+            } else {
+                $isAnti = $index === 1;
+                $wire = $pair['value'] !== '' ? (string) $pair['value'] : ($isAnti ? '00' : '01');
+            }
+            $mapped[] = [
+                'label' => $isAnti ? 'Anti-clockwise' : 'Clockwise',
+                'value' => $wire,
+            ];
+        }
+
+        if (count($mapped) < 2) {
+            return [
+                ['label' => 'Anti-clockwise', 'value' => '00'],
+                ['label' => 'Clockwise', 'value' => '01'],
+            ];
+        }
+
+        return array_slice($mapped, 0, 2);
+    }
+
+    private static function matchDirectionOptionValue(array $options, $raw)
+    {
+        $raw = trim((string) $raw);
+        $selected = (string) ($options[0]['value'] ?? '00');
+        if ($raw === '' || preg_match('/^(\[[^\]]*\])+$/', $raw)) {
+            return $selected;
+        }
+        foreach ($options as $option) {
+            $optionValue = (string) ($option['value'] ?? '');
+            if ($optionValue !== '' && strcasecmp($optionValue, $raw) === 0) {
+                return $optionValue;
+            }
+            if (strcasecmp((string) ($option['label'] ?? ''), $raw) === 0) {
+                return $optionValue;
+            }
+            if (preg_match('/^(0|1|00|01)$/i', $raw)
+                && preg_match('/^(0|1|00|01)$/i', $optionValue)
+                && (int) $raw === (int) $optionValue
+            ) {
+                return $optionValue;
+            }
+        }
+
+        return $selected;
+    }
+
+    /**
      * Single-control groups should not show a "1 Control" / "1 UI" badge.
-     * Additive flags only — Flutter that ignores them keeps prior behavior.
+     * Additive flags only - Flutter that ignores them keeps prior behavior.
      */
     private static function applyGroupCountVisibility(array $schema): array
     {
@@ -493,8 +1033,9 @@ class DeviceUiSchemaNormalizer
             $uiCount = isset($control['uiCount']) ? (int) $control['uiCount'] : 0;
             $groupName = trim((string) ($control['groupParameter'] ?? ''));
             $groupKey = trim((string) ($control['pageNo'] ?? '')) . '::' . strtolower($groupName);
-            $isSingle = $uiCount === 1 || ($groupName !== '' && ($groupCounts[$groupKey] ?? 0) === 1);
-            $showCount = !$isSingle && $uiCount > 1;
+            $groupSize = $groupName !== '' ? (int) ($groupCounts[$groupKey] ?? 0) : 0;
+            $isSingle = $groupSize === 1 || ($groupName === '' && $uiCount === 1);
+            $showCount = !$isSingle && ($groupSize > 1 || $uiCount > 1);
             if ($uiCount <= 0 && !$isSingle) {
                 $showCount = ($groupCounts[$groupKey] ?? 0) > 1;
             }
@@ -614,7 +1155,7 @@ class DeviceUiSchemaNormalizer
     }
 
     /**
-     * Prefer Loading… over fake wire padding (00 / 0000 / 00000000) until MQTT live state arrives.
+     * Prefer Loading... over fake wire padding (00 / 0000 / 00000000) until MQTT live state arrives.
      */
     private static function applyLiveValueLoadingFlags(array $schema): array
     {
@@ -666,7 +1207,7 @@ class DeviceUiSchemaNormalizer
             }
 
             $control['valueLoading'] = true;
-            $control['loadingText'] = 'Loading…';
+            $control['loadingText'] = 'Loading...';
             $control['preferLiveState'] = true;
             $control['value'] = '';
             $control['initialValue'] = null;
@@ -681,8 +1222,8 @@ class DeviceUiSchemaNormalizer
             }
             $control['component']['props']['valueLoading'] = true;
             $control['component']['props']['loading'] = true;
-            $control['component']['props']['loadingText'] = 'Loading…';
-            $control['component']['props']['placeholder'] = 'Loading…';
+            $control['component']['props']['loadingText'] = 'Loading...';
+            $control['component']['props']['placeholder'] = 'Loading...';
             if (isset($schema['state']['device']['parameters']) && is_array($schema['state']['device']['parameters'])) {
                 $paramKey = trim((string) ($control['parameterKey'] ?? ''));
                 if ($paramKey === '' && !empty($control['binding'])) {
@@ -922,7 +1463,7 @@ class DeviceUiSchemaNormalizer
 
     /**
      * Pixel-to-pixel with Views/items/view_page_ui.php .phone-shell ParameterCard CSS.
-     * Rewrites known size/alignment style values only — no schema structure change.
+     * Rewrites known size/alignment style values only - no schema structure change.
      */
     private static function applyPreviewPixelParity(array $schema): array
     {
@@ -1216,28 +1757,90 @@ class DeviceUiSchemaNormalizer
         if (!isset($schema['state']) || !is_array($schema['state'])) {
             $schema['state'] = [];
         }
+        $label = $connected ? 'Online' : 'Offline';
         $schema['state']['online'] = $connected;
+        $schema['state']['onlineLabel'] = $label;
 
         if (!isset($schema['state']['deviceConnectivity']) || !is_array($schema['state']['deviceConnectivity'])) {
             $schema['state']['deviceConnectivity'] = [];
         }
         $schema['state']['deviceConnectivity']['online'] = $connected;
+        $schema['state']['deviceConnectivity']['label'] = $label;
 
         if (isset($schema['extensions']['serverDrivenUi']['state']) && is_array($schema['extensions']['serverDrivenUi']['state'])) {
             $schema['extensions']['serverDrivenUi']['state']['online'] = $connected;
+            $schema['extensions']['serverDrivenUi']['state']['onlineLabel'] = $label;
         }
         if (isset($schema['extensions']['universal']['data']['state']) && is_array($schema['extensions']['universal']['data']['state'])) {
             $schema['extensions']['universal']['data']['state']['online'] = $connected;
+            $schema['extensions']['universal']['data']['state']['onlineLabel'] = $label;
         }
 
+        $theme = (isset($schema['theme']) && is_array($schema['theme'])) ? $schema['theme'] : [];
+        $colors = (isset($theme['colors']) && is_array($theme['colors'])) ? $theme['colors'] : [];
+        $color = $connected
+            ? (string) ($theme['successColor'] ?? ($colors['success'] ?? ($colors['accent'] ?? '#22C55E')))
+            : (string) ($theme['errorColor'] ?? ($colors['error'] ?? '#EF4444'));
+        self::paintOnlineLabels($schema, $label, $color);
+
         return $schema;
+    }
+
+    /**
+     * Keep baked brand-strip text on the same connectivity flag as state.online.
+     */
+    private static function paintOnlineLabels(&$node, string $label, string $color): void
+    {
+        if (!is_array($node)) {
+            return;
+        }
+
+        $id = isset($node['id']) ? (string) $node['id'] : '';
+        $props = (isset($node['properties']) && is_array($node['properties'])) ? $node['properties'] : null;
+        $textBinding = ($props && isset($props['textBinding'])) ? (string) $props['textBinding'] : '';
+        if ($textBinding === 'state.onlineLabel' || $id === 'online_text') {
+            if ($props !== null) {
+                $node['properties']['text'] = $label;
+            }
+            if (array_key_exists('text', $node)) {
+                $node['text'] = $label;
+            }
+            if ($color !== '' && isset($node['style']) && is_array($node['style'])) {
+                foreach (['color', 'textColor'] as $key) {
+                    if (array_key_exists($key, $node['style'])) {
+                        $node['style'][$key] = $color;
+                    }
+                }
+                if (isset($node['style']['textStyle']) && is_array($node['style']['textStyle']) && array_key_exists('color', $node['style']['textStyle'])) {
+                    $node['style']['textStyle']['color'] = $color;
+                }
+            }
+        }
+        if ($id === 'online_dot' && $color !== '' && isset($node['style']) && is_array($node['style']) && array_key_exists('backgroundColor', $node['style'])) {
+            $node['style']['backgroundColor'] = $color;
+        }
+        if (isset($node['labelBinding']) && (string) $node['labelBinding'] === 'state.onlineLabel') {
+            if (array_key_exists('text', $node)) {
+                $node['text'] = $label;
+            }
+            if ($color !== '' && array_key_exists('color', $node)) {
+                $node['color'] = $color;
+            }
+        }
+
+        foreach ($node as &$child) {
+            if (is_array($child)) {
+                self::paintOnlineLabels($child, $label, $color);
+            }
+        }
+        unset($child);
     }
 
     /**
      * Add dark/light presets and the same runtime appearance contract App Home uses.
      *
      * Default: system (follow phone). If the account saved light/dark in web Profile
-     * settings, that value is applied via AppAppearance — never collapse system here.
+     * settings, that value is applied via AppAppearance - never collapse system here.
      */
     private static function attachModeThemes(array $schema, int $userId = 0): array
     {
@@ -1248,12 +1851,14 @@ class DeviceUiSchemaNormalizer
         if (!isset($schema['theme']) || !is_array($schema['theme'])) {
             $schema['theme'] = array();
         }
-        // Keep authored colors; switchable palettes live under themes.presets.
+        // Keep authored colors for System (the app follows the phone).
+        // Light/Dark from Profile rewrites only color values that already exist.
         $schema['theme']['defaultMode'] = $activeMode;
         $schema['theme']['mode'] = $activeMode;
         if (array_key_exists('themeMode', $schema['theme'])) {
             $schema['theme']['themeMode'] = $activeMode;
         }
+        $schema = self::applyAccountPaletteToExistingColors($schema, $activeMode);
 
         if (!isset($schema['state']) || !is_array($schema['state'])) {
             $schema['state'] = array();
@@ -1273,6 +1878,110 @@ class DeviceUiSchemaNormalizer
             $wifiColors = (isset($wifiTheme['colors']) && is_array($wifiTheme['colors'])) ? $wifiTheme['colors'] : array();
             $schema['wifiProvisioning']['themes'] = self::buildModeThemes(self::wifiPalettes($wifiColors), $activeMode);
         }
+
+        return $schema;
+    }
+
+    /**
+     * Profile Light/Dark: replace existing theme color values so the app paints
+     * a readable palette. Does not add or remove keys.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    private static function applyAccountPaletteToExistingColors(array $schema, string $activeMode): array
+    {
+        if ($activeMode !== 'light' && $activeMode !== 'dark') {
+            return $schema;
+        }
+        if (!isset($schema['theme']) || !is_array($schema['theme'])) {
+            return $schema;
+        }
+
+        $dark = $activeMode === 'dark';
+        $colors = $dark
+            ? array(
+                'background' => '#0B1220',
+                'gradientEnd' => '#111827',
+                'shell' => '#0F172A',
+                'surface' => '#1E293B',
+                'card' => '#1E293B',
+                'text' => '#F8FAFC',
+                'mutedText' => '#94A3B8',
+                'muted' => '#94A3B8',
+                'secondary' => '#64748B',
+                'border' => '#334155',
+                'topbar' => '#020617',
+                'toggleOff' => '#475569',
+            )
+            : array(
+                'background' => '#F8FAFC',
+                'gradientEnd' => '#EEF2F7',
+                'shell' => '#F8FAFC',
+                'surface' => '#FFFFFF',
+                'card' => '#FFFFFF',
+                'text' => '#0F172A',
+                'mutedText' => '#64748B',
+                'muted' => '#64748B',
+                'secondary' => '#94A3B8',
+                'border' => '#E2E8F0',
+                'topbar' => '#FFFFFF',
+                'toggleOff' => '#CBD5E1',
+            );
+        $flat = $dark
+            ? array(
+                'backgroundColor' => '#0B1220',
+                'gradientColor' => '#111827',
+                'shellColor' => '#0F172A',
+                'cardColor' => '#1E293B',
+                'textColor' => '#F8FAFC',
+                'mutedTextColor' => '#94A3B8',
+                'topbarColor' => '#020617',
+                'secondaryColor' => '#64748B',
+                'borderColor' => '#334155',
+                'toggleOffColor' => '#475569',
+            )
+            : array(
+                'backgroundColor' => '#F8FAFC',
+                'gradientColor' => '#EEF2F7',
+                'shellColor' => '#F8FAFC',
+                'cardColor' => '#FFFFFF',
+                'textColor' => '#0F172A',
+                'mutedTextColor' => '#64748B',
+                'topbarColor' => '#FFFFFF',
+                'secondaryColor' => '#94A3B8',
+                'borderColor' => '#E2E8F0',
+                'toggleOffColor' => '#CBD5E1',
+            );
+
+        $theme = &$schema['theme'];
+        if (isset($theme['colors']) && is_array($theme['colors'])) {
+            foreach ($colors as $key => $value) {
+                if (array_key_exists($key, $theme['colors'])) {
+                    $theme['colors'][$key] = $value;
+                }
+            }
+        }
+        foreach ($flat as $key => $value) {
+            if (array_key_exists($key, $theme)) {
+                $theme[$key] = $value;
+            }
+        }
+        if (isset($theme['tokens']) && is_array($theme['tokens'])) {
+            foreach ($flat as $key => $value) {
+                if (array_key_exists($key, $theme['tokens'])) {
+                    $theme['tokens'][$key] = $value;
+                }
+            }
+            if (isset($theme['tokens']['colors']) && is_array($theme['tokens']['colors'])) {
+                foreach ($colors as $key => $value) {
+                    if (array_key_exists($key, $theme['tokens']['colors'])) {
+                        $theme['tokens']['colors'][$key] = $value;
+                    }
+                }
+            }
+        }
+        unset($theme);
 
         return $schema;
     }
@@ -1555,7 +2264,8 @@ class DeviceUiSchemaNormalizer
 
     /**
      * Copies protocolMeta.command_id / function_code / action_id into the matching
-     * deviceFrame command slots. Does not invent values that product_api never stored.
+     * deviceFrame command slots. Also reverse-hydrates meta from non-empty frame
+     * slots when meta is blank. Does not invent values product_api never stored.
      */
     private static function hydrateWriteFieldsFromMeta(array $schema, array &$report)
     {
@@ -1592,27 +2302,72 @@ class DeviceUiSchemaNormalizer
             }
 
             $commands = isset($frame['commands']) && is_array($frame['commands']) ? $frame['commands'] : [];
+
+            // Frame → meta: recover real ids already present on slots but missing in meta.
+            foreach ($commands as $field) {
+                if (!is_array($field)) {
+                    continue;
+                }
+                $slot = self::frameFieldName($field);
+                if (!in_array($slot, ['commandid', 'functioncode', 'actionid'], true)) {
+                    continue;
+                }
+                $slotValue = isset($field['value']) ? $field['value'] : null;
+                if ($slotValue === null || $slotValue === '' || $slotValue === []) {
+                    $slotValue = isset($field['asperui_value']) ? $field['asperui_value'] : null;
+                }
+                if ($slotValue === null || $slotValue === '' || $slotValue === [] || self::isZeroProtocolId($slotValue)) {
+                    continue;
+                }
+                $normalized = self::normalizeProtocolHex($slotValue, 1);
+                if ($normalized === '' || self::isZeroProtocolId($normalized)) {
+                    continue;
+                }
+                if ($slot === 'commandid' && ($commandId === null || self::isZeroProtocolId($commandId))) {
+                    $commandId = $normalized;
+                } elseif ($slot === 'functioncode' && ($functionCode === null || self::isZeroProtocolId($functionCode))) {
+                    $functionCode = $normalized;
+                } elseif ($slot === 'actionid' && ($actionId === null || self::isZeroProtocolId($actionId))) {
+                    $actionId = $normalized;
+                }
+            }
+
             $filled = $commands;
             if ($commandId !== null || $functionCode !== null || $actionId !== null) {
                 $filled = self::fillWriteFieldSlots($filled, $commandId, $functionCode, $actionId, $report, $control);
             }
             $filled = self::fillTerminatorSlot($filled, $report, $control);
-            if ($filled === $commands) {
+            $metaChanged = false;
+            if (!isset($control['protocolMeta']) || !is_array($control['protocolMeta'])) {
+                $control['protocolMeta'] = $meta;
+                $metaChanged = true;
+            }
+            if ($commandId !== null && !self::isZeroProtocolId($commandId)
+                && self::firstNonEmpty(isset($control['protocolMeta']['command_id']) ? $control['protocolMeta']['command_id'] : null) === null
+            ) {
+                $control['protocolMeta']['command_id'] = $commandId;
+                $metaChanged = true;
+            }
+            if ($functionCode !== null && !self::isZeroProtocolId($functionCode)
+                && self::firstNonEmpty(isset($control['protocolMeta']['function_code']) ? $control['protocolMeta']['function_code'] : null) === null
+            ) {
+                $control['protocolMeta']['function_code'] = $functionCode;
+                $metaChanged = true;
+            }
+            if ($actionId !== null && !self::isZeroProtocolId($actionId)
+                && self::firstNonEmpty(isset($control['protocolMeta']['action_id']) ? $control['protocolMeta']['action_id'] : null) === null
+            ) {
+                $control['protocolMeta']['action_id'] = $actionId;
+                $metaChanged = true;
+            }
+
+            if ($filled === $commands && !$metaChanged) {
                 continue;
             }
 
             $frame['commands'] = $filled;
             $control['deviceFrame'] = $frame;
-            if (!isset($control['protocolMeta']) || !is_array($control['protocolMeta'])) {
-                $control['protocolMeta'] = $meta;
-            }
             $control['protocolMeta']['frame'] = $frame;
-            if ($commandId !== null) {
-                $control['protocolMeta']['command_id'] = $commandId;
-            }
-            if ($functionCode !== null) {
-                $control['protocolMeta']['function_code'] = $functionCode;
-            }
             $schema['controls'][$index] = $control;
         }
 
@@ -1626,7 +2381,7 @@ class DeviceUiSchemaNormalizer
     private static function fillTerminatorSlot(array $commands, array &$report, array $control)
     {
         $controlId = trim((string) (isset($control['id']) ? $control['id'] : ''));
-        $found = false;
+        $terminatorIndexes = [];
         foreach ($commands as $i => $field) {
             if (!is_array($field)) {
                 continue;
@@ -1634,31 +2389,64 @@ class DeviceUiSchemaNormalizer
             if (self::frameFieldName($field) !== 'terminator') {
                 continue;
             }
-            $found = true;
-            $value = isset($field['value']) ? $field['value'] : null;
-            $asperui = isset($field['asperui_value']) ? $field['asperui_value'] : null;
-            if (($value === null || $value === '' || $value === []) && $asperui !== null && $asperui !== '' && $asperui !== []) {
-                if (self::looksLikeProtocolHex($asperui)) {
-                    $field['value'] = $asperui;
-                    $value = $asperui;
-                }
-            }
-            $normalized = self::normalizeProtocolHex($value, 1);
-            if ($normalized === '') {
-                $normalized = '0A';
-            }
-            $field['value'] = $normalized;
-            $field['no_of_bytes'] = 1;
-            if (!isset($field['asperui_value']) || $field['asperui_value'] === null || $field['asperui_value'] === ''
-                || !self::looksLikeProtocolHex($field['asperui_value'])
-            ) {
-                $field['asperui_value'] = $normalized;
-            }
-            $commands[$i] = $field;
-            $report['repairedByteFields'][] = ($controlId !== '' ? $controlId : 'control') . '.commands.Terminator';
+            $terminatorIndexes[] = $i;
         }
 
-        if (!$found && self::controlNeedsSendProtocol($control)) {
+        if (!empty($terminatorIndexes)) {
+            $keep = null;
+            foreach ($terminatorIndexes as $i) {
+                $val = strtoupper(preg_replace('/[^0-9A-F]/', '', (string) (isset($commands[$i]['value']) ? $commands[$i]['value'] : '')));
+                if ($val === '0A') {
+                    $keep = $i;
+                    break;
+                }
+            }
+            if ($keep === null) {
+                $keep = (int) end($terminatorIndexes);
+            }
+
+            $out = [];
+            foreach ($commands as $i => $field) {
+                if (!is_array($field)) {
+                    $out[] = $field;
+                    continue;
+                }
+                if (self::frameFieldName($field) !== 'terminator') {
+                    $out[] = $field;
+                    continue;
+                }
+                if ($i !== $keep) {
+                    continue;
+                }
+                $value = isset($field['value']) ? $field['value'] : null;
+                $asperui = isset($field['asperui_value']) ? $field['asperui_value'] : null;
+                if (($value === null || $value === '' || $value === []) && $asperui !== null && $asperui !== '' && $asperui !== []) {
+                    if (self::looksLikeProtocolHex($asperui)) {
+                        $field['value'] = $asperui;
+                        $value = $asperui;
+                    }
+                }
+                $normalized = self::normalizeProtocolHex($value, 1);
+                if ($normalized === '') {
+                    $normalized = '0A';
+                }
+                $field['default_name'] = 'Terminator';
+                $field['Field_description'] = 'Terminator';
+                $field['value'] = $normalized;
+                $field['no_of_bytes'] = 1;
+                if (!isset($field['asperui_value']) || $field['asperui_value'] === null || $field['asperui_value'] === ''
+                    || !self::looksLikeProtocolHex($field['asperui_value'])
+                ) {
+                    $field['asperui_value'] = $normalized;
+                }
+                $out[] = $field;
+                $report['repairedByteFields'][] = ($controlId !== '' ? $controlId : 'control') . '.commands.Terminator';
+            }
+
+            return array_values($out);
+        }
+
+        if (self::controlNeedsSendProtocol($control)) {
             $nextStart = 1;
             foreach ($commands as $field) {
                 if (!is_array($field)) {
@@ -1678,7 +2466,7 @@ class DeviceUiSchemaNormalizer
     }
 
     /**
-     * Enforce Rule 1–3 for every Send / writable user-input control:
+     * Enforce Rule 1-3 for every Send / writable user-input control:
      * hex width = 2 * no_of_bytes, full CommandId/Function/Data/Terminator framing,
      * and explicit write permissions.
      */
@@ -1815,12 +2603,23 @@ class DeviceUiSchemaNormalizer
 
     /**
      * Resolve protocol width from no_of_bytes or mobile alias byteLength.
-     * Does not rename either key — both stay in the schema when present.
+     * Does not rename either key - both stay in the schema when present.
      */
     private static function resolveCommandByteCount(array $field)
     {
-        $bytes = isset($field['no_of_bytes']) ? (int) $field['no_of_bytes'] : 0;
-        if ($bytes < 1 && isset($field['byteLength'])) {
+        // Explicit 0 is a zero-width payload (Command Get Status Data). Do not
+        // invent a byte — that shifts the terminator and can absorb a header byte.
+        if (array_key_exists('no_of_bytes', $field) && $field['no_of_bytes'] !== '' && $field['no_of_bytes'] !== null) {
+            $declared = (int) $field['no_of_bytes'];
+            if ($declared === 0) {
+                return 0;
+            }
+            if ($declared > 0) {
+                return $declared;
+            }
+        }
+        $bytes = 0;
+        if (isset($field['byteLength'])) {
             $bytes = (int) $field['byteLength'];
         }
         if ($bytes < 1 && isset($field['byte_length'])) {
@@ -1848,6 +2647,10 @@ class DeviceUiSchemaNormalizer
             if (isset($field['byteLength']) || array_key_exists('byteLength', $field)) {
                 $field['byteLength'] = $bytes;
             }
+            if ($bytes < 1 && $name !== 'terminator') {
+                $commands[$i] = $field;
+                continue;
+            }
 
             $value = isset($field['value']) ? $field['value'] : null;
             if (($value === null || $value === '' || $value === [])
@@ -1862,7 +2665,7 @@ class DeviceUiSchemaNormalizer
                 if ($name === 'terminator') {
                     $normalized = '0A';
                 } elseif (in_array($name, ['commandid', 'functioncode', 'actionid'], true)) {
-                    // Never invent protocol IDs — leave empty so writeReady stays false
+                    // Never invent protocol IDs - leave empty so writeReady stays false
                     // until product_api supplies the real bytes.
                     $commands[$i] = $field;
                     continue;
@@ -1889,11 +2692,15 @@ class DeviceUiSchemaNormalizer
 
             $field['value'] = $normalized;
             $field['no_of_bytes'] = $bytes;
-            // Keep asperui_value width-safe when it is protocol hex (e.g. "00" → "0000").
+            // Widen asperui only when it is the wire value (e.g. "00" -> "0000").
+            // A shorter UI token such as "1" next to wire "A2EA" must stay "1".
             if (isset($field['asperui_value']) && self::looksLikeProtocolHex($field['asperui_value'])) {
-                $asperuiHex = self::normalizeProtocolHex($field['asperui_value'], $bytes);
-                if ($asperuiHex !== '') {
-                    $field['asperui_value'] = $asperuiHex;
+                $asperuiRaw = strtoupper(preg_replace('/[\s:_-]+/', '', preg_replace('/^0x/i', '', trim((string) $field['asperui_value']))));
+                if ($normalized === '' || strcasecmp($asperuiRaw, $normalized) === 0 || strlen($asperuiRaw) >= strlen($normalized)) {
+                    $asperuiHex = self::normalizeProtocolHex($field['asperui_value'], $bytes);
+                    if ($asperuiHex !== '') {
+                        $field['asperui_value'] = $asperuiHex;
+                    }
                 }
             }
             $commands[$i] = $field;
@@ -2398,11 +3205,15 @@ class DeviceUiSchemaNormalizer
             : [];
 
         if ($usedV2Api) {
-            // V2 API is authority for pages/values (like legacy test_nodes for legacy).
+            // V2 test node is the page list. Stored pages that the new API
+            // removed (old Home.operation, etc.) are not copied back in.
             $schema['node_details'] = $ordered;
             $schema['v2_node_details'] = $ordered;
             if (!empty($config)) {
-                $schema['deviceConfig'] = self::mergeDeviceConfigPages($config, $existingConfig);
+                $schema['deviceConfig'] = self::mergeDeviceConfigPages(
+                    $config,
+                    self::configLimitedToLivePages($existingConfig, $config)
+                );
                 if (isset($schema['node_details'][0]) && is_array($schema['node_details'][0])) {
                     $schema['node_details'][0]['config'] = $schema['deviceConfig'];
                 }
@@ -2504,6 +3315,21 @@ class DeviceUiSchemaNormalizer
         }
 
         // Prefer in-process builder when CI model is already available (api_schema path).
+        // Autoload: api_schema boots CI before normalize. Skipping autoload forced a
+        // loopback HTTP call that often timed out and left the stored node in place.
+        if (!class_exists(\App\Models\View_page_model::class, true)) {
+            $boot = dirname(__DIR__) . '/Libraries/AppHomeBootstrap.php';
+            if (is_file($boot)) {
+                try {
+                    require_once $boot;
+                    if (class_exists(\App\Libraries\AppHomeBootstrap::class, false)) {
+                        \App\Libraries\AppHomeBootstrap::bootIfNeeded();
+                    }
+                } catch (\Throwable $exception) {
+                    // HTTP fallback below.
+                }
+            }
+        }
         if (class_exists(\App\Models\View_page_model::class, false)) {
             try {
                 $model = new \App\Models\View_page_model();
@@ -2558,6 +3384,33 @@ class DeviceUiSchemaNormalizer
     }
 
     /**
+     * Published schema carries one node list: node_details.
+     * V2 stays on meta.v2DisplayHandlers. v2_node_details was the same payload.
+     */
+    private static function publishSingleNodeDetails(array $schema)
+    {
+        $hasNode = isset($schema['node_details']) && is_array($schema['node_details']) && $schema['node_details'] !== [];
+        $hasV2 = isset($schema['v2_node_details']) && is_array($schema['v2_node_details']) && $schema['v2_node_details'] !== [];
+        if ($hasV2 && !$hasNode) {
+            $schema['node_details'] = $schema['v2_node_details'];
+            $hasNode = true;
+        }
+        if ($hasV2 || !empty($schema['meta']['v2DisplayHandlers']) || !empty($schema['meta']['app']['v2DisplayHandlers'])) {
+            if (!isset($schema['meta']) || !is_array($schema['meta'])) {
+                $schema['meta'] = [];
+            }
+            $schema['meta']['v2DisplayHandlers'] = true;
+            if (!isset($schema['meta']['app']) || !is_array($schema['meta']['app'])) {
+                $schema['meta']['app'] = [];
+            }
+            $schema['meta']['app']['v2DisplayHandlers'] = true;
+        }
+        unset($schema['v2_node_details']);
+
+        return $schema;
+    }
+
+    /**
      * Detect schemas that carry V2 handler-built node details.
      */
     private static function schemaPrefersV2NodeDetails(array $schema)
@@ -2607,6 +3460,11 @@ class DeviceUiSchemaNormalizer
             ) {
                 $schema['node_details'][0]['config'] = $schema['deviceConfig'];
             }
+            if (isset($schema['v2_node_details'][0]['config']) && is_array($schema['v2_node_details'][0])
+                && isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])
+            ) {
+                $schema['v2_node_details'][0]['config'] = $schema['deviceConfig'];
+            }
             if (isset($schema['state']['device']) && is_array($schema['state']['device'])
                 && isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])
             ) {
@@ -2649,6 +3507,36 @@ class DeviceUiSchemaNormalizer
      * Union live + existing deviceConfig pages without renaming keys.
      * Live frames win for shared page names; pages only in existing are kept.
      */
+    /**
+     * Keep stored frame detail only for pages the live V2 node still publishes.
+     * Pages removed by a new API are not merged back into deviceConfig.
+     */
+    private static function configLimitedToLivePages(array $existingConfig, array $liveConfig): array
+    {
+        $livePages = isset($liveConfig['devices'][0]['pages']) && is_array($liveConfig['devices'][0]['pages'])
+            ? $liveConfig['devices'][0]['pages']
+            : [];
+        if ($existingConfig === [] || $livePages === []) {
+            return [];
+        }
+        if (!isset($existingConfig['devices'][0]) || !is_array($existingConfig['devices'][0])) {
+            return [];
+        }
+        $existingPages = isset($existingConfig['devices'][0]['pages']) && is_array($existingConfig['devices'][0]['pages'])
+            ? $existingConfig['devices'][0]['pages']
+            : [];
+        $kept = [];
+        foreach ($livePages as $pageName => $frames) {
+            $pageKey = (string) $pageName;
+            if (isset($existingPages[$pageKey]) && is_array($existingPages[$pageKey])) {
+                $kept[$pageKey] = $existingPages[$pageKey];
+            }
+        }
+        $existingConfig['devices'][0]['pages'] = $kept;
+
+        return $existingConfig;
+    }
+
     private static function mergeDeviceConfigPages(array $liveConfig, array $existingConfig)
     {
         $livePages = isset($liveConfig['devices'][0]['pages']) && is_array($liveConfig['devices'][0]['pages'])
@@ -2705,16 +3593,794 @@ class DeviceUiSchemaNormalizer
                 $score += 5;
             }
             $score += count($commands);
+            // Prefer frames with real protocol hex over zero/empty placeholders.
+            $score += self::frameWireScore($frame);
         }
 
         return $score;
     }
 
     /**
+     * Score how operable a frame's command wire values look (non-zero hex wins).
+     */
+    private static function frameWireScore(array $frame)
+    {
+        $score = 0;
+        $commands = isset($frame['commands']) && is_array($frame['commands']) ? $frame['commands'] : [];
+        foreach ($commands as $field) {
+            if (!is_array($field)) {
+                continue;
+            }
+            $level = strtolower(trim((string) ($field['field_level'] ?? ($field['fieldLevel'] ?? 'bytewise'))));
+            $parentId = (int) ($field['parent_field_id'] ?? ($field['parentFieldId'] ?? 0));
+            if ($level === 'bitwise' && $parentId > 0) {
+                continue;
+            }
+            $hex = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', (string) ($field['value'] ?? '')));
+            if ($hex === '') {
+                continue;
+            }
+            if (preg_match('/^0+$/', $hex)) {
+                $score += 1;
+                continue;
+            }
+            $score += 10 + (int) (strlen($hex) / 2);
+        }
+
+        return $score;
+    }
+
+    /**
+     * Copy richer deviceConfig / v2_node_details page frames onto controls[].deviceFrame.
+     * Preserves schema keys and only replaces when the config frame has better wire values.
+     * Safe for app: same deviceFrame shape, no new response keys.
+     */
+    private static function syncControlDeviceFramesFromConfigPages(array $schema)
+    {
+        if (!isset($schema['controls']) || !is_array($schema['controls']) || $schema['controls'] === []) {
+            return $schema;
+        }
+
+        $pageSets = [];
+        if (isset($schema['deviceConfig']['devices'][0]['pages']) && is_array($schema['deviceConfig']['devices'][0]['pages'])) {
+            $pageSets[] = $schema['deviceConfig']['devices'][0]['pages'];
+        }
+        foreach (['v2_node_details', 'node_details'] as $detailKey) {
+            if (!isset($schema[$detailKey][0]['config']['devices'][0]['pages'])
+                || !is_array($schema[$detailKey][0]['config']['devices'][0]['pages'])
+            ) {
+                continue;
+            }
+            $pageSets[] = $schema[$detailKey][0]['config']['devices'][0]['pages'];
+        }
+
+        if ($pageSets === []) {
+            return $schema;
+        }
+
+        $bestByName = [];
+        $bestBySlug = [];
+        foreach ($pageSets as $pages) {
+            foreach ($pages as $entries) {
+                if (!is_array($entries)) {
+                    continue;
+                }
+                foreach ($entries as $entry) {
+                    if (!is_array($entry)) {
+                        continue;
+                    }
+                    $frame = isset($entry['frame']) && is_array($entry['frame']) ? $entry['frame'] : null;
+                    if ($frame === null) {
+                        continue;
+                    }
+                    $name = strtolower(trim((string) ($frame['name'] ?? '')));
+                    if ($name === '') {
+                        continue;
+                    }
+                    $slug = preg_replace('/[^a-z0-9]+/', '', $name);
+                    $score = self::frameWireScore($frame);
+                    if ($score <= 0) {
+                        continue;
+                    }
+                    if (!isset($bestByName[$name]) || $score > self::frameWireScore($bestByName[$name])) {
+                        $bestByName[$name] = $frame;
+                    }
+                    if ($slug !== '' && (!isset($bestBySlug[$slug]) || $score > self::frameWireScore($bestBySlug[$slug]))) {
+                        $bestBySlug[$slug] = $frame;
+                    }
+                }
+            }
+        }
+
+        if ($bestByName === [] && $bestBySlug === []) {
+            return $schema;
+        }
+
+        foreach ($schema['controls'] as $index => $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+            $candidates = [
+                strtolower(trim((string) ($control['deviceFrame']['name'] ?? ''))),
+                strtolower(trim((string) ($control['parameterName'] ?? ''))),
+                strtolower(trim((string) ($control['parameter'] ?? ''))),
+                strtolower(trim((string) ($control['label'] ?? ''))),
+                strtolower(trim((string) ($control['name'] ?? ''))),
+            ];
+            $best = null;
+            $bestScore = -1;
+            foreach ($candidates as $cand) {
+                if ($cand === '') {
+                    continue;
+                }
+                if (isset($bestByName[$cand])) {
+                    $score = self::frameWireScore($bestByName[$cand]);
+                    if ($score > $bestScore) {
+                        $best = $bestByName[$cand];
+                        $bestScore = $score;
+                    }
+                }
+                $slug = preg_replace('/[^a-z0-9]+/', '', $cand);
+                if ($slug !== '' && isset($bestBySlug[$slug])) {
+                    $score = self::frameWireScore($bestBySlug[$slug]);
+                    if ($score > $bestScore) {
+                        $best = $bestBySlug[$slug];
+                        $bestScore = $score;
+                    }
+                }
+            }
+            if ($best === null || $bestScore <= 0) {
+                continue;
+            }
+
+            $current = isset($control['deviceFrame']) && is_array($control['deviceFrame'])
+                ? $control['deviceFrame']
+                : [];
+            $currentScore = self::frameWireScore($current);
+            $v2Authority = self::schemaPrefersV2NodeDetails($schema);
+            // A longer stored control wire is not richer when it repeats a header
+            // byte (Command Get Status Data = E7). The test-node page frame wins.
+            if (!$v2Authority && $bestScore <= $currentScore) {
+                continue;
+            }
+
+            // Keep control-facing name if present; copy operable commands/response/error.
+            $merged = $best;
+            if (!empty($current['name'])) {
+                $merged['name'] = $current['name'];
+            } elseif (!empty($control['parameterName'])) {
+                $merged['name'] = $control['parameterName'];
+            }
+            $control['deviceFrame'] = $merged;
+            if (!isset($control['protocolMeta']) || !is_array($control['protocolMeta'])) {
+                $control['protocolMeta'] = [];
+            }
+            $control['protocolMeta']['frame'] = $merged;
+            if (isset($merged['commands']) && is_array($merged['commands'])) {
+                $control['commands'] = $merged['commands'];
+            }
+            // Refresh protocol ids from upgraded frame when meta still zero/empty.
+            foreach ($merged['commands'] ?? [] as $field) {
+                if (!is_array($field)) {
+                    continue;
+                }
+                $slot = self::frameFieldName($field);
+                $hex = self::normalizeProtocolHex($field['value'] ?? null, 0);
+                if ($hex === '' || self::isZeroProtocolId($hex)) {
+                    continue;
+                }
+                if ($slot === 'commandid'
+                    && (self::firstNonEmpty($control['protocolMeta']['command_id'] ?? null) === null
+                        || self::isZeroProtocolId($control['protocolMeta']['command_id'] ?? null))
+                ) {
+                    $control['protocolMeta']['command_id'] = $hex;
+                }
+                if ($slot === 'functioncode'
+                    && (self::firstNonEmpty($control['protocolMeta']['function_code'] ?? null) === null
+                        || self::isZeroProtocolId($control['protocolMeta']['function_code'] ?? null))
+                ) {
+                    $control['protocolMeta']['function_code'] = $hex;
+                }
+            }
+            $schema['controls'][$index] = $control;
+        }
+
+        return $schema;
+    }
+
+    /**
      * Publish every schema page into deviceConfig.devices[0].pages using control
-     * deviceFrame payloads. Does not invent protocol bytes — only copies frames
+     * deviceFrame payloads. Does not invent protocol bytes - only copies frames
      * already present on controls.
      */
+    /**
+     * Publish one screen per linked page title.
+     * A parameter kept on an earlier page is not repeated on a later page.
+     * Device pages that were never linked are removed from the node the app reads.
+     */
+    public static function alignPublishedUiPages(array $schema)
+    {
+        $controls = isset($schema['controls']) && is_array($schema['controls']) ? $schema['controls'] : [];
+        if ($controls === []) {
+            return $schema;
+        }
+
+        $orderedIndexes = array_keys($controls);
+        usort($orderedIndexes, static function ($a, $b) use ($controls) {
+            $left = is_array($controls[$a]) ? $controls[$a] : [];
+            $right = is_array($controls[$b]) ? $controls[$b] : [];
+            $pageCompare = ((int) ($left['pageNo'] ?? 0)) <=> ((int) ($right['pageNo'] ?? 0));
+            if ($pageCompare !== 0) {
+                return $pageCompare;
+            }
+
+            return ((int) ($left['sequence'] ?? 0)) <=> ((int) ($right['sequence'] ?? 0));
+        });
+
+        $titleCounts = [];
+        $titleDisplay = [];
+        $normalized = [];
+        foreach ($orderedIndexes as $index) {
+            $control = $controls[$index];
+            if (!is_array($control)) {
+                continue;
+            }
+            $pageNo = trim((string) ($control['pageNo'] ?? '1'));
+            if ($pageNo === '') {
+                $pageNo = '1';
+            }
+            $title = trim((string) ($control['pageName'] ?? ''));
+            if ($title === '') {
+                $title = 'Page ' . $pageNo;
+            }
+            $titleKey = strtolower($title);
+            if (!isset($titleCounts[$titleKey])) {
+                $titleCounts[$titleKey] = [];
+            }
+            if (!isset($titleCounts[$titleKey][$pageNo])) {
+                $titleCounts[$titleKey][$pageNo] = 0;
+            }
+            $titleCounts[$titleKey][$pageNo]++;
+            if (!isset($titleDisplay[$titleKey]) || (int) $pageNo < (int) array_key_first($titleCounts[$titleKey])) {
+                $titleDisplay[$titleKey] = $title;
+            }
+            $control['pageNo'] = $pageNo;
+            $control['pageName'] = $title;
+            $normalized[] = $control;
+        }
+
+        $titleOwner = [];
+        foreach ($titleCounts as $titleKey => $counts) {
+            $bestNo = '';
+            $bestCount = -1;
+            foreach ($counts as $pageNo => $count) {
+                if ($count > $bestCount || ($count === $bestCount && ($bestNo === '' || (int) $pageNo < (int) $bestNo))) {
+                    $bestNo = (string) $pageNo;
+                    $bestCount = $count;
+                }
+            }
+            $titleOwner[$titleKey] = $bestNo;
+        }
+
+        $parametersOnWinner = [];
+        foreach ($normalized as $control) {
+            $titleKey = strtolower(trim((string) ($control['pageName'] ?? '')));
+            $pageNo = (string) ($control['pageNo'] ?? '');
+            if (($titleOwner[$titleKey] ?? '') !== $pageNo) {
+                continue;
+            }
+            $parameter = strtolower(trim((string) ($control['parameterName'] ?? ($control['parameter'] ?? ''))));
+            if ($parameter !== '') {
+                $parametersOnWinner[$titleKey][$parameter] = true;
+            }
+        }
+
+        $keptControls = [];
+        foreach ($normalized as $control) {
+            $titleKey = strtolower(trim((string) ($control['pageName'] ?? '')));
+            $pageNo = (string) ($control['pageNo'] ?? '');
+            $winner = (string) ($titleOwner[$titleKey] ?? $pageNo);
+            $parameter = strtolower(trim((string) ($control['parameterName'] ?? ($control['parameter'] ?? ''))));
+            if ($pageNo !== $winner) {
+                if ($parameter !== '' && !empty($parametersOnWinner[$titleKey][$parameter])) {
+                    continue;
+                }
+                $control['pageNo'] = $winner;
+            }
+            $keptControls[] = $control;
+        }
+
+        $idsByPage = [];
+        $pageTitle = [];
+        foreach ($keptControls as $index => $control) {
+            $pageNo = trim((string) ($control['pageNo'] ?? '1'));
+            if ($pageNo === '') {
+                $pageNo = '1';
+            }
+            $title = trim((string) ($control['pageName'] ?? ''));
+            if ($title === '') {
+                $title = 'Page ' . $pageNo;
+            }
+            $titleKey = strtolower($title);
+            $keptNo = (string) ($titleOwner[$titleKey] ?? $pageNo);
+            $keptTitle = (string) ($titleDisplay[$titleKey] ?? $title);
+            $control['pageNo'] = $keptNo;
+            $control['pageName'] = $keptTitle;
+            $control['pageId'] = 'page_' . $keptNo;
+            $keptControls[$index] = $control;
+            $id = trim((string) ($control['id'] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+            if (!isset($idsByPage[$keptNo])) {
+                $idsByPage[$keptNo] = [];
+                $pageTitle[$keptNo] = $keptTitle;
+            }
+            $idsByPage[$keptNo][] = $id;
+        }
+        $schema['controls'] = array_values($keptControls);
+
+        uksort($idsByPage, static function ($a, $b) {
+            return ((int) $a) <=> ((int) $b);
+        });
+
+        $previousPages = [];
+        foreach ($schema['pages'] ?? [] as $page) {
+            if (!is_array($page)) {
+                continue;
+            }
+            $pageNo = trim((string) ($page['pageNo'] ?? ''));
+            if ($pageNo !== '') {
+                $previousPages[$pageNo] = $page;
+            }
+        }
+
+        $newPages = [];
+        $pageIds = [];
+        foreach ($idsByPage as $pageNo => $ids) {
+            $page = isset($previousPages[$pageNo]) && is_array($previousPages[$pageNo])
+                ? $previousPages[$pageNo]
+                : [];
+            $page['id'] = trim((string) ($page['id'] ?? '')) !== '' ? $page['id'] : ('page_' . $pageNo);
+            $page['pageNo'] = (string) $pageNo;
+            $page['title'] = $pageTitle[$pageNo] ?? ('Page ' . $pageNo);
+            $page['controlIds'] = array_values($ids);
+            $page['controlCount'] = count($page['controlIds']);
+            $page['index'] = count($newPages);
+            $newPages[] = $page;
+            $pageIds[] = $page['id'];
+        }
+        $schema['pages'] = $newPages;
+
+        if (!isset($schema['meta']) || !is_array($schema['meta'])) {
+            $schema['meta'] = [];
+        }
+        $schema['meta']['pageCount'] = count($newPages);
+        $schema['meta']['totalControlCount'] = count($schema['controls']);
+        if (isset($schema['meta']['canonicalValidation']) && is_array($schema['meta']['canonicalValidation'])) {
+            $schema['meta']['canonicalValidation']['pageCount'] = count($newPages);
+            $schema['meta']['canonicalValidation']['totalControlCount'] = count($schema['controls']);
+        }
+
+        if (!isset($schema['navigation']) || !is_array($schema['navigation'])) {
+            $schema['navigation'] = [];
+        }
+        $existingNavPages = isset($schema['navigation']['pages']) && is_array($schema['navigation']['pages'])
+            ? $schema['navigation']['pages']
+            : [];
+        $navFirst = $existingNavPages !== [] ? reset($existingNavPages) : null;
+        $schema['navigation']['pages'] = is_string($navFirst) ? $pageIds : $newPages;
+        $schema['navigation']['pageIds'] = $pageIds;
+        $initial = trim((string) ($schema['navigation']['initialPageId'] ?? ($schema['navigation']['initial'] ?? '')));
+        if ($initial === '' || !in_array($initial, $pageIds, true)) {
+            $schema['navigation']['initial'] = $pageIds[0] ?? '';
+            $schema['navigation']['initialPageId'] = $pageIds[0] ?? '';
+            $schema['navigation']['activePageId'] = $pageIds[0] ?? '';
+        }
+        if (isset($schema['navigation']['graph']['routes']) && is_array($schema['navigation']['graph']['routes'])) {
+            $allowedIds = array_fill_keys($pageIds, true);
+            $schema['navigation']['graph']['routes'] = array_values(array_filter(
+                $schema['navigation']['graph']['routes'],
+                static function ($route) use ($allowedIds) {
+                    return is_array($route) && isset($allowedIds[(string) ($route['id'] ?? '')]);
+                }
+            ));
+            if (isset($schema['navigation']['deepLinks']) && is_array($schema['navigation']['deepLinks'])) {
+                $schema['navigation']['deepLinks'] = array_values(array_filter(
+                    $schema['navigation']['deepLinks'],
+                    static function ($link) use ($allowedIds) {
+                        return is_array($link) && isset($allowedIds[(string) ($link['routeId'] ?? '')]);
+                    }
+                ));
+            }
+        }
+        if (isset($schema['dashboard']) && is_array($schema['dashboard'])) {
+            $schema['dashboard']['pages'] = array_map(static function ($page) {
+                return [
+                    'id' => $page['id'],
+                    'pageNo' => $page['pageNo'],
+                    'title' => $page['title'],
+                    'controlIds' => $page['controlIds'],
+                    'controlCount' => $page['controlCount'],
+                    'widgetTreeRef' => 'page_slide_' . $page['index'],
+                ];
+            }, $newPages);
+        }
+        if (isset($schema['state']) && is_array($schema['state'])) {
+            if (!empty($newPages) && !in_array($schema['state']['activePageId'] ?? '', $pageIds, true)) {
+                $schema['state']['activePageId'] = $newPages[0]['id'];
+                $schema['state']['activePageNo'] = $newPages[0]['pageNo'];
+                $schema['state']['activePageName'] = $newPages[0]['title'];
+                $schema['state']['activePageIndex'] = 0;
+            }
+            if (isset($schema['state']['pages']) && is_array($schema['state']['pages'])) {
+                $schema['state']['pages'] = $newPages;
+            }
+        }
+
+        $allowedTitles = [];
+        foreach ($pageTitle as $title) {
+            $allowedTitles[strtolower(trim((string) $title))] = $title;
+        }
+        $schema = self::limitSchemaDevicePages($schema, $allowedTitles, $idsByPage);
+        if (isset($schema['ui']['widgetTree']) && is_array($schema['ui']['widgetTree'])) {
+            $seen = ['slide' => [], 'list' => []];
+            $schema['ui']['widgetTree'] = self::prunePublishedPageNodes(
+                $schema['ui']['widgetTree'],
+                $pageTitle,
+                $idsByPage,
+                $seen,
+                false
+            );
+            // A mapping sync can leave schema_controls_N as a sibling of
+            // phone_shell_column. That sibling overflows the matchParent column
+            // and pushes the pager off screen. Move the same node under the
+            // existing page slider. Trees with no page_slider are left as-is.
+            $schema['ui']['widgetTree'] = self::nestLooseSchemaControlLists(
+                $schema['ui']['widgetTree'],
+                $pageTitle
+            );
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Place schemaControlList nodes that sit outside a page slide into
+     * page_slider → page_slide_X. No-op when this tree has no page_slider.
+     * The list node is moved as-is: no new control fields, bindings, or actions.
+     *
+     * @param array $pageTitle pageNo => title
+     */
+    public static function nestLooseSchemaControlLists(array $widgetTree, array $pageTitle = [])
+    {
+        if (!self::widgetTreeHasId($widgetTree, 'page_slider')) {
+            return $widgetTree;
+        }
+
+        $loose = [];
+        $widgetTree = self::detachLooseSchemaControlLists($widgetTree, false, $loose);
+        if ($loose === []) {
+            return $widgetTree;
+        }
+
+        return self::attachListsToPageSlider($widgetTree, $loose, $pageTitle);
+    }
+
+    private static function widgetTreeHasId(array $node, $id)
+    {
+        if ((string) ($node['id'] ?? '') === (string) $id) {
+            return true;
+        }
+        if (!isset($node['children']) || !is_array($node['children'])) {
+            return false;
+        }
+        foreach ($node['children'] as $child) {
+            if (is_array($child) && self::widgetTreeHasId($child, $id)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function widgetPageNo(array $node)
+    {
+        if (isset($node['properties']['pageNo'])) {
+            return trim((string) $node['properties']['pageNo']);
+        }
+        if (isset($node['pageNo'])) {
+            return trim((string) $node['pageNo']);
+        }
+
+        return '';
+    }
+
+    private static function nodeIsPageSlide(array $node)
+    {
+        $type = strtolower(trim((string) ($node['type'] ?? '')));
+        $pageNo = self::widgetPageNo($node);
+        $childId = (string) ($node['id'] ?? '');
+
+        return $type === 'column'
+            && $pageNo !== ''
+            && (strpos($childId, 'page_slide_') === 0 || isset($node['properties']['pageName']));
+    }
+
+    private static function detachLooseSchemaControlLists(array $node, $insideSlide, array &$loose)
+    {
+        if (!isset($node['children']) || !is_array($node['children'])) {
+            return $node;
+        }
+
+        $kept = [];
+        foreach ($node['children'] as $child) {
+            if (!is_array($child)) {
+                $kept[] = $child;
+                continue;
+            }
+            $type = strtolower(trim((string) ($child['type'] ?? '')));
+            $pageNo = self::widgetPageNo($child);
+            $isList = $type === 'schemacontrollist';
+            if ($isList && !$insideSlide && $pageNo !== '') {
+                $loose[] = $child;
+                continue;
+            }
+            $kept[] = self::detachLooseSchemaControlLists(
+                $child,
+                $insideSlide || self::nodeIsPageSlide($child),
+                $loose
+            );
+        }
+        $node['children'] = array_values($kept);
+
+        return $node;
+    }
+
+    private static function attachListsToPageSlider(array $node, array $loose, array $pageTitle)
+    {
+        if ((string) ($node['id'] ?? '') === 'page_slider') {
+            return self::insertListsIntoSlider($node, $loose, $pageTitle);
+        }
+        if (!isset($node['children']) || !is_array($node['children'])) {
+            return $node;
+        }
+        foreach ($node['children'] as $index => $child) {
+            if (!is_array($child)) {
+                continue;
+            }
+            $node['children'][$index] = self::attachListsToPageSlider($child, $loose, $pageTitle);
+        }
+
+        return $node;
+    }
+
+    private static function insertListsIntoSlider(array $slider, array $loose, array $pageTitle)
+    {
+        $children = isset($slider['children']) && is_array($slider['children']) ? $slider['children'] : [];
+        $slidesByPage = [];
+        $template = null;
+        $maxIndex = -1;
+        foreach ($children as $index => $child) {
+            if (!is_array($child) || !self::nodeIsPageSlide($child)) {
+                continue;
+            }
+            $template = $child;
+            $pageNo = self::widgetPageNo($child);
+            if ($pageNo !== '') {
+                $slidesByPage[$pageNo] = $index;
+            }
+            if (preg_match('/page_slide_(\d+)/', (string) ($child['id'] ?? ''), $match)) {
+                $maxIndex = max($maxIndex, (int) $match[1]);
+            }
+        }
+
+        foreach ($loose as $list) {
+            if (!is_array($list)) {
+                continue;
+            }
+            $pageNo = self::widgetPageNo($list);
+            if ($pageNo === '') {
+                continue;
+            }
+            if (isset($slidesByPage[$pageNo])) {
+                $index = $slidesByPage[$pageNo];
+                if (!self::slideHasControlList($children[$index])) {
+                    if (!isset($children[$index]['children']) || !is_array($children[$index]['children'])) {
+                        $children[$index]['children'] = [];
+                    }
+                    $children[$index]['children'][] = $list;
+                }
+                continue;
+            }
+            $maxIndex++;
+            $children[] = self::makePageSlideFromTemplate($template, $maxIndex, $pageNo, $pageTitle, $list);
+            $slidesByPage[$pageNo] = count($children) - 1;
+        }
+
+        $slider['children'] = array_values($children);
+
+        return $slider;
+    }
+
+    private static function slideHasControlList(array $slide)
+    {
+        if (!isset($slide['children']) || !is_array($slide['children'])) {
+            return false;
+        }
+        foreach ($slide['children'] as $child) {
+            if (!is_array($child)) {
+                continue;
+            }
+            $type = strtolower(trim((string) ($child['type'] ?? '')));
+            if ($type === 'schemacontrollist') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function makePageSlideFromTemplate($template, $index, $pageNo, array $pageTitle, array $list)
+    {
+        $title = isset($pageTitle[$pageNo]) ? (string) $pageTitle[$pageNo] : ('Page ' . $pageNo);
+        if (is_array($template)) {
+            $slide = $template;
+        } else {
+            $slide = [
+                'type' => 'column',
+                'properties' => [
+                    'width' => 'matchParent',
+                    'crossAxisAlignment' => 'stretch',
+                    'visibility' => true,
+                    'scrollable' => true,
+                ],
+            ];
+        }
+        $slide['type'] = 'column';
+        $slide['id'] = 'page_slide_' . $index;
+        if (!isset($slide['properties']) || !is_array($slide['properties'])) {
+            $slide['properties'] = [];
+        }
+        $slide['properties']['pageNo'] = (string) $pageNo;
+        $slide['properties']['pageId'] = 'page_' . $pageNo;
+        $slide['properties']['pageName'] = $title;
+        $slide['properties']['isActive'] = false;
+        $slide['children'] = [$list];
+
+        return $slide;
+    }
+
+    private static function limitSchemaDevicePages(array $schema, array $allowedTitles, array $idsByPage)
+    {
+        if ($allowedTitles === []) {
+            return $schema;
+        }
+        $apply = static function ($config) use ($allowedTitles, $schema) {
+            if (!is_array($config)) {
+                return $config;
+            }
+            if (!isset($config['devices'][0]) || !is_array($config['devices'][0])) {
+                $config['devices'][0] = ['pages' => []];
+            }
+            $pages = isset($config['devices'][0]['pages']) && is_array($config['devices'][0]['pages'])
+                ? $config['devices'][0]['pages']
+                : [];
+            $kept = [];
+            foreach ($pages as $pageName => $frames) {
+                $key = strtolower(trim((string) $pageName));
+                if (!isset($allowedTitles[$key]) || !is_array($frames)) {
+                    continue;
+                }
+                $kept[$allowedTitles[$key]] = $frames;
+            }
+            foreach ($allowedTitles as $title) {
+                if (isset($kept[$title])) {
+                    continue;
+                }
+                $frames = [];
+                foreach ($schema['controls'] as $control) {
+                    if (!is_array($control) || trim((string) ($control['pageName'] ?? '')) !== $title) {
+                        continue;
+                    }
+                    $frame = isset($control['deviceFrame']) && is_array($control['deviceFrame'])
+                        ? $control['deviceFrame']
+                        : null;
+                    if ($frame === null) {
+                        continue;
+                    }
+                    $frames[] = ['frame' => $frame];
+                }
+                $kept[$title] = $frames;
+            }
+            $config['devices'][0]['pages'] = $kept;
+            $config['devices'][0]['total_pages'] = (string) max(1, count($kept));
+
+            return $config;
+        };
+
+        if (isset($schema['deviceConfig'])) {
+            $schema['deviceConfig'] = $apply($schema['deviceConfig']);
+        }
+        foreach (['node_details', 'v2_node_details'] as $detailKey) {
+            if (!isset($schema[$detailKey][0]) || !is_array($schema[$detailKey][0])) {
+                continue;
+            }
+            if (isset($schema['deviceConfig']) && is_array($schema['deviceConfig'])) {
+                $schema[$detailKey][0]['config'] = $schema['deviceConfig'];
+            } elseif (isset($schema[$detailKey][0]['config']) && is_array($schema[$detailKey][0]['config'])) {
+                $schema[$detailKey][0]['config'] = $apply($schema[$detailKey][0]['config']);
+            }
+        }
+        if (isset($schema['state']['device']) && is_array($schema['state']['device']) && isset($schema['deviceConfig'])) {
+            $schema['state']['device']['config'] = $schema['deviceConfig'];
+        }
+        if (isset($schema['deviceState']) && is_array($schema['deviceState']) && isset($schema['deviceConfig'])) {
+            $schema['deviceState']['config'] = $schema['deviceConfig'];
+        }
+        if (isset($schema['info']) && is_array($schema['info'])) {
+            $schema['info']['pages'] = array_values($allowedTitles);
+            $schema['info']['total_pages'] = count($allowedTitles);
+        }
+
+        return $schema;
+    }
+
+    private static function prunePublishedPageNodes($node, array $pageTitle, array $idsByPage, array &$seen, $insideSlide)
+    {
+        if (!is_array($node)) {
+            return $node;
+        }
+        $type = strtolower(trim((string) ($node['type'] ?? '')));
+        $pageNo = trim((string) ($node['properties']['pageNo'] ?? ''));
+        if ($type === 'schemacontrollist' && $pageNo !== '' && isset($idsByPage[$pageNo])) {
+            $node['properties']['controlIds'] = array_values($idsByPage[$pageNo]);
+            $node['properties']['controlCount'] = count($idsByPage[$pageNo]);
+            $node['properties']['pageId'] = 'page_' . $pageNo;
+        }
+        if ($type === 'column' && $pageNo !== '' && isset($pageTitle[$pageNo])) {
+            $node['properties']['pageName'] = $pageTitle[$pageNo];
+            $node['properties']['pageId'] = 'page_' . $pageNo;
+        }
+        if (!isset($node['children']) || !is_array($node['children'])) {
+            return $node;
+        }
+
+        $children = [];
+        $isButtonList = ((string) ($node['id'] ?? '')) === 'page_buttons';
+        foreach ($node['children'] as $child) {
+            if (!is_array($child)) {
+                continue;
+            }
+            $childType = strtolower(trim((string) ($child['type'] ?? '')));
+            $childId = (string) ($child['id'] ?? '');
+            $childPage = trim((string) ($child['properties']['pageNo'] ?? ''));
+            $childIsSlide = $childType === 'column'
+                && $childPage !== ''
+                && (strpos($childId, 'page_slide_') === 0 || isset($child['properties']['pageName']));
+            $childIsList = $childType === 'schemacontrollist';
+            if ($childIsSlide) {
+                if (!isset($pageTitle[$childPage]) || isset($seen['slide'][$childPage])) {
+                    continue;
+                }
+                $seen['slide'][$childPage] = true;
+            }
+            if ($childIsList && !$insideSlide && !$childIsSlide) {
+                if (!isset($pageTitle[$childPage]) || isset($seen['slide'][$childPage]) || isset($seen['list'][$childPage])) {
+                    continue;
+                }
+                $seen['list'][$childPage] = true;
+            }
+            $children[] = self::prunePublishedPageNodes($child, $pageTitle, $idsByPage, $seen, $insideSlide || $childIsSlide);
+        }
+        if ($isButtonList && count($children) > count($pageTitle)) {
+            $children = array_slice($children, 0, count($pageTitle));
+        }
+        $node['children'] = array_values($children);
+
+        return $node;
+    }
+
     private static function ensureDeviceConfigPagesFromControls(array $schema)
     {
         $controls = isset($schema['controls']) && is_array($schema['controls']) ? $schema['controls'] : [];
@@ -2808,8 +4474,20 @@ class DeviceUiSchemaNormalizer
             && is_array($schema['deviceConfig']['devices'][0]['pages'])
             ? $schema['deviceConfig']['devices'][0]['pages']
             : [];
+        // New V2 models keep the v2 test-node page list. Do not add pages that
+        // exist only on the previous Studio schema.
+        $v2PageAuthority = self::schemaPrefersV2NodeDetails($schema);
 
         foreach ($pagesFromControls as $pageName => $frames) {
+            $pageExists = isset($existingPages[$pageName]) && is_array($existingPages[$pageName]) && $existingPages[$pageName] !== [];
+            // V2 test-node pages are the wire source. Do not replace them with a
+            // stored control frame that merely has a longer hex string.
+            if ($v2PageAuthority && $pageExists) {
+                continue;
+            }
+            if ($v2PageAuthority && !$pageExists) {
+                continue;
+            }
             if (!isset($existingPages[$pageName]) || !is_array($existingPages[$pageName])
                 || self::deviceConfigPageScore($frames) > self::deviceConfigPageScore($existingPages[$pageName])
             ) {
@@ -2828,6 +4506,9 @@ class DeviceUiSchemaNormalizer
         }
         if (isset($schema['node_details'][0]) && is_array($schema['node_details'][0])) {
             $schema['node_details'][0]['config'] = $schema['deviceConfig'];
+        }
+        if (isset($schema['v2_node_details'][0]) && is_array($schema['v2_node_details'][0])) {
+            $schema['v2_node_details'][0]['config'] = $schema['deviceConfig'];
         }
 
         return $schema;
@@ -3019,7 +4700,7 @@ class DeviceUiSchemaNormalizer
     }
 
     /**
-     * Force mqtt / websocket / clientIdPattern onto device/{openedNodeId}/…
+     * Force mqtt / websocket / clientIdPattern onto device/{openedNodeId}/...
      * App may key off opened node_id already; this keeps schema contract correct.
      */
     private static function rewriteTransportNodeTopics(array $schema, $nodeId): array
@@ -3181,6 +4862,7 @@ class DeviceUiSchemaNormalizer
             'deviceConfig' => true,
             'deviceState' => true,
             'node_details' => true,
+            'v2_node_details' => true,
             'dataSources' => true,
             'permissions' => true,
             'state' => true,
@@ -3430,25 +5112,25 @@ class DeviceUiSchemaNormalizer
     private static function repairControlCommandFrames(array $control, array &$report, $label)
     {
         if (isset($control['deviceFrame']['commands']) && is_array($control['deviceFrame']['commands'])) {
-            $control['deviceFrame']['commands'] = self::separateOverlappingBytewiseSlots(
+            $control['deviceFrame']['commands'] = self::splitLegacyCommandList(self::separateOverlappingBytewiseSlots(
                 $control['deviceFrame']['commands'],
                 $report,
                 $label . '.deviceFrame.commands'
-            );
+            ));
         }
         if (isset($control['protocolMeta']['frame']['commands']) && is_array($control['protocolMeta']['frame']['commands'])) {
-            $control['protocolMeta']['frame']['commands'] = self::separateOverlappingBytewiseSlots(
+            $control['protocolMeta']['frame']['commands'] = self::splitLegacyCommandList(self::separateOverlappingBytewiseSlots(
                 $control['protocolMeta']['frame']['commands'],
                 $report,
                 $label . '.protocolMeta.frame.commands'
-            );
+            ));
         }
         if (isset($control['commands']) && self::looksLikeCommandFieldList($control['commands'])) {
-            $control['commands'] = self::separateOverlappingBytewiseSlots(
+            $control['commands'] = self::splitLegacyCommandList(self::separateOverlappingBytewiseSlots(
                 $control['commands'],
                 $report,
                 $label . '.commands'
-            );
+            ));
         }
         if (isset($control['protocolMeta']['ui_components']) && is_array($control['protocolMeta']['ui_components'])) {
             foreach ($control['protocolMeta']['ui_components'] as $index => $component) {
@@ -3486,17 +5168,17 @@ class DeviceUiSchemaNormalizer
                     }
                     $path = $label . '.devices[' . $deviceIndex . '].pages.' . $pageKey . '[' . $frameIndex . ']';
                     if (isset($item['frame']['commands']) && is_array($item['frame']['commands'])) {
-                        $item['frame']['commands'] = self::separateOverlappingBytewiseSlots(
+                        $item['frame']['commands'] = self::splitLegacyCommandList(self::separateOverlappingBytewiseSlots(
                             $item['frame']['commands'],
                             $report,
                             $path . '.frame.commands'
-                        );
+                        ));
                     } elseif (self::looksLikeCommandFieldList(isset($item['commands']) ? $item['commands'] : null)) {
-                        $item['commands'] = self::separateOverlappingBytewiseSlots(
+                        $item['commands'] = self::splitLegacyCommandList(self::separateOverlappingBytewiseSlots(
                             $item['commands'],
                             $report,
                             $path . '.commands'
-                        );
+                        ));
                     }
                     $config['devices'][$deviceIndex]['pages'][$pageKey][$frameIndex] = $item;
                 }
@@ -3504,6 +5186,24 @@ class DeviceUiSchemaNormalizer
         }
 
         return $config;
+    }
+
+    /**
+     * Split a combined header (A2EA, A4EA, A1E7) into CommandId / Function Code / Terminator.
+     */
+    private static function splitLegacyCommandList(array $commands)
+    {
+        if ($commands === [] || !class_exists(\App\Models\View_page_model::class, false)) {
+            return $commands;
+        }
+        try {
+            $model = new \App\Models\View_page_model();
+            $split = $model->splitLegacyProtocolCommandFields($commands);
+
+            return is_array($split) ? $split : $commands;
+        } catch (\Throwable $exception) {
+            return $commands;
+        }
     }
 
     private static function looksLikeCommandFieldList($fields)
@@ -3550,7 +5250,35 @@ class DeviceUiSchemaNormalizer
 
     private static function frameFieldName(array $field)
     {
-        return strtolower(preg_replace('/[\s_]+/', '', self::frameFieldLabel($field)));
+        return self::canonicalizeProtocolFieldName(self::frameFieldLabel($field));
+    }
+
+    /**
+     * Match view_page_model: terminatorCrc / "Terminator / CRC" => terminator.
+     */
+    private static function canonicalizeProtocolFieldName($raw)
+    {
+        // Lowercase FIRST — [^a-z0-9] would otherwise strip uppercase A-Z.
+        $name = preg_replace('/[^a-z0-9]+/', '', strtolower((string) $raw));
+        if ($name === '') {
+            return '';
+        }
+        if ($name === 'terminator' || $name === 'terminatorcrc' || $name === 'crc'
+            || strpos($name, 'terminator') === 0
+        ) {
+            return 'terminator';
+        }
+        if (in_array($name, ['commandid', 'command', 'cmdid', 'cmd'], true)) {
+            return 'commandid';
+        }
+        if (in_array($name, ['functioncode', 'function', 'funcode', 'funccode'], true)) {
+            return 'functioncode';
+        }
+        if (in_array($name, ['actionid', 'action'], true)) {
+            return 'actionid';
+        }
+
+        return $name;
     }
 
     // ------------------------------------------------------------ card styles
@@ -4118,7 +5846,7 @@ class DeviceUiSchemaNormalizer
     private static function isHeaderScanNode(array $node)
     {
         $id = strtolower(trim((string) (isset($node['id']) ? $node['id'] : '')));
-        // Only the app-topbar scan control — never wifiProvisioning QR scan UI.
+        // Only the app-topbar scan control - never wifiProvisioning QR scan UI.
         return in_array($id, [
             'scan-button',
             'scanbutton',
@@ -4605,7 +6333,7 @@ class DeviceUiSchemaNormalizer
                 }
             }
             // Rule 3: writable Send/input controls publish access explicitly.
-            // Preserve Ready when the API declared it; do not rewrite Ready → Write.
+            // Preserve Ready when the API declared it; do not rewrite Ready -> Write.
             if ($writable) {
                 if (!isset($control['protocolMeta']) || !is_array($control['protocolMeta'])) {
                     $control['protocolMeta'] = [];
@@ -4989,6 +6717,11 @@ class DeviceUiSchemaNormalizer
      * Recomputes the validation block against the document that is actually being
      * served. `valid` covers structure we can guarantee; `dataComplete` covers the
      * product_api values only the web team can supply.
+     *
+     * Also publishes an explicit transport contract:
+     * - writeReady / deviceWriteSupported
+     * - preferredTransport: device|cloud
+     * Incomplete device frames keep Cloud UI writes, but must not be packed.
      */
     private static function recordValidation(array $schema, array $report)
     {
@@ -4999,13 +6732,19 @@ class DeviceUiSchemaNormalizer
                 continue;
             }
 
+            // Always publish an explicit writeReady boolean for writable controls.
+            // Null/absent flags made the app attempt device-frame packing and then
+            // fail with "incomplete protocol frame".
+            if (!self::isWritableControl($control)) {
+                $control = self::applyWriteTransportFlags($control, false, []);
+                $schema['controls'][$index] = $control;
+                continue;
+            }
+
             $missing = self::missingWriteFields($control);
             if (empty($missing)) {
-                if (self::isWritableControl($control)) {
-                    $control['writeReady'] = true;
-                    $control['missingFrameValues'] = [];
-                    $schema['controls'][$index] = $control;
-                }
+                $control = self::applyWriteTransportFlags($control, true, []);
+                $schema['controls'][$index] = $control;
                 continue;
             }
 
@@ -5020,9 +6759,12 @@ class DeviceUiSchemaNormalizer
                 'missing'   => $missing,
             ];
 
-            // The app must not guess these bytes, so the control is published read-only.
-            $control['writeReady'] = false;
-            $control['missingFrameValues'] = $missing;
+            // The app must not guess these bytes - mark not write-ready.
+            // Keep UI access flags intact so Cloud parameter binding still works.
+            // Drop empty/zero protocol-id slots so the app does not attempt packing
+            // an incomplete CommandId/Function Code frame. Do not invent replacements.
+            $control = self::stripUnusableProtocolIdSlots($control, $report);
+            $control = self::applyWriteTransportFlags($control, false, $missing);
             $schema['controls'][$index] = $control;
         }
 
@@ -5051,6 +6793,225 @@ class DeviceUiSchemaNormalizer
         return $schema;
     }
 
+    /**
+     * Publish strict transport flags + cloud/device write hints on one control.
+     * When device write is unsupported, remove every action.type=send (top-level
+     * events, nested widgetTree/props, sendButton.action) so the app cannot
+     * attempt frame packing. Keep action.type=update and all bindings/keys.
+     *
+     * @param string[] $missing
+     */
+    private static function applyWriteTransportFlags(array $control, $deviceReady, array $missing)
+    {
+        $deviceReady = $deviceReady === true;
+        $missing = array_values(array_map('strval', $missing));
+        $binding = trim((string) (isset($control['binding']) ? $control['binding'] : ''));
+        if ($binding === '' && isset($control['parameterKey']) && trim((string) $control['parameterKey']) !== '') {
+            $binding = 'device.parameters.' . trim((string) $control['parameterKey']);
+        }
+
+        $control['writeReady'] = $deviceReady;
+        $control['deviceWriteSupported'] = $deviceReady;
+        $control['preferredTransport'] = $deviceReady ? 'device' : 'cloud';
+        $control['missingFrameValues'] = $missing;
+
+        $control['cloudWrite'] = [
+            'enabled' => true,
+            'actionType' => 'update',
+            'binding' => $binding,
+            'transport' => 'cloud',
+        ];
+        $control['deviceWrite'] = [
+            'enabled' => $deviceReady,
+            'actionType' => 'send',
+            'dataSource' => 'deviceCommands',
+            'framePath' => 'deviceFrame',
+            'transport' => 'device',
+        ];
+
+        if (!$deviceReady) {
+            // Invariant: never publish send while the frame is incomplete.
+            // Walk the whole control tree (events / component / props / sendButton).
+            $control = self::stripDeviceSendTriggers($control, $binding);
+        }
+
+        return $control;
+    }
+
+    /**
+     * Recursively neutralize device-frame send triggers on a cloud/incomplete
+     * control. Does not rename keys, remove parameters, or invent protocol bytes.
+     * - events with action.type=send → action.type=update (same binding)
+     * - sendButton.action.type=send → update
+     * - bare action.type=send nodes → update
+     */
+    private static function stripDeviceSendTriggers(array $node, $fallbackBinding = '')
+    {
+        $fallbackBinding = trim((string) $fallbackBinding);
+
+        if (isset($node['events']) && is_array($node['events'])) {
+            $node['events'] = self::rewriteSendEventsList($node['events'], $fallbackBinding);
+        }
+
+        if (isset($node['sendButton']) && is_array($node['sendButton'])) {
+            $node['sendButton'] = self::downgradeSendActionNode($node['sendButton'], $fallbackBinding);
+        }
+
+        if (isset($node['action']) && is_array($node['action'])) {
+            $node['action'] = self::downgradeSendActionNode($node['action'], $fallbackBinding);
+        } elseif (isset($node['type']) && strtolower(trim((string) $node['type'])) === 'send'
+            && (isset($node['binding']) || $fallbackBinding !== '')
+        ) {
+            // Bare action object: {type:send, binding:...}
+            $node['type'] = 'update';
+            if (!isset($node['binding']) || trim((string) $node['binding']) === '') {
+                $node['binding'] = $fallbackBinding;
+            }
+        }
+
+        foreach ($node as $key => $child) {
+            if (!is_array($child)) {
+                continue;
+            }
+            if ($key === 'events' || $key === 'sendButton' || $key === 'action') {
+                continue;
+            }
+            // Do not rewrite protocol frame documents or meta transport contracts.
+            if ($key === 'deviceFrame' || $key === 'protocolMeta' || $key === 'commands'
+                || $key === 'cloudWrite' || $key === 'deviceWrite' || $key === 'missingFrameValues'
+            ) {
+                continue;
+            }
+            $node[$key] = self::stripDeviceSendTriggers($child, $fallbackBinding);
+        }
+
+        return $node;
+    }
+
+    /**
+     * @param mixed $events
+     * @return mixed
+     */
+    private static function rewriteSendEventsList($events, $fallbackBinding = '')
+    {
+        if (!is_array($events)) {
+            return $events;
+        }
+
+        $keys = array_keys($events);
+        $isList = $keys === [] || $keys === range(0, count($keys) - 1);
+        if ($isList) {
+            $out = [];
+            foreach ($events as $event) {
+                if (!is_array($event)) {
+                    $out[] = $event;
+                    continue;
+                }
+                $out[] = self::downgradeSendEvent($event, $fallbackBinding);
+            }
+
+            return array_values($out);
+        }
+
+        foreach ($events as $eventName => $event) {
+            if (!is_array($event)) {
+                continue;
+            }
+            $events[$eventName] = self::downgradeSendEvent($event, $fallbackBinding);
+        }
+
+        return $events;
+    }
+
+    private static function downgradeSendEvent(array $event, $fallbackBinding = '')
+    {
+        if (isset($event['action']) && is_array($event['action'])) {
+            $event['action'] = self::downgradeSendActionNode($event['action'], $fallbackBinding);
+        }
+
+        return $event;
+    }
+
+    private static function downgradeSendActionNode(array $action, $fallbackBinding = '')
+    {
+        $type = strtolower(trim((string) (isset($action['type']) ? $action['type'] : '')));
+        if ($type === 'send') {
+            $action['type'] = 'update';
+            $binding = trim((string) (isset($action['binding']) ? $action['binding'] : ''));
+            if ($binding === '' && trim((string) $fallbackBinding) !== '') {
+                $action['binding'] = trim((string) $fallbackBinding);
+            }
+        }
+        if (isset($action['action']) && is_array($action['action'])) {
+            $action['action'] = self::downgradeSendActionNode($action['action'], $fallbackBinding);
+        }
+        // Nested sendButton inside props blobs.
+        if (isset($action['sendButton']) && is_array($action['sendButton'])) {
+            $action['sendButton'] = self::downgradeSendActionNode($action['sendButton'], $fallbackBinding);
+        }
+
+        return $action;
+    }
+
+    /**
+     * Remove CommandId / Function Code / ActionId slots that are empty or zero
+     * padding when the control is not device-write-ready. Leaves Data/Terminator
+     * intact for Cloud binding. Never invents replacement protocol bytes.
+     */
+    private static function stripUnusableProtocolIdSlots(array $control, array &$report)
+    {
+        $controlId = trim((string) (isset($control['id']) ? $control['id'] : 'control'));
+        $frameKeys = [];
+        if (isset($control['deviceFrame']['commands']) && is_array($control['deviceFrame']['commands'])) {
+            $frameKeys[] = 'deviceFrame';
+        }
+        if (isset($control['protocolMeta']['frame']['commands']) && is_array($control['protocolMeta']['frame']['commands'])) {
+            $frameKeys[] = 'protocolMeta.frame';
+        }
+
+        foreach ($frameKeys as $key) {
+            if ($key === 'deviceFrame') {
+                $commands = $control['deviceFrame']['commands'];
+            } else {
+                $commands = $control['protocolMeta']['frame']['commands'];
+            }
+            $kept = [];
+            $removed = false;
+            foreach ($commands as $field) {
+                if (!is_array($field)) {
+                    $kept[] = $field;
+                    continue;
+                }
+                $name = self::frameFieldName($field);
+                if (!in_array($name, ['commandid', 'functioncode', 'actionid'], true)) {
+                    $kept[] = $field;
+                    continue;
+                }
+                $value = isset($field['value']) ? $field['value'] : null;
+                if ($value === null || $value === '' || $value === []) {
+                    $value = isset($field['asperui_value']) ? $field['asperui_value'] : null;
+                }
+                if ($value !== null && $value !== '' && $value !== [] && !self::isZeroProtocolId($value)) {
+                    $kept[] = $field;
+                    continue;
+                }
+                $removed = true;
+                $report['droppedFrameSlots'][] = $controlId . '.commands.' . (self::frameFieldLabel($field) ?: $name);
+            }
+            if (!$removed) {
+                continue;
+            }
+            $kept = array_values($kept);
+            if ($key === 'deviceFrame') {
+                $control['deviceFrame']['commands'] = $kept;
+            } else {
+                $control['protocolMeta']['frame']['commands'] = $kept;
+            }
+        }
+
+        return $control;
+    }
+
     private static function missingWriteFields(array $control)
     {
         if (!self::isWritableControl($control)) {
@@ -5069,29 +7030,97 @@ class DeviceUiSchemaNormalizer
         }
 
         $present = [];
+        $definedSlots = [];
+        $hasPayload = false;
         foreach ($commands as $field) {
             if (!is_array($field)) {
                 continue;
             }
+            $name = self::frameFieldName($field);
             $value = isset($field['value']) ? $field['value'] : null;
             if ($value === null || $value === '' || $value === []) {
                 $value = isset($field['asperui_value']) ? $field['asperui_value'] : null;
             }
+            $isProtocolSlot = in_array($name, ['commandid', 'functioncode', 'actionid', 'terminator'], true);
+            if ($isProtocolSlot) {
+                $definedSlots[$name] = true;
+            }
             if ($value === null || $value === '' || $value === []) {
                 continue;
             }
-            $present[self::frameFieldName($field)] = true;
+            // Placeholder 0x00 / 00 protocol ids cannot be packed by the app.
+            // Treat them as missing so writeReady stays false (do not invent real ids).
+            if (in_array($name, ['commandid', 'functioncode', 'actionid'], true)
+                && self::isZeroProtocolId($value)
+            ) {
+                continue;
+            }
+            $present[$name] = true;
+            if (!$isProtocolSlot && !self::isZeroProtocolId($value)) {
+                $hasPayload = true;
+            }
+        }
+
+        // protocolMeta may hold a non-zero id even when the frame slot is still 00.
+        $meta = isset($control['protocolMeta']) && is_array($control['protocolMeta'])
+            ? $control['protocolMeta']
+            : [];
+        foreach ([
+            'commandid' => ['command_id', 'commandId'],
+            'functioncode' => ['function_code', 'functionCode'],
+            'actionid' => ['action_id', 'actionId'],
+        ] as $slot => $keys) {
+            if (isset($present[$slot])) {
+                continue;
+            }
+            foreach ($keys as $key) {
+                if (!array_key_exists($key, $meta)) {
+                    continue;
+                }
+                $metaVal = $meta[$key];
+                if ($metaVal === null || $metaVal === '' || $metaVal === []) {
+                    continue;
+                }
+                if (!self::isZeroProtocolId($metaVal)) {
+                    $present[$slot] = true;
+                    break;
+                }
+            }
         }
 
         $missing = [];
-        if (!isset($present['commandid'])) {
-            $missing[] = 'CommandId';
+        // Require a protocol id only when that slot is part of the authored frame.
+        // A frame whose command bytes live entirely in Data (no CommandId slot)
+        // is complete — do not invent CommandId or Function Code.
+        if (isset($definedSlots['commandid'])) {
+            if (!isset($present['commandid'])) {
+                $missing[] = 'CommandId';
+            }
         }
-        if (!isset($present['functioncode'])) {
-            $missing[] = 'Function Code';
+        if (isset($definedSlots['functioncode'])) {
+            if (!isset($present['functioncode'])) {
+                $missing[] = 'Function Code';
+            }
+        }
+        if (!isset($definedSlots['commandid']) && !isset($definedSlots['functioncode']) && !$hasPayload) {
+            $missing[] = 'CommandId';
         }
 
         return $missing;
+    }
+
+    /**
+     * True when a protocol id is only zero padding (00 / 0x00 / 0000).
+     * Empty values are not zero-padding.
+     */
+    private static function isZeroProtocolId($value)
+    {
+        if ($value === null || $value === '' || $value === []) {
+            return false;
+        }
+        $hex = strtoupper(preg_replace('/[^0-9A-F]/', '', (string) $value));
+
+        return $hex !== '' && preg_match('/^0+$/', $hex) === 1;
     }
 
     private static function isWritableControl(array $control)
@@ -5140,7 +7169,7 @@ class DeviceUiSchemaNormalizer
         $warnings = [];
 
         foreach ($report['missingFrameValues'] as $entry) {
-            $warnings[] = $entry['controlId'] . ': published read-only, schema is missing '
+            $warnings[] = $entry['controlId'] . ': device write unavailable (use Cloud), schema is missing '
                 . implode(', ', $entry['missing']) . '.';
         }
         foreach ($report['droppedFrameSlots'] as $slot) {

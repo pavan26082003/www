@@ -808,8 +808,10 @@ public function getPageParameterMapping($modelno)
         // After a save, api_page_linking_data is the list the user kept. Do not
         // merge those legacy rows back in, or a removed page returns on refresh.
         $this->mergeProductApiPageRows($rows, $pageNames, $pageNoByName, $apiRows, $apiByParameter, $vendorPageMap);
-        $this->mergeV2ApiPageRows($rows, $pageNames, $pageNoByName, $modelno, $apiByParameter, $vendorPageMap);
     }
+    // New V2 APIs are created after page linking is saved. Add those parameters
+    // without putting a page the user removed back on the node.
+    $this->mergeV2ApiPageRows($rows, $pageNames, $pageNoByName, $modelno, $apiByParameter, $vendorPageMap, $removedPages);
 
     $this->fillMissingDeviceUiApiMetadataForRows($modelno, $apiByParameter, $rows);
 
@@ -857,22 +859,25 @@ public function getPageParameterMapping($modelno)
                 $usedKeys[$key] = true;
             }
         }
-        if (!$hasSavedMappingRecord) {
-            foreach ($rows as $row) {
-                if (!is_array($row)) {
-                    continue;
-                }
-                $key = $this->pageParameterLinkKey(
-                    trim((string) ($row['page_no'] ?? '')),
-                    trim((string) ($row['parameter'] ?? ''))
-                );
-                if ($key === '' || isset($usedKeys[$key])) {
-                    continue;
-                }
-                $row['sequence'] = $sequence++;
-                $orderedRows[] = $row;
-                $usedKeys[$key] = true;
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
             }
+            $fromV2Config = !empty($row['from_v2_config']);
+            if ($hasSavedMappingRecord && !$fromV2Config) {
+                continue;
+            }
+            $key = $this->pageParameterLinkKey(
+                trim((string) ($row['page_no'] ?? '')),
+                trim((string) ($row['parameter'] ?? ''))
+            );
+            if ($key === '' || isset($usedKeys[$key])) {
+                continue;
+            }
+            unset($row['from_v2_config']);
+            $row['sequence'] = $sequence++;
+            $orderedRows[] = $row;
+            $usedKeys[$key] = true;
         }
         if (!empty($orderedRows)) {
             $rows = $orderedRows;
@@ -904,6 +909,15 @@ public function getPageParameterMapping($modelno)
             return ((int) $a) <=> ((int) $b);
         });
     }
+
+    foreach ($rows as &$mappedRow) {
+        if (is_array($mappedRow)) {
+            unset($mappedRow['from_v2_config']);
+        }
+    }
+    unset($mappedRow);
+
+    $this->collapseDuplicateMappingPages($rows, $pageNames);
 
     $record['page_names_array'] = $pageNames;
     $record['linking_data_array'] = $linkingData;
@@ -1393,7 +1407,31 @@ private function buildDeviceUiApiMetadataFromTree($configId)
         'error' => 'error',
     ];
 
-    foreach ($tree['frames'] as $frame) {
+    // raw_payload_json keeps the real frameCode (e.g. A1EA000A) even when
+    // api_frame_fields.value_in_hex_min was saved as a 0x00 range placeholder.
+    $payloadWireByGroupIndex = [
+        'command' => [],
+        'response' => [],
+        'error' => [],
+    ];
+    try {
+        $payloadWireByGroupIndex = $this->extractV2PayloadFrameWireByGroupIndex(
+            $tree['config']['raw_payload_json'] ?? null
+        );
+    } catch (\Throwable $exception) {
+        log_message('error', 'V2 frameCode extract failed for config ' . $configId . ': ' . $exception->getMessage());
+    }
+    $groupIndexCounters = [
+        'command' => 0,
+        'response' => 0,
+        'error' => 0,
+    ];
+
+    $frames = isset($tree['frames']) && is_array($tree['frames']) ? $tree['frames'] : [];
+    foreach ($frames as $frame) {
+        if (!is_array($frame)) {
+            continue;
+        }
         $group = $frame['frame_group'] ?? '';
         if (!isset($prefixMap[$group])) {
             continue;
@@ -1402,6 +1440,19 @@ private function buildDeviceUiApiMetadataFromTree($configId)
         $prefix = $prefixMap[$group];
         $frameId = (int) ($frame['id'] ?? 0);
         $frameFields = $tree['fields_by_frame'][$frameId] ?? [];
+        if (!is_array($frameFields)) {
+            $frameFields = [];
+        }
+        $frameIndex = isset($frame['frame_index']) ? (int) $frame['frame_index'] : (int) ($groupIndexCounters[$group] ?? 0);
+        $groupIndexCounters[$group] = $frameIndex + 1;
+        $frameWireHex = '';
+        if (isset($payloadWireByGroupIndex[$group]) && is_array($payloadWireByGroupIndex[$group])) {
+            if (isset($payloadWireByGroupIndex[$group][$frameIndex])) {
+                $frameWireHex = (string) $payloadWireByGroupIndex[$group][$frameIndex];
+            } elseif (isset($payloadWireByGroupIndex[$group][0]) && count($payloadWireByGroupIndex[$group]) === 1) {
+                $frameWireHex = (string) $payloadWireByGroupIndex[$group][0];
+            }
+        }
 
         if ($group === 'command') {
             $pseudoRow['cmd_multipleui'] = $this->normalizeDeviceUiFlagList($frame['multiple_ui'] ?? null, 3);
@@ -1419,6 +1470,16 @@ private function buildDeviceUiApiMetadataFromTree($configId)
         }
 
         foreach ($frameFields as $field) {
+            if (!is_array($field)) {
+                continue;
+            }
+            if ($frameWireHex !== '') {
+                try {
+                    $field = $this->overlayV2FieldWireHexFromFrameCode($field, $frameWireHex);
+                } catch (\Throwable $exception) {
+                    // Keep stored field values if overlay fails.
+                }
+            }
             $this->appendDeviceUiTreeFieldToPseudoRow($pseudoRow, $prefix, $field);
         }
     }
@@ -1466,93 +1527,159 @@ private function modelHasV2ApiConfigs($modelno)
  */
 public function buildV2TestNodesPayload($nodeId = '', $modelNo = '')
 {
+    @ini_set('memory_limit', '1024M');
+    try {
+        self::loadDeviceUiSchemaGenerator();
+        if (class_exists(DeviceUiSchemaGenerator::class, false)) {
+            DeviceUiSchemaGenerator::raiseMemoryLimit();
+        }
+    } catch (\Throwable $ignored) {
+        // keep going with ini memory_limit above
+    }
+
     $nodeId = trim((string) $nodeId);
     $modelNo = trim((string) $modelNo);
 
-    if ($modelNo === '' && $nodeId !== '') {
-        $modelNo = $this->resolveDeviceUiModelNoFromNodeId($nodeId);
-    }
-    if ($nodeId === '' && $modelNo !== '') {
-        $nodeId = $this->resolveDeviceUiNodeId($modelNo, '');
-    }
-
-    if ($modelNo === '') {
-        return [
-            'status' => false,
-            'message' => 'model_no or resolvable node_id is required',
-            'node_details' => [],
-            'nodes' => $nodeId,
-            'source' => 'v2_test_nodes',
-        ];
-    }
-
-    if (!$this->modelHasV2ApiConfigs($modelNo)) {
-        return [
-            'status' => false,
-            'message' => 'Model is not V2 (no api_product_configs rows)',
-            'model_no' => $modelNo,
-            'node_details' => [],
-            'nodes' => $nodeId,
-            'source' => 'v2_test_nodes',
-        ];
-    }
-
-    $info = $this->getDeviceUiInfo($modelNo, $nodeId);
-    if (!is_array($info) || empty($info['node_details']) || !is_array($info['node_details'])) {
-        return [
-            'status' => false,
-            'message' => 'Unable to build V2 node_details',
-            'model_no' => $modelNo,
-            'node_details' => [],
-            'nodes' => $nodeId,
-            'source' => 'v2_test_nodes',
-        ];
-    }
-
-    $deviceConfig = isset($info['deviceConfig']) && is_array($info['deviceConfig'])
-        ? $info['deviceConfig']
-        : (isset($info['node_details'][0]['config']) && is_array($info['node_details'][0]['config'])
-            ? $info['node_details'][0]['config']
-            : []);
-
-    // Overlay live human values from auto_get_nodes_params (same source the app polls).
-    $deviceConfig = $this->overlayDeviceUiAutoGetParams($deviceConfig, $nodeId);
-    $deviceConfig = $this->enrichV2DeviceConfigDisplayValues($deviceConfig);
-    $deviceConfig = $this->sanitizeDeviceUiDisplayConfig($deviceConfig);
-
-    $nodeDetails = $info['node_details'];
-    if (!isset($nodeDetails[0]) || !is_array($nodeDetails[0])) {
-        $nodeDetails = [[
-            'id' => $nodeId,
-            'config' => $deviceConfig,
-            'role' => 'primary',
-            'status' => [
-                'connectivity' => [
-                    'connected' => false,
-                    'timestamp' => (int) round(microtime(true) * 1000),
-                ],
-            ],
-        ]];
-    } else {
-        $nodeDetails[0]['config'] = $deviceConfig;
-        if ($nodeId !== '') {
-            $nodeDetails[0]['id'] = $nodeId;
+    try {
+        if ($modelNo === '' && $nodeId !== '') {
+            $modelNo = $this->resolveDeviceUiModelNoFromNodeId($nodeId);
         }
+        if ($nodeId === '' && $modelNo !== '') {
+            $nodeId = $this->resolveDeviceUiNodeId($modelNo, '');
+        }
+
+        if ($modelNo === '') {
+            return [
+                'status' => false,
+                'message' => 'model_no or resolvable node_id is required',
+                'node_details' => [],
+                'nodes' => $nodeId,
+                'source' => 'v2_test_nodes',
+            ];
+        }
+
+        if (!$this->modelHasV2ApiConfigs($modelNo)) {
+            return [
+                'status' => false,
+                'message' => 'Model is not V2 (no api_product_configs rows)',
+                'model_no' => $modelNo,
+                'node_details' => [],
+                'nodes' => $nodeId,
+                'source' => 'v2_test_nodes',
+            ];
+        }
+
+        $info = null;
+        $buildError = '';
+        try {
+            $info = $this->getDeviceUiInfo($modelNo, $nodeId);
+        } catch (\Throwable $exception) {
+            $buildError = $exception->getMessage();
+            log_message('error', 'buildV2TestNodesPayload getDeviceUiInfo failed: ' . $buildError);
+            // Retry without remote legacy test_nodes merge (common crash / timeout source).
+            try {
+                $info = $this->getDeviceUiInfo($modelNo, $nodeId, ['skipRemote' => true]);
+                $buildError = $buildError !== '' ? ($buildError . ' | recovered_skipRemote') : 'recovered_skipRemote';
+            } catch (\Throwable $retryException) {
+                return [
+                    'status' => false,
+                    'message' => 'Unable to build V2 node_details',
+                    'error' => $retryException->getMessage(),
+                    'model_no' => $modelNo,
+                    'node_details' => [],
+                    'nodes' => $nodeId,
+                    'source' => 'v2_test_nodes',
+                ];
+            }
+        }
+
+        if (!is_array($info) || empty($info['node_details']) || !is_array($info['node_details'])) {
+            return [
+                'status' => false,
+                'message' => 'Unable to build V2 node_details',
+                'error' => $buildError !== '' ? $buildError : null,
+                'model_no' => $modelNo,
+                'node_details' => [],
+                'nodes' => $nodeId,
+                'source' => 'v2_test_nodes',
+            ];
+        }
+
+        $deviceConfig = isset($info['deviceConfig']) && is_array($info['deviceConfig'])
+            ? $info['deviceConfig']
+            : (isset($info['node_details'][0]['config']) && is_array($info['node_details'][0]['config'])
+                ? $info['node_details'][0]['config']
+                : []);
+
+        // Overlay live human values from auto_get_nodes_params (same source the app polls).
+        try {
+            $deviceConfig = $this->overlayDeviceUiAutoGetParams($deviceConfig, $nodeId);
+        } catch (\Throwable $exception) {
+            log_message('error', 'buildV2TestNodesPayload auto_get overlay failed: ' . $exception->getMessage());
+        }
+        try {
+            $deviceConfig = $this->enrichV2DeviceConfigDisplayValues($deviceConfig);
+            $deviceConfig = $this->sanitizeDeviceUiDisplayConfig($deviceConfig);
+            $deviceConfig = $this->repairV2DeviceConfigFrameWires($deviceConfig, $modelNo);
+        } catch (\Throwable $exception) {
+            log_message('error', 'buildV2TestNodesPayload enrich/sanitize failed: ' . $exception->getMessage());
+        }
+
+        $nodeDetails = $info['node_details'];
+        if (!isset($nodeDetails[0]) || !is_array($nodeDetails[0])) {
+            $nodeDetails = [[
+                'id' => $nodeId,
+                'config' => $deviceConfig,
+                'role' => 'primary',
+                'status' => [
+                    'connectivity' => [
+                        'connected' => false,
+                        'timestamp' => (int) round(microtime(true) * 1000),
+                    ],
+                ],
+            ]];
+        } else {
+            $nodeDetails[0]['config'] = $deviceConfig;
+            if ($nodeId !== '') {
+                $nodeDetails[0]['id'] = $nodeId;
+            }
+        }
+
+        try {
+            $nodeDetails = $this->enrichV2NodeDetailsDisplayValues($nodeDetails);
+            $nodeDetails = $this->sanitizeDeviceUiDisplayNodeDetails($nodeDetails);
+        } catch (\Throwable $exception) {
+            log_message('error', 'buildV2TestNodesPayload nodeDetails enrich failed: ' . $exception->getMessage());
+        }
+        $nodes = $nodeId !== '' ? $nodeId : (string) ($info['nodes'] ?? '');
+
+        $result = [
+            'status' => true,
+            'message' => 'V2 node_details built',
+            'model_no' => $modelNo,
+            'node_details' => $nodeDetails,
+            'v2_node_details' => $nodeDetails,
+            'nodes' => $nodes,
+            'source' => 'v2_test_nodes',
+        ];
+        if ($buildError !== '') {
+            $result['build_note'] = $buildError;
+        }
+
+        return $result;
+    } catch (\Throwable $exception) {
+        log_message('error', 'buildV2TestNodesPayload failed: ' . $exception->getMessage());
+
+        return [
+            'status' => false,
+            'message' => 'V2 test_nodes build failed',
+            'error' => $exception->getMessage(),
+            'model_no' => $modelNo,
+            'node_details' => [],
+            'nodes' => $nodeId,
+            'source' => 'v2_test_nodes',
+        ];
     }
-
-    $nodeDetails = $this->enrichV2NodeDetailsDisplayValues($nodeDetails);
-    $nodeDetails = $this->sanitizeDeviceUiDisplayNodeDetails($nodeDetails);
-    $nodes = $nodeId !== '' ? $nodeId : (string) ($info['nodes'] ?? '');
-
-    return [
-        'status' => true,
-        'message' => 'V2 node_details built',
-        'model_no' => $modelNo,
-        'node_details' => $nodeDetails,
-        'v2_node_details' => $nodeDetails,
-        'nodes' => $nodes,
-        'source' => 'v2_test_nodes',
-    ];
 }
 
 /**
@@ -1685,7 +1812,8 @@ private function restoreV2DeviceConfigAfterTestNodes(array $schema, array $v2Dev
         ? $schema['deviceConfig']
         : [];
     // Local V2 config is "live" so its pages/frames win on shared keys.
-    $merged = $this->mergeDeviceUiNodeConfig($v2DeviceConfig, $remoteConfig, $modelno, $nodeId);
+    $merged = $this->mergeDeviceUiNodeConfig($v2DeviceConfig, $remoteConfig, $modelno, $nodeId, [], true);
+    $merged = $this->limitDeviceConfigToLinkedPages($merged, $modelno);
     $merged = $this->enrichV2DeviceConfigDisplayValues($merged);
     $schema['deviceConfig'] = $merged;
 
@@ -1731,7 +1859,265 @@ private function restoreV2DeviceConfigAfterTestNodes(array $schema, array $v2Dev
         $schema['deviceState']['config'] = $merged;
     }
 
+    return $this->publishV2SchemaNodeAlias($schema, $modelno);
+}
+
+/**
+ * V2 models keep a single node_details payload.
+ * v2DisplayHandlers marks the model as V2. The old v2_node_details alias is
+ * the same array and is not published beside node_details.
+ */
+private function publishV2SchemaNodeAlias(array $schema, $modelno)
+{
+    if (!$this->modelHasV2ApiConfigs($modelno)) {
+        return $schema;
+    }
+    if (empty($schema['node_details']) || !is_array($schema['node_details'])) {
+        return $schema;
+    }
+
+    unset($schema['v2_node_details']);
+    if (!isset($schema['meta']) || !is_array($schema['meta'])) {
+        $schema['meta'] = [];
+    }
+    $schema['meta']['v2DisplayHandlers'] = true;
+    if (!isset($schema['meta']['app']) || !is_array($schema['meta']['app'])) {
+        $schema['meta']['app'] = [];
+    }
+    $schema['meta']['app']['v2DisplayHandlers'] = true;
+
     return $schema;
+}
+
+/**
+ * First real protocol hex. Zero-padding (00 / 0x00) does not hide a later real id.
+ */
+private function deviceUiFirstRealProtocolId(...$values)
+{
+    $zero = '';
+    foreach ($values as $value) {
+        $clean = $this->deviceUiNonEmptyString($value);
+        if ($clean === '') {
+            continue;
+        }
+        if ($this->deviceUiHexIsZeroPadding($clean)) {
+            if ($zero === '') {
+                $zero = $clean;
+            }
+            continue;
+        }
+        $hex = $this->deviceUiNormalizeProtocolHex($clean, 0);
+
+        return $hex !== '' ? $hex : $clean;
+    }
+
+    return $zero;
+}
+
+/**
+ * When the control frame has a real CommandId / Function Code, replace a 00 placeholder.
+ */
+private function applyProtocolIdsFromDeviceFrame(array &$control)
+{
+    $frame = isset($control['deviceFrame']) && is_array($control['deviceFrame']) ? $control['deviceFrame'] : null;
+    if ($frame === null || empty($frame['commands']) || !is_array($frame['commands'])) {
+        return;
+    }
+    if (!isset($control['protocolMeta']) || !is_array($control['protocolMeta'])) {
+        $control['protocolMeta'] = [];
+    }
+    $map = [
+        'commandid' => 'command_id',
+        'functioncode' => 'function_code',
+        'actionid' => 'action_id',
+    ];
+    foreach ($frame['commands'] as $field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        $slot = $this->deviceUiFrameFieldName($field);
+        if (!isset($map[$slot])) {
+            continue;
+        }
+        $hex = $this->deviceUiNormalizeProtocolHex($field['value'] ?? null, 0);
+        if ($hex === '' || $this->deviceUiHexIsZeroPadding($hex)) {
+            continue;
+        }
+        $metaKey = $map[$slot];
+        if ($this->deviceUiProtocolSlotNeedsFill($control['protocolMeta'][$metaKey] ?? null, $hex)) {
+            $control['protocolMeta'][$metaKey] = $hex;
+        }
+    }
+}
+
+/**
+ * Index frame wire hex from api_product_configs.raw_payload_json by
+ * frame group + frame index so V2 reads can recover CommandId/FunctionCode
+ * when api_frame_fields still holds 0x00 range placeholders.
+ */
+private function extractV2PayloadFrameWireByGroupIndex($rawPayloadJson)
+{
+    $out = [
+        'command' => [],
+        'response' => [],
+        'error' => [],
+    ];
+
+    if ($rawPayloadJson === null || $rawPayloadJson === '') {
+        return $out;
+    }
+
+    $payload = is_array($rawPayloadJson)
+        ? $rawPayloadJson
+        : json_decode((string) $rawPayloadJson, true);
+    if (!is_array($payload)) {
+        return $out;
+    }
+
+    $groupMap = [
+        'commands' => 'command',
+        'commandFrames' => 'command',
+        'command_frames' => 'command',
+        'responses' => 'response',
+        'responseFrames' => 'response',
+        'response_frames' => 'response',
+        'errors' => 'error',
+        'errorFrames' => 'error',
+        'error_frames' => 'error',
+    ];
+
+    foreach ($groupMap as $payloadKey => $group) {
+        if (empty($payload[$payloadKey]) || !is_array($payload[$payloadKey])) {
+            continue;
+        }
+        foreach (array_values($payload[$payloadKey]) as $index => $frame) {
+            if (!is_array($frame)) {
+                continue;
+            }
+            $hex = $this->extractV2FrameWireHexFromPayloadFrame($frame);
+            if ($hex !== '') {
+                $out[$group][(int) $index] = $hex;
+            }
+        }
+    }
+
+    return $out;
+}
+
+private function extractV2FrameWireHexFromPayloadFrame(array $frame)
+{
+    $partition = (isset($frame['partition']) && is_array($frame['partition']))
+        ? $frame['partition']
+        : [];
+
+    $candidates = [
+        $frame['frameCode'] ?? null,
+        $frame['commandCode'] ?? null,
+        $frame['responseCode'] ?? null,
+        $frame['commandValue'] ?? null,
+        $frame['fullApiValue'] ?? null,
+        $partition['fullApiValue'] ?? null,
+    ];
+
+    if (!empty($frame['valueGroups']) && is_array($frame['valueGroups'])) {
+        $joined = '';
+        foreach ($frame['valueGroups'] as $group) {
+            $joined .= preg_replace('/[^0-9A-Fa-f]/', '', (string) $group);
+        }
+        if ($joined !== '') {
+            $candidates[] = $joined;
+        }
+    }
+
+    foreach ($candidates as $candidate) {
+        $hex = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', (string) $candidate));
+        if ($hex !== '' && (strlen($hex) % 2) === 0) {
+            return $hex;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Prefer frameCode slice over stored 0x00 placeholders for protocol slots.
+ */
+private function overlayV2FieldWireHexFromFrameCode(array $field, $frameWireHex)
+{
+    $frameWireHex = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', (string) $frameWireHex));
+    if ($frameWireHex === '') {
+        return $field;
+    }
+
+    $level = strtolower(trim((string) ($field['field_level'] ?? 'bytewise')));
+    if ($level === 'bitwise') {
+        return $field;
+    }
+
+    $start = max(0, (int) ($field['start_byte'] ?? ($field['start_byte_position'] ?? ($field['byte_start_position'] ?? 0))));
+    $numberOfBytes = max(1, (int) ($field['no_of_bytes'] ?? ($field['number_of_bytes'] ?? 1)));
+    $slice = substr($frameWireHex, $start * 2, $numberOfBytes * 2);
+    if ($slice === '' || (strlen($slice) % 2) !== 0) {
+        return $field;
+    }
+    $slice = strtoupper($slice);
+
+    $slot = $this->canonicalizeDeviceUiProtocolFieldName(
+        (string) ($field['field_description'] ?? ($field['name'] ?? ''))
+    );
+    $stored = $this->deviceUiNormalizeProtocolHex(
+        $field['value_in_hex_min'] ?? ($field['valueInHexMin'] ?? null),
+        $numberOfBytes
+    );
+
+    $isProtocol = in_array($slot, ['commandid', 'functioncode', 'actionid', 'terminator'], true);
+    $storedIsBad = ($stored === '' || $this->deviceUiHexIsZeroPadding($stored));
+    $sliceIsUseful = ($slice !== '' && !$this->deviceUiHexIsZeroPadding($slice));
+
+    if ($slot === 'terminator') {
+        $wire = $sliceIsUseful ? $slice : '0A';
+        $field['value_in_hex_min'] = $wire;
+        $field['field_description'] = 'Terminator';
+        if ($this->deviceUiNormalizeProtocolHex($field['default_value'] ?? null, $numberOfBytes) === ''
+            || $this->deviceUiHexIsZeroPadding($field['default_value'] ?? null)
+        ) {
+            $field['default_value'] = $wire;
+        }
+        return $field;
+    }
+
+    // Protocol ids: always prefer a non-zero frameCode slice over placeholder 00.
+    // Non-protocol data: only fill when stored hex is empty/zero and slice is real.
+    // When the field window covers the whole framed command, store exclusive
+    // payload (frame minus a trailing terminator byte) — never leave 000000.
+    if ($isProtocol && $sliceIsUseful) {
+        $field['value_in_hex_min'] = $slice;
+        if ($storedIsBad
+            || !$this->deviceUiValueLooksLikeProtocolHex($field['default_value'] ?? null)
+        ) {
+            $field['default_value'] = $slice;
+        }
+    } elseif (!$isProtocol && $storedIsBad && $sliceIsUseful) {
+        $wire = $slice;
+        if (strtoupper($slice) === $frameWireHex && strlen($frameWireHex) >= 4) {
+            $exclusive = $frameWireHex;
+            if (substr($exclusive, -2) === '0A') {
+                $exclusive = substr($exclusive, 0, -2);
+            }
+            $wire = $exclusive !== '' ? $exclusive : '';
+        }
+        if ($wire === '') {
+            $field['value_in_hex_min'] = '';
+            $field['no_of_bytes'] = 0;
+            $field['number_of_bytes'] = 0;
+        } else {
+            $field['value_in_hex_min'] = strtoupper($wire);
+            $field['no_of_bytes'] = max(1, (int) (strlen($wire) / 2));
+            $field['number_of_bytes'] = $field['no_of_bytes'];
+        }
+    }
+
+    return $field;
 }
 
 private function appendDeviceUiTreeFieldToPseudoRow(array &$pseudoRow, $prefix, array $field)
@@ -1963,13 +2349,141 @@ private function mergeProductApiPageRows(array &$rows, array &$pageNames, array 
     }
 }
 
-private function mergeV2ApiPageRows(array &$rows, array &$pageNames, array &$pageNoByName, $modelno, array $apiByParameter, array $vendorPageMap = [])
+/**
+ * One title is one page. Parameters that landed on a second number with the
+ * same title move onto the lowest number, and that extra number is dropped.
+ */
+private function collapseDuplicateMappingPages(array &$rows, array &$pageNames)
+{
+    $canonicalNoByName = [];
+    $displayNameByKey = [];
+    foreach ($pageNames as $no => $name) {
+        $no = trim((string) $no);
+        $display = trim((string) $name);
+        $key = strtolower($display);
+        if ($no === '' || $key === '') {
+            continue;
+        }
+        if (!isset($canonicalNoByName[$key]) || (int) $no < (int) $canonicalNoByName[$key]) {
+            $canonicalNoByName[$key] = $no;
+            $displayNameByKey[$key] = $display;
+        }
+    }
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $display = trim((string) ($row['page_name'] ?? ''));
+        $key = strtolower($display);
+        $no = trim((string) ($row['page_no'] ?? ''));
+        if ($key === '' || $no === '') {
+            continue;
+        }
+        if (!isset($canonicalNoByName[$key]) || (int) $no < (int) $canonicalNoByName[$key]) {
+            $canonicalNoByName[$key] = $no;
+            $displayNameByKey[$key] = $display;
+        }
+    }
+
+    $collapsedRows = [];
+    $seen = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $display = trim((string) ($row['page_name'] ?? ''));
+        $key = strtolower($display);
+        if ($key !== '' && isset($canonicalNoByName[$key])) {
+            $row['page_no'] = $canonicalNoByName[$key];
+            $row['page_name'] = $displayNameByKey[$key];
+        }
+        $paramKey = $this->pageParameterLinkKey($row['page_no'] ?? '', $row['parameter'] ?? '');
+        if ($paramKey === ':' || isset($seen[$paramKey])) {
+            continue;
+        }
+        $seen[$paramKey] = true;
+        $collapsedRows[] = $row;
+    }
+    $rows = $collapsedRows;
+
+    $keptNames = [];
+    foreach ($pageNames as $no => $name) {
+        $no = trim((string) $no);
+        $display = trim((string) $name);
+        $key = strtolower($display);
+        if ($no === '' || $key === '') {
+            continue;
+        }
+        if (isset($canonicalNoByName[$key]) && (string) $canonicalNoByName[$key] !== $no) {
+            continue;
+        }
+        $keptNames[$no] = $display;
+    }
+    foreach ($rows as $row) {
+        $no = trim((string) ($row['page_no'] ?? ''));
+        $display = trim((string) ($row['page_name'] ?? ''));
+        if ($no === '') {
+            continue;
+        }
+        if ($display === '') {
+            $display = 'Page ' . $no;
+        }
+        $keptNames[$no] = $display;
+    }
+    $pageNames = $keptNames;
+}
+
+/**
+ * App screens are the linked page titles. Device pages that were never linked
+ * stay off the node the app reads.
+ */
+private function limitDeviceConfigToLinkedPages(array $config, $modelno)
+{
+    $allowed = [];
+    $mapping = $this->getPageParameterMapping($modelno);
+    foreach (is_array($mapping['rows'] ?? null) ? $mapping['rows'] : [] as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $name = trim((string) ($row['page_name'] ?? ''));
+        if ($name === '') {
+            continue;
+        }
+        $allowed[strtolower($name)] = $name;
+    }
+    if ($allowed === []) {
+        return $config;
+    }
+    if (!isset($config['devices'][0]['pages']) || !is_array($config['devices'][0]['pages'])) {
+        return $config;
+    }
+
+    $kept = [];
+    foreach ($config['devices'][0]['pages'] as $pageName => $frames) {
+        $key = strtolower(trim((string) $pageName));
+        if (!isset($allowed[$key]) || !is_array($frames)) {
+            continue;
+        }
+        $kept[$allowed[$key]] = $frames;
+    }
+    $config['devices'][0]['pages'] = $kept;
+    $config['devices'][0]['total_pages'] = (string) max(1, count($kept));
+
+    return $config;
+}
+
+private function mergeV2ApiPageRows(array &$rows, array &$pageNames, array &$pageNoByName, $modelno, array $apiByParameter, array $vendorPageMap = [], array $removedPages = [])
 {
     $linkedParameters = [];
+    $linkedParameterNames = [];
     foreach ($rows as $row) {
         $paramKey = $this->pageParameterLinkKey($row['page_no'] ?? '1', $row['parameter'] ?? '');
         if ($paramKey !== ':') {
             $linkedParameters[$paramKey] = true;
+        }
+        $linkedName = strtolower(trim((string) ($row['parameter'] ?? '')));
+        if ($linkedName !== '') {
+            $linkedParameterNames[$linkedName] = true;
         }
     }
 
@@ -1992,6 +2506,13 @@ private function mergeV2ApiPageRows(array &$rows, array &$pageNames, array &$pag
             $pageNo = '1';
         }
 
+        $parameterKey = strtolower($parameterName);
+        // Already placed on a linked page. A different page_number must not
+        // create a second copy of the same parameter.
+        if (isset($linkedParameterNames[$parameterKey])) {
+            continue;
+        }
+
         $paramKey = $this->pageParameterLinkKey($pageNo, $parameterName);
         if (isset($linkedParameters[$paramKey])) {
             continue;
@@ -2004,9 +2525,23 @@ private function mergeV2ApiPageRows(array &$rows, array &$pageNames, array &$pag
         if ($pageName === '') {
             $pageName = 'Page ' . $pageNo;
         }
+        if (isset($removedPages[strtolower($pageName)])) {
+            continue;
+        }
+        // Same title already has a page number. Attach the new parameter there.
+        $existingNo = $pageNoByName[strtolower($pageName)] ?? '';
+        if ($existingNo !== '' && $existingNo !== $pageNo) {
+            $pageNo = $existingNo;
+            $pageName = trim((string) ($pageNames[$pageNo] ?? $pageName));
+            $paramKey = $this->pageParameterLinkKey($pageNo, $parameterName);
+            if (isset($linkedParameters[$paramKey])) {
+                continue;
+            }
+        }
 
         $pageNames[$pageNo] = $pageName;
         $pageNoByName[strtolower($pageName)] = $pageNo;
+        $linkedParameterNames[$parameterKey] = true;
         $linkedParameters[$paramKey] = true;
 
         $sequence = (int) ($config['sequence_no'] ?? 0);
@@ -2025,6 +2560,7 @@ private function mergeV2ApiPageRows(array &$rows, array &$pageNames, array &$pag
             'parameter' => $parameterName,
             'sequence' => $sequence,
             'api' => $this->resolveDeviceUiApiMetadata($apiByParameter, $parameterName),
+            'from_v2_config' => true,
         ];
     }
 }
@@ -2053,15 +2589,17 @@ private function buildDeviceUiApiMetadata(array $row)
         'cmd_value_in_hex_min',
     ]));
     foreach ($fieldDescriptions as $index => $description) {
-        $normalized = strtolower(trim((string) $description));
+        $normalized = $this->canonicalizeDeviceUiProtocolFieldName($description);
+        $rawLower = strtolower(trim((string) $description));
         // Prefer protocol hex (cmd_valueinhexmin) over cmd_defaultvalue labels / stubs.
-        if ($normalized === 'commandid' || $normalized === 'command id') {
+        // Use canonicalize so "Command Id" / "CommandID" / etc. always match.
+        if ($normalized === 'commandid' || $rawLower === 'command id') {
             $commandId = $this->deviceUiFirstNonEmpty($hexMins[$index] ?? null, $defaults[$index] ?? null);
-        } elseif ($normalized === 'function code' || $normalized === 'functioncode') {
+        } elseif ($normalized === 'functioncode' || $rawLower === 'function code') {
             $functionCode = $this->deviceUiFirstNonEmpty($hexMins[$index] ?? null, $defaults[$index] ?? null);
-        } elseif ($normalized === 'actionid' || $normalized === 'action id') {
+        } elseif ($normalized === 'actionid' || $rawLower === 'action id') {
             $actionId = $this->deviceUiFirstNonEmpty($hexMins[$index] ?? null, $defaults[$index] ?? null);
-        } elseif ($dataIndex === null && ($normalized === 'data' || $normalized === 'trigger')) {
+        } elseif ($dataIndex === null && ($normalized === 'data' || $normalized === 'trigger' || $rawLower === 'data' || $rawLower === 'trigger')) {
             $dataIndex = $index;
         }
     }
@@ -2547,7 +3085,7 @@ private function buildDeviceUiFrameFieldList(array $row, $prefix)
             'asperui_value' => $rawDefault,
             'Field_description' => $fieldDescription,
             'type' => trim((string) ($valueDefs[$index] ?? 'Fixed Value')),
-            'data_type' => trim((string) ($dataTypes[$index] ?? 'UnsignedInt')),
+            'data_type' => $this->canonicalizeDeviceUiDataTypeLabel($dataTypes[$index] ?? 'UnsignedInt'),
             'no_of_bytes' => $byteCount,
             'byte_start_position' => $this->deviceUiApiInt($byteStarts[$index] ?? ($index + 1), $index + 1),
             'ui_type' => $uiType !== '' ? $uiType : 'None',
@@ -2765,6 +3303,21 @@ private function deviceUiNormalizeProtocolHex($value, $byteCount = 0)
  */
 private function deviceUiResolveFrameWireValue($rawDefault, $hexMin, $byteCount, $fieldName = '')
 {
+    $fieldName = $this->canonicalizeDeviceUiProtocolFieldName($fieldName);
+    $bytes = max(1, (int) $byteCount);
+
+    // Terminator is always protocol 0A unless a non-zero hex was explicitly stored.
+    if ($fieldName === 'terminator') {
+        foreach ([$hexMin, $rawDefault] as $candidate) {
+            $normalized = $this->deviceUiNormalizeProtocolHex($candidate, $bytes);
+            if ($normalized !== '' && !$this->deviceUiHexIsZeroPadding($normalized)) {
+                return $normalized;
+            }
+        }
+
+        return '0A';
+    }
+
     $normalizedHex = $this->deviceUiNormalizeProtocolHex($hexMin, $byteCount);
     if ($normalizedHex !== '') {
         return $normalizedHex;
@@ -2775,18 +3328,12 @@ private function deviceUiResolveFrameWireValue($rawDefault, $hexMin, $byteCount,
         return $normalizedDefault;
     }
 
-    $fieldName = strtolower(preg_replace('/[\s_]+/', '', (string) $fieldName));
-    if ($fieldName === 'terminator') {
-        return '0A';
-    }
     // Do not invent 00 for protocol ids. An empty slot can still be filled
     // from protocolMeta.command_id / function_code. A real stored 00 is kept
     // above, because deviceUiNormalizeProtocolHex already returned it.
     if (in_array($fieldName, ['commandid', 'functioncode', 'actionid'], true)) {
         return '';
     }
-
-    $bytes = max(1, (int) $byteCount);
 
     return str_repeat('00', $bytes);
 }
@@ -2934,6 +3481,35 @@ private function normalizeDeviceUiChoiceLists($labels, $values)
     return [$labels, $values];
 }
 
+/**
+ * asperui and asperui_values are paired by index. A longer label list
+ * (SPRAY COUNT ["0","0"] vs ["1"]) has no wire for the extra label.
+ */
+private function alignDeviceUiChoiceListLengths(array $fields)
+{
+    foreach ($fields as $index => $field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        $labels = $field['asperui'] ?? null;
+        $values = $field['asperui_values'] ?? null;
+        if (!is_array($labels) || !is_array($values)) {
+            continue;
+        }
+        $labels = array_values($labels);
+        $values = array_values($values);
+        if ($labels === [] || $values === [] || count($labels) === count($values)) {
+            continue;
+        }
+        $count = min(count($labels), count($values));
+        $field['asperui'] = array_slice($labels, 0, $count);
+        $field['asperui_values'] = array_slice($values, 0, $count);
+        $fields[$index] = $field;
+    }
+
+    return $fields;
+}
+
 private function normalizeDeviceUiFrameChoiceFields(array $fields)
 {
     foreach ($fields as $index => $field) {
@@ -2976,16 +3552,29 @@ private function deviceUiFormatTypeName($uiType)
 
 private function deviceUiMultiComponentLabel(array $componentMeta, $parameterName)
 {
-    $uiType = $this->deviceUiFormatTypeName($componentMeta['ui_type'] ?? '');
-    if ($uiType !== '') {
-        return $uiType;
-    }
     $fieldName = trim((string) ($componentMeta['field_description'] ?? ''));
-    if ($fieldName !== '' && strcasecmp($fieldName, (string) $parameterName) !== 0) {
+    if ($fieldName !== '' && !$this->deviceUiLabelIsProtocolRole($fieldName) && strcasecmp($fieldName, (string) $parameterName) !== 0) {
         return $fieldName;
     }
+    $parameterName = trim((string) $parameterName);
+    if ($parameterName !== '') {
+        return $parameterName;
+    }
+    $uiType = $this->deviceUiFormatTypeName($componentMeta['ui_type'] ?? '');
 
-    return trim((string) $parameterName);
+    return $uiType !== '' ? $uiType : $parameterName;
+}
+
+private function deviceUiLabelIsProtocolRole($name)
+{
+    $name = strtolower(trim((string) $name));
+    $name = str_replace(['_', '-'], ' ', $name);
+
+    return in_array($name, [
+        '', 'data', 'trigger', 'command', 'response', 'error', 'none', 'field',
+        'commandid', 'command id', 'functioncode', 'function code', 'terminator',
+        'actionid', 'action id',
+    ], true);
 }
 
 /**
@@ -3417,6 +4006,25 @@ public function saveDeviceUiSchema($modelno, array $schema)
     $schema['updatedAt'] = $schema['generatedAt'];
     $now = $istNow->format('Y-m-d H:i:s');
 
+    try {
+        if (!class_exists(\App\Services\DeviceUiSchemaNormalizer::class, false)) {
+            foreach ([
+                APPPATH . 'services/DeviceUiSchemaNormalizer.php',
+                APPPATH . 'Services/DeviceUiSchemaNormalizer.php',
+            ] as $normalizerFile) {
+                if (is_file($normalizerFile)) {
+                    require_once $normalizerFile;
+                    break;
+                }
+            }
+        }
+        if (class_exists(\App\Services\DeviceUiSchemaNormalizer::class, false)) {
+            $schema = \App\Services\DeviceUiSchemaNormalizer::alignPublishedUiPages($schema);
+        }
+    } catch (\Throwable $exception) {
+        log_message('error', 'Device UI page align on save failed: ' . $exception->getMessage());
+    }
+
     $schemaJson = DeviceUiSchemaGenerator::package((string) $modelno, (string) $nodeId, $schema);
     if (!is_string($schemaJson) || $schemaJson === '' || strlen($schemaJson) > DeviceUiSchemaGenerator::INLINE_LIMIT) {
         $detail = trim(DeviceUiSchemaGenerator::lastError());
@@ -3582,11 +4190,24 @@ private function normalizeDeviceUiSchemaForApp(array $schema, $modelno, $nodeId 
                 APPPATH . 'services/DeviceUiSchemaNormalizer.php',
                 APPPATH . 'Services/DeviceUiSchemaNormalizer.php',
             ];
-            foreach ($normalizerCandidates as $normalizerFile) {
-                if (is_file($normalizerFile)) {
+            $prevDisplay = ini_get('display_errors');
+            $prevReporting = error_reporting(E_ALL & ~E_WARNING & ~E_NOTICE & ~E_DEPRECATED);
+            ini_set('display_errors', '0');
+            try {
+                foreach ($normalizerCandidates as $normalizerFile) {
+                    if (!is_file($normalizerFile)) {
+                        continue;
+                    }
                     require_once $normalizerFile;
-                    break;
+                    if (class_exists(\App\Services\DeviceUiSchemaNormalizer::class, false)) {
+                        break;
+                    }
                 }
+            } finally {
+                if ($prevDisplay !== false) {
+                    ini_set('display_errors', (string) $prevDisplay);
+                }
+                error_reporting($prevReporting);
             }
         }
 
@@ -3811,7 +4432,9 @@ private function deviceUiSchemaBuildVersion(): string
 private function migrateDeviceUiSchemaThemeToDarkDefault(array $theme): array
 {
     $mode = strtolower(trim((string) ($theme['mode'] ?? ($theme['themeMode'] ?? ''))));
-    if ($mode !== '' && $mode !== 'light' && $mode !== 'pro') {
+    // Explicit Light stays Light. Only empty / legacy Pro is promoted to Dark.
+    // Profile Appearance is applied later and must not be overwritten here.
+    if ($mode !== '' && $mode !== 'pro') {
         return $theme;
     }
 
@@ -4516,14 +5139,6 @@ private function syncDeviceUiSchemaPagesFromMapping($modelno, array $schema)
     }
 
     $expectedPages = [];
-    foreach ($pageNames as $pageNo => $pageName) {
-        $pageNo = trim((string) $pageNo);
-        if ($pageNo === '') {
-            continue;
-        }
-        $title = trim((string) $pageName);
-        $expectedPages[$pageNo] = $title !== '' ? $title : ('Page ' . $pageNo);
-    }
     foreach ($rows as $row) {
         if (!is_array($row)) {
             continue;
@@ -4541,11 +5156,31 @@ private function syncDeviceUiSchemaPagesFromMapping($modelno, array $schema)
         }
         $expectedPages[$pageNo] = $title;
     }
-    foreach ($controlsByPage as $pageNo => $_ids) {
-        if (!isset($expectedPages[$pageNo])) {
+    if ($expectedPages === [] && $pageNames === []) {
+        foreach ($controlsByPage as $pageNo => $_ids) {
             $expectedPages[$pageNo] = 'Page ' . $pageNo;
         }
     }
+    $canonicalNoByTitle = [];
+    foreach ($expectedPages as $pageNo => $title) {
+        $titleKey = strtolower(trim((string) $title));
+        if ($titleKey === '') {
+            continue;
+        }
+        if (!isset($canonicalNoByTitle[$titleKey]) || (int) $pageNo < (int) $canonicalNoByTitle[$titleKey]) {
+            $canonicalNoByTitle[$titleKey] = (string) $pageNo;
+        }
+    }
+    $collapsedPages = [];
+    foreach ($expectedPages as $pageNo => $title) {
+        $titleKey = strtolower(trim((string) $title));
+        $keepNo = $canonicalNoByTitle[$titleKey] ?? (string) $pageNo;
+        if ((string) $pageNo !== (string) $keepNo) {
+            continue;
+        }
+        $collapsedPages[$keepNo] = $title;
+    }
+    $expectedPages = $collapsedPages;
 
     $existingByNo = [];
     foreach ($schema['pages'] ?? [] as $page) {
@@ -5101,9 +5736,11 @@ public function generateInitialDeviceUiSchema($modelno, $nodeId = '')
 
     // Run the same P0 repair as the refresh pipeline so the first generated schema
     // already has consistent flags, ordering and component projections.
-    return $this->attachDeviceUiFlutterContract(
+    $schema = $this->attachDeviceUiFlutterContract(
         $this->repairDeviceUiSchemaP0Contracts($this->hydrateDeviceUiProtocolMetaFromFrames($schema))
     );
+
+    return $this->publishV2SchemaNodeAlias($schema, $modelno);
 }
 
 private function deviceUiResponsiveContract()
@@ -5442,14 +6079,17 @@ private function refreshDeviceUiSchemaApiDetails($modelno, array $schema, $nodeI
         $existingConfig,
         $modelno,
         $nodeId,
-        is_array($infoPayload) && isset($infoPayload['info']) && is_array($infoPayload['info']) ? $infoPayload['info'] : []
+        is_array($infoPayload) && isset($infoPayload['info']) && is_array($infoPayload['info']) ? $infoPayload['info'] : [],
+        $this->modelHasV2ApiConfigs($modelno)
     );
+    $deviceConfig = $this->limitDeviceConfigToLinkedPages($deviceConfig, $modelno);
     if (empty($deviceConfig)) {
         try {
             $schema = $this->refreshDeviceUiSchemaControlsFromApi($modelno, $schema);
+            $schema = $this->publishV2SchemaNodeAlias($schema, $modelno);
             return $this->syncDeviceUiSchemaControlReferences($schema);
         } catch (\Throwable $exception) {
-            return $schema;
+            return $this->publishV2SchemaNodeAlias($schema, $modelno);
         }
     }
 
@@ -5540,9 +6180,10 @@ private function refreshDeviceUiSchemaApiDetails($modelno, array $schema, $nodeI
     $schema = $this->syncDeviceUiPreviewContracts($schema);
 
     try {
+        $schema = $this->publishV2SchemaNodeAlias($schema, $modelno);
         return $this->syncDeviceUiSchemaControlReferences($schema);
     } catch (\Throwable $exception) {
-        return $schema;
+        return $this->publishV2SchemaNodeAlias($schema, $modelno);
     }
 }
 
@@ -5770,9 +6411,9 @@ private function refreshDeviceUiSchemaControlsFromApi($modelno, array $schema)
                 $updatedControl['protocolMeta'] = [];
             }
             $updatedControl['protocolMeta'] = array_merge($updatedControl['protocolMeta'], [
-                'command_id' => $this->deviceUiFirstNonEmpty($componentMeta['command_id'] ?? null, $apiMeta['command_id'] ?? null, $updatedControl['protocolMeta']['command_id'] ?? null),
-                'function_code' => $this->deviceUiFirstNonEmpty($componentMeta['function_code'] ?? null, $apiMeta['function_code'] ?? null, $updatedControl['protocolMeta']['function_code'] ?? null),
-                'action_id' => $this->deviceUiFirstNonEmpty($componentMeta['action_id'] ?? null, $apiMeta['action_id'] ?? null, $updatedControl['protocolMeta']['action_id'] ?? null),
+                'command_id' => $this->deviceUiFirstRealProtocolId($componentMeta['command_id'] ?? null, $apiMeta['command_id'] ?? null, $updatedControl['protocolMeta']['command_id'] ?? null),
+                'function_code' => $this->deviceUiFirstRealProtocolId($componentMeta['function_code'] ?? null, $apiMeta['function_code'] ?? null, $updatedControl['protocolMeta']['function_code'] ?? null),
+                'action_id' => $this->deviceUiFirstRealProtocolId($componentMeta['action_id'] ?? null, $apiMeta['action_id'] ?? null, $updatedControl['protocolMeta']['action_id'] ?? null),
                 'ui_type' => $componentMeta['ui_type'] ?? ($apiMeta['ui_type'] ?? null),
                 'ui_type_source' => $source !== '' ? $source : ($apiMeta['ui_type_source'] ?? null),
                 'field_index' => $fieldIndex,
@@ -5791,6 +6432,7 @@ private function refreshDeviceUiSchemaControlsFromApi($modelno, array $schema)
             if (is_array($apiMeta['frame'] ?? null)) {
                 $updatedControl['deviceFrame'] = $apiMeta['frame'];
             }
+            $this->applyProtocolIdsFromDeviceFrame($updatedControl);
             $this->applyDeviceUiChoiceContract($updatedControl);
             $expandedControls[] = $updatedControl;
         }
@@ -5885,9 +6527,9 @@ private function refreshDeviceUiSchemaControlsFromApi($modelno, array $schema)
                 'apiComponentKey' => $componentKey,
                 'apiComponentIndex' => $componentIndex,
                 'protocolMeta' => [
-                    'command_id' => $apiMeta['command_id'] ?? null,
-                    'function_code' => $apiMeta['function_code'] ?? null,
-                    'action_id' => $apiMeta['action_id'] ?? null,
+                    'command_id' => $this->deviceUiFirstRealProtocolId($componentMeta['command_id'] ?? null, $apiMeta['command_id'] ?? null),
+                    'function_code' => $this->deviceUiFirstRealProtocolId($componentMeta['function_code'] ?? null, $apiMeta['function_code'] ?? null),
+                    'action_id' => $this->deviceUiFirstRealProtocolId($componentMeta['action_id'] ?? null, $apiMeta['action_id'] ?? null),
                     'ui_type' => $componentMeta['ui_type'] ?? ($apiMeta['ui_type'] ?? null),
                     'ui_type_source' => $source !== '' ? $source : ($apiMeta['ui_type_source'] ?? null),
                     'field_index' => $fieldIndex,
@@ -5919,6 +6561,7 @@ private function refreshDeviceUiSchemaControlsFromApi($modelno, array $schema)
             if (is_array($apiMeta['frame'] ?? null)) {
                 $control['deviceFrame'] = $apiMeta['frame'];
             }
+            $this->applyProtocolIdsFromDeviceFrame($control);
             $this->applyDeviceUiChoiceContract($control);
             if ($control['catalogComponentType'] === null || $control['catalogComponentType'] === 'auto') {
                 unset($control['catalogComponentType']);
@@ -6299,23 +6942,74 @@ private function attachCanonicalDeviceUiFrames(array $schema)
         $meta = isset($control['protocolMeta']) && is_array($control['protocolMeta']) ? $control['protocolMeta'] : [];
         $pageFrames = $this->deviceUiFramesForPage($framesByPage, $control['pageNo'] ?? '');
         $resolved = $this->resolveDeviceUiFrameForControl($frames, $name, $meta, $pageFrames);
+        $existingFrame = (!empty($control['deviceFrame']) && is_array($control['deviceFrame']))
+            ? $control['deviceFrame']
+            : [];
         if (is_array($resolved)) {
-            $control['deviceFrame'] = $this->normalizeDeviceUiFrame($resolved, $name !== '' ? $name : 'frame', $meta);
-        } elseif (!empty($control['deviceFrame']) && is_array($control['deviceFrame'])) {
-            $control['deviceFrame'] = $this->normalizeDeviceUiFrame($control['deviceFrame'], $name !== '' ? $name : 'frame', $meta);
+            $resolvedNorm = $this->normalizeDeviceUiFrame($resolved, $name !== '' ? $name : 'frame', $meta);
+            $existingNorm = !empty($existingFrame)
+                ? $this->normalizeDeviceUiFrame($existingFrame, $name !== '' ? $name : 'frame', $meta)
+                : [];
+            // Prefer the operable (non-zero) frame so controls[].deviceFrame matches pages.
+            $control['deviceFrame'] = $this->preferRicherDeviceUiFrame($resolvedNorm, $existingNorm);
+        } elseif (!empty($existingFrame)) {
+            $control['deviceFrame'] = $this->normalizeDeviceUiFrame($existingFrame, $name !== '' ? $name : 'frame', $meta);
         } else {
             $control['deviceFrame'] = $this->normalizeDeviceUiFrame([], $name !== '' ? $name : 'frame', $meta);
         }
         if (!isset($control['protocolMeta']) || !is_array($control['protocolMeta'])) {
             $control['protocolMeta'] = [];
         }
-        if (empty($control['protocolMeta']['frame']) || !is_array($control['protocolMeta']['frame'])) {
-            $control['protocolMeta']['frame'] = $control['deviceFrame'];
-        }
+        // Always keep protocolMeta.frame aligned with the chosen operable deviceFrame.
+        $control['protocolMeta']['frame'] = $control['deviceFrame'];
     }
     unset($control);
 
     return $schema;
+}
+
+/**
+ * Prefer the frame whose command wire values are actually operable (non-zero hex).
+ * Keeps schema/app contract identical — only chooses between two already-built frames.
+ */
+private function preferRicherDeviceUiFrame(array $primary, array $secondary)
+{
+    if ($secondary === []) {
+        return $primary;
+    }
+    if ($primary === []) {
+        return $secondary;
+    }
+    $primaryScore = $this->deviceUiFrameWireScore($primary);
+    $secondaryScore = $this->deviceUiFrameWireScore($secondary);
+    return ($secondaryScore > $primaryScore) ? $secondary : $primary;
+}
+
+private function deviceUiFrameWireScore(array $frame)
+{
+    $score = 0;
+    $commands = isset($frame['commands']) && is_array($frame['commands']) ? $frame['commands'] : [];
+    foreach ($commands as $field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        $level = strtolower(trim((string) ($field['field_level'] ?? ($field['fieldLevel'] ?? 'bytewise'))));
+        $parentId = (int) ($field['parent_field_id'] ?? ($field['parentFieldId'] ?? 0));
+        if ($level === 'bitwise' && $parentId > 0) {
+            continue;
+        }
+        $hex = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', (string) ($field['value'] ?? '')));
+        if ($hex === '') {
+            continue;
+        }
+        if (preg_match('/^0+$/', $hex)) {
+            $score += 1;
+            continue;
+        }
+        $score += 10 + (int) (strlen($hex) / 2);
+    }
+
+    return $score;
 }
 
 /**
@@ -6650,7 +7344,9 @@ private function repairDeviceUiSchemaP0Contracts(array $schema)
             $slotMeta = array_merge($meta, ['ensure_terminator' => true]);
             $commands = $this->hydrateDeviceUiFrameFields($commands, $slotMeta);
             $commands = $this->ensureDeviceUiWriteFieldSlots($commands, $slotMeta);
+            $commands = $this->finalizeDeviceUiProtocolCommandSlots($commands);
             $commands = $this->repairDeviceUiFrameBytePositions($commands);
+            $commands = $this->finalizeDeviceUiProtocolCommandSlots($commands);
             $frame['commands'] = $commands;
             $frame['name'] = $frame['name'] ?? ($control['parameterName'] ?? $control['parameter'] ?? 'frame');
             $knownCommandId = $this->deviceUiFirstNonEmpty(
@@ -8071,6 +8767,24 @@ private function deviceUiFrameCommandValue(array $frame, $fieldName)
     return null;
 }
 
+/**
+ * Drop a trailing terminator that was concatenated onto a protocol id.
+ * Only strips when the frame has a separate terminator field.
+ */
+private function deviceUiStripProtocolTerminator($value, $terminator)
+{
+    $hex = strtoupper((string) preg_replace('/[^0-9A-F]/', '', (string) $value));
+    $term = strtoupper((string) preg_replace('/[^0-9A-F]/', '', (string) $terminator));
+    if ($hex === '' || $term === '' || strlen($hex) <= strlen($term)) {
+        return $value;
+    }
+    if (substr($hex, -strlen($term)) === $term && ((strlen($hex) - strlen($term)) % 2) === 0) {
+        return substr($hex, 0, -strlen($term));
+    }
+
+    return $value;
+}
+
 private function hydrateDeviceUiProtocolMetaFromFrames(array $schema)
 {
     if (empty($schema['controls']) || !is_array($schema['controls'])) {
@@ -8085,20 +8799,23 @@ private function hydrateDeviceUiProtocolMetaFromFrames(array $schema)
         $deviceFrame = isset($control['deviceFrame']) && is_array($control['deviceFrame']) ? $control['deviceFrame'] : [];
         $metaFrame = isset($meta['frame']) && is_array($meta['frame']) ? $meta['frame'] : [];
         $sourceFrame = !empty($deviceFrame) ? $deviceFrame : $metaFrame;
-        $commandId = $this->deviceUiFirstNonEmpty(
-            $meta['command_id'] ?? null,
-            $meta['commandId'] ?? null,
-            $this->deviceUiFrameCommandValue($sourceFrame, 'commandid')
+        $terminator = $this->deviceUiFrameCommandValue($sourceFrame, 'terminator');
+        // Prefer the frame slot. A stored id that still has the terminator
+        // appended (CommandId + 0A) must not beat the split frame field.
+        $commandId = $this->deviceUiFirstRealProtocolId(
+            $this->deviceUiFrameCommandValue($sourceFrame, 'commandid'),
+            $this->deviceUiStripProtocolTerminator($meta['command_id'] ?? null, $terminator),
+            $this->deviceUiStripProtocolTerminator($meta['commandId'] ?? null, $terminator)
         );
-        $functionCode = $this->deviceUiFirstNonEmpty(
-            $meta['function_code'] ?? null,
-            $meta['functionCode'] ?? null,
-            $this->deviceUiFrameCommandValue($sourceFrame, 'functioncode')
+        $functionCode = $this->deviceUiFirstRealProtocolId(
+            $this->deviceUiFrameCommandValue($sourceFrame, 'functioncode'),
+            $this->deviceUiStripProtocolTerminator($meta['function_code'] ?? null, $terminator),
+            $this->deviceUiStripProtocolTerminator($meta['functionCode'] ?? null, $terminator)
         );
-        $actionId = $this->deviceUiFirstNonEmpty(
-            $meta['action_id'] ?? null,
-            $meta['actionId'] ?? null,
-            $this->deviceUiFrameCommandValue($sourceFrame, 'actionid')
+        $actionId = $this->deviceUiFirstRealProtocolId(
+            $this->deviceUiFrameCommandValue($sourceFrame, 'actionid'),
+            $this->deviceUiStripProtocolTerminator($meta['action_id'] ?? null, $terminator),
+            $this->deviceUiStripProtocolTerminator($meta['actionId'] ?? null, $terminator)
         );
         $meta['command_id'] = $commandId !== null ? $commandId : '';
         $meta['function_code'] = $functionCode !== null ? $functionCode : '';
@@ -8673,14 +9390,25 @@ private function validateDeviceUiSchemaContract(array $schema)
                 ? $control['deviceFrame']['commands']
                 : [];
             $presentFields = [];
+            $definedSlots = [];
             $occupiedBytes = [];
             foreach ($commands as $field) {
                 if (!is_array($field)) {
                     continue;
                 }
                 $fieldName = $this->deviceUiFrameFieldName($field);
+                if (in_array($fieldName, ['commandid', 'functioncode', 'actionid', 'terminator'], true)) {
+                    $definedSlots[$fieldName] = true;
+                }
                 if ($fieldName !== '' && !$this->deviceUiFrameValueIsEmpty($field['value'] ?? null)) {
-                    $presentFields[$fieldName] = true;
+                    // Placeholder 00 / 0x00 protocol ids are not packable — treat as absent.
+                    if (in_array($fieldName, ['commandid', 'functioncode', 'actionid'], true)
+                        && $this->deviceUiHexIsZeroPadding($field['value'] ?? null)
+                    ) {
+                        // leave absent
+                    } else {
+                        $presentFields[$fieldName] = true;
+                    }
                 }
 
                 $start = $field['byte_start_position'] ?? null;
@@ -8708,13 +9436,18 @@ private function validateDeviceUiSchemaContract(array $schema)
                 }
             }
 
-            if (empty($presentFields['commandid'])) {
+            $payloadNames = array_diff(array_keys($presentFields), ['commandid', 'functioncode', 'actionid', 'terminator']);
+            if (!empty($definedSlots['commandid'])) {
+                if (empty($presentFields['commandid'])) {
+                    $result['errors'][] = $id . ': writable control deviceFrame is missing CommandId value.';
+                }
+            } elseif (empty($definedSlots['functioncode']) && $payloadNames === []) {
                 $result['errors'][] = $id . ': writable control deviceFrame is missing CommandId value.';
             }
-            if (empty($presentFields['functioncode'])) {
+            if (!empty($definedSlots['functioncode']) && empty($presentFields['functioncode'])) {
                 $result['warnings'][] = $id . ': writable control deviceFrame is missing Function Code value.';
             }
-            if (empty($presentFields['terminator'])) {
+            if (!empty($definedSlots['terminator']) && empty($presentFields['terminator'])) {
                 $result['warnings'][] = $id . ': writable control deviceFrame is missing Terminator value.';
             }
         }
@@ -9270,15 +10003,26 @@ private function deviceUiDirectionOptions(array $meta = [])
         }
     }
 
-    $antiTokens = ['1', '01', 'ccw', 'anticlockwise', 'anticlock', 'counterclockwise', 'counterclock', 'reverse', 'rev'];
-    $cwTokens = ['0', '00', 'cw', 'clockwise', 'clock', 'forward', 'fwd'];
+    // Words on the protocol label win. Bare 0/00 and 1/01 follow the fan byte:
+    // 00 is anti-clockwise, 01 is clockwise. Checking the byte in the same list
+    // as the word was labeling a CCW blade as Clockwise.
+    $antiWords = ['ccw', 'anticlockwise', 'anticlock', 'counterclockwise', 'counterclock', 'reverse', 'rev'];
+    $cwWords = ['cw', 'clockwise', 'clock', 'forward', 'fwd'];
+    $antiValues = ['0', '00'];
+    $cwValues = ['1', '01'];
     $mapped = [];
     foreach ($pairs as $index => $pair) {
-        $token = strtolower((string) preg_replace('/[^a-z0-9]+/', '', (string) $pair['label']));
-        $valueToken = strtolower((string) preg_replace('/[^a-z0-9]+/', '', (string) $pair['value']));
-        if (in_array($token, $antiTokens, true) || in_array($valueToken, $antiTokens, true)) {
+        $token = (string) preg_replace('/[^a-z0-9]+/', '', strtolower((string) $pair['label']));
+        $valueToken = (string) preg_replace('/[^a-z0-9]+/', '', strtolower((string) $pair['value']));
+        // The wire byte is what the fan uses. A stored word such as
+        // "Clockwise" on value 00 must not keep the wrong button name.
+        if (in_array($valueToken, $antiValues, true) || in_array($token, $antiValues, true)) {
             $isAnti = true;
-        } elseif (in_array($token, $cwTokens, true) || in_array($valueToken, $cwTokens, true)) {
+        } elseif (in_array($valueToken, $cwValues, true) || in_array($token, $cwValues, true)) {
+            $isAnti = false;
+        } elseif (in_array($token, $antiWords, true)) {
+            $isAnti = true;
+        } elseif (in_array($token, $cwWords, true)) {
             $isAnti = false;
         } else {
             $isAnti = ($index === 1);
@@ -9289,9 +10033,13 @@ private function deviceUiDirectionOptions(array $meta = [])
         ];
     }
     if (count($mapped) < 2) {
+        $known = [];
+        foreach ($mapped as $option) {
+            $known[(string) $option['value']] = $option;
+        }
         return [
-            ['label' => 'Clockwise', 'value' => isset($mapped[0]['value']) ? $mapped[0]['value'] : '00'],
-            ['label' => 'Anti-clockwise', 'value' => '01'],
+            $known['00'] ?? ['label' => 'Anti-clockwise', 'value' => '00'],
+            $known['01'] ?? ['label' => 'Clockwise', 'value' => '01'],
         ];
     }
 
@@ -9305,7 +10053,8 @@ private function deviceUiNormalizeDirectionWireValue($value, $isAnti = false)
 {
     $raw = trim((string) $value);
     if ($raw === '') {
-        return $isAnti ? '01' : '00';
+        // Numeric fan protocol: 00 = anti-clockwise, 01 = clockwise.
+        return $isAnti ? '00' : '01';
     }
     if (preg_match('/^(0|00)$/i', $raw)) {
         return '00';
@@ -9387,6 +10136,16 @@ private function applyDeviceUiDirectionControlContract(array &$control)
     $control['component']['props']['options'] = $options;
     $control['component']['props']['value'] = $selected;
     $control['component']['props']['useLiveBinding'] = true;
+    $control['component']['props']['hideValue'] = true;
+    $control['component']['props']['showValue'] = false;
+    $control['component']['props']['hideRawValue'] = true;
+    $control['component']['props']['allowReselect'] = false;
+    $control['component']['props']['sendOnReselect'] = false;
+    $control['displayValue'] = '';
+    $visibleLabel = trim((string) ($control['label'] ?? ''));
+    if ($visibleLabel !== '' && preg_match('/^(\[[^\]]*\])+$|^(0|1|00|01|08)$/i', $visibleLabel)) {
+        $control['label'] = '';
+    }
     $control['component']['widgetTree'] = [
         'type' => 'SegmentedControl',
         'properties' => [
@@ -9570,7 +10329,7 @@ private function deviceUiSchemaComponentFromApi($apiType, $parameterName = '')
     ];
 }
 
-private function mergeDeviceUiNodeConfig(array $liveConfig, array $existingConfig, $modelno, $nodeId, array $info = [])
+private function mergeDeviceUiNodeConfig(array $liveConfig, array $existingConfig, $modelno, $nodeId, array $info = [], $preferLiveFrames = false)
 {
     $hasLivePages = isset($liveConfig['devices'][0]['pages'])
         && is_array($liveConfig['devices'][0]['pages'])
@@ -9587,7 +10346,7 @@ private function mergeDeviceUiNodeConfig(array $liveConfig, array $existingConfi
         // so multi-page models are not truncated to Page 1 from test_nodes.
         $livePages = $liveConfig['devices'][0]['pages'];
         $existingPages = $existingConfig['devices'][0]['pages'];
-        $mergedPages = $this->mergeDeviceUiNodePages($livePages, $existingPages);
+        $mergedPages = $this->mergeDeviceUiNodePages($livePages, $existingPages, $preferLiveFrames);
         foreach ($existingPages as $pageName => $frames) {
             if (!is_array($frames)) {
                 continue;
@@ -9634,7 +10393,7 @@ private function mergeDeviceUiNodeConfig(array $liveConfig, array $existingConfi
     return $this->applyDeviceUiNodeIdentity($liveConfig, $modelno, $nodeId);
 }
 
-private function mergeDeviceUiNodePages(array $livePages, array $existingPages)
+private function mergeDeviceUiNodePages(array $livePages, array $existingPages, $preferLiveFrames = false)
 {
     $existingByName = [];
     $existingByKey = [];
@@ -9675,7 +10434,13 @@ private function mergeDeviceUiNodePages(array $livePages, array $existingPages)
                 $existingFrame = $existingByKey[$nameKey];
             }
             if ($existingFrame !== null) {
-                if (empty($liveCommands) || $this->deviceUiFrameScore($existingFrame) > $this->deviceUiFrameScore($frame)) {
+                // V2 keeps its own frame. The other side only fills empty values.
+                // Legacy still lets the richer frame win, which is how a fat test_nodes
+                // frame used to replace a V2 frame that had fewer slots.
+                $legacyPrefersExisting = empty($liveCommands)
+                    || $this->deviceUiFrameScore($existingFrame) > $this->deviceUiFrameScore($frame);
+                $useExisting = $preferLiveFrames ? empty($liveCommands) : $legacyPrefersExisting;
+                if ($useExisting) {
                     $livePages[$pageName][$index]['frame'] = $this->normalizeDeviceUiFrame(
                         $this->mergeDeviceUiFrameValues($existingFrame, $frame),
                         $frame['name'] ?? ($existingFrame['name'] ?? $name)
@@ -9951,7 +10716,7 @@ private function fetchDeviceUiAutoGetNodesParams($nodeId)
         foreach ($decoded as $value) {
             if (is_array($value)) {
                 foreach ($value as $pageName => $pageVals) {
-                    if (is_string($pageName) && stripos($pageName, 'Page') === 0 && is_array($pageVals)) {
+                    if ($this->deviceUiAutoGetBlockIsPage($pageName, $pageVals)) {
                         $cache[$cacheKey] = $decoded;
                         return $decoded;
                     }
@@ -9969,7 +10734,28 @@ private function fetchDeviceUiAutoGetNodesParams($nodeId)
 }
 
 /**
- * Map auto_get Page*.* human values onto deviceConfig frame Data/Trigger fields.
+ * auto_get page block: a named map of parameter → scalar.
+ * Accepts Page1.Operation, Configure.Config, Status, and Device Communication.
+ */
+private function deviceUiAutoGetBlockIsPage($pageName, $pageVals)
+{
+    if (!is_string($pageName) || trim($pageName) === '' || !is_array($pageVals) || $pageVals === []) {
+        return false;
+    }
+    foreach ($pageVals as $paramName => $paramValue) {
+        if (!is_string($paramName)) {
+            continue;
+        }
+        if (is_scalar($paramValue) || $paramValue === null) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Map auto_get human values onto deviceConfig frame Data/Trigger fields.
  * Never clears existing values with null/empty.
  */
 private function overlayDeviceUiAutoGetParams(array $deviceConfig, $nodeId)
@@ -9985,23 +10771,20 @@ private function overlayDeviceUiAutoGetParams(array $deviceConfig, $nodeId)
     }
 
     $liveByFrameKey = [];
-    foreach ($auto as $key => $block) {
+    foreach ($auto as $block) {
         if (!is_array($block)) {
             continue;
         }
         foreach ($block as $pageName => $pageVals) {
-            if (!is_string($pageName) || stripos($pageName, 'Page') !== 0 || !is_array($pageVals)) {
+            if (!$this->deviceUiAutoGetBlockIsPage($pageName, $pageVals)) {
                 continue;
             }
             foreach ($pageVals as $paramName => $paramValue) {
-                if (!is_string($paramName) && !is_int($paramName)) {
+                if (!is_string($paramName)) {
                     continue;
                 }
-                $name = trim((string) $paramName);
-                if ($name === '' || strcasecmp($name, 'name') === 0) {
-                    continue;
-                }
-                if ($paramValue === null || $paramValue === '') {
+                $name = trim($paramName);
+                if ($name === '' || $paramValue === null || $paramValue === '') {
                     continue;
                 }
                 $frameKey = $this->deviceUiFrameNameKey($name);
@@ -10029,13 +10812,7 @@ private function overlayDeviceUiAutoGetParams(array $deviceConfig, $nodeId)
             if (!is_array($frame)) {
                 continue;
             }
-            $frameName = trim((string) ($frame['name'] ?? ''));
-            $frameKey = $this->deviceUiFrameNameKey($frameName);
-            if ($frameKey === '' || !array_key_exists($frameKey, $liveByFrameKey)) {
-                continue;
-            }
-            $liveValue = $liveByFrameKey[$frameKey];
-            $frame = $this->applyLiveValueToDeviceUiFrame($frame, $liveValue);
+            $frame = $this->applyLiveValuesToDeviceUiFrame($frame, $liveByFrameKey);
             if (isset($item['frame'])) {
                 $item['frame'] = $frame;
             } else {
@@ -10049,67 +10826,179 @@ private function overlayDeviceUiAutoGetParams(array $deviceConfig, $nodeId)
 }
 
 /**
- * Write a live human/bool/number onto the Data (or Trigger) slot as asperui_value.
- * Keeps wire `value` when it is already protocol hex; otherwise leaves wire untouched.
+ * Write each live value onto the Data/Trigger slot with that name.
+ * A frame-level match still fills the first Data slot when the slot itself is unnamed.
  */
-private function applyLiveValueToDeviceUiFrame(array $frame, $liveValue)
+private function applyLiveValuesToDeviceUiFrame(array $frame, array $liveByFrameKey)
 {
-    $display = $liveValue;
-    if (is_bool($liveValue)) {
-        $display = $liveValue ? 'ON' : 'OFF';
-    } elseif (is_int($liveValue) || is_float($liveValue)) {
-        $display = $liveValue;
-    } elseif (is_string($liveValue)) {
-        $trim = trim($liveValue);
-        if ($trim === '') {
-            return $frame;
-        }
-        $lower = strtolower($trim);
-        if (in_array($lower, ['true', 'false'], true)) {
-            $display = $lower === 'true' ? 'ON' : 'OFF';
-        } else {
-            $display = $trim;
-        }
-    } else {
-        return $frame;
-    }
-
+    $frameKey = $this->deviceUiFrameNameKey($frame['name'] ?? '');
+    $applied = false;
     foreach (['commands', 'response', 'error'] as $bucket) {
         if (!isset($frame[$bucket]) || !is_array($frame[$bucket])) {
             continue;
         }
         foreach ($frame[$bucket] as $index => $field) {
-            if (!is_array($field)) {
+            if (!is_array($field) || !$this->deviceUiFieldIsLiveDataSlot($field)) {
                 continue;
             }
-            $desc = strtolower(trim((string) (
-                $field['Field_description']
-                ?? $field['field_description']
-                ?? $field['default_name']
-                ?? ''
-            )));
-            if (!in_array($desc, ['data', 'trigger'], true)) {
+            $slotKey = $this->deviceUiLiveSlotKey($field);
+            if ($slotKey === '' || !array_key_exists($slotKey, $liveByFrameKey)) {
                 continue;
             }
-            $field['asperui_value'] = $display;
-            // Booleanish live → common wire bytes when current wire is empty/padding.
-            $wire = isset($field['value']) ? trim((string) $field['value']) : '';
-            $wireHex = strtoupper(preg_replace('/[\s:_-]+/', '', preg_replace('/^0x/i', '', $wire)));
-            $isPadding = $wireHex !== '' && (bool) preg_match('/^0+$/', $wireHex);
-            if (is_bool($liveValue) || (is_string($liveValue) && in_array(strtolower(trim((string) $liveValue)), ['true', 'false', 'on', 'off'], true))) {
-                $on = is_bool($liveValue)
-                    ? $liveValue
-                    : in_array(strtolower(trim((string) $liveValue)), ['true', 'on', '1'], true);
-                if ($wire === '' || $isPadding) {
-                    $field['value'] = $on ? '01' : '00';
-                }
+            $frame[$bucket][$index] = $this->applyLiveValueToDeviceUiField($field, $liveByFrameKey[$slotKey]);
+            $applied = true;
+        }
+    }
+
+    if (!$applied && $frameKey !== '' && array_key_exists($frameKey, $liveByFrameKey)) {
+        $frame = $this->applyLiveValueToDeviceUiFrame($frame, $liveByFrameKey[$frameKey]);
+    }
+
+    return $frame;
+}
+
+private function deviceUiFieldIsLiveDataSlot(array $field)
+{
+    $role = $this->canonicalizeDeviceUiProtocolFieldName(
+        (string) ($field['Field_description'] ?? $field['field_description'] ?? $field['default_name'] ?? '')
+    );
+
+    return in_array($role, ['data', 'trigger'], true);
+}
+
+private function deviceUiLiveSlotKey(array $field)
+{
+    $defaultName = trim((string) ($field['default_name'] ?? ''));
+    $specific = $this->canonicalizeDeviceUiProtocolFieldName($defaultName);
+    if ($specific !== '' && !in_array($specific, ['data', 'trigger'], true)) {
+        return $this->deviceUiFrameNameKey($defaultName);
+    }
+
+    return '';
+}
+
+/**
+ * Write one live value onto the first Data (or Trigger) slot.
+ */
+private function applyLiveValueToDeviceUiFrame(array $frame, $liveValue)
+{
+    foreach (['commands', 'response', 'error'] as $bucket) {
+        if (!isset($frame[$bucket]) || !is_array($frame[$bucket])) {
+            continue;
+        }
+        foreach ($frame[$bucket] as $index => $field) {
+            if (!is_array($field) || !$this->deviceUiFieldIsLiveDataSlot($field)) {
+                continue;
             }
-            $frame[$bucket][$index] = $field;
+            $frame[$bucket][$index] = $this->applyLiveValueToDeviceUiField($field, $liveValue);
+
             return $frame;
         }
     }
 
     return $frame;
+}
+
+/**
+ * Set asperui_value from the live reading and pair value when the choice map
+ * or a boolean 00/01 wire is known. Does not replace a longer existing wire.
+ */
+private function applyLiveValueToDeviceUiField(array $field, $liveValue)
+{
+    $display = $this->deviceUiLiveDisplayValue($field, $liveValue);
+    if ($display === null || $display === '') {
+        return $field;
+    }
+    $field['asperui_value'] = $display;
+    $mapped = $this->resolveDeviceUiChoiceWireValue($field);
+    if ($mapped !== '') {
+        $field['value'] = $mapped;
+
+        return $field;
+    }
+
+    $bool = $this->deviceUiLiveBoolState($liveValue);
+    if ($bool === null) {
+        return $field;
+    }
+    $wire = isset($field['value']) ? trim((string) $field['value']) : '';
+    $wireHex = strtoupper(preg_replace('/[^0-9A-F]/', '', preg_replace('/^0x/i', '', $wire)));
+    $isPadding = $wireHex !== '' && (bool) preg_match('/^0+$/', $wireHex);
+    if ($wire === '' || $isPadding || in_array($wireHex, ['0', '00', '01', '1'], true)) {
+        $field['value'] = $bool ? '01' : '00';
+    }
+
+    return $field;
+}
+
+/**
+ * @param mixed $liveValue
+ * @return mixed
+ */
+private function deviceUiLiveDisplayValue(array $field, $liveValue)
+{
+    if (is_bool($liveValue)) {
+        return $this->deviceUiBoolLabel($field, $liveValue);
+    }
+    if (is_int($liveValue) || is_float($liveValue)) {
+        return $liveValue;
+    }
+    if (!is_string($liveValue)) {
+        return null;
+    }
+    $trim = trim($liveValue);
+    if ($trim === '') {
+        return null;
+    }
+    $lower = strtolower($trim);
+    if (in_array($lower, ['true', 'false', 'on', 'off'], true)) {
+        return $this->deviceUiBoolLabel($field, in_array($lower, ['true', 'on'], true));
+    }
+    $labels = isset($field['asperui']) && is_array($field['asperui']) ? $field['asperui'] : [];
+    foreach ($labels as $label) {
+        if (strtolower(trim((string) $label)) === $lower) {
+            return trim((string) $label);
+        }
+    }
+
+    return $trim;
+}
+
+private function deviceUiBoolLabel(array $field, $on)
+{
+    $labels = isset($field['asperui']) && is_array($field['asperui']) ? $field['asperui'] : [];
+    $want = $on ? ['true', 'on', '1', 'yes'] : ['false', 'off', '0', 'no'];
+    foreach ($labels as $label) {
+        $text = strtolower(trim((string) $label));
+        if (in_array($text, $want, true)) {
+            return trim((string) $label);
+        }
+    }
+
+    return $on ? 'true' : 'false';
+}
+
+/**
+ * @param mixed $liveValue
+ * @return bool|null
+ */
+private function deviceUiLiveBoolState($liveValue)
+{
+    if (is_bool($liveValue)) {
+        return $liveValue;
+    }
+    if (!is_string($liveValue)) {
+        return null;
+    }
+    $lower = strtolower(trim($liveValue));
+    if (in_array($lower, ['true', 'on'], true)) {
+        return true;
+    }
+    if (in_array($lower, ['false', 'off'], true)) {
+        return false;
+    }
+
+    return null;
 }
 
 private function applyDeviceUiTestNodesToSchema(array $schema, array $testNodes, $requestedNodeId)
@@ -10825,6 +11714,252 @@ private function upsertDeviceUiAttributes(array $attributes, array $required)
     return array_values($merged);
 }
 
+/**
+ * Legacy test_nodes keeps one byte per slot: CommandId "A1", Function Code "E7",
+ * Terminator "0A". A V2 frameCode such as A2EA0A must not stay inside one Data
+ * or CommandId value. Named payloads (power "00", a 23-byte recipe) are left alone.
+ */
+public function splitLegacyProtocolCommandFields(array $fields)
+{
+    if ($fields === []) {
+        return $fields;
+    }
+
+    $wire = [];
+    $bitwise = [];
+    foreach ($fields as $field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        $level = strtolower(trim((string) ($field['field_level'] ?? '')));
+        $parent = (int) ($field['parent_field_id'] ?? 0);
+        if ($level === 'bitwise' && $parent > 0) {
+            $bitwise[] = $field;
+            continue;
+        }
+        $wire[] = $field;
+    }
+
+    $hexOf = static function (array $field) {
+        return strtoupper(preg_replace('/[^0-9A-F]/', '', (string) ($field['value'] ?? '')));
+    };
+    $indexOf = $this->deviceUiIndexProtocolSlots($wire);
+
+    if ($indexOf['commandid'] !== null && $indexOf['functioncode'] === null) {
+        $i = $indexOf['commandid'];
+        $hex = $hexOf($wire[$i]);
+        if ($indexOf['terminator'] !== null && strlen($hex) >= 4 && substr($hex, -2) === '0A') {
+            $hex = substr($hex, 0, -2);
+        }
+        if ($this->deviceUiHexLooksLikeSplitHeader($hex)) {
+            $uiSource = $wire[$i];
+            $wire[$i] = $this->deviceUiProtocolSlotField('CommandId', substr($hex, 0, 2));
+            $insert = [$this->deviceUiProtocolSlotField('Function Code', substr($hex, 2, 2))];
+            $rest = substr($hex, 4);
+            $keptUi = true;
+            if ($rest !== '' && (strlen($rest) % 2) === 0) {
+                $data = $uiSource;
+                $data['default_name'] = 'Data';
+                $data['Field_description'] = 'Data';
+                $data['value'] = $rest;
+                $data['no_of_bytes'] = (int) (strlen($rest) / 2);
+                $data['byte_start_position'] = 3;
+                $insert[] = $data;
+                $keptUi = false;
+            }
+            array_splice($wire, $i + 1, 0, $insert);
+            if ($keptUi) {
+                $trigger = $this->deviceUiUiOnlyTriggerFrom($uiSource);
+                if ($trigger !== null) {
+                    $wire[] = $trigger;
+                }
+            }
+            $indexOf = $this->deviceUiIndexProtocolSlots($wire);
+        }
+    }
+
+    if ($indexOf['commandid'] === null && $indexOf['terminator'] !== null) {
+        foreach ($wire as $i => $field) {
+            $slot = $this->deviceUiFrameFieldName($field);
+            if (in_array($slot, ['terminator', 'commandid', 'functioncode', 'actionid'], true)) {
+                continue;
+            }
+            if (!$this->deviceUiFieldIsGenericData($field)) {
+                continue;
+            }
+            $hex = $hexOf($field);
+            if (strlen($hex) >= 6 && substr($hex, -2) === '0A') {
+                $hex = substr($hex, 0, -2);
+            }
+            if (!$this->deviceUiHexLooksLikeSplitHeader($hex)) {
+                continue;
+            }
+            $cmd = $this->deviceUiProtocolSlotField('CommandId', substr($hex, 0, 2));
+            $fn = $this->deviceUiProtocolSlotField('Function Code', substr($hex, 2, 2));
+            $rest = substr($hex, 4);
+            $replacement = [$cmd, $fn];
+            if ($rest !== '' && (strlen($rest) % 2) === 0) {
+                $data = $field;
+                $data['value'] = $rest;
+                $data['no_of_bytes'] = (int) (strlen($rest) / 2);
+                $data['default_name'] = 'Data';
+                $data['Field_description'] = 'Data';
+                $replacement[] = $data;
+            } else {
+                $trigger = $this->deviceUiUiOnlyTriggerFrom($field);
+                if ($trigger !== null) {
+                    $wire[] = $trigger;
+                }
+            }
+            array_splice($wire, $i, 1, $replacement);
+            break;
+        }
+    }
+
+    $indexOf = $this->deviceUiIndexProtocolSlots($wire);
+    if ($indexOf['commandid'] !== null && $indexOf['functioncode'] !== null) {
+        $header = $hexOf($wire[$indexOf['commandid']]) . $hexOf($wire[$indexOf['functioncode']]);
+        foreach ($wire as $i => $field) {
+            if (!$this->deviceUiFieldIsGenericData($field)) {
+                continue;
+            }
+            $hex = $hexOf($field);
+            $bytes = (int) ($field['no_of_bytes'] ?? 0);
+            $duplicate = ($hex !== '' && ($hex === $header || $hex === $hexOf($wire[$indexOf['functioncode']]) || $hex === $hexOf($wire[$indexOf['commandid']])));
+            // A zero-width slot is UI only. A real data byte, even if still blank, stays.
+            $empty = ($bytes === 0);
+            if (!$duplicate && !$empty) {
+                continue;
+            }
+            $trigger = $this->deviceUiUiOnlyTriggerFrom($field);
+            if ($trigger !== null) {
+                $wire[$i] = $trigger;
+            } else {
+                unset($wire[$i]);
+            }
+        }
+        $wire = array_values($wire);
+    }
+
+    $triggers = [];
+    $body = [];
+    foreach ($wire as $ord => $field) {
+        $bytes = (int) ($field['no_of_bytes'] ?? 0);
+        $slot = $this->deviceUiFrameFieldName($field);
+        if ($bytes <= 0 || $slot === 'trigger') {
+            $field['no_of_bytes'] = 0;
+            $field['byte_start_position'] = 0;
+            $field['_ord'] = $ord;
+            $triggers[] = $field;
+            continue;
+        }
+        $field['_ord'] = $ord;
+        $body[] = $field;
+    }
+    $rank = ['commandid' => 0, 'functioncode' => 1, 'actionid' => 2, 'terminator' => 9];
+    usort($body, function ($a, $b) use ($rank) {
+        $ra = $rank[$this->deviceUiFrameFieldName($a)] ?? 5;
+        $rb = $rank[$this->deviceUiFrameFieldName($b)] ?? 5;
+        if ($ra === $rb) {
+            return ((int) $a['_ord']) <=> ((int) $b['_ord']);
+        }
+        return $ra <=> $rb;
+    });
+    $pos = 1;
+    foreach ($body as &$field) {
+        $bytes = max(1, (int) ($field['no_of_bytes'] ?? 1));
+        $field['no_of_bytes'] = $bytes;
+        $field['byte_start_position'] = $pos;
+        $pos += $bytes;
+        unset($field['_ord']);
+    }
+    unset($field);
+    foreach ($triggers as &$field) {
+        unset($field['_ord']);
+    }
+    unset($field);
+
+    return array_values(array_merge($body, $triggers, $bitwise));
+}
+
+private function deviceUiIndexProtocolSlots(array $fields)
+{
+    $indexOf = ['commandid' => null, 'functioncode' => null, 'terminator' => null];
+    foreach ($fields as $i => $field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        $slot = $this->deviceUiFrameFieldName($field);
+        if (array_key_exists($slot, $indexOf) && $indexOf[$slot] === null) {
+            $indexOf[$slot] = $i;
+        }
+    }
+
+    return $indexOf;
+}
+
+private function deviceUiHexLooksLikeSplitHeader($hex)
+{
+    $hex = strtoupper(preg_replace('/[^0-9A-F]/', '', (string) $hex));
+    if (strlen($hex) < 4 || (strlen($hex) % 2) !== 0) {
+        return false;
+    }
+    $first = hexdec(substr($hex, 0, 2));
+    $second = hexdec(substr($hex, 2, 2));
+
+    return $first >= 0xA0 && $second >= 0x01;
+}
+
+private function deviceUiFieldIsGenericData(array $field)
+{
+    $slot = $this->deviceUiFrameFieldName($field);
+    if (in_array($slot, ['commandid', 'functioncode', 'actionid', 'terminator'], true)) {
+        return false;
+    }
+    $rawName = strtolower(preg_replace('/[^a-z0-9]+/', '', (string) ($field['default_name'] ?? '')));
+    $desc = strtolower(preg_replace('/[^a-z0-9]+/', '', (string) ($field['Field_description'] ?? ($field['field_description'] ?? ''))));
+
+    return $slot === 'data' || in_array($rawName, ['data', ''], true) || in_array($desc, ['data'], true);
+}
+
+private function deviceUiProtocolSlotField($label, $value)
+{
+    $value = strtoupper((string) $value);
+
+    return [
+        'default_name' => $label,
+        'Field_description' => $label,
+        'value' => $value,
+        'asperui_value' => $value,
+        'type' => 'Fixed Value',
+        'data_type' => 'UnsignedInt',
+        'no_of_bytes' => 1,
+        'byte_start_position' => 1,
+        'ui_type' => 'None',
+        'local_control' => 'enable',
+    ];
+}
+
+private function deviceUiUiOnlyTriggerFrom(array $field)
+{
+    $ui = strtolower(trim((string) ($field['ui_type'] ?? 'none')));
+    if ($ui === '' || $ui === 'none') {
+        return null;
+    }
+    $slot = $this->deviceUiFrameFieldName($field);
+    $name = trim((string) ($field['default_name'] ?? ''));
+    if ($name === '' || in_array($slot, ['commandid', 'functioncode', 'actionid', 'terminator', 'data'], true)) {
+        $name = 'Trigger';
+    }
+    $field['default_name'] = $name;
+    $field['Field_description'] = 'Trigger';
+    $field['value'] = '';
+    $field['no_of_bytes'] = 0;
+    $field['byte_start_position'] = 0;
+
+    return $field;
+}
+
 private function normalizeDeviceUiFrame(array $frame, $parameterName = '', array $meta = [])
 {
     $parameterName = trim((string) ($frame['name'] ?? $parameterName));
@@ -10836,11 +11971,35 @@ private function normalizeDeviceUiFrame(array $frame, $parameterName = '', array
         return $this->defaultDeviceUiFrame($parameterName, $meta);
     }
 
+    $frameWireHex = $this->extractV2FrameWireHexFromPayloadFrame($frame);
+    if ($frameWireHex === '' && is_array($meta)) {
+        $frameWireHex = $this->extractV2FrameWireHexFromPayloadFrame($meta);
+        if ($frameWireHex === '') {
+            $frameWireHex = strtoupper(preg_replace(
+                '/[^0-9A-Fa-f]/',
+                '',
+                (string) ($meta['frame_wire_hex'] ?? ($meta['frameWireHex'] ?? ($meta['frameCode'] ?? '')))
+            ));
+        }
+    }
+
     $access = strtolower(trim((string) ($meta['access'] ?? '')));
     $writableMeta = $access === '' || strpos($access, 'write') !== false;
     $slotMeta = $writableMeta ? array_merge($meta, ['ensure_terminator' => true]) : $meta;
+    if ($frameWireHex !== '') {
+        $slotMeta['frame_wire_hex'] = $frameWireHex;
+    }
+
     $commands = $this->hydrateDeviceUiFrameFields($commands, $slotMeta);
     $commands = $this->ensureDeviceUiWriteFieldSlots($commands, $slotMeta);
+    $commands = $this->finalizeDeviceUiProtocolCommandSlots($commands);
+    if ($frameWireHex !== '') {
+        $commands = $this->applyDeviceUiFrameWireHexToFields($commands, $frameWireHex);
+    }
+    $commands = $this->reconcileDeviceUiFrameWireFields($commands, $frameWireHex);
+    $commands = $this->repairDeviceUiFrameBytePositions($commands);
+    $commands = $this->finalizeDeviceUiProtocolCommandSlots($commands);
+    $commands = $this->reconcileDeviceUiFrameWireFields($commands, $frameWireHex);
     $commands = $this->repairDeviceUiFrameBytePositions($commands);
 
     $multipleUi = isset($frame['multiple_ui_by_source']) && is_array($frame['multiple_ui_by_source'])
@@ -10851,6 +12010,20 @@ private function normalizeDeviceUiFrame(array $frame, $parameterName = '', array
         ]
         : $this->normalizeDeviceUiFlagList($frame['multiple_ui'] ?? ['false', 'false', 'false'], 3);
 
+    $responseFields = $this->normalizeDeviceUiFrameChoiceFields(
+        $this->hydrateDeviceUiFrameFields(isset($frame['response']) && is_array($frame['response']) ? $frame['response'] : [], $meta)
+    );
+    $responseFields = $this->reconcileDeviceUiFrameWireFields($responseFields);
+    $responseFields = $this->repairDeviceUiFrameBytePositions($responseFields);
+    $responseFields = $this->canonicalizeDeviceUiFrameFieldDataTypes($responseFields);
+
+    $errorFields = $this->normalizeDeviceUiFrameChoiceFields(
+        $this->hydrateDeviceUiFrameFields(isset($frame['error']) && is_array($frame['error']) ? $frame['error'] : [], $meta)
+    );
+    $errorFields = $this->reconcileDeviceUiFrameWireFields($errorFields);
+    $errorFields = $this->repairDeviceUiFrameBytePositions($errorFields);
+    $errorFields = $this->canonicalizeDeviceUiFrameFieldDataTypes($errorFields);
+
     return [
         'name' => $parameterName,
         'multiple_ui' => $multipleUi,
@@ -10860,9 +12033,15 @@ private function normalizeDeviceUiFrame(array $frame, $parameterName = '', array
             'error' => $multipleUi[2],
         ],
         'trigger_ui' => $this->normalizeDeviceUiFlagList($frame['trigger_ui'] ?? ['false', 'false', 'false'], 3),
-        'commands' => $this->normalizeDeviceUiFrameChoiceFields($this->stripNonPhysicalDeviceUiFrameFields($commands)),
-        'response' => $this->normalizeDeviceUiFrameChoiceFields($this->hydrateDeviceUiFrameFields(isset($frame['response']) && is_array($frame['response']) ? $frame['response'] : [], $meta)),
-        'error' => $this->normalizeDeviceUiFrameChoiceFields($this->hydrateDeviceUiFrameFields(isset($frame['error']) && is_array($frame['error']) ? $frame['error'] : [], $meta)),
+        'commands' => $this->alignDeviceUiChoiceListLengths($this->canonicalizeDeviceUiFrameFieldDataTypes(
+            $this->splitLegacyProtocolCommandFields(
+                $this->finalizeDeviceUiProtocolCommandSlots(
+                    $this->normalizeDeviceUiFrameChoiceFields($this->stripNonPhysicalDeviceUiFrameFields($commands))
+                )
+            )
+        )),
+        'response' => $this->alignDeviceUiChoiceListLengths($responseFields),
+        'error' => $this->alignDeviceUiChoiceListLengths($errorFields),
     ];
 }
 
@@ -10980,52 +12159,131 @@ private function ensureDeviceUiWriteFieldSlots(array $commands, array $meta = []
  */
 private function repairDeviceUiFrameBytePositions(array $fields)
 {
-    $nextPosition = 1;
-    $repaired = [];
-    $ranges = [];
+    // Index parents so bitwise children can share the parent byte position.
+    $byId = [];
+    foreach ($fields as $field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        $id = (int) ($field['id'] ?? 0);
+        if ($id > 0) {
+            $byId[$id] = $field;
+        }
+    }
+
+    $headers = [];
+    $payload = [];
+    $terminators = [];
+    $bitwise = [];
+    $other = [];
+
     foreach ($fields as $field) {
         if (!is_array($field)) {
             continue;
         }
         $name = $this->deviceUiFrameFieldName($field);
+        $level = strtolower(trim((string) ($field['field_level'] ?? ($field['fieldLevel'] ?? 'bytewise'))));
+        $parentId = (int) ($field['parent_field_id'] ?? ($field['parentFieldId'] ?? 0));
         $bytes = isset($field['no_of_bytes']) ? (int) $field['no_of_bytes'] : 0;
-        if ($bytes < 1) {
-            $bytes = 1;
+
+        if ($level === 'bitwise' && $parentId > 0) {
+            $parentPos = 1;
+            if (isset($byId[$parentId])) {
+                $parentPos = max(1, (int) ($byId[$parentId]['byte_start_position'] ?? 1));
+                // The parent byte is already on the wire. A bit child is display
+                // metadata, not another byte. Leave it zero-width so a later
+                // pass cannot pad it to 00 or copy its decimal display onto the wire.
+                $field['byte_start_position'] = $parentPos;
+                $field['no_of_bytes'] = 0;
+                $field['value'] = '';
+            }
+            $bitwise[] = $field;
+            continue;
         }
-        $start = isset($field['byte_start_position']) ? (int) $field['byte_start_position'] : 0;
-        if ($start === 0 && $name === 'trigger') {
-            $field['no_of_bytes'] = $bytes;
+
+        if ($bytes < 0) {
+            $bytes = 0;
+        }
+        $field['no_of_bytes'] = $bytes;
+
+        if ($name === 'trigger' && (int) ($field['byte_start_position'] ?? 0) === 0) {
+            $other[] = $field;
+            continue;
+        }
+        if ($name === 'terminator') {
+            $terminators[] = $field;
+            continue;
+        }
+        if (in_array($name, ['commandid', 'functioncode', 'actionid'], true)) {
+            $headers[] = $field;
+            continue;
+        }
+        if ($bytes === 0) {
+            // Zero-width payload (no exclusive bytes) — keep for UI, no wire slot.
+            $field['byte_start_position'] = max(1, (int) ($field['byte_start_position'] ?? 1));
+            $other[] = $field;
+            continue;
+        }
+        $payload[] = $field;
+    }
+
+    // Stable physical order: headers → payload (by prior position) → terminator last.
+    usort($payload, static function ($a, $b) {
+        return ((int) ($a['byte_start_position'] ?? 0)) <=> ((int) ($b['byte_start_position'] ?? 0));
+    });
+
+    $nextPosition = 1;
+    $ordered = array_merge($headers, $payload, $terminators);
+    $repaired = [];
+    foreach ($ordered as $field) {
+        $bytes = max(0, (int) ($field['no_of_bytes'] ?? 0));
+        if ($bytes < 1 && $this->deviceUiFrameFieldName($field) !== 'terminator') {
+            $field['no_of_bytes'] = 0;
+            $field['byte_start_position'] = $nextPosition;
             $repaired[] = $field;
             continue;
         }
-        if ($start < 1) {
-            $start = $nextPosition;
-        }
-        $level = strtolower(trim((string) ($field['field_level'] ?? ($field['fieldLevel'] ?? ''))));
-        if ($level !== 'bitwise') {
-            $end = $start + $bytes;
-            foreach ($ranges as $range) {
-                if ($start < $range[1] && $end > $range[0]) {
-                    $nextFree = 1;
-                    foreach ($ranges as $placed) {
-                        if ($placed[1] > $nextFree) {
-                            $nextFree = $placed[1];
-                        }
-                    }
-                    $start = $nextFree;
-                    $end = $start + $bytes;
-                    break;
-                }
-            }
-            $ranges[] = [$start, $end];
+        if ($bytes < 1) {
+            $bytes = 1;
         }
         $field['no_of_bytes'] = $bytes;
-        $field['byte_start_position'] = $start;
-        $nextPosition = max($nextPosition, $start + $bytes);
+        $field['byte_start_position'] = $nextPosition;
+        $nextPosition += $bytes;
         $repaired[] = $field;
     }
 
-    return $repaired;
+    // Bitwise children after parents so UI still receives them; positions already parent-aligned.
+    foreach ($bitwise as $field) {
+        $repaired[] = $field;
+    }
+    foreach ($other as $field) {
+        $repaired[] = $field;
+    }
+
+    // Refresh parent map positions for bitwise after header/payload reassignment.
+    $byId = [];
+    foreach ($repaired as $field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        $id = (int) ($field['id'] ?? 0);
+        if ($id > 0) {
+            $byId[$id] = $field;
+        }
+    }
+    foreach ($repaired as &$field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        $level = strtolower(trim((string) ($field['field_level'] ?? '')));
+        $parentId = (int) ($field['parent_field_id'] ?? 0);
+        if ($level === 'bitwise' && $parentId > 0 && isset($byId[$parentId])) {
+            $field['byte_start_position'] = max(1, (int) ($byId[$parentId]['byte_start_position'] ?? 1));
+        }
+    }
+    unset($field);
+
+    return array_values($repaired);
 }
 
 /**
@@ -11042,8 +12300,12 @@ private function stripNonPhysicalDeviceUiFrameFields(array $fields)
         $start = $field['byte_start_position'] ?? null;
         $length = $field['no_of_bytes'] ?? null;
         $isBitwise = strtolower(trim((string) ($field['field_level'] ?? $field['fieldLevel'] ?? ''))) === 'bitwise';
+        $uiType = strtolower(trim((string) ($field['ui_type'] ?? $field['uiType'] ?? '')));
+        // Legacy keeps a 0-byte Trigger/Button (Get Status) beside A1 / E7 / 0A.
         if (!$isBitwise && is_numeric($start) && is_numeric($length) && (int) $start <= 0 && (int) $length <= 0) {
-            continue;
+            if ($uiType === '' || $uiType === 'none') {
+                continue;
+            }
         }
         $filtered[] = $field;
     }
@@ -11053,11 +12315,947 @@ private function stripNonPhysicalDeviceUiFrameFields(array $fields)
 
 private function deviceUiFrameFieldName(array $field)
 {
-    return strtolower(preg_replace(
-        '/[\s_]+/',
-        '',
-        trim((string) ($field['Field_description'] ?? $field['field_description'] ?? $field['default_name'] ?? ''))
-    ));
+    $raw = trim((string) ($field['Field_description'] ?? $field['field_description'] ?? $field['default_name'] ?? ''));
+
+    return $this->canonicalizeDeviceUiProtocolFieldName($raw);
+}
+
+/**
+ * Merge key for one slot. Protocol roles stay CommandId / Function Code / Terminator.
+ * A Data or Trigger slot uses default_name (power, Cookermode) so several Data
+ * slots in one frame do not collapse onto the last one.
+ */
+private function deviceUiFrameFieldMergeKey(array $field)
+{
+    $description = trim((string) ($field['Field_description'] ?? $field['field_description'] ?? ''));
+    $defaultName = trim((string) ($field['default_name'] ?? ''));
+    $role = $this->canonicalizeDeviceUiProtocolFieldName($description !== '' ? $description : $defaultName);
+    if (in_array($role, ['data', 'trigger'], true) && $defaultName !== '') {
+        $specific = $this->canonicalizeDeviceUiProtocolFieldName($defaultName);
+        if ($specific !== '' && !in_array($specific, ['data', 'trigger'], true)) {
+            return $specific;
+        }
+    }
+    if (in_array($role, ['data', 'trigger'], true)) {
+        $pos = (int) ($field['byte_start_position'] ?? ($field['start_byte'] ?? 0));
+        if ($pos > 0) {
+            return $role . '@' . $pos;
+        }
+    }
+
+    return $role;
+}
+
+private function deviceUiFrameFieldMergeKeyIsGeneric($key)
+{
+    $key = (string) $key;
+
+    return $key === 'data'
+        || $key === 'trigger'
+        || strpos($key, 'data@') === 0
+        || strpos($key, 'trigger@') === 0;
+}
+
+/**
+ * Normalize protocol slot names so terminatorCrc / "Terminator / CRC" count as terminator,
+ * and Command ID / functionCode aliases match legacy slot checks.
+ */
+private function canonicalizeDeviceUiProtocolFieldName($raw)
+{
+    // Lowercase FIRST — [^a-z0-9] would otherwise strip uppercase A-Z.
+    $name = preg_replace('/[^a-z0-9]+/', '', strtolower((string) $raw));
+    if ($name === '') {
+        return '';
+    }
+
+    if ($name === 'terminator' || $name === 'terminatorcrc' || $name === 'crc'
+        || strpos($name, 'terminator') === 0
+    ) {
+        return 'terminator';
+    }
+    if (in_array($name, ['commandid', 'command', 'cmdid', 'cmd'], true)) {
+        return 'commandid';
+    }
+    if (in_array($name, ['functioncode', 'function', 'funcode', 'funccode'], true)) {
+        return 'functioncode';
+    }
+    if (in_array($name, ['actionid', 'action'], true)) {
+        return 'actionid';
+    }
+
+    return $name;
+}
+
+/**
+ * Universal wire-slot reconciliation for V2 frames.
+ *
+ * Prevents concatenating a full-frame hex stored in Data (or an oversized
+ * CommandId) together with separate CommandId / Function / Terminator siblings.
+ * Also clears wire values on bitwise children so they are UI metadata only.
+ * Configuration-driven — no model/device hardcoding.
+ */
+private function reconcileDeviceUiFrameWireFields(array $fields, $frameWireHex = '')
+{
+    if (empty($fields)) {
+        return $fields;
+    }
+
+    $frameWireHex = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', (string) $frameWireHex));
+    $protocolSlots = ['commandid', 'functioncode', 'actionid', 'terminator'];
+    $protocolValues = [];
+    $hasTerminatorSibling = false;
+    $hasFunctionSibling = false;
+    $hasActionSibling = false;
+
+    foreach ($fields as $field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        $slot = $this->deviceUiFrameFieldName($field);
+        if (!in_array($slot, $protocolSlots, true)) {
+            continue;
+        }
+        $bytes = isset($field['no_of_bytes']) ? max(1, (int) $field['no_of_bytes']) : 1;
+        $hex = $this->deviceUiNormalizeProtocolHex($field['value'] ?? null, $bytes);
+        if ($hex === '') {
+            $hex = $this->deviceUiNormalizeProtocolHex($field['asperui_value'] ?? null, $bytes);
+        }
+        if ($hex !== '') {
+            $protocolValues[$slot] = $hex;
+        }
+        if ($slot === 'terminator') {
+            $hasTerminatorSibling = true;
+        }
+        if ($slot === 'functioncode') {
+            $hasFunctionSibling = true;
+        }
+        if ($slot === 'actionid') {
+            $hasActionSibling = true;
+        }
+    }
+
+    $protocolConcat = '';
+    foreach (['commandid', 'functioncode', 'actionid', 'terminator'] as $slot) {
+        if (!empty($protocolValues[$slot])) {
+            $protocolConcat .= $protocolValues[$slot];
+        }
+    }
+    $headerConcat = '';
+    foreach (['commandid', 'functioncode', 'actionid'] as $slot) {
+        if (!empty($protocolValues[$slot])) {
+            $headerConcat .= $protocolValues[$slot];
+        }
+    }
+    $terminatorHex = isset($protocolValues['terminator'])
+        ? strtoupper($protocolValues['terminator'])
+        : '';
+
+    // When frame wire is known, derive exclusive free payload once.
+    $exclusiveFree = '';
+    if ($frameWireHex !== '' && (strlen($frameWireHex) % 2) === 0) {
+        $exclusiveFree = $frameWireHex;
+        if ($headerConcat !== '' && strpos($exclusiveFree, $headerConcat) === 0) {
+            $exclusiveFree = substr($exclusiveFree, strlen($headerConcat));
+        }
+        if ($terminatorHex !== '' && strlen($exclusiveFree) >= strlen($terminatorHex)
+            && substr($exclusiveFree, -strlen($terminatorHex)) === $terminatorHex
+        ) {
+            $exclusiveFree = substr($exclusiveFree, 0, -strlen($terminatorHex));
+        } elseif ($terminatorHex === '' && strlen($exclusiveFree) >= 2 && substr($exclusiveFree, -2) === '0A') {
+            $exclusiveFree = substr($exclusiveFree, 0, -2);
+        }
+        if ($exclusiveFree !== '' && (strlen($exclusiveFree) % 2) !== 0) {
+            $exclusiveFree = '';
+        }
+    }
+
+    foreach ($fields as &$field) {
+        if (!is_array($field)) {
+            continue;
+        }
+
+        $level = strtolower(trim((string) ($field['field_level'] ?? ($field['fieldLevel'] ?? 'bytewise'))));
+        $parentId = (int) ($field['parent_field_id'] ?? ($field['parentFieldId'] ?? 0));
+        // Bitwise children describe bits inside a parent byte — not extra wire bytes.
+        if ($level === 'bitwise' && $parentId > 0) {
+            if ($this->deviceUiValueLooksLikeProtocolHex($field['value'] ?? null)) {
+                if ($this->deviceUiFrameValueIsEmpty($field['asperui_value'] ?? null)) {
+                    $field['asperui_value'] = $field['value'];
+                }
+            }
+            $field['value'] = '';
+            continue;
+        }
+
+        $slot = $this->deviceUiFrameFieldName($field);
+        $bytes = isset($field['no_of_bytes']) ? max(0, (int) $field['no_of_bytes']) : 1;
+        $hex = $this->deviceUiNormalizeProtocolHex($field['value'] ?? null, 0);
+
+        // Oversized protocol id that already embeds the full frame + terminator sibling.
+        if (in_array($slot, ['commandid', 'functioncode', 'actionid'], true)
+            && $hasTerminatorSibling
+            && $terminatorHex !== ''
+            && $hex !== ''
+            && strlen($hex) > 2
+            && substr($hex, -strlen($terminatorHex)) === $terminatorHex
+        ) {
+            $trimmed = substr($hex, 0, -strlen($terminatorHex));
+            if ($slot === 'commandid' && $trimmed !== '' && (strlen($trimmed) % 2) === 0) {
+                if ($hasFunctionSibling || $hasActionSibling) {
+                    $field['value'] = substr($trimmed, 0, 2);
+                    $field['no_of_bytes'] = 1;
+                } else {
+                    // Sole header field (e.g. Display A4EA0A): keep full exclusive body.
+                    $field['value'] = strtoupper($trimmed);
+                    $field['no_of_bytes'] = max(1, (int) (strlen($trimmed) / 2));
+                }
+                if ($this->deviceUiValueLooksLikeProtocolHex($field['asperui_value'] ?? null)) {
+                    $field['asperui_value'] = $field['value'];
+                }
+            } elseif ($trimmed !== '' && (strlen($trimmed) % 2) === 0) {
+                $field['value'] = substr($trimmed, -2);
+                $field['no_of_bytes'] = 1;
+            }
+            continue;
+        }
+
+        // CommandId alone with terminator and known frame wire — restore missing middle bytes.
+        if ($slot === 'commandid' && !$hasFunctionSibling && !$hasActionSibling
+            && $hasTerminatorSibling && $frameWireHex !== ''
+        ) {
+            $body = $frameWireHex;
+            if ($terminatorHex !== '' && substr($body, -strlen($terminatorHex)) === $terminatorHex) {
+                $body = substr($body, 0, -strlen($terminatorHex));
+            } elseif (substr($body, -2) === '0A') {
+                $body = substr($body, 0, -2);
+            }
+            if ($body !== '' && (strlen($body) % 2) === 0) {
+                $field['value'] = strtoupper($body);
+                $field['no_of_bytes'] = max(1, (int) (strlen($body) / 2));
+            }
+            continue;
+        }
+
+        if (in_array($slot, $protocolSlots, true)) {
+            continue;
+        }
+
+        if ($hex === '') {
+            // Empty non-protocol: fill from exclusive frame payload when available.
+            if ($exclusiveFree !== '') {
+                $field['value'] = strtoupper($exclusiveFree);
+                $field['no_of_bytes'] = max(1, (int) (strlen($exclusiveFree) / 2));
+                $exclusiveFree = ''; // consume once
+            }
+            continue;
+        }
+
+        // Data/payload field that stores the entire framed command.
+        if ($protocolConcat !== '' && strtoupper($hex) === strtoupper($protocolConcat)) {
+            $payload = '';
+            if ($headerConcat !== '' && $terminatorHex !== ''
+                && strpos(strtoupper($hex), strtoupper($headerConcat)) === 0
+                && substr(strtoupper($hex), -strlen($terminatorHex)) === $terminatorHex
+            ) {
+                $payload = substr($hex, strlen($headerConcat), strlen($hex) - strlen($headerConcat) - strlen($terminatorHex));
+            }
+            if ($payload === '' || (strlen($payload) % 2) !== 0) {
+                // No exclusive payload — collapse width (do not emit 000000).
+                $field['value'] = '';
+                $field['no_of_bytes'] = 0;
+            } else {
+                $field['value'] = strtoupper($payload);
+                $field['no_of_bytes'] = max(1, (int) (strlen($field['value']) / 2));
+            }
+            continue;
+        }
+
+        // Data stores a copy of CommandId+Function (e.g. A1E7) while siblings exist.
+        if ($headerConcat !== '' && strtoupper($hex) === strtoupper($headerConcat)) {
+            // Lowercase FIRST — [^a-z0-9] would strip uppercase letters from "Data".
+            $defaultName = preg_replace('/[^a-z0-9]+/', '', strtolower((string) ($field['default_name'] ?? '')));
+            $isNamedControl = $defaultName !== '' && !in_array($defaultName, ['data', 'trigger'], true);
+            if (!$isNamedControl) {
+                if ($exclusiveFree !== '') {
+                    $field['value'] = strtoupper($exclusiveFree);
+                    $field['no_of_bytes'] = max(1, (int) (strlen($exclusiveFree) / 2));
+                    $exclusiveFree = '';
+                } else {
+                    $field['value'] = '';
+                    $field['no_of_bytes'] = 0;
+                }
+                continue;
+            }
+        }
+
+        // All-zero generic Data between protocol wrappers → no exclusive payload.
+        // Named controls (Timer/Power/…) may legitimately be multi-byte zeros.
+        if ($headerConcat !== '' && $hasTerminatorSibling
+            && $hex !== '' && preg_match('/^0+$/', $hex) && strlen($hex) >= 2
+        ) {
+            $defaultName = preg_replace('/[^a-z0-9]+/', '', strtolower((string) ($field['default_name'] ?? '')));
+            $isNamedControl = $defaultName !== '' && !in_array($defaultName, ['data', 'trigger'], true);
+            if ($isNamedControl) {
+                continue;
+            }
+            if ($exclusiveFree !== '') {
+                $field['value'] = strtoupper($exclusiveFree);
+                $field['no_of_bytes'] = max(1, (int) (strlen($exclusiveFree) / 2));
+                $exclusiveFree = '';
+            } elseif ($frameWireHex !== '' && $protocolConcat !== ''
+                && strlen($frameWireHex) <= strlen($protocolConcat)
+            ) {
+                $field['value'] = '';
+                $field['no_of_bytes'] = 0;
+            } elseif (strlen($hex) > 2) {
+                // Inflated zero padding with wrappers present (A1 E7 000000 0A).
+                $field['value'] = '';
+                $field['no_of_bytes'] = 0;
+            }
+            continue;
+        }
+
+        // Data alone + Terminator: zeros or full-frame; recover exclusive body.
+        if (!$hasFunctionSibling && $headerConcat === '' && $hasTerminatorSibling
+            && $terminatorHex !== ''
+        ) {
+            if ($frameWireHex !== '') {
+                $body = $frameWireHex;
+                if (substr($body, -strlen($terminatorHex)) === $terminatorHex) {
+                    $body = substr($body, 0, -strlen($terminatorHex));
+                }
+                if ($body !== '' && (strlen($body) % 2) === 0
+                    && ($hex === '' || preg_match('/^0+$/', $hex) || strtoupper($hex) === $frameWireHex
+                        || substr($hex, -strlen($terminatorHex)) === $terminatorHex)
+                ) {
+                    $field['value'] = strtoupper($body);
+                    $field['no_of_bytes'] = max(1, (int) (strlen($body) / 2));
+                    continue;
+                }
+            }
+            if (strlen($hex) > strlen($terminatorHex)
+                && substr($hex, -strlen($terminatorHex)) === $terminatorHex
+            ) {
+                $withoutTerm = substr($hex, 0, -strlen($terminatorHex));
+                if ($withoutTerm !== '' && (strlen($withoutTerm) % 2) === 0) {
+                    $field['value'] = strtoupper($withoutTerm);
+                    $field['no_of_bytes'] = max(1, (int) (strlen($withoutTerm) / 2));
+                }
+                continue;
+            }
+        }
+
+        // Data already includes trailing terminator while a Terminator sibling exists.
+        if ($hasTerminatorSibling && $terminatorHex !== ''
+            && strlen($hex) > strlen($terminatorHex)
+            && substr($hex, -strlen($terminatorHex)) === $terminatorHex
+        ) {
+            $withoutTerm = substr($hex, 0, -strlen($terminatorHex));
+            $looksFramed = ($headerConcat !== '' && strpos($hex, $headerConcat) === 0)
+                || (strlen($withoutTerm) >= 2 && $this->deviceUiValueLooksLikeProtocolHex($withoutTerm));
+            if ($looksFramed) {
+                if ($headerConcat !== '' && strpos($withoutTerm, $headerConcat) === 0) {
+                    $payload = substr($withoutTerm, strlen($headerConcat));
+                    if ($payload !== '' && (strlen($payload) % 2) === 0) {
+                        $field['value'] = strtoupper($payload);
+                        $field['no_of_bytes'] = max(1, (int) (strlen($payload) / 2));
+                    } else {
+                        $field['value'] = '';
+                        $field['no_of_bytes'] = 0;
+                    }
+                } else {
+                    $field['value'] = strtoupper($withoutTerm);
+                    $field['no_of_bytes'] = max(1, (int) (strlen((string) $field['value']) / 2));
+                }
+            }
+        }
+    }
+    unset($field);
+
+    return array_values($fields);
+}
+
+/**
+ * Apply a known frame wire hex onto field values using protocol occupancy.
+ * Configuration-driven — fills zero/empty non-protocol slots from exclusive free bytes.
+ */
+private function applyDeviceUiFrameWireHexToFields(array $fields, $frameWireHex)
+{
+    $frameWireHex = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', (string) $frameWireHex));
+    if ($frameWireHex === '' || empty($fields) || (strlen($frameWireHex) % 2) !== 0) {
+        return $fields;
+    }
+
+    $frameByteLen = (int) (strlen($frameWireHex) / 2);
+    $positions = [];
+    foreach ($fields as $field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        $level = strtolower(trim((string) ($field['field_level'] ?? 'bytewise')));
+        if ($level === 'bitwise' && (int) ($field['parent_field_id'] ?? 0) > 0) {
+            continue;
+        }
+        $pos = (int) ($field['byte_start_position'] ?? ($field['start_byte'] ?? -1));
+        $bytes = (int) ($field['no_of_bytes'] ?? ($field['number_of_bytes'] ?? 1));
+        $slot = $this->deviceUiFrameFieldName($field);
+        // A zero-width trigger sits at position 0 and is not a wire byte.
+        // Counting it makes a 1-based frame look 0-based and shifts A1E70A to E70A0A.
+        if ($pos === 0 && ($bytes < 1 || $slot === 'trigger')) {
+            continue;
+        }
+        if ($pos >= 0) {
+            $positions[] = $pos;
+        }
+    }
+    $oneBased = !empty($positions) && min($positions) >= 1;
+
+    $occupied = [];
+    $meta = [];
+    foreach ($fields as $index => $field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        $level = strtolower(trim((string) ($field['field_level'] ?? 'bytewise')));
+        $parentId = (int) ($field['parent_field_id'] ?? 0);
+        $isBitwise = ($level === 'bitwise' && $parentId > 0);
+        $slot = $this->deviceUiFrameFieldName($field);
+        $bytes = max(0, (int) ($field['no_of_bytes'] ?? 1));
+        $pos = (int) ($field['byte_start_position'] ?? ($field['start_byte'] ?? 0));
+        $idx = $oneBased ? max(0, $pos - 1) : max(0, $pos);
+        $meta[$index] = [
+            'slot' => $slot,
+            'bytes' => $bytes,
+            'idx' => $idx,
+            'isBitwise' => $isBitwise,
+        ];
+        if ($isBitwise || $bytes < 1) {
+            continue;
+        }
+        if (in_array($slot, ['commandid', 'functioncode', 'actionid', 'terminator'], true)) {
+            $markIdx = $idx;
+            // Declared terminator position can sit past a short frameCode; clamp to end.
+            if ($slot === 'terminator' && $markIdx >= $frameByteLen) {
+                $markIdx = max(0, $frameByteLen - max(1, $bytes));
+            }
+            for ($b = $markIdx; $b < ($markIdx + max(1, $bytes)) && $b < $frameByteLen; $b++) {
+                $occupied[$b] = $slot;
+            }
+        }
+    }
+
+    // Also occupy trailing terminator bytes by value when the frame ends with them.
+    foreach ($fields as $field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        if ($this->deviceUiFrameFieldName($field) !== 'terminator') {
+            continue;
+        }
+        $termHex = $this->deviceUiNormalizeProtocolHex($field['value'] ?? null, 0);
+        if ($termHex === '' || $this->deviceUiHexIsZeroPadding($termHex)) {
+            $termHex = '0A';
+        }
+        if (strlen($frameWireHex) >= strlen($termHex)
+            && substr($frameWireHex, -strlen($termHex)) === strtoupper($termHex)
+        ) {
+            $termBytes = (int) (strlen($termHex) / 2);
+            for ($b = $frameByteLen - $termBytes; $b < $frameByteLen; $b++) {
+                $occupied[$b] = 'terminator';
+            }
+        }
+        break;
+    }
+
+    // Occupy leading header bytes by matching field values sequentially on the wire.
+    $cursor = 0;
+    foreach (['commandid', 'functioncode', 'actionid'] as $headerSlot) {
+        foreach ($fields as $field) {
+            if (!is_array($field) || $this->deviceUiFrameFieldName($field) !== $headerSlot) {
+                continue;
+            }
+            $hdr = strtoupper($this->deviceUiNormalizeProtocolHex($field['value'] ?? null, 0));
+            if ($hdr === '' || $this->deviceUiHexIsZeroPadding($hdr)) {
+                break;
+            }
+            $sliceAtCursor = substr($frameWireHex, $cursor * 2, strlen($hdr));
+            if ($sliceAtCursor === $hdr) {
+                $hdrBytes = (int) (strlen($hdr) / 2);
+                for ($b = $cursor; $b < ($cursor + $hdrBytes) && $b < $frameByteLen; $b++) {
+                    $occupied[$b] = $headerSlot;
+                }
+                $cursor += $hdrBytes;
+            }
+            break;
+        }
+    }
+
+    $free = '';
+    for ($b = 0; $b < $frameByteLen; $b++) {
+        if (!isset($occupied[$b])) {
+            $free .= substr($frameWireHex, $b * 2, 2);
+        }
+    }
+
+    $freeConsumed = false;
+    foreach ($fields as $index => &$field) {
+        if (!is_array($field) || !isset($meta[$index])) {
+            continue;
+        }
+        if (!empty($meta[$index]['isBitwise'])) {
+            $field['value'] = '';
+            continue;
+        }
+
+        $slot = $meta[$index]['slot'];
+        $bytes = max(1, (int) $meta[$index]['bytes']);
+        $idx = (int) $meta[$index]['idx'];
+        $isProtocol = in_array($slot, ['commandid', 'functioncode', 'actionid', 'terminator'], true);
+        $current = $this->deviceUiNormalizeProtocolHex($field['value'] ?? null, 0);
+        $currentBad = ($current === '' || $this->deviceUiHexIsZeroPadding($current));
+
+        if ($isProtocol) {
+            $slice = substr($frameWireHex, $idx * 2, $bytes * 2);
+            if ($slot === 'terminator') {
+                $wire = ($slice !== '' && !$this->deviceUiHexIsZeroPadding($slice)) ? strtoupper($slice) : '0A';
+                $field['value'] = $wire;
+                $field['no_of_bytes'] = max(1, (int) (strlen($wire) / 2));
+                continue;
+            }
+            if ($slot === 'commandid') {
+                $hasFunc = false;
+                foreach ($meta as $m) {
+                    if (($m['slot'] ?? '') === 'functioncode' || ($m['slot'] ?? '') === 'actionid') {
+                        $hasFunc = true;
+                        break;
+                    }
+                }
+                if (!$hasFunc) {
+                    $body = $frameWireHex;
+                    if (substr($body, -2) === '0A') {
+                        $body = substr($body, 0, -2);
+                    }
+                    if ($body !== '' && (strlen($body) % 2) === 0 && ($currentBad || strlen($current) <= 2)) {
+                        $field['value'] = strtoupper($body);
+                        $field['no_of_bytes'] = max(1, (int) (strlen($body) / 2));
+                        continue;
+                    }
+                }
+            }
+            if ($slice !== '' && (strlen($slice) % 2) === 0 && ($currentBad || !$this->deviceUiHexIsZeroPadding($slice))) {
+                if ($currentBad || !$this->deviceUiHexIsZeroPadding($slice)) {
+                    $field['value'] = strtoupper($slice);
+                    $field['no_of_bytes'] = max(1, (int) (strlen($slice) / 2));
+                }
+            }
+            continue;
+        }
+
+        // Non-protocol: recover from free bytes when empty/zero/full-frame.
+        $needsFill = $currentBad
+            || ($current !== '' && strtoupper($current) === $frameWireHex);
+        if (!$needsFill) {
+            continue;
+        }
+        if ($free === '') {
+            $field['value'] = '';
+            $field['no_of_bytes'] = 0;
+        } elseif (!$freeConsumed) {
+            $field['value'] = strtoupper($free);
+            $field['no_of_bytes'] = max(1, (int) (strlen($free) / 2));
+            $freeConsumed = true;
+        }
+    }
+    unset($field);
+
+    return array_values($fields);
+}
+
+/**
+ * Re-normalize every frame in a published deviceConfig so wire/position/choice
+ * fixes apply even when the schema snapshot was built before these repairs.
+ */
+private function repairV2DeviceConfigFrameWires(array $deviceConfig, $modelNo = '')
+{
+    if ($deviceConfig === [] || empty($deviceConfig['devices']) || !is_array($deviceConfig['devices'])) {
+        return $deviceConfig;
+    }
+
+    $wireByParam = [];
+    try {
+        $wireByParam = $this->loadV2FrameWireHexByParameterName($modelNo);
+    } catch (\Throwable $exception) {
+        $wireByParam = [];
+    }
+
+    foreach ($deviceConfig['devices'] as &$device) {
+        if (!is_array($device) || empty($device['pages']) || !is_array($device['pages'])) {
+            continue;
+        }
+        foreach ($device['pages'] as $pageName => &$pageEntries) {
+            if (!is_array($pageEntries)) {
+                continue;
+            }
+            foreach ($pageEntries as &$entry) {
+                if (!is_array($entry)) {
+                    continue;
+                }
+                $frame = null;
+                if (isset($entry['frame']) && is_array($entry['frame'])) {
+                    $frame = $entry['frame'];
+                } elseif (isset($entry['commands']) || isset($entry['name'])) {
+                    $frame = $entry;
+                }
+                if (!is_array($frame) || empty($frame['commands']) || !is_array($frame['commands'])) {
+                    continue;
+                }
+                $frameName = trim((string) ($frame['name'] ?? ''));
+                $meta = [];
+                $wireHex = $this->deviceUiV2FrameWireForName($wireByParam, $frameName);
+                if ($wireHex !== '') {
+                    $meta['frame_wire_hex'] = $wireHex;
+                    $frame['frameCode'] = $wireHex;
+                }
+                $normalized = $this->normalizeDeviceUiFrame($frame, $frameName, $meta);
+                if (isset($entry['frame'])) {
+                    $entry['frame'] = $normalized;
+                } else {
+                    $entry = $normalized;
+                }
+            }
+            unset($entry);
+        }
+        unset($pageEntries);
+    }
+    unset($device);
+
+    return $deviceConfig;
+}
+
+/**
+ * Map parameter/frame name → frameCode hex from V2 raw_payload_json (universal).
+ */
+private function loadV2FrameWireHexByParameterName($modelNo)
+{
+    $modelNo = trim((string) $modelNo);
+    $out = [];
+    if ($modelNo === '' || !$this->db->tableExists('api_product_configs')) {
+        return $out;
+    }
+
+    $configs = $this->db->table('api_product_configs')
+        ->select('id, raw_payload_json')
+        ->where('model_name', $modelNo)
+        ->get()
+        ->getResultArray();
+    if (!is_array($configs)) {
+        return $out;
+    }
+
+    foreach ($configs as $config) {
+        $byGroup = $this->extractV2PayloadFrameWireByGroupIndex($config['raw_payload_json'] ?? null);
+        $commandWires = isset($byGroup['command']) && is_array($byGroup['command']) ? $byGroup['command'] : [];
+        if ($commandWires === []) {
+            continue;
+        }
+
+        // Prefer names from api_frames when available.
+        $configId = (int) ($config['id'] ?? 0);
+        if ($configId > 0 && $this->db->tableExists('api_frames')) {
+            $frames = $this->db->table('api_frames')
+                ->select('parameter_name, frame_name, frame_index, frame_group')
+                ->where('config_id', $configId)
+                ->where('frame_group', 'command')
+                ->orderBy('frame_index', 'ASC')
+                ->get()
+                ->getResultArray();
+            if (is_array($frames)) {
+                foreach ($frames as $frame) {
+                    $idx = (int) ($frame['frame_index'] ?? -1);
+                    $hex = ($idx >= 0 && isset($commandWires[$idx])) ? (string) $commandWires[$idx] : '';
+                    if ($hex === '' && $idx > 0 && !isset($commandWires[$idx]) && isset($commandWires[$idx - 1])) {
+                        $hex = (string) $commandWires[$idx - 1];
+                    }
+                    if ($hex === '' && count($commandWires) === 1) {
+                        $hex = (string) reset($commandWires);
+                    }
+                    if ($hex === '') {
+                        continue;
+                    }
+                    foreach ([$frame['parameter_name'] ?? '', $frame['frame_name'] ?? ''] as $name) {
+                        $this->rememberV2FrameWire($out, $name, $hex);
+                    }
+                }
+            }
+        }
+
+        // Also index payload frame names directly.
+        $payload = json_decode((string) ($config['raw_payload_json'] ?? ''), true);
+        if (!is_array($payload)) {
+            continue;
+        }
+        foreach (['commands', 'commandFrames', 'command_frames', 'frames'] as $payloadKey) {
+            if (empty($payload[$payloadKey]) || !is_array($payload[$payloadKey])) {
+                continue;
+            }
+            foreach (array_values($payload[$payloadKey]) as $index => $frame) {
+                if (!is_array($frame)) {
+                    continue;
+                }
+                $hex = $this->extractV2FrameWireHexFromPayloadFrame($frame);
+                if ($hex === '') {
+                    continue;
+                }
+                foreach (['parameterName', 'parameter_name', 'name', 'frameName', 'frame_name'] as $nameKey) {
+                    $this->rememberV2FrameWire($out, $frame[$nameKey] ?? '', $hex);
+                }
+                if (isset($commandWires[$index]) && (string) $commandWires[$index] !== '') {
+                    // keep
+                }
+            }
+        }
+    }
+
+    return $out;
+}
+
+/**
+ * Store a frameCode under the exact name and the fuzzy frame key.
+ * The first real hex wins so a later placeholder does not wipe A1/C2.
+ */
+private function rememberV2FrameWire(array &$out, $name, $hex)
+{
+    $hex = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', (string) $hex));
+    if ($hex === '' || (strlen($hex) % 2) !== 0) {
+        return;
+    }
+    $exact = strtolower(trim((string) $name));
+    if ($exact !== '' && empty($out[$exact])) {
+        $out[$exact] = $hex;
+    }
+    $fuzzy = $this->deviceUiFrameNameKey($name);
+    if ($fuzzy !== '' && empty($out[$fuzzy])) {
+        $out[$fuzzy] = $hex;
+    }
+}
+
+private function deviceUiV2FrameWireForName(array $wireByParam, $frameName)
+{
+    $exact = strtolower(trim((string) $frameName));
+    if ($exact !== '' && !empty($wireByParam[$exact])) {
+        return (string) $wireByParam[$exact];
+    }
+    $fuzzy = $this->deviceUiFrameNameKey($frameName);
+    if ($fuzzy !== '' && !empty($wireByParam[$fuzzy])) {
+        return (string) $wireByParam[$fuzzy];
+    }
+
+    return '';
+}
+
+/**
+ * Map asperui / sno_asperui selection onto asperui_values wire hex.
+ */
+private function resolveDeviceUiChoiceWireValue(array $field)
+{
+    $labels = $field['asperui'] ?? [];
+    $values = $field['asperui_values'] ?? [];
+    $sno = $field['sno_asperui'] ?? [];
+    if (!is_array($labels)) {
+        $labels = $labels !== null && $labels !== '' ? [$labels] : [];
+    }
+    if (!is_array($values)) {
+        $values = $values !== null && $values !== '' ? [$values] : [];
+    }
+    if (!is_array($sno)) {
+        $sno = $sno !== null && $sno !== '' ? [$sno] : [];
+    }
+    if ($values === []) {
+        return '';
+    }
+
+    $selected = $field['asperui_value'] ?? null;
+    if ($selected === null || $selected === '') {
+        return '';
+    }
+    $selectedStr = trim((string) $selected);
+    $selectedLower = strtolower($selectedStr);
+
+    // Direct wire match.
+    foreach ($values as $value) {
+        $hex = $this->deviceUiNormalizeProtocolHex($value, 0);
+        if ($hex !== '' && strtoupper($selectedStr) === $hex) {
+            return $hex;
+        }
+    }
+
+    // Label match → corresponding wire value.
+    foreach ($labels as $index => $label) {
+        if (strtolower(trim((string) $label)) === $selectedLower && isset($values[$index])) {
+            $hex = $this->deviceUiNormalizeProtocolHex($values[$index], 0);
+            if ($hex !== '') {
+                return $hex;
+            }
+            $raw = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', (string) $values[$index]));
+            if ($raw !== '' && (strlen($raw) % 2) === 0) {
+                return $raw;
+            }
+        }
+    }
+
+    // sno_asperui match.
+    foreach ($sno as $index => $code) {
+        if (strtolower(trim((string) $code)) === $selectedLower && isset($values[$index])) {
+            $hex = $this->deviceUiNormalizeProtocolHex($values[$index], 0);
+            if ($hex !== '') {
+                return $hex;
+            }
+        }
+    }
+
+    // Numeric selected equals label (baud 9600 etc.).
+    if (is_numeric($selectedStr)) {
+        foreach ($labels as $index => $label) {
+            if (is_numeric($label) && (float) $label === (float) $selectedStr && isset($values[$index])) {
+                $hex = $this->deviceUiNormalizeProtocolHex($values[$index], 0);
+                if ($hex !== '') {
+                    return $hex;
+                }
+            }
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Normalize emitted data_type spellings to the legacy frontend vocabulary.
+ */
+private function canonicalizeDeviceUiFrameFieldDataTypes(array $fields)
+{
+    foreach ($fields as &$field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        if (!array_key_exists('data_type', $field) && !array_key_exists('dataType', $field)) {
+            continue;
+        }
+        $raw = (string) ($field['data_type'] ?? ($field['dataType'] ?? ''));
+        $field['data_type'] = $this->canonicalizeDeviceUiDataTypeLabel($raw);
+    }
+    unset($field);
+
+    return $fields;
+}
+
+private function canonicalizeDeviceUiDataTypeLabel($raw)
+{
+    $key = strtolower(preg_replace('/[\s_\-]+/', '', trim((string) $raw)));
+    if ($key === '') {
+        return 'UnsignedInt';
+    }
+
+    $map = [
+        'unsignedint' => 'UnsignedInt',
+        'unsignedinteger' => 'UnsignedInt',
+        'uint' => 'UnsignedInt',
+        'uint8' => 'UnsignedInt',
+        'uint16' => 'UnsignedInt',
+        'uint32' => 'UnsignedInt',
+        'signedint' => 'SignedInt',
+        'signedinteger' => 'SignedInt',
+        'int' => 'SignedInt',
+        'integer' => 'SignedInt',
+        'float' => 'Float',
+        'float32' => 'Float',
+        'single' => 'Float',
+        'double' => 'Float',
+        'string' => 'String',
+        'utf8' => 'String',
+        'text' => 'String',
+        'bool' => 'Boolean',
+        'boolean' => 'Boolean',
+        'bit' => 'Boolean',
+    ];
+
+    return $map[$key] ?? trim((string) $raw);
+}
+
+/**
+ * Collapse duplicate protocol slots to match legacy test_nodes shape:
+ * one CommandId, one Function Code, optional ActionId, data fields, one Terminator=0A.
+ */
+private function finalizeDeviceUiProtocolCommandSlots(array $commands)
+{
+    $slotLabels = [
+        'commandid' => 'CommandId',
+        'functioncode' => 'Function Code',
+        'actionid' => 'ActionId',
+        'terminator' => 'Terminator',
+    ];
+    $best = [];
+    $others = [];
+
+    foreach ($commands as $field) {
+        if (!is_array($field)) {
+            continue;
+        }
+        $name = $this->deviceUiFrameFieldName($field);
+        if (!isset($slotLabels[$name])) {
+            $others[] = $field;
+            continue;
+        }
+
+        $bytes = isset($field['no_of_bytes']) ? max(1, (int) $field['no_of_bytes']) : 1;
+        $value = $this->deviceUiNormalizeProtocolHex($field['value'] ?? null, $bytes);
+        if ($value === '') {
+            $value = $this->deviceUiNormalizeProtocolHex($field['asperui_value'] ?? null, $bytes);
+        }
+        if ($name === 'terminator' && ($value === '' || $this->deviceUiHexIsZeroPadding($value))) {
+            $value = '0A';
+        }
+
+        $score = 0;
+        if ($value !== '') {
+            $score += 10;
+        }
+        if ($value !== '' && !$this->deviceUiHexIsZeroPadding($value)) {
+            $score += 20;
+        }
+        if ($name === 'terminator' && strtoupper($value) === '0A') {
+            $score += 30;
+        }
+
+        $candidate = $field;
+        $candidate['default_name'] = $slotLabels[$name];
+        $candidate['Field_description'] = $slotLabels[$name];
+        $candidate['no_of_bytes'] = $bytes;
+        if ($value !== '') {
+            $candidate['value'] = $value;
+            if ($name === 'terminator' || $this->deviceUiValueLooksLikeProtocolHex($candidate['asperui_value'] ?? null)) {
+                $candidate['asperui_value'] = $value;
+            }
+        }
+
+        if (!isset($best[$name]) || $score > $best[$name]['score']) {
+            $best[$name] = ['score' => $score, 'field' => $candidate];
+        }
+    }
+
+    $ordered = [];
+    foreach (['commandid', 'functioncode', 'actionid'] as $slot) {
+        if (isset($best[$slot])) {
+            $ordered[] = $best[$slot]['field'];
+        }
+    }
+    foreach ($others as $field) {
+        $ordered[] = $field;
+    }
+    if (isset($best['terminator'])) {
+        $ordered[] = $best['terminator']['field'];
+    }
+
+    return array_values($ordered);
 }
 
 private function deviceUiFrameValueIsEmpty($value)
@@ -11299,7 +13497,13 @@ private function hydrateDeviceUiFrameFields(array $fields, array $meta = [])
         if (!is_array($field)) {
             continue;
         }
-        $bytes = isset($field['no_of_bytes']) ? max(1, (int) $field['no_of_bytes']) : 1;
+        $level = strtolower(trim((string) ($field['field_level'] ?? ($field['fieldLevel'] ?? 'bytewise'))));
+        $parentId = (int) ($field['parent_field_id'] ?? ($field['parentFieldId'] ?? 0));
+        $isBitwiseChild = $level === 'bitwise' && $parentId > 0;
+        $bytes = isset($field['no_of_bytes']) ? (int) $field['no_of_bytes'] : 1;
+        if (!$isBitwiseChild) {
+            $bytes = max(1, $bytes);
+        }
         $field['no_of_bytes'] = $bytes;
         $name = $this->deviceUiFrameFieldName($field);
         $slotFill = null;
@@ -11319,11 +13523,24 @@ private function hydrateDeviceUiFrameFields(array $fields, array $meta = [])
         }
 
         // Only promote asperui → wire when asperui is real protocol hex (never labels / live text).
-        if ($this->deviceUiFrameValueIsEmpty($field['value'] ?? null)
+        // Bit children keep their display number (17 for wire 11) off the packed byte.
+        if (!$isBitwiseChild
+            && $this->deviceUiFrameValueIsEmpty($field['value'] ?? null)
             && !$this->deviceUiFrameValueIsEmpty($field['asperui_value'] ?? null)
             && $this->deviceUiValueLooksLikeProtocolHex($field['asperui_value'])
         ) {
             $field['value'] = $field['asperui_value'];
+        }
+
+        // Dropdown / choice controls: map asperui label → asperui_values wire hex.
+        if (!$isBitwiseChild && (
+            $this->deviceUiFrameValueIsEmpty($field['value'] ?? null)
+            || $this->deviceUiHexIsZeroPadding($this->deviceUiNormalizeProtocolHex($field['value'] ?? null, 0))
+        )) {
+            $mapped = $this->resolveDeviceUiChoiceWireValue($field);
+            if ($mapped !== '') {
+                $field['value'] = $mapped;
+            }
         }
 
         if (!$this->deviceUiFrameValueIsEmpty($field['value'] ?? null)) {
@@ -11356,8 +13573,8 @@ private function hydrateDeviceUiFrameFields(array $fields, array $meta = [])
             $fill = $this->deviceUiNormalizeProtocolHex($actionId, $bytes) ?: $actionId;
         } elseif ($name === 'terminator') {
             $fill = '0A';
-        } elseif (in_array($name, ['data', 'trigger'], true)) {
-            $fill = str_repeat('00', $bytes);
+        } elseif (!$isBitwiseChild && in_array($name, ['data', 'trigger'], true)) {
+            $fill = str_repeat('00', max(1, $bytes));
         }
         if ($fill === null) {
             continue;
@@ -11375,23 +13592,31 @@ private function hydrateDeviceUiFrameFields(array $fields, array $meta = [])
 private function mergeDeviceUiFrameFieldLists(array $primary, array $secondary)
 {
     $byName = [];
+    $byIndex = [];
     foreach ($secondary as $index => $field) {
         if (!is_array($field)) {
             continue;
         }
-        $name = $this->deviceUiFrameFieldName($field);
-        if ($name !== '') {
+        $name = $this->deviceUiFrameFieldMergeKey($field);
+        // First specific name wins. A later "Data" slot must not replace "power".
+        if ($name !== '' && !isset($byName[$name])) {
             $byName[$name] = $field;
         }
-        $byName['#' . $index] = $field;
+        $byIndex[$index] = $field;
     }
 
     foreach ($primary as $index => &$field) {
         if (!is_array($field)) {
             continue;
         }
-        $name = $this->deviceUiFrameFieldName($field);
-        $other = ($name !== '' && isset($byName[$name])) ? $byName[$name] : ($byName['#' . $index] ?? null);
+        $name = $this->deviceUiFrameFieldMergeKey($field);
+        $other = ($name !== '' && isset($byName[$name])) ? $byName[$name] : null;
+        if (!is_array($other) && $this->deviceUiFrameFieldMergeKeyIsGeneric($name) && isset($byIndex[$index])) {
+            $otherKey = $this->deviceUiFrameFieldMergeKey($byIndex[$index]);
+            if ($this->deviceUiFrameFieldMergeKeyIsGeneric($otherKey)) {
+                $other = $byIndex[$index];
+            }
+        }
         if (!is_array($other)) {
             continue;
         }
@@ -11613,6 +13838,7 @@ public function getDeviceUiInfo($modelno, $nodeId = '', array $options = [])
             $localConfig = $this->buildDeviceUiNodeConfig($modelno, $product ?: [], $pageNames, $rows, $nodeId);
             if (!empty($localConfig)) {
                 $deviceConfig = $this->mergeDeviceUiNodeConfig($deviceConfig, $localConfig, $modelno, $nodeId);
+                $deviceConfig = $this->limitDeviceConfigToLinkedPages($deviceConfig, $modelno);
             }
             $deviceConfig = $this->enrichDeviceUiInfoFromProduct($deviceConfig, $product ?: []);
             $deviceConfig = $this->sanitizeDeviceUiDisplayConfig($deviceConfig);
@@ -11652,7 +13878,8 @@ public function getDeviceUiInfo($modelno, $nodeId = '', array $options = [])
             $remoteConfig = isset($remoteDetails[0]['config']) && is_array($remoteDetails[0]['config'])
                 ? $remoteDetails[0]['config']
                 : [];
-            $deviceConfig = $this->mergeDeviceUiNodeConfig($deviceConfig, $remoteConfig, $modelno, $nodeId);
+            $deviceConfig = $this->mergeDeviceUiNodeConfig($deviceConfig, $remoteConfig, $modelno, $nodeId, [], true);
+            $deviceConfig = $this->limitDeviceConfigToLinkedPages($deviceConfig, $modelno);
             $deviceConfig = $this->enrichV2DeviceConfigDisplayValues($deviceConfig);
             if (isset($remoteDetails[0]['status']['connectivity']['connected'])) {
                 $connected = !empty($remoteDetails[0]['status']['connectivity']['connected']);
@@ -11666,6 +13893,26 @@ public function getDeviceUiInfo($modelno, $nodeId = '', array $options = [])
         }
     }
 
+    if ($isV2Model) {
+        try {
+            $deviceConfig = $this->repairV2DeviceConfigFrameWires($deviceConfig, $modelno);
+        } catch (\Throwable $exception) {
+            log_message('error', 'V2 frame wire repair failed: ' . $exception->getMessage());
+        }
+    }
+
+    $linkedPageNames = [];
+    foreach ($rows as $linkedRow) {
+        if (!is_array($linkedRow)) {
+            continue;
+        }
+        $linkedPageName = trim((string) ($linkedRow['page_name'] ?? ''));
+        if ($linkedPageName === '' || in_array($linkedPageName, $linkedPageNames, true)) {
+            continue;
+        }
+        $linkedPageNames[] = $linkedPageName;
+    }
+
     $info = [
         'brand' => $deviceConfig['info']['brand'] ?? ($product['brand_name'] ?? null),
         'product' => $deviceConfig['info']['product'] ?? ($product['product_name'] ?? null),
@@ -11674,8 +13921,8 @@ public function getDeviceUiInfo($modelno, $nodeId = '', array $options = [])
         'type' => $deviceConfig['info']['type'] ?? 'IOT',
         'product_type' => $deviceConfig['info']['product_type'] ?? 'IOT',
         'description' => $product['product_description'] ?? null,
-        'total_pages' => $product['number_of_pages'] ?? count($pageNames),
-        'pages' => array_values($pageNames),
+        'total_pages' => $linkedPageNames !== [] ? count($linkedPageNames) : ($product['number_of_pages'] ?? count($pageNames)),
+        'pages' => $linkedPageNames !== [] ? $linkedPageNames : array_values($pageNames),
         'fw_version' => $deviceConfig['info']['fw_version'] ?? ($live['fw_version'] ?? null),
         'SSID' => $deviceConfig['info']['SSID'] ?? ($live['ssid'] ?? null),
         'Access_Point' => $deviceConfig['info']['Access_Point'] ?? ($live['Access_Point'] ?? null),

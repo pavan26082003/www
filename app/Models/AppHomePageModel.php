@@ -1063,6 +1063,9 @@ class AppHomePageModel
         try {
             $data = $this->applyLiveUserProfileToSchema($data, $userId);
             if (class_exists(\App\Libraries\GridSduiSchemaBuilder::class)) {
+                // Remove Grid featureCard rows before live enrich. If enrich throws,
+                // the fallback below still returns a Home schema the app can render.
+                $data = \App\Libraries\GridSduiSchemaBuilder::omitDisallowedGridExploreComponents($data);
                 $ssoToken = '';
                 if ($userId > 0 && class_exists(\App\Libraries\GridWebSso::class)) {
                     $ssoToken = \App\Libraries\GridWebSso::issue($userId);
@@ -1072,12 +1075,24 @@ class AppHomePageModel
 
             $schema = $this->attachGridDataSource($this->normalizeSmartphoneBreakpoints($data), $userId);
             $schema = $this->prepareRatingOpenUrlForClient($schema, $userId);
+            $schema = $this->attachProfilePhotoOptions($schema, $userId);
             $schema = $this->applyAccountAppearanceToSchema($schema, $userId);
 
             return \App\Libraries\AppHomeSchemaSigner::attachSignature($schema);
         } catch (\Throwable $e) {
             log_message('error', 'App home live enrich failed for user_id=' . $userId . ': ' . $e->getMessage());
             // Fall back to the last published schema_json so the public API still works.
+            if (is_array($data) && class_exists(\App\Libraries\GridSduiSchemaBuilder::class)) {
+                $data = \App\Libraries\GridSduiSchemaBuilder::omitDisallowedGridExploreComponents($data);
+            }
+            // Still attach photo + rating open-url so Account avatar tap works even when
+            // other live enrich steps failed. Does not change saved schema_json shape.
+            try {
+                $data = $this->prepareRatingOpenUrlForClient($data, $userId);
+                $data = $this->attachProfilePhotoOptions($data, $userId);
+            } catch (\Throwable $enrichErr) {
+                log_message('error', 'App home photo/rating fallback enrich failed for user_id=' . $userId . ': ' . $enrichErr->getMessage());
+            }
             return $data;
         }
     }
@@ -1664,6 +1679,452 @@ class AppHomePageModel
     }
 
     /**
+     * Absolute HTML profile-photo page for the in-app WebView.
+     * intent is change, remove, or upload. Same public URL rules as Rating.
+     */
+    public function publicProfilePhotoPageUrl(int $userId = 0, string $intent = ''): string
+    {
+        $url = $this->publicAppHomeWebUrl('app-home-page/profile-photo');
+        $intent = strtolower(trim($intent));
+        if (in_array($intent, array('change', 'remove', 'upload'), true)) {
+            $url .= (strpos($url, '?') === false ? '?' : '&') . 'intent=' . rawurlencode($intent);
+        }
+        if ($userId > 0 && class_exists(\App\Libraries\GridWebSso::class)) {
+            $sso = \App\Libraries\GridWebSso::issue($userId);
+            if ($sso !== '') {
+                $url = \App\Libraries\GridWebSso::appendToken($url, $sso);
+            }
+        }
+
+        return $url;
+    }
+
+    /**
+     * Account photo tap. Adds the photo screen with the same component and
+     * action types Edit profile already uses. Does not rename or remove
+     * existing profile-header fields, bindings, or menu rows.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    public function attachProfilePhotoOptions(array $schema, int $userId): array
+    {
+        if ($schema === array()) {
+            return $schema;
+        }
+
+        $components = (isset($schema['components']) && is_array($schema['components']))
+            ? $schema['components']
+            : array();
+        $appearance = array();
+        if (isset($components['profile-menu']['appearance']) && is_array($components['profile-menu']['appearance'])) {
+            $appearance = $components['profile-menu']['appearance'];
+        } elseif (isset($components['profile-header']['appearance']) && is_array($components['profile-header']['appearance'])) {
+            $appearance = $components['profile-header']['appearance'];
+        }
+        $pageLayout = array();
+        if (isset($components['profile-edit-page']['layout']) && is_array($components['profile-edit-page']['layout'])) {
+            $pageLayout = $components['profile-edit-page']['layout'];
+        } elseif (isset($components['profile-page']['layout']) && is_array($components['profile-page']['layout'])) {
+            $pageLayout = $components['profile-page']['layout'];
+        }
+
+        if (!isset($components['profile-photo-page'])) {
+            $components['profile-photo-page'] = array(
+                'id' => 'profile-photo-page',
+                'type' => 'scrollPage',
+                'layout' => $pageLayout,
+                'children' => array('profile-photo-header', 'profile-photo-menu'),
+            );
+        }
+        if (!isset($components['profile-photo-header'])) {
+            $components['profile-photo-header'] = array(
+                'id' => 'profile-photo-header',
+                'type' => 'pageHeader',
+                'title' => 'Edit profile photo',
+                'subtitle' => 'Change, remove, or upload your profile photo',
+            );
+        }
+        if (!isset($components['profile-photo-menu'])) {
+            $components['profile-photo-menu'] = array(
+                'id' => 'profile-photo-menu',
+                'type' => 'profileMenu',
+                'appearance' => $appearance,
+                'items' => array(
+                    array(
+                        'id' => 'profile-photo-change',
+                        'iconToken' => 'profile',
+                        'label' => 'Change profile',
+                        'subtitle' => 'Take a new profile photo',
+                        'trailingIconToken' => 'chevron-right',
+                        'actionId' => 'profile-photo-change',
+                    ),
+                    array(
+                        'id' => 'profile-photo-remove',
+                        'iconToken' => 'alerts',
+                        'label' => 'Remove profile',
+                        'subtitle' => 'Remove the current profile photo',
+                        'trailingIconToken' => 'chevron-right',
+                        'actionId' => 'profile-photo-remove',
+                    ),
+                    array(
+                        'id' => 'profile-photo-upload',
+                        'iconToken' => 'shield',
+                        'label' => 'Upload profile',
+                        'subtitle' => 'Choose a photo from your device',
+                        'trailingIconToken' => 'chevron-right',
+                        'actionId' => 'profile-photo-upload',
+                    ),
+                ),
+            );
+        }
+        $schema['components'] = $components;
+
+        if (isset($schema['components']['profile-header']) && is_array($schema['components']['profile-header'])) {
+            $header =& $schema['components']['profile-header'];
+            // Older saved schemas may only have flat avatarUrl on the header.
+            // Ensure the existing avatar object is present so tap can be wired —
+            // same keys the studio schema already uses (no new parameters).
+            if (!isset($header['avatar']) || !is_array($header['avatar'])) {
+                $header['avatar'] = array();
+                $initials = trim((string) ($header['avatarText'] ?? ''));
+                if ($initials !== '') {
+                    $header['avatar']['initials'] = $initials;
+                }
+                $imageUrl = trim((string) ($header['imageUrl'] ?? $header['avatarUrl'] ?? ''));
+                if ($imageUrl !== '') {
+                    $header['avatar']['imageUrl'] = $imageUrl;
+                }
+            }
+            if (!isset($header['avatar']['events']) || !is_array($header['avatar']['events'])) {
+                $header['avatar']['events'] = array();
+            }
+            $header['avatar']['events']['tap'] = array('actionId' => 'profile-photo-options');
+            $header['avatar']['actionId'] = 'profile-photo-options';
+            $header['avatar']['accessibilityLabel'] = 'Edit profile photo';
+            if (isset($header['avatar']['appearance']) && is_array($header['avatar']['appearance'])
+                && array_key_exists('objectFit', $header['avatar']['appearance'])) {
+                $header['avatar']['appearance']['objectFit'] = 'cover';
+            }
+            unset($header);
+        }
+
+        if (!isset($schema['routes']) || !is_array($schema['routes'])) {
+            $schema['routes'] = array();
+        }
+        if (!isset($schema['routes']['profile-photo'])) {
+            $schema['routes']['profile-photo'] = array(
+                'path' => '/profile/photo',
+                'pageId' => 'profile-photo',
+                'public' => false,
+                'requiresAuthentication' => true,
+                'requiredPermissions' => array('profile.read'),
+                'deepLinks' => array('efactor://profile-photo'),
+                'transition' => 'slide',
+                'restoreState' => true,
+            );
+        }
+
+        if (!isset($schema['pages']) || !is_array($schema['pages'])) {
+            $schema['pages'] = array();
+        }
+        if (!isset($schema['pages']['profile-photo'])) {
+            $profilePage = (isset($schema['pages']['profile']) && is_array($schema['pages']['profile']))
+                ? $schema['pages']['profile']
+                : array();
+            $schema['pages']['profile-photo'] = array(
+                'id' => 'profile-photo',
+                'routeId' => 'profile-photo',
+                'rootComponentId' => 'profile-photo-page',
+                'presentationStates' => array('offlineComponentId' => 'offline-banner'),
+                'usesAppShell' => true,
+                'keepBottomNavigation' => array_key_exists('keepBottomNavigation', $profilePage) ? $profilePage['keepBottomNavigation'] : true,
+                'bottomNavigationVisible' => array_key_exists('bottomNavigationVisible', $profilePage) ? $profilePage['bottomNavigationVisible'] : true,
+                'hideBottomNavigation' => array_key_exists('hideBottomNavigation', $profilePage) ? $profilePage['hideBottomNavigation'] : false,
+                'bottomNavigationComponentId' => $profilePage['bottomNavigationComponentId'] ?? 'main-bottom-navigation',
+                'chrome' => $profilePage['chrome'] ?? 'appShell',
+            );
+        }
+
+        // Same open-url / inAppWebView shape as Account → Rating (Flutter already handles it).
+        // Avatar tap opens the photo sheet WebView directly — not a native navigate route.
+        $open = $this->profilePhotoOpenAction($userId, 'change', 'Profile picture');
+        $change = $this->profilePhotoOpenAction($userId, 'change', 'Change profile');
+        $remove = $this->profilePhotoOpenAction($userId, 'remove', 'Remove profile');
+        $upload = $this->profilePhotoOpenAction($userId, 'upload', 'Upload profile');
+        if (!isset($schema['actionRegistry']) || !is_array($schema['actionRegistry'])) {
+            $schema['actionRegistry'] = array();
+        }
+        $schema['actionRegistry']['profile-photo-options'] = $open;
+        $schema['actionRegistry']['profile-photo-change'] = $change;
+        $schema['actionRegistry']['profile-photo-remove'] = $remove;
+        $schema['actionRegistry']['profile-photo-upload'] = $upload;
+        if (isset($schema['actions']) && is_array($schema['actions'])) {
+            $schema['actions']['profile-photo-options'] = $open;
+            $schema['actions']['profile-photo-change'] = $change;
+            $schema['actions']['profile-photo-remove'] = $remove;
+            $schema['actions']['profile-photo-upload'] = $upload;
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Same open-url shape as Account → Rating.
+     *
+     * @return array<string, mixed>
+     */
+    private function profilePhotoOpenAction(int $userId, string $intent, string $title): array
+    {
+        $url = $this->publicProfilePhotoPageUrl($userId, $intent);
+        $webView = array(
+            'javaScriptEnabled' => true,
+            'sharedCookies' => true,
+            'clearCache' => false,
+            'showAppBar' => false,
+            'showToolbar' => false,
+            'hideAppBar' => true,
+            'displayMode' => 'fullscreen',
+        );
+
+        return array(
+            'type' => 'open-url',
+            'url' => $url,
+            'route' => $url,
+            'title' => $title,
+            'openIn' => 'inAppWebView',
+            'webView' => $webView,
+            'destination' => array(
+                'url' => $url,
+                'openIn' => 'inAppWebView',
+                'title' => $title,
+                'sharedCookies' => true,
+                'showAppBar' => false,
+                'showToolbar' => false,
+                'hideAppBar' => true,
+            ),
+        );
+    }
+
+    /**
+     * Center-crop / pad to a square JPEG so the avatar fills the circle.
+     * Uses existing GD only; does not change schema or storage columns.
+     */
+    private function makeSquareProfileTemp(string $tmpPath): ?string
+    {
+        if (!is_file($tmpPath) || !function_exists('imagecreatetruecolor')) {
+            return null;
+        }
+        $info = @getimagesize($tmpPath);
+        if (!is_array($info)) {
+            return null;
+        }
+        $width = (int) ($info[0] ?? 0);
+        $height = (int) ($info[1] ?? 0);
+        $mime = (string) ($info['mime'] ?? '');
+        if ($width < 1 || $height < 1) {
+            return null;
+        }
+
+        $src = null;
+        if ($mime === 'image/jpeg' && function_exists('imagecreatefromjpeg')) {
+            $src = @imagecreatefromjpeg($tmpPath);
+        } elseif ($mime === 'image/png' && function_exists('imagecreatefrompng')) {
+            $src = @imagecreatefrompng($tmpPath);
+        } elseif ($mime === 'image/webp' && function_exists('imagecreatefromwebp')) {
+            $src = @imagecreatefromwebp($tmpPath);
+        } elseif ($mime === 'image/gif' && function_exists('imagecreatefromgif')) {
+            $src = @imagecreatefromgif($tmpPath);
+        }
+        if (!$src) {
+            return null;
+        }
+
+        $side = min($width, $height);
+        $sx = (int) floor(($width - $side) / 2);
+        $sy = (int) floor(($height - $side) / 2);
+        $outSize = 640;
+        $dst = imagecreatetruecolor($outSize, $outSize);
+        if (!$dst) {
+            imagedestroy($src);
+            return null;
+        }
+        imagefill($dst, 0, 0, imagecolorallocate($dst, 0, 0, 0));
+        imagecopyresampled($dst, $src, 0, 0, $sx, $sy, $outSize, $outSize, $side, $side);
+        imagedestroy($src);
+
+        $outPath = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'ahp_avatar_' . uniqid('', true) . '.jpg';
+        $ok = function_exists('imagejpeg') ? @imagejpeg($dst, $outPath, 92) : false;
+        imagedestroy($dst);
+        if (!$ok || !is_file($outPath)) {
+            return null;
+        }
+
+        return $outPath;
+    }
+
+    /**
+     * Save a new account photo into the existing users.image value and, when
+     * a grid profile row already exists, its existing avatar column.
+     *
+     * @return array{success: bool, message: string, avatarUrl?: string}
+     */
+    public function saveAccountProfilePhoto(int $userId, string $tmpPath): array
+    {
+        if ($userId <= 0 || !is_file($tmpPath)) {
+            return array('success' => false, 'message' => 'No valid image file uploaded.');
+        }
+        $size = @filesize($tmpPath);
+        if ($size === false || $size <= 0 || $size > 8 * 1024 * 1024) {
+            return array('success' => false, 'message' => 'Please choose a photo under 8 MB.');
+        }
+        $info = @getimagesize($tmpPath);
+        $mime = is_array($info) ? (string) ($info['mime'] ?? '') : '';
+        if (!in_array($mime, array('image/jpeg', 'image/png', 'image/webp', 'image/gif'), true)) {
+            return array('success' => false, 'message' => 'Please choose a JPG, PNG, or WebP photo.');
+        }
+
+        $squarePath = $this->makeSquareProfileTemp($tmpPath);
+        $uploadPath = $squarePath !== null ? $squarePath : $tmpPath;
+
+        helper(array('general', 'app_files'));
+        $moved = move_temp_file('avatar.png', get_setting('profile_image_path'), '', $uploadPath);
+        if ($squarePath !== null && is_file($squarePath)) {
+            @unlink($squarePath);
+        }
+        if (!is_array($moved) || empty($moved['file_name'])) {
+            return array('success' => false, 'message' => 'Could not save the profile photo.');
+        }
+
+        $fileName = (string) $moved['file_name'];
+        $this->replaceAccountProfileImage($userId, serialize($moved), $fileName);
+
+        return array(
+            'success' => true,
+            'message' => 'Profile photo updated.',
+            'avatarUrl' => $this->resolveAccountAvatarUrl($userId, serialize($moved)),
+        );
+    }
+
+    /**
+     * Clear the account photo. Existing image columns are set empty; no new columns.
+     *
+     * @return array{success: bool, message: string, avatarUrl: string}
+     */
+    public function removeAccountProfilePhoto(int $userId): array
+    {
+        if ($userId <= 0) {
+            return array('success' => false, 'message' => 'Not signed in', 'avatarUrl' => '');
+        }
+        $this->replaceAccountProfileImage($userId, '', '');
+
+        return array(
+            'success' => true,
+            'message' => 'Profile photo removed.',
+            'avatarUrl' => '',
+        );
+    }
+
+    private function replaceAccountProfileImage(int $userId, string $serializedImage, string $fileName): void
+    {
+        helper(array('general', 'app_files'));
+        $usersTable = $this->db->prefixTable('users');
+        $row = $this->db->table($usersTable)->select('image')->where('id', $userId)->get()->getRowArray();
+        $previousImage = trim((string) ($row['image'] ?? ''));
+        $previousGrid = $this->readGridProfileAvatar($userId);
+
+        $previousGridNames = array($previousGrid);
+        foreach ($this->gridProfileDatabases() as $db) {
+            $previousGridNames[] = $this->readAvatarFromDatabase($db, $userId);
+        }
+
+        $this->db->table($usersTable)->where('id', $userId)->update(array('image' => $serializedImage));
+        $this->writeGridProfileAvatar($userId, $fileName);
+
+        $imagePath = (string) get_setting('profile_image_path');
+        if ($previousImage !== '' && $previousImage !== $serializedImage) {
+            $decoded = @unserialize($previousImage);
+            if (is_array($decoded) && !empty($decoded['file_name']) && (string) $decoded['file_name'] !== $fileName) {
+                delete_app_files($imagePath, array($decoded));
+            }
+        }
+        $removed = array();
+        foreach ($previousGridNames as $previousName) {
+            $previousName = trim((string) $previousName);
+            if (strpos($previousName, 'a:') === 0) {
+                $decodedGrid = @unserialize($previousName);
+                if (is_array($decodedGrid) && !empty($decodedGrid['file_name'])) {
+                    $previousName = (string) $decodedGrid['file_name'];
+                }
+            }
+            if ($previousName === '' || $previousName === $fileName || isset($removed[$previousName])) {
+                continue;
+            }
+            if (strpos($previousName, '/') !== false || preg_match('#^https?://#i', $previousName)) {
+                continue;
+            }
+            $removed[$previousName] = true;
+            delete_app_files($imagePath, array($previousName));
+        }
+    }
+
+    /**
+     * @return array<int, \CodeIgniter\Database\BaseConnection>
+     */
+    private function gridProfileDatabases(): array
+    {
+        $databases = array($this->db);
+        try {
+            $gridDb = \Config\Database::connect('grid', false);
+            if ($gridDb) {
+                $databases[] = $gridDb;
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Account profile avatar grid db: ' . $e->getMessage());
+        }
+
+        return $databases;
+    }
+
+    /**
+     * @param \CodeIgniter\Database\BaseConnection $db
+     */
+    private function readAvatarFromDatabase($db, int $userId): string
+    {
+        try {
+            if (!$db->tableExists('grid_profiles') || !$db->fieldExists('avatar', 'grid_profiles')) {
+                return '';
+            }
+            $row = $db->table('grid_profiles')
+                ->select('avatar')
+                ->where('user_id', $userId)
+                ->get()
+                ->getRowArray();
+
+            return trim((string) ($row['avatar'] ?? ''));
+        } catch (\Throwable $e) {
+            return '';
+        }
+    }
+
+    private function writeGridProfileAvatar(int $userId, string $fileName): void
+    {
+        if ($userId <= 0) {
+            return;
+        }
+        foreach ($this->gridProfileDatabases() as $db) {
+            try {
+                if (!$db->tableExists('grid_profiles') || !$db->fieldExists('avatar', 'grid_profiles')) {
+                    continue;
+                }
+                $db->table('grid_profiles')->where('user_id', $userId)->update(array('avatar' => $fileName));
+            } catch (\Throwable $e) {
+                log_message('error', 'Account profile avatar: ' . $e->getMessage());
+            }
+        }
+    }
+
+    /**
      * Absolute App Home JSON API base (.../index.php/app-home-page/api).
      */
     public function publicAppHomeApiBaseUrl(): string
@@ -2176,6 +2637,7 @@ class AppHomePageModel
             'schemaApiUrl' => $this->getSchemaApiUrl($userId),
             'apiBase' => $this->publicAppHomeApiBaseUrl(),
             'ratingPageUrl' => $ratingPageUrl,
+            'profilePhotoPageUrl' => $this->publicProfilePhotoPageUrl($userId),
             'filesBase' => rtrim(base_url('files'), '/'),
             'iotApiUrl' => $iotApiUrl,
             'circleConnectUrl' => $circleConnectUrl,

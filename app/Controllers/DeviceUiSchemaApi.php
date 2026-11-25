@@ -117,11 +117,11 @@ class DeviceUiSchemaApi extends Controller
                 unset($paging);
             }
 
-            $json = json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            if ($json === false) {
+            $json = \App\Services\DeviceUiSchemaGenerator::encode($schema);
+            if ($json === '') {
                 return $this->apiErrorResponse(
                     'SCHEMA_ENCODE_FAILED',
-                    'Unable to encode the device UI schema as JSON: ' . json_last_error_msg(),
+                    'Unable to encode the device UI schema as JSON: ' . (\App\Services\DeviceUiSchemaGenerator::lastError() !== '' ? \App\Services\DeviceUiSchemaGenerator::lastError() : json_last_error_msg()),
                     500,
                     ['model_no' => $modelno, 'node_id' => $resolvedNodeId]
                 );

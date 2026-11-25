@@ -174,6 +174,25 @@ uksort($pages, function ($a, $b) {
     return ((int) $a) <=> ((int) $b);
 });
 
+$collapsedPages = [];
+$pageNoByTitle = [];
+foreach ($pages as $page) {
+    $titleKey = strtolower(trim((string) ($page['page_name'] ?? '')));
+    if ($titleKey === '') {
+        $titleKey = 'page ' . trim((string) ($page['page_no'] ?? ''));
+    }
+    if (!isset($pageNoByTitle[$titleKey])) {
+        $pageNoByTitle[$titleKey] = (string) ($page['page_no'] ?? '');
+        $collapsedPages[$pageNoByTitle[$titleKey]] = $page;
+        continue;
+    }
+    $keepNo = $pageNoByTitle[$titleKey];
+    foreach ($page['params'] as $param) {
+        $collapsedPages[$keepNo]['params'][] = $param;
+    }
+}
+$pages = $collapsedPages;
+
 foreach ($pages as &$page) {
     usort($page['params'], function ($a, $b) {
         return ((int) $a['sequence']) <=> ((int) $b['sequence']);
@@ -181,7 +200,35 @@ foreach ($pages as &$page) {
 }
 unset($page);
 
-$pages = array_values($pages);
+$pages = array_values(array_filter($pages, static function ($page) {
+    return !empty($page['params']);
+}));
+
+if (!function_exists('view_page_ui_json')) {
+    /**
+     * Encode a value for an inline script. A failed json_encode used to print
+     * nothing, which became `const pageData = ;` and killed every click handler.
+     */
+    function view_page_ui_json($value, $fallback = 'null')
+    {
+        $flags = JSON_UNESCAPED_SLASHES
+            | JSON_UNESCAPED_UNICODE
+            | JSON_HEX_TAG
+            | JSON_HEX_AMP
+            | JSON_HEX_APOS
+            | JSON_HEX_QUOT;
+        if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+            $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+        }
+        if (defined('JSON_PARTIAL_OUTPUT_ON_ERROR')) {
+            $flags |= JSON_PARTIAL_OUTPUT_ON_ERROR;
+        }
+
+        $json = json_encode($value, $flags, 2048);
+
+        return ($json === false || $json === '') ? $fallback : $json;
+    }
+}
 
 // Default matches Design Studio "Dark" preset (aligned with App Home dark UI).
 $default_ui_theme = [
@@ -481,17 +528,55 @@ if ($brand_logo_is_efactor) {
     }
 }
 $brand_logo_preview_url = (string) ($brand_logo_asset['previewUrl'] ?? ($brand_logo_asset['url'] ?? ''));
+$account_appearance_passed = strtolower(trim((string) ($account_appearance_mode ?? '')));
 $account_appearance_mode = 'system';
+if ($account_appearance_passed === 'light' || $account_appearance_passed === 'dark' || $account_appearance_passed === 'system') {
+    $account_appearance_mode = $account_appearance_passed;
+}
 try {
+    if ($account_appearance_mode !== 'system' || $account_appearance_passed !== '') {
+        throw new \RuntimeException('appearance already resolved');
+    }
     $account_appearance_uid = 0;
-    if (class_exists(\App\Services\DeviceUiSchemaNormalizer::class)) {
+    // Do NOT class_exists() without false — CI PSR-4 autoloads
+    // app/Services/... and a corrupt production copy spams parse warnings.
+    if (!class_exists(\App\Services\DeviceUiSchemaNormalizer::class, false)) {
+        $normalizerCandidates = [
+            APPPATH . 'services/DeviceUiSchemaNormalizer.php',
+            APPPATH . 'Services/DeviceUiSchemaNormalizer.php',
+        ];
+        $prevDisplay = ini_get('display_errors');
+        $prevReporting = error_reporting(E_ALL & ~E_WARNING & ~E_NOTICE & ~E_DEPRECATED);
+        ini_set('display_errors', '0');
+        try {
+            foreach ($normalizerCandidates as $normalizerFile) {
+                if (!is_file($normalizerFile)) {
+                    continue;
+                }
+                require_once $normalizerFile;
+                if (class_exists(\App\Services\DeviceUiSchemaNormalizer::class, false)) {
+                    break;
+                }
+            }
+        } finally {
+            if ($prevDisplay !== false) {
+                ini_set('display_errors', (string) $prevDisplay);
+            }
+            error_reporting($prevReporting);
+        }
+    }
+    if (class_exists(\App\Services\DeviceUiSchemaNormalizer::class, false)) {
         $account_appearance_uid = (int) \App\Services\DeviceUiSchemaNormalizer::resolveRequestUserId();
     }
-    if ($account_appearance_uid > 0 && class_exists(\App\Libraries\AppAppearance::class)) {
+    if ($account_appearance_uid > 0 && class_exists(\App\Libraries\AppAppearance::class, false)) {
+        $account_appearance_mode = \App\Libraries\AppAppearance::resolve($account_appearance_uid);
+    } elseif ($account_appearance_uid > 0 && class_exists(\App\Libraries\AppAppearance::class)) {
         $account_appearance_mode = \App\Libraries\AppAppearance::resolve($account_appearance_uid);
     }
 } catch (\Throwable $e) {
-    $account_appearance_mode = 'system';
+    if ($account_appearance_passed === '') {
+        $account_appearance_mode = 'system';
+    }
 }
 // SSR preview mode: honor forced light/dark from account. System falls back to studio until JS reads OS.
 $account_appearance_mode = strtolower(trim((string) $account_appearance_mode));
@@ -502,6 +587,61 @@ $preview_display_theme_mode = $account_appearance_mode === 'light' || $account_a
     ? $account_appearance_mode
     : ($is_dark_ui_theme ? 'dark' : 'light');
 $is_preview_dark_ui = $preview_display_theme_mode === 'dark';
+// Paint colors follow Profile Appearance. Studio theme stays in $active_ui_theme
+// so Save Changes still stores the authored palette and does not rewrite schema keys.
+$ui_css_theme = $active_ui_theme;
+if ($account_appearance_mode === 'light' || $account_appearance_mode === 'dark') {
+    $paint_dark = $account_appearance_mode === 'dark';
+    $paint_accent = (string) ($active_ui_theme['accentColor'] ?? ($paint_dark ? '#60A5FA' : '#2563EB'));
+    $paint_chrome = $paint_dark
+        ? [
+            'themeMode' => 'dark',
+            'backgroundColor' => '#0B1220',
+            'gradientColor' => '#111827',
+            'shellColor' => '#0F172A',
+            'cardColor' => '#1E293B',
+            'textColor' => '#F8FAFC',
+            'mutedTextColor' => '#94A3B8',
+            'topbarColor' => '#020617',
+            'secondaryColor' => '#64748B',
+            'toggleOnColor' => $paint_accent,
+            'toggleOffColor' => '#475569',
+            'iconColor' => $paint_accent,
+            'borderColor' => '#334155',
+            'buttonBgColor' => $paint_accent,
+            'buttonTextColor' => '#FFFFFF',
+            'accentColor' => $paint_accent,
+        ]
+        : [
+            'themeMode' => 'light',
+            'backgroundColor' => '#F8FAFC',
+            'gradientColor' => '#EEF2F7',
+            'shellColor' => '#F8FAFC',
+            'cardColor' => '#FFFFFF',
+            'textColor' => '#0F172A',
+            'mutedTextColor' => '#64748B',
+            'topbarColor' => '#FFFFFF',
+            'secondaryColor' => '#94A3B8',
+            'toggleOnColor' => $paint_accent,
+            'toggleOffColor' => '#CBD5E1',
+            'iconColor' => $paint_accent,
+            'borderColor' => '#E2E8F0',
+            'buttonBgColor' => $paint_accent,
+            'buttonTextColor' => '#FFFFFF',
+            'accentColor' => $paint_accent,
+        ];
+    $ui_css_theme = array_merge($active_ui_theme, $paint_chrome);
+    $ui_input_bg = $paint_dark ? $paint_chrome['backgroundColor'] : '#FFFFFF';
+    $ui_input_text = $paint_dark ? '#FFFFFF' : '#0F172A';
+    $ui_input_border = $paint_chrome['borderColor'];
+    $ui_well_bg = $paint_dark ? '#111827' : '#F1F5F9';
+    $ui_header_bg = $paint_chrome['topbarColor'];
+    $ui_header_fg = $paint_dark ? '#FFFFFF' : $paint_chrome['textColor'];
+    $ui_header_device = $paint_accent;
+    $ui_header_chip_bg = $paint_dark ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.06)';
+    $ui_header_chip_bg_hover = $paint_dark ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.10)';
+    $ui_header_chip_fg = $ui_header_fg;
+}
 $request_for_view = service('request');
 $active_scan_username = trim((string) ($request_for_view ? $request_for_view->getGet('username') : ''));
 if ($active_scan_username === '') {
@@ -624,7 +764,8 @@ if (!function_exists('view_ui_normalize_direction_wire_value')) {
     {
         $raw = trim((string) $value);
         if ($raw === '') {
-            return $isAnti ? '01' : '00';
+            // Numeric fan protocol: 00 = anti-clockwise, 01 = clockwise.
+            return $isAnti ? '00' : '01';
         }
         if (preg_match('/^(0|00)$/i', $raw)) {
             return '00';
@@ -675,14 +816,25 @@ if (!function_exists('view_ui_direction_options')) {
         }
 
         $mapped = [];
-        $antiTokens = ['1', '01', 'ccw', 'anticlockwise', 'anticlock', 'counterclockwise', 'counterclock', 'reverse', 'rev'];
-        $cwTokens = ['0', '00', 'cw', 'clockwise', 'clock', 'forward', 'fwd'];
+        // Words on the protocol label win. Bare 0/00 and 1/01 follow the fan byte:
+        // 00 is anti-clockwise, 01 is clockwise. Checking the byte in the same list
+        // as the word was labeling a CCW blade as Clockwise.
+        $antiWords = ['ccw', 'anticlockwise', 'anticlock', 'counterclockwise', 'counterclock', 'reverse', 'rev'];
+        $cwWords = ['cw', 'clockwise', 'clock', 'forward', 'fwd'];
+        $antiValues = ['0', '00'];
+        $cwValues = ['1', '01'];
         foreach ($pairs as $index => $pair) {
-            $token = strtolower((string) preg_replace('/[^a-z0-9]+/', '', (string) $pair['label']));
-            $valueToken = strtolower((string) preg_replace('/[^a-z0-9]+/', '', (string) $pair['value']));
-            if (in_array($token, $antiTokens, true) || in_array($valueToken, $antiTokens, true)) {
+            $token = (string) preg_replace('/[^a-z0-9]+/', '', strtolower((string) $pair['label']));
+            $valueToken = (string) preg_replace('/[^a-z0-9]+/', '', strtolower((string) $pair['value']));
+            // The wire byte is what the fan uses. A stored word such as
+            // "Clockwise" on value 00 must not keep the wrong button name.
+            if (in_array($valueToken, $antiValues, true) || in_array($token, $antiValues, true)) {
                 $isAnti = true;
-            } elseif (in_array($token, $cwTokens, true) || in_array($valueToken, $cwTokens, true)) {
+            } elseif (in_array($valueToken, $cwValues, true) || in_array($token, $cwValues, true)) {
+                $isAnti = false;
+            } elseif (in_array($token, $antiWords, true)) {
+                $isAnti = true;
+            } elseif (in_array($token, $cwWords, true)) {
                 $isAnti = false;
             } else {
                 $isAnti = ($index === 1);
@@ -693,13 +845,28 @@ if (!function_exists('view_ui_direction_options')) {
             ];
         }
         if (count($mapped) < 2) {
+            $known = [];
+            foreach ($mapped as $option) {
+                $known[(string) $option['value']] = $option;
+            }
             return [
-                ['label' => 'Clockwise', 'value' => isset($mapped[0]['value']) ? $mapped[0]['value'] : '00'],
-                ['label' => 'Anti-clockwise', 'value' => '01'],
+                $known['00'] ?? ['label' => 'Anti-clockwise', 'value' => '00'],
+                $known['01'] ?? ['label' => 'Clockwise', 'value' => '01'],
             ];
         }
 
-        return array_slice($mapped, 0, 2);
+        $byLabel = [];
+        foreach ($mapped as $option) {
+            $label = (string) ($option['label'] ?? '');
+            if ($label !== '' && !isset($byLabel[$label])) {
+                $byLabel[$label] = $option;
+            }
+        }
+
+        return [
+            $byLabel['Anti-clockwise'] ?? ['label' => 'Anti-clockwise', 'value' => '00'],
+            $byLabel['Clockwise'] ?? ['label' => 'Clockwise', 'value' => '01'],
+        ];
     }
 }
 
@@ -1485,6 +1652,20 @@ if (!function_exists('view_ui_match_icon_keyword_rules')) {
     }
 }
 
+if (!function_exists('view_ui_label_is_protocol_role')) {
+    function view_ui_label_is_protocol_role($name)
+    {
+        $name = strtolower(trim((string) $name));
+        $name = str_replace(['_', '-'], ' ', $name);
+
+        return in_array($name, [
+            '', 'data', 'trigger', 'command', 'response', 'error', 'none', 'field',
+            'commandid', 'command id', 'functioncode', 'function code', 'terminator',
+            'actionid', 'action id',
+        ], true);
+    }
+}
+
 if (!function_exists('view_ui_icon_hint_is_noise')) {
     /**
      * True when a hint is only UI-type / numeric noise (e.g. "Text 00 button").
@@ -1771,15 +1952,15 @@ if (!function_exists('view_ui_icon')) {
     }
 
     .phone-shell {
-      --ui-bg: <?= esc($active_ui_theme['backgroundColor']) ?>;
-      --ui-shell: <?= esc($active_ui_theme['shellColor']) ?>;
-      --ui-surface: <?= esc($active_ui_theme['cardColor']) ?>;
-      --ui-text: <?= esc($active_ui_theme['textColor']) ?>;
-      --ui-muted: <?= esc($active_ui_theme['mutedTextColor']) ?>;
-      --ui-blue: <?= esc($active_ui_theme['secondaryColor']) ?>;
-      --ui-green-dark: <?= esc($active_ui_theme['accentColor']) ?>;
-      --ui-accent: <?= esc($active_ui_theme['accentColor']) ?>;
-      --ui-graphite: <?= esc($active_ui_theme['topbarColor']) ?>;
+      --ui-bg: <?= esc($ui_css_theme['backgroundColor']) ?>;
+      --ui-shell: <?= esc($ui_css_theme['shellColor']) ?>;
+      --ui-surface: <?= esc($ui_css_theme['cardColor']) ?>;
+      --ui-text: <?= esc($ui_css_theme['textColor']) ?>;
+      --ui-muted: <?= esc($ui_css_theme['mutedTextColor']) ?>;
+      --ui-blue: <?= esc($ui_css_theme['secondaryColor']) ?>;
+      --ui-green-dark: <?= esc($ui_css_theme['accentColor']) ?>;
+      --ui-accent: <?= esc($ui_css_theme['accentColor']) ?>;
+      --ui-graphite: <?= esc($ui_css_theme['topbarColor']) ?>;
       --ui-header-bg: <?= esc($ui_header_bg) ?>;
       --ui-header-fg: <?= esc($ui_header_fg) ?>;
       --ui-header-device: <?= esc($ui_header_device) ?>;
@@ -1789,24 +1970,24 @@ if (!function_exists('view_ui_icon')) {
       --ui-radius: <?= (int) $active_ui_theme['borderRadius'] ?>px;
       --ui-shadow-alpha: <?= max(0, min(100, (int) $active_ui_theme['shadowStrength'])) / 1000 ?>;
       --ui-card-shadow: <?= esc($ui_card_shadow_css) ?>;
-      --ui-toggle-on: <?= esc($active_ui_theme['toggleOnColor']) ?>;
-      --ui-toggle-off: <?= esc($active_ui_theme['toggleOffColor']) ?>;
+      --ui-toggle-on: <?= esc($ui_css_theme['toggleOnColor']) ?>;
+      --ui-toggle-off: <?= esc($ui_css_theme['toggleOffColor']) ?>;
       --ui-font: "<?= esc($active_ui_theme['fontFamily']) ?>", "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
       --ui-font-size: <?= (int) $active_ui_theme['fontSize'] ?>px;
       --ui-font-weight: <?= (int) $active_ui_theme['fontWeight'] ?>;
       --ui-letter-spacing: <?= (float) $active_ui_theme['letterSpacing'] ?>px;
       --ui-line-height: <?= (float) $active_ui_theme['lineHeight'] ?>;
       --ui-text-align: <?= esc($active_ui_theme['textAlign']) ?>;
-      --ui-button-bg: <?= esc($active_ui_theme['buttonBgColor']) ?>;
-      --ui-button-text: <?= esc($active_ui_theme['buttonTextColor']) ?>;
-      --ui-success: <?= esc($active_ui_theme['successColor']) ?>;
-      --ui-warning: <?= esc($active_ui_theme['warningColor']) ?>;
-      --ui-error: <?= esc($active_ui_theme['errorColor']) ?>;
-      --ui-icon-size: <?= (int) $active_ui_theme['iconSize'] ?>px;
-      --ui-icon-color: <?= esc($active_ui_theme['iconColor']) ?>;
+      --ui-button-bg: <?= esc($ui_css_theme['buttonBgColor']) ?>;
+      --ui-button-text: <?= esc($ui_css_theme['buttonTextColor']) ?>;
+      --ui-success: <?= esc($ui_css_theme['successColor']) ?>;
+      --ui-warning: <?= esc($ui_css_theme['warningColor']) ?>;
+      --ui-error: <?= esc($ui_css_theme['errorColor']) ?>;
+      --ui-icon-size: <?= (int) $ui_css_theme['iconSize'] ?>px;
+      --ui-icon-color: <?= esc($ui_css_theme['iconColor']) ?>;
       --ui-header-height: <?= (int) $active_ui_theme['headerHeight'] ?>px;
-      --ui-border-size: <?= (int) $active_ui_theme['borderSize'] ?>px;
-      --ui-border-color: <?= esc($active_ui_theme['borderColor']) ?>;
+      --ui-border-size: <?= (int) $ui_css_theme['borderSize'] ?>px;
+      --ui-border-color: <?= esc($ui_css_theme['borderColor']) ?>;
       --ui-input-bg: <?= esc($ui_input_bg) ?>;
       --ui-input-text: <?= esc($ui_input_text) ?>;
       --ui-input-border: <?= esc($ui_input_border) ?>;
@@ -2600,7 +2781,8 @@ if (!function_exists('view_ui_icon')) {
       width: 40px;
       height: 40px;
       border: 1px solid var(--ui-border-color);
-      background: var(--ui-graphite);
+      background: var(--ui-shell);
+      color: var(--ui-text);
       box-shadow: 0 4px 12px rgba(15, 23, 42, .12);
     }
 
@@ -4926,6 +5108,78 @@ if (!function_exists('view_ui_icon')) {
       color: inherit;
     }
 
+    .segmented-visual.is-direction-control .segmented-option:disabled {
+      opacity: 1;
+      cursor: default;
+    }
+
+    .param-card.is-direction-card .field-value {
+      display: none;
+    }
+
+    .param-card.is-direction-card.layout-stacked {
+      overflow: visible;
+    }
+
+    .segmented-visual.is-direction-control {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      margin-top: 4px;
+      gap: 6px;
+    }
+
+    .segmented-visual.is-direction-control .segmented-option {
+      min-width: 0;
+      width: 100%;
+      padding: 8px 8px;
+      font-size: 11px;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .segmented-visual.is-direction-control .segmented-option span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .direction-mode-btn {
+      justify-self: end;
+      align-self: center;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 36px;
+      max-width: 168px;
+      margin-left: auto;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--ui-accent);
+      color: #FFFFFF;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.15;
+      text-align: center;
+      cursor: pointer;
+      box-shadow: 0 6px 16px color-mix(in srgb, var(--ui-accent) 34%, transparent);
+    }
+
+    .direction-mode-btn svg {
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+      fill: none;
+      flex: 0 0 auto;
+    }
+
+    .direction-mode-btn:active {
+      transform: scale(.97);
+    }
+
     .param-card.is-registered-component {
       grid-template-columns: 1fr;
       align-items: stretch;
@@ -5072,8 +5326,8 @@ if (!function_exists('view_ui_icon')) {
       height: 44px;
       border: 1px solid var(--ui-border);
       border-radius: 50%;
-      background: var(--ui-graphite);
-      color: #fff;
+      background: var(--ui-shell);
+      color: var(--ui-text);
       cursor: pointer;
       box-shadow: 0 10px 20px rgba(34, 40, 60, .14);
     }
@@ -9311,6 +9565,23 @@ if (!function_exists('view_ui_icon')) {
         }
         document.body.setAttribute('data-studio-theme-mode', dark ? 'dark' : 'light');
         window.__viewPagePreviewDark = dark;
+        var accent = <?= json_encode((string) ($active_ui_theme['accentColor'] ?? '#2563EB'), JSON_UNESCAPED_SLASHES) ?>;
+        var chrome = dark
+          ? { bg: '#0B1220', shell: '#0F172A', surface: '#1E293B', text: '#F8FAFC', muted: '#94A3B8', topbar: '#020617', secondary: '#64748B', border: '#334155', toggleOff: '#475569', well: '#111827', input: '#0B1220', inputText: '#FFFFFF' }
+          : { bg: '#F8FAFC', shell: '#F8FAFC', surface: '#FFFFFF', text: '#0F172A', muted: '#64748B', topbar: '#FFFFFF', secondary: '#94A3B8', border: '#E2E8F0', toggleOff: '#CBD5E1', well: '#F1F5F9', input: '#FFFFFF', inputText: '#0F172A' };
+        var style = document.createElement('style');
+        style.setAttribute('data-account-appearance', mode);
+        style.textContent = '.phone-shell{'
+          + '--ui-bg:' + chrome.bg + ';--ui-shell:' + chrome.shell + ';--ui-surface:' + chrome.surface + ';'
+          + '--ui-text:' + chrome.text + ';--ui-muted:' + chrome.muted + ';--ui-graphite:' + chrome.topbar + ';'
+          + '--ui-header-bg:' + chrome.topbar + ';--ui-header-fg:' + chrome.text + ';--ui-header-device:' + accent + ';'
+          + '--ui-header-chip-fg:' + chrome.text + ';'
+          + '--ui-blue:' + chrome.secondary + ';--ui-border-color:' + chrome.border + ';--ui-border:' + chrome.border + ';'
+          + '--ui-toggle-on:' + accent + ';--ui-toggle-off:' + chrome.toggleOff + ';'
+          + '--ui-accent:' + accent + ';--ui-green:' + accent + ';--ui-green-dark:' + accent + ';--ui-icon-color:' + accent + ';'
+          + '--ui-button-bg:' + accent + ';--ui-input-bg:' + chrome.input + ';--ui-input-text:' + chrome.inputText + ';'
+          + '--ui-input-border:' + chrome.border + ';--ui-well:' + chrome.well + ';}';
+        document.head.appendChild(style);
       } catch (e) {}
     })();
   </script>
@@ -9464,8 +9735,8 @@ if (!function_exists('view_ui_icon')) {
                         }
                         $fieldName = trim((string) ($apiMeta['field_description'] ?? ''));
                         $fieldNameMeta = trim((string) ($apiMeta['field_name'] ?? ''));
-                        $genericField = in_array(strtolower($fieldName), ['data', 'trigger', 'command', 'response', 'error', 'none', ''], true);
-                        $genericFieldMeta = in_array(strtolower($fieldNameMeta), ['data', 'trigger', 'command', 'response', 'error', 'none', ''], true);
+                        $genericField = view_ui_label_is_protocol_role($fieldName);
+                        $genericFieldMeta = view_ui_label_is_protocol_role($fieldNameMeta);
                         // Prefer semantic field names over raw UI-type labels (Text/Button).
                         if (!$genericField && $fieldName !== '') {
                             $displayParamName = $fieldName;
@@ -9480,11 +9751,13 @@ if (!function_exists('view_ui_icon')) {
                         }
                     } elseif ($hasRelatedApiComponents) {
                         $fieldName = trim((string) ($apiMeta['field_description'] ?? ''));
-                        $genericField = in_array(strtolower($fieldName), ['data', 'trigger', 'command', 'response', 'error', 'none', ''], true);
+                        $genericField = view_ui_label_is_protocol_role($fieldName);
                         if (!$genericField && $fieldName !== '' && strcasecmp($fieldName, $paramName) !== 0) {
                             $displayParamName = $fieldName;
                         } else {
-                            $displayParamName = $apiSource !== '' ? ucfirst($apiSource) : ('API ' . ($apiComponentIndex + 1));
+                            // One control in the group keeps the parameter name.
+                            // ucfirst("command") was labeling Send Data, Child Lock and Power as "Command".
+                            $displayParamName = $paramName !== '' ? $paramName : ('API ' . ($apiComponentIndex + 1));
                         }
                     }
                     $displayParamValue = view_ui_resolve_component_value($apiMeta, $componentType, '');
@@ -9496,7 +9769,7 @@ if (!function_exists('view_ui_icon')) {
                     }
                     $isPower = in_array($componentType, ['toggleSwitch', 'switch'], true) || strpos($paramLower, 'power') !== false;
                     $stackedComponentTypes = ['slider', 'brightnessSlider', 'airflowSlider', 'cctSlider', 'saturationSlider', 'hueSlider', 'hueSliderCustom', 'autoTriggerTimer', 'hueCircle', 'powerGauge', 'needleGauge', 'segmented', 'linearGauge'];
-                    $isTimer = in_array($componentType, $stackedComponentTypes, true);
+                    $isTimer = in_array($componentType, $stackedComponentTypes, true) && !view_ui_is_direction_parameter($paramName);
                     $isTrigger = in_array($componentType, ['button', 'pushButton'], true);
                     $isDropdown = in_array($componentType, ['dropdown', 'notification'], true);
                     $isTextInput = in_array($componentType, ['enterText', 'textField', 'cmd'], true);
@@ -9603,7 +9876,7 @@ if (!function_exists('view_ui_icon')) {
                     <div class="get-status-response-panel" data-expanded="0">
                       <div class="get-status-response-inner">
                     <?php endif; ?>
-                    <div class="param-card<?= ($hasRelatedApiComponents ? ' is-grouped-component' : '') . ($isTimer ? ' layout-stacked' : '') . $getStatusCardClass . ($isPreviewCollapsed ? ' is-preview-collapsed' : '') ?>" data-get-status-command="<?= $isGetStatusCommand ? '1' : '0' ?>" data-param-key="<?= esc($paramKey) ?>" data-param-name="<?= esc($paramName ?: 'Parameter') ?>" data-api-ui-source="<?= esc($apiSource) ?>" data-api-field-index="<?= esc($apiFieldIndex) ?>" data-component-label="<?= esc($displayParamName ?: 'Component') ?>" data-component-value="<?= esc($displayParamValue ?: '') ?>" data-sequence="<?= esc($param['sequence']) ?>" data-component-type="<?= esc($componentType) ?>" data-api-meta="<?= esc(json_encode($apiMeta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
+                    <div class="param-card<?= ($hasRelatedApiComponents ? ' is-grouped-component' : '') . ($isTimer ? ' layout-stacked' : '') . $getStatusCardClass . ($isPreviewCollapsed ? ' is-preview-collapsed' : '') . (view_ui_is_direction_parameter($paramName) ? ' is-direction-card' : '') ?>" data-get-status-command="<?= $isGetStatusCommand ? '1' : '0' ?>" data-param-key="<?= esc($paramKey) ?>" data-param-name="<?= esc($paramName ?: 'Parameter') ?>" data-api-ui-source="<?= esc($apiSource) ?>" data-api-field-index="<?= esc($apiFieldIndex) ?>" data-component-label="<?= esc($displayParamName ?: 'Component') ?>" data-component-value="<?= esc($displayParamValue ?: '') ?>" data-sequence="<?= esc($param['sequence']) ?>" data-component-type="<?= esc($componentType) ?>" data-api-meta="<?= esc(json_encode($apiMeta, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
                       <div class="param-main-row">
                         <button type="button" class="param-icon" data-icon-picker-trigger="1" data-icon="<?= esc($paramIcon) ?>" aria-label="Change <?= esc($paramName ?: 'parameter') ?> icon"><?= view_ui_icon($paramIcon) ?></button>
                         <div>
@@ -10758,10 +11031,19 @@ if (!function_exists('view_ui_icon')) {
       let stepConstraint = meta && meta.step !== null && typeof meta.step !== 'undefined' && meta.step !== ''
         ? parseFloat(meta.step) : null;
 
+      if ((!Number.isFinite(minConstraint) || !Number.isFinite(maxConstraint)) && meta && meta.frame) {
+        const rangedField = findDeviceFrameDataField(meta.frame, meta);
+        const display = rangedField && (rangedField.display_value || rangedField.displayValue);
+        if (display && typeof display === 'object') {
+          if (!Number.isFinite(minConstraint) && display.min !== '' && display.min != null) minConstraint = parseFloat(display.min);
+          if (!Number.isFinite(maxConstraint) && display.max !== '' && display.max != null) maxConstraint = parseFloat(display.max);
+        }
+      }
+
       if (registeredComponent && registeredComponent.valueType === 'number') {
-        if (registeredComponent.min != null) minConstraint = registeredComponent.min;
-        if (registeredComponent.max != null) maxConstraint = registeredComponent.max;
-        if (registeredComponent.step != null) stepConstraint = registeredComponent.step;
+        if (!Number.isFinite(minConstraint) && registeredComponent.min != null) minConstraint = registeredComponent.min;
+        if (!Number.isFinite(maxConstraint) && registeredComponent.max != null) maxConstraint = registeredComponent.max;
+        if (!Number.isFinite(stepConstraint) && registeredComponent.step != null) stepConstraint = registeredComponent.step;
       }
 
       if (isTimer || isSlider) {
@@ -10783,6 +11065,41 @@ if (!function_exists('view_ui_icon')) {
         maximum: Number.isFinite(maxConstraint) ? maxConstraint : null,
         step: Number.isFinite(stepConstraint) ? stepConstraint : null
       };
+    }
+
+    function applyResolvedSliderBounds(control, bounds) {
+      if (!control || !bounds || !Number.isFinite(bounds.minimum) || !Number.isFinite(bounds.maximum)) return;
+      control.constraints = {
+        minimum: bounds.minimum,
+        maximum: bounds.maximum,
+        step: bounds.step > 0 ? bounds.step : 1
+      };
+      function paint(bag) {
+        if (!bag || typeof bag !== 'object') return;
+        bag.min = bounds.minimum;
+        bag.max = bounds.maximum;
+        bag.minimum = bounds.minimum;
+        bag.maximum = bounds.maximum;
+        if (bounds.step > 0) bag.step = bounds.step;
+      }
+      if (control.component && control.component.props) paint(control.component.props);
+      if (control.rightAccessory) paint(control.rightAccessory);
+      function walk(node) {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) {
+          node.forEach(walk);
+          return;
+        }
+        const type = String(node.type || '').toLowerCase();
+        if (type === 'schemaslider' || type === 'slider') {
+          paint(node.props);
+          paint(node.properties && node.properties.props);
+        }
+        Object.keys(node).forEach(function(key) {
+          if (node[key] && typeof node[key] === 'object') walk(node[key]);
+        });
+      }
+      walk(control.component && control.component.widgetTree);
     }
 
     /**
@@ -14566,8 +14883,10 @@ if (!function_exists('view_ui_icon')) {
         const uiCount = parseInt(control.uiCount, 10);
         const hasGroup = String(control.groupParameter || '').trim() !== '';
         const groupKey = String(control.pageNo || '') + '::' + String(control.groupParameter || control.parameterName || control.parameter || '').trim().toLowerCase();
-        // Match web: hide inner title when this is the only UI in the group.
-        const isSingle = uiCount === 1 || (hasGroup && groupCounts[groupKey] === 1);
+        // uiCount is 1 on each row of a multi-control group. Hide the inner
+        // title only when the group itself has a single control.
+        const groupSize = hasGroup ? (groupCounts[groupKey] || 0) : 0;
+        const isSingle = groupSize === 1 || (!hasGroup && uiCount === 1);
         if (isSingle) {
           clearControlInnerTitle(control);
         }
@@ -14579,6 +14898,49 @@ if (!function_exists('view_ui_icon')) {
           }
           control.component.props.showGroupCount = showCount;
           control.component.props.hideGroupCount = !showCount;
+        }
+      });
+    }
+
+    function frameSlotHex(frame, slot) {
+      const fields = frame && Array.isArray(frame.commands) ? frame.commands : [];
+      for (let index = 0; index < fields.length; index += 1) {
+        if (deviceFrameFieldName(fields[index]) !== slot) continue;
+        return String(fields[index].value || '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+      }
+      return '';
+    }
+
+    function idWithoutTerminator(id, terminator) {
+      const hex = String(id || '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+      const term = String(terminator || '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+      if (!hex || !term || hex.length <= term.length) return hex;
+      if (hex.slice(-term.length) === term && ((hex.length - term.length) % 2) === 0) {
+        return hex.slice(0, -term.length);
+      }
+      return hex;
+    }
+
+    function repairControlProtocolIds(control, schema) {
+      if (!control || !control.protocolMeta) return;
+      const frame = control.deviceFrame || control.protocolMeta.frame;
+      const terminator = frameSlotHex(frame, 'terminator');
+      const fromFrame = frameSlotHex(frame, 'commandid');
+      const previous = String(control.protocolMeta.command_id || control.protocolMeta.commandId || '');
+      const commandId = fromFrame || idWithoutTerminator(previous, terminator);
+      if (!commandId || /^0+$/.test(commandId)) return;
+      control.protocolMeta.command_id = commandId;
+      control.protocolMeta.commandId = commandId;
+      if (!schema || !schema.actions) return;
+      const previousHex = previous.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+      const concatenated = terminator ? (commandId + terminator) : '';
+      Object.keys(schema.actions).forEach(function(key) {
+        const action = schema.actions[key];
+        const input = action && (action.input || (action.definition && action.definition.input));
+        if (!input || input.commandId == null) return;
+        const current = String(input.commandId).replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+        if (current && current !== commandId && (current === previousHex || current === concatenated)) {
+          input.commandId = commandId;
         }
       });
     }
@@ -14601,6 +14963,11 @@ if (!function_exists('view_ui_icon')) {
         applyGetStatusResponseContract(control, meta);
         applyGetStatusCommandContract(control, meta);
         applyReadOnlyProtocolContract(control, meta);
+        repairControlProtocolIds(control, schema);
+        if (control.componentType === 'slider' || resolveParameterRenderType(control.catalogComponentType || control.componentType) === 'slider') {
+          const sliderBounds = resolveControlNumericConstraints(control.catalogComponentType || control.componentType || 'slider', control.protocolMeta || {}, null);
+          applyResolvedSliderBounds(control, sliderBounds);
+        }
         if (protocolAccessIsWritable(meta) || control.writable === true) {
           ensureDeviceFrameHasCommandId(control);
         }
@@ -15375,30 +15742,48 @@ if (!function_exists('view_ui_icon')) {
         }
         if (writable) {
           const commands = control.deviceFrame && Array.isArray(control.deviceFrame.commands) ? control.deviceFrame.commands : [];
-          const hasCommandId = commands.some(function(field) {
-            return deviceFrameFieldName(field) === 'commandid' && !isEmptyFrameValue(field && field.value);
+          const definedSlots = {};
+          const presentSlots = {};
+          let hasPayload = false;
+          commands.forEach(function(field) {
+            const name = deviceFrameFieldName(field);
+            if (!name) return;
+            if (name === 'commandid' || name === 'functioncode' || name === 'actionid' || name === 'terminator') {
+              definedSlots[name] = true;
+            }
+            if (isEmptyFrameValue(field && field.value)) return;
+            if ((name === 'commandid' || name === 'functioncode' || name === 'actionid') && hexIsZeroPadding(field.value)) return;
+            presentSlots[name] = true;
+            if (name !== 'commandid' && name !== 'functioncode' && name !== 'actionid' && name !== 'terminator' && !hexIsZeroPadding(field.value)) {
+              hasPayload = true;
+            }
           });
-          if (!hasCommandId) {
+          const missingCommand = definedSlots.commandid
+            ? !presentSlots.commandid
+            : (!definedSlots.functioncode && !hasPayload);
+          if (missingCommand) {
             result.errors.push(control.id + ': writable control deviceFrame is missing CommandId value.');
           }
         }
         if (isGetStatusParameter(control.parameterName || control.parameter || control.label) && !writable) {
           const type = String(control.componentType || '').toLowerCase();
-          const responseWidget = String(flutterWidgetForComponentType(control.componentType || control.controlType) || '').toLowerCase();
+          const responseWidget = canonicalWidgetKey(flutterWidgetForComponentType(control.componentType || control.controlType));
+          const widgetKey = canonicalWidgetKey(widget);
           if (control.controlType && String(control.controlType).toLowerCase() !== type) {
             result.errors.push(control.id + ': Get Status response componentType and controlType do not agree.');
           }
-          if (responseWidget && responseWidget !== 'listtile' && widget && widget !== responseWidget) {
+          if (responseWidget && responseWidget !== 'listtile' && widgetKey && widgetKey !== responseWidget) {
             result.errors.push(control.id + ': Get Status response componentType and flutterWidget do not agree.');
           }
         }
         if (isGetStatusParameter(control.parameterName || control.parameter || control.label) && writable) {
           const type = String(control.componentType || '').toLowerCase();
-          const expectedWidget = String(flutterWidgetForComponentType(control.componentType || control.controlType) || '').toLowerCase();
+          const expectedWidget = canonicalWidgetKey(flutterWidgetForComponentType(control.componentType || control.controlType));
+          const widgetKey = canonicalWidgetKey(widget);
           if (control.controlType && String(control.controlType).toLowerCase() !== type) {
             result.errors.push(control.id + ': Get Status command componentType and controlType do not agree.');
           }
-          if (expectedWidget && expectedWidget !== 'listtile' && widget && widget !== expectedWidget) {
+          if (expectedWidget && expectedWidget !== 'listtile' && widgetKey && widgetKey !== expectedWidget) {
             result.errors.push(control.id + ': Get Status command componentType and flutterWidget do not agree.');
           }
         }
@@ -15852,7 +16237,11 @@ if (!function_exists('view_ui_icon')) {
       });
     }
 
-    function mergeDeviceConfigPages(builtPages, livePages) {
+    function studioUsesV2NodeDetails() {
+      return !!(deviceUiInfo && Array.isArray(deviceUiInfo.v2_node_details) && deviceUiInfo.v2_node_details.length);
+    }
+
+    function mergeDeviceConfigPages(builtPages, livePages, keepBuiltOnlyPages) {
       if (!livePages || typeof livePages !== 'object' || Array.isArray(livePages) || !Object.keys(livePages).length) {
         return builtPages;
       }
@@ -15866,9 +16255,21 @@ if (!function_exists('view_ui_icon')) {
           if (name) builtByFrame[name] = item.frame;
         });
       });
-      const out = {};
+      const liveByName = {};
       Object.keys(livePages).forEach(function(pageName) {
-        out[pageName] = (livePages[pageName] || []).map(function(item) {
+        liveByName[String(pageName).trim().toLowerCase()] = livePages[pageName];
+      });
+      // Linked pages are the app screens. A live page that was never linked
+      // (for example a device-only page) is not added. Matching live pages
+      // still contribute their frame bytes.
+      const out = {};
+      Object.keys(builtPages).forEach(function(pageName) {
+        const live = liveByName[String(pageName).trim().toLowerCase()];
+        if (!live) {
+          out[pageName] = builtPages[pageName];
+          return;
+        }
+        out[pageName] = (live || []).map(function(item) {
           const frame = item && item.frame && typeof item.frame === 'object' ? item.frame : {};
           const built = builtByFrame[String(frame.name || '').toLowerCase()];
           if (!built) return item;
@@ -15884,9 +16285,9 @@ if (!function_exists('view_ui_icon')) {
           };
         });
       });
-      Object.keys(builtPages).forEach(function(pageName) {
-        if (!out[pageName]) out[pageName] = builtPages[pageName];
-      });
+      if (keepBuiltOnlyPages === false && !Object.keys(out).length) {
+        return livePages;
+      }
       return out;
     }
 
@@ -16043,7 +16444,7 @@ if (!function_exists('view_ui_icon')) {
       }
       const pageCount = Object.keys(pages).length;
       const livePages = (liveDevice.pages && typeof liveDevice.pages === 'object' && Object.keys(liveDevice.pages).length)
-        ? mergeDeviceConfigPages(pages, liveDevice.pages)
+        ? mergeDeviceConfigPages(pages, liveDevice.pages, !studioUsesV2NodeDetails())
         : pages;
       const productName = liveDevice.name || infoSource.name || modelNo || '';
       const liveMac = (function() {
@@ -17573,11 +17974,15 @@ if (!function_exists('view_ui_icon')) {
           return { label: option.label, value: option.label };
         });
       }
-      const antiTokens = ['1', '01', 'ccw', 'anticlockwise', 'anticlock', 'counterclockwise', 'counterclock', 'reverse', 'rev'];
-      const cwTokens = ['0', '00', 'cw', 'clockwise', 'clock', 'forward', 'fwd'];
+      // Words on the protocol label win. Bare 0/00 and 1/01 follow the fan byte:
+      // 00 is anti-clockwise, 01 is clockwise.
+      const antiWords = ['ccw', 'anticlockwise', 'anticlock', 'counterclockwise', 'counterclock', 'reverse', 'rev'];
+      const cwWords = ['cw', 'clockwise', 'clock', 'forward', 'fwd'];
+      const antiValues = ['0', '00'];
+      const cwValues = ['1', '01'];
       const normalizeWire = function(value, isAnti) {
         const raw = String(value == null ? '' : value).trim();
-        if (!raw) return isAnti ? '01' : '00';
+        if (!raw) return isAnti ? '00' : '01';
         if (/^(0|00)$/i.test(raw)) return '00';
         if (/^(1|01)$/i.test(raw)) return '01';
         if (/^\d+$/.test(raw)) {
@@ -17592,8 +17997,10 @@ if (!function_exists('view_ui_icon')) {
         const token = String(option.label || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
         const valueToken = String(option.value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
         let isAnti;
-        if (antiTokens.indexOf(token) !== -1 || antiTokens.indexOf(valueToken) !== -1) isAnti = true;
-        else if (cwTokens.indexOf(token) !== -1 || cwTokens.indexOf(valueToken) !== -1) isAnti = false;
+        if (antiValues.indexOf(valueToken) !== -1 || antiValues.indexOf(token) !== -1) isAnti = true;
+        else if (cwValues.indexOf(valueToken) !== -1 || cwValues.indexOf(token) !== -1) isAnti = false;
+        else if (antiWords.indexOf(token) !== -1) isAnti = true;
+        else if (cwWords.indexOf(token) !== -1) isAnti = false;
         else isAnti = index === 1;
         const label = isAnti ? 'Anti-clockwise' : 'Clockwise';
         return {
@@ -17601,14 +18008,14 @@ if (!function_exists('view_ui_icon')) {
           value: normalizeWire(option.value, isAnti)
         };
       });
-      if (mapped.length < 2) {
-        const cwValue = mapped[0] && mapped[0].value ? mapped[0].value : '00';
-        return [
-          { label: 'Clockwise', value: cwValue },
-          { label: 'Anti-clockwise', value: '01' }
-        ];
-      }
-      return mapped.slice(0, 2);
+      const byLabel = {};
+      mapped.forEach(function(option) {
+        if (option.label && !byLabel[option.label]) byLabel[option.label] = option;
+      });
+      return [
+        byLabel['Anti-clockwise'] || { label: 'Anti-clockwise', value: '00' },
+        byLabel['Clockwise'] || { label: 'Clockwise', value: '01' }
+      ];
     }
 
     function parseOptionList(items, values) {
@@ -18003,12 +18410,20 @@ if (!function_exists('view_ui_icon')) {
       const componentTypeOverrides = {};
       const pagesMap = {};
 
+      const pageNoByTitle = {};
       document.querySelectorAll('.page-slide').forEach(function(slide, pageIndex) {
-        const pageNo = String(slide.dataset.pageNo || String(pageIndex + 1));
-        const pageName = String(slide.dataset.pageTitle || ('Page ' + pageNo));
+        let pageNo = String(slide.dataset.pageNo || String(pageIndex + 1));
+        let pageName = String(slide.dataset.pageTitle || ('Page ' + pageNo));
+        const titleKey = pageName.trim().toLowerCase();
+        if (pageNoByTitle[titleKey]) {
+          pageNo = pageNoByTitle[titleKey];
+          pageName = pagesMap[pageNo] ? pagesMap[pageNo].title : pageName;
+        } else {
+          pageNoByTitle[titleKey] = pageNo;
+        }
         const pageId = 'page_' + pageNo;
         if (!pagesMap[pageNo]) {
-          pagesMap[pageNo] = { id: pageId, pageNo: pageNo, title: pageName, index: pageIndex, controlIds: [] };
+          pagesMap[pageNo] = { id: pageId, pageNo: pageNo, title: pageName, index: Object.keys(pagesMap).length, controlIds: [] };
         }
 
         sortParamCardsByControlOrder(Array.from(slide.querySelectorAll('.param-card'))).forEach(function(card, paramIndex) {
@@ -18226,6 +18641,7 @@ if (!function_exists('view_ui_icon')) {
               controlRecord.component.props.min = sliderConstraints.minimum;
               controlRecord.component.props.max = sliderConstraints.maximum;
               controlRecord.component.props.step = sliderConstraints.step;
+              applyResolvedSliderBounds(controlRecord, sliderConstraints);
               if (variantConfig.variant === 'timer' || sliderCatalogType === 'autoTriggerTimer') {
                 Object.assign(controlRecord.component.props, buildTimerSliderLabelStyleProps());
               }
@@ -18372,26 +18788,26 @@ if (!function_exists('view_ui_icon')) {
     const deviceInfoContent = document.getElementById('device-info-content');
     let currentGatewayDetails = null;
 
-    const defaultTheme = <?= json_encode($default_ui_theme, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const savedTheme = <?= json_encode($active_ui_theme, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const pageData = <?= json_encode($pages, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const modelNo = <?= json_encode($modelno, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const deviceUiInfo = <?= json_encode($device_ui_info ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const resolvedStudioNodeId = <?= json_encode($resolved_node_id ?? '', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const modalId = <?= json_encode((int) $modal_id, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const saveThemeUrl = <?= json_encode(get_uri('items/save_view_page_ui_theme'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    const defaultTheme = <?= view_page_ui_json($default_ui_theme, '{}') ?>;
+    const savedTheme = <?= view_page_ui_json($active_ui_theme, '{}') ?>;
+    const pageData = <?= view_page_ui_json($pages, '[]') ?>;
+    const modelNo = <?= view_page_ui_json($modelno, '""') ?>;
+    const deviceUiInfo = <?= view_page_ui_json($device_ui_info ?? [], '{}') ?>;
+    const resolvedStudioNodeId = <?= view_page_ui_json($resolved_node_id ?? '', '""') ?>;
+    const modalId = <?= view_page_ui_json((int) $modal_id, '0') ?>;
+    const saveThemeUrl = <?= view_page_ui_json(get_uri('items/save_view_page_ui_theme'), '""') ?>;
     const shouldSyncLinkedSchema = <?= $schema_sync ? 'true' : 'false' ?>;
-    const schemaApiUrl = <?= json_encode($schema_api_url ?? '', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const v8SchemaApiBase = <?= json_encode($v8_schema_api_base ?? base_url('v8/api_schema.php'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    const schemaApiUrl = <?= view_page_ui_json($schema_api_url ?? '', '""') ?>;
+    const v8SchemaApiBase = <?= view_page_ui_json($v8_schema_api_base ?? base_url('v8/api_schema.php'), '""') ?>;
     const deviceInfoUrl = schemaApiUrl;
-    const legacyScanApiBase = <?= json_encode($legacy_v8_scan_api_base ?? '', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const v8DeviceApiBase = <?= json_encode($v8_device_api_base ?? base_url('v8/iot_api_creation.php'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const studioAccessToken = <?= json_encode($studio_access_token ?? '', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const removeDeviceUrl = <?= json_encode($remove_device_url ?? get_uri('items/remove_device_node'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    const legacyScanApiBase = <?= view_page_ui_json($legacy_v8_scan_api_base ?? '', '""') ?>;
+    const v8DeviceApiBase = <?= view_page_ui_json($v8_device_api_base ?? base_url('v8/iot_api_creation.php'), '""') ?>;
+    const studioAccessToken = <?= view_page_ui_json($studio_access_token ?? '', '""') ?>;
+    const removeDeviceUrl = <?= view_page_ui_json($remove_device_url ?? get_uri('items/remove_device_node'), '""') ?>;
     const parametersApiUrl = schemaApiUrl;
-    const editPageLinkingUrl = <?= json_encode(get_uri('items/api_page_linking/' . (int) $modal_id . '?modelno=' . rawurlencode($modelno)), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const brandLogo = <?= json_encode($brand_logo_asset ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const accountAppearance = <?= json_encode($account_appearance_mode ?? 'system', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    const editPageLinkingUrl = <?= view_page_ui_json(get_uri('items/api_page_linking/' . (int) $modal_id . '?modelno=' . rawurlencode($modelno)), '""') ?>;
+    const brandLogo = <?= view_page_ui_json($brand_logo_asset ?? [], '{}') ?>;
+    const accountAppearance = <?= view_page_ui_json($account_appearance_mode ?? 'system', '"system"') ?>;
     function resolveAccountAppearanceMode() {
       const raw = String(accountAppearance || 'system').toLowerCase();
       return (raw === 'light' || raw === 'dark' || raw === 'system') ? raw : 'system';
@@ -18423,8 +18839,8 @@ if (!function_exists('view_ui_icon')) {
       return resolveDisplayThemeMode() === 'dark';
     }
     const initialDeviceOnline = <?= $device_online ? 'true' : 'false' ?>;
-    const initialDeviceOnlineLabel = <?= json_encode($device_online_label, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const initialDeviceOnlineTimestamp = <?= json_encode($device_online_timestamp, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    const initialDeviceOnlineLabel = <?= view_page_ui_json($device_online_label, '""') ?>;
+    const initialDeviceOnlineTimestamp = <?= view_page_ui_json($device_online_timestamp, '0') ?>;
     const schemaNodeIdInput = document.getElementById('schema-node-id-input');
     const schemaPageNoInput = document.getElementById('schema-page-no-input');
 
@@ -20374,13 +20790,19 @@ if (!function_exists('view_ui_icon')) {
       return 'ListTile';
     }
 
+    function canonicalWidgetKey(name) {
+      const key = String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (key === 'schemaslider') return 'slider';
+      return key;
+    }
+
     function removeParamAccessories(card) {
       const valueEl = card.querySelector('.field-value');
       // Read the text value up front: the input now sits inside
       // .param-text-input-wrap (or the cmd console), which is cleared below.
       const existingInput = valueEl ? valueEl.querySelector('input.param-text-input, textarea.param-text-input') : null;
       const preservedValue = existingInput ? existingInput.value : null;
-      card.querySelectorAll('.toggle-visual, .action-dot, .power-button-ui, .param-meta, .range-visual, .needle-gauge-visual, .power-gauge-visual, .segmented-visual, .param-dropdown, .param-text-input-wrap, .param-cmd-console, .registered-visual, .linear-gauge-visual, .elevated-action-btn').forEach(function(node) {
+      card.querySelectorAll('.toggle-visual, .action-dot, .power-button-ui, .param-meta, .range-visual, .needle-gauge-visual, .power-gauge-visual, .segmented-visual, .direction-mode-btn, .param-dropdown, .param-text-input-wrap, .param-cmd-console, .registered-visual, .linear-gauge-visual, .elevated-action-btn').forEach(function(node) {
         node.remove();
       });
       if (valueEl && preservedValue !== null) {
@@ -20642,6 +21064,56 @@ if (!function_exists('view_ui_icon')) {
       });
     }
 
+    function buildDirectionModeButton(card, meta, override) {
+      const valueEl = card.querySelector('.field-value');
+      const parsed = parseOptionPairs(meta, card && card.dataset.paramName);
+      const options = parsed.length >= 2 ? parsed.slice(0, 2) : [
+        { label: 'Anti-clockwise', value: '00' },
+        { label: 'Clockwise', value: '01' }
+      ];
+      const rawCurrent = override.value || (valueEl ? valueEl.textContent.trim() : '');
+      let current = matchOptionValue(options, rawCurrent, card && card.dataset.paramName);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'direction-mode-btn param-component';
+      btn.setAttribute('aria-label', 'Change direction');
+      function paint() {
+        let option = options[0];
+        for (let i = 0; i < options.length; i += 1) {
+          if (String(options[i].value) === String(current)) {
+            option = options[i];
+            break;
+          }
+        }
+        current = option.value;
+        btn.dataset.value = option.value;
+        btn.innerHTML = iconSvg(directionOptionIcon(option.label)) + '<span>' + escapeHtml(option.label) + '</span>';
+      }
+      paint();
+      btn.addEventListener('click', function(event) {
+        event.stopPropagation();
+        let index = 0;
+        for (let i = 0; i < options.length; i += 1) {
+          if (String(options[i].value) === String(current)) {
+            index = i;
+            break;
+          }
+        }
+        const next = options[(index + 1) % options.length];
+        current = next.value;
+        paint();
+        const paramOverride = getComponentOverride(card.dataset.paramKey);
+        if (valueEl && !valueEl.querySelector('input, select, textarea')) {
+          valueEl.textContent = next.label;
+        }
+        const metaValue = card.querySelector('.meta-value');
+        if (metaValue) metaValue.textContent = next.label;
+        paramOverride.value = next.value;
+        generateSchema();
+      });
+      return btn;
+    }
+
     function buildSegmentedControlElement(card, meta, override) {
       const valueEl = card.querySelector('.field-value');
       const parsedOptions = parseOptionPairs(meta, card && card.dataset.paramName);
@@ -20664,11 +21136,23 @@ if (!function_exists('view_ui_icon')) {
         } else {
           btn.textContent = option.label;
         }
+        if (isDirection && String(option.value) === String(current)) {
+          btn.disabled = true;
+          btn.setAttribute('aria-disabled', 'true');
+        }
         btn.addEventListener('click', function(event) {
           event.stopPropagation();
+          if (btn.disabled || btn.classList.contains('is-active')) {
+            return;
+          }
           wrap.dataset.value = option.value;
           wrap.querySelectorAll('.segmented-option').forEach(function(node) {
-            node.classList.toggle('is-active', node === btn);
+            const active = node === btn;
+            node.classList.toggle('is-active', active);
+            if (isDirection) {
+              node.disabled = active;
+              node.setAttribute('aria-disabled', active ? 'true' : 'false');
+            }
           });
           const paramOverride = getComponentOverride(card.dataset.paramKey);
           syncSegmentedOptionStyles(wrap, getEffectiveComponentColors(paramOverride).accentColor);
@@ -24193,7 +24677,7 @@ if (!function_exists('view_ui_icon')) {
           radii: { card: numberValue(currentTheme.borderRadius, 18), button: numberValue(currentTheme.buttonRadius, 16), pill: 999 },
           borders: { card: { width: numberValue(currentTheme.borderSize, 1), color: token('colors.border') } },
           shadows: { card: { enabled: numberValue(currentTheme.shadowStrength, 70) > 0, strength: numberValue(currentTheme.shadowStrength, 70) } },
-          icons: { library: 'semantic', default: currentTheme.parameterIcon || 'gauge', size: numberValue(currentTheme.iconSize, 22), overrides: currentTheme.parameterIcons || {} },
+          icons: { library: 'semantic', default: currentTheme.parameterIcon || 'gauge', size: numberValue(currentTheme.iconSize, 22), overrides: pruneObjectMapToKeys(currentTheme.parameterIcons || {}, liveSchemaMapKeys(controls)) },
           componentStyles: componentStyles
         },
         responsive: buildDeviceUiResponsiveContract(),
@@ -24792,7 +25276,7 @@ if (!function_exists('view_ui_icon')) {
             dimens: ['headerHeight', 'borderRadius', 'borderSize', 'pagePadding', 'cardPadding', 'cardSpacing'],
             fonts: [currentTheme.fontFamily]
           },
-          parameterIconReferences: Object.keys(currentTheme.parameterIcons || {}).map(key => ({
+          parameterIconReferences: Object.keys(pruneObjectMapToKeys(currentTheme.parameterIcons || {}, liveSchemaMapKeys([]))).map(key => ({
             parameterKey: key,
             iconName: currentTheme.parameterIcons[key],
             fontAwesomeClass: 'fa-' + (currentTheme.parameterIcons[key] || 'gauge')
@@ -25838,16 +26322,21 @@ if (!function_exists('view_ui_icon')) {
         }, isReadOnlyControl ? { disabled: { opacity: 1, color: styles.textColor || currentTheme.textColor, textColor: styles.textColor || currentTheme.textColor } } : {}), children);
       };
 
-      const pageNodes = Array.from(document.querySelectorAll('.page-slide')).map(function(slide, pageIndex) {
+      const seenPageTitles = {};
+      const pageNodes = [];
+      Array.from(document.querySelectorAll('.page-slide')).forEach(function(slide, pageIndex) {
         const pageNo = slide.dataset.pageNo || String(pageIndex + 1);
         const pageName = slide.dataset.pageTitle || ('Page ' + pageNo);
+        const titleKey = String(pageName).trim().toLowerCase();
+        if (seenPageTitles[titleKey]) return;
+        seenPageTitles[titleKey] = true;
         const pageControls = controlsBundle.controls.filter(function(control) {
           return String(control.pageNo) === String(pageNo)
             && control.visible !== false
             && control.parserOnly !== true
             && !isParserOnlySchemaControl(control);
         });
-        return node('column', 'page_slide_' + pageIndex, {
+        pageNodes.push(node('column', 'page_slide_' + pageNodes.length, {
           width: 'matchParent',
           crossAxisAlignment: 'stretch',
           pageId: 'page_' + pageNo,
@@ -25860,7 +26349,7 @@ if (!function_exists('view_ui_icon')) {
         }, {
           padding: edge(0, pagePadding, 8, pagePadding)
         }, [
-          node('schemaControlList', 'param_list_' + pageIndex, {
+          node('schemaControlList', 'param_list_' + pageNodes.length, {
             renderMode: 'schemaControls',
             source: 'controls',
             pageNo: pageNo,
@@ -25874,7 +26363,7 @@ if (!function_exists('view_ui_icon')) {
             spacing: 0,
             responsiveLayout: buildDeviceUiResponsiveLayout('page')
           }, { margin: edge(0, 0, 0, 0) }, [])
-        ]);
+        ]));
       });
 
       const activePageMeta = navigationPages[activeIndex] || navigationPages[0] || null;
@@ -26358,11 +26847,6 @@ if (!function_exists('view_ui_icon')) {
         pages: navigationPages,
         deviceConfig: deviceConfig,
         node_details: deviceNodeDetails,
-        // V2 debug/authority alias — same shape as node_details. Lets api_schema
-        // normalizer keep V2 pages when legacy test_nodes would overwrite them.
-        v2_node_details: (deviceUiInfo && Array.isArray(deviceUiInfo.v2_node_details) && deviceUiInfo.v2_node_details.length)
-          ? deviceUiInfo.v2_node_details
-          : undefined,
         nodes: resolvedNodeId || (deviceUiInfo && deviceUiInfo.nodes) || '',
         dataSources: {
           deviceInfo: {
@@ -27018,12 +27502,16 @@ if (!function_exists('view_ui_icon')) {
           ? document.querySelector('.param-card[data-param-key="' + lookupKey.replace(/"/g, '') + '"]')
           : null;
         const meta = card ? getEffectiveParamMeta(card) : {};
+        const frameForMeta = control.deviceFrame || buildDeviceFrameFromMeta(control.parameterName || control.label, meta);
+        const terminatorHex = frameSlotHex(frameForMeta, 'terminator');
+        const commandFromFrame = frameSlotHex(frameForMeta, 'commandid');
+        const functionFromFrame = frameSlotHex(frameForMeta, 'functioncode');
         return Object.assign({}, control, {
           meta: {
-            command_id: meta.command_id || meta.commandId || null,
-            function_code: meta.function_code || meta.functionCode || null,
+            command_id: commandFromFrame || idWithoutTerminator(meta.command_id || meta.commandId, terminatorHex) || null,
+            function_code: functionFromFrame || idWithoutTerminator(meta.function_code || meta.functionCode, terminatorHex) || null,
             action_id: meta.action_id || meta.actionId || null,
-            frame: control.deviceFrame || buildDeviceFrameFromMeta(control.parameterName || control.label, meta)
+            frame: frameForMeta
           },
           deviceFrame: control.deviceFrame || buildDeviceFrameFromMeta(control.parameterName || control.label, meta),
           readOnly: control.readOnly === true || !!(control.component && control.component.readOnly) || control.componentType === 'linearGauge',

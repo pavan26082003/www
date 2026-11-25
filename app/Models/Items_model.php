@@ -3767,7 +3767,31 @@ public function deleteApiTreeConfig($configId, $userId = null)
 
     return $this->db->transStatus();
 }
-private function insertApiTreeField($frameId, $parentFieldId, $fieldLevel, $row, $rowSequence, $subFieldSequence, $frameGroup)
+/**
+ * Resolve config_id from api_frames when callers did not pass it.
+ */
+private function resolveApiFrameConfigId($frameId)
+{
+    $frameId = (int) $frameId;
+    if ($frameId <= 0 || !$this->db->tableExists('api_frames')) {
+        return null;
+    }
+
+    $row = $this->db->table('api_frames')
+        ->select('config_id')
+        ->where('id', $frameId)
+        ->get()
+        ->getRowArray();
+
+    if (empty($row) || !isset($row['config_id'])) {
+        return null;
+    }
+
+    $configId = (int) $row['config_id'];
+    return $configId > 0 ? $configId : null;
+}
+
+private function insertApiTreeField($frameId, $parentFieldId, $fieldLevel, $row, $rowSequence, $subFieldSequence, $frameGroup, $configId = null)
 {
     $prefixes = $this->apiTreePrefixes($frameGroup);
 
@@ -3901,6 +3925,17 @@ private function insertApiTreeField($frameId, $parentFieldId, $fieldLevel, $row,
         'scaling'               => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'scaling')),
         'raw_row_json'          => json_encode($row, JSON_UNESCAPED_UNICODE)
     );
+
+    // Denormalized join key (safe: only when column exists).
+    if ($this->db->fieldExists('config_id', 'api_frame_fields')) {
+        $resolvedConfigId = (int) $configId;
+        if ($resolvedConfigId <= 0) {
+            $resolvedConfigId = (int) $this->resolveApiFrameConfigId($frameId);
+        }
+        if ($resolvedConfigId > 0) {
+            $data['config_id'] = $resolvedConfigId;
+        }
+    }
 
     $insertField = $this->db->table('api_frame_fields')->insert($data);
 

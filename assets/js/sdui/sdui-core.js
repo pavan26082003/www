@@ -271,7 +271,7 @@
     if (type === 'switch') {
       entry.type = 'boolean';
       entry.value = parseToggle(initial);
-      entry.readOnly = false;
+      entry.readOnly = isReadOnlyType(type, control);
       entry.transport = { encode: { 'false': '00', 'true': '01' } };
     } else if (type === 'button') {
       entry.type = 'boolean';
@@ -359,6 +359,8 @@
     var valuePath = stateValuePath(key);
     var styles = control.styles || {};
     var actionId = stateEntry.meta.actionId;
+    var readOnlyControl = !!(stateEntry && stateEntry.readOnly)
+      || !!(control && (control.readOnly === true || (control.component && control.component.readOnly === true)));
     var options = stateEntry.options || normalizeOptions(control.options);
     var bounds = stateEntry.constraints || { minimum: 0, maximum: 100, step: 1 };
     var accent = normalizeColor(styles.accentColor || theme.accentColor, '#2563EB');
@@ -369,7 +371,7 @@
       icon: control.icon || theme.parameterIcon || 'gauge',
       componentType: type,
       stateKey: key,
-      action: actionId,
+      action: readOnlyControl ? null : actionId,
       visible: control.visible !== false,
       style: {
         backgroundColor: normalizeColor(styles.cardColor || theme.cardColor, '#FFFFFF'),
@@ -396,11 +398,13 @@
       card.valueText = { type: 'expression', op: 'if', args: [valuePath, 'ON', 'OFF'] };
       card.accessory = {
         type: 'switch',
-        valueBinding: binding(valuePath, 'twoWay'),
+        valueBinding: binding(valuePath, readOnlyControl ? 'oneWay' : 'twoWay'),
         activeColor: normalizeColor(styles.accentColor || theme.toggleOnColor || theme.accentColor, '#2563EB'),
-        inactiveColor: normalizeColor(theme.toggleOffColor, '#CBD5E1'),
-        onChanged: writeSteps(actionId, key, '{event.value}')
+        inactiveColor: normalizeColor(theme.toggleOffColor, '#CBD5E1')
       };
+      if (!readOnlyControl) {
+        card.accessory.onChanged = writeSteps(actionId, key, '{event.value}');
+      }
       return card;
     }
 
@@ -412,15 +416,17 @@
       card.valueText = { type: 'expression', op: 'formatNumber', args: [valuePath, 0] };
       card.content = {
         type: 'slider',
-        valueBinding: binding(valuePath, 'twoWay'),
+        valueBinding: binding(valuePath, readOnlyControl ? 'oneWay' : 'twoWay'),
         minimum: sliderBounds.minimum,
         maximum: sliderBounds.maximum,
         step: sliderBounds.step,
         activeColor: accent,
-        inactiveColor: normalizeColor(theme.toggleOffColor || theme.borderColor, '#CBD5E1'),
-        onChanged: [setStateStep(valuePath, '{event.value}')],
-        onChangeEnd: [invokeAction(actionId, { parameter: key, value: '{event.value}' })]
+        inactiveColor: normalizeColor(theme.toggleOffColor || theme.borderColor, '#CBD5E1')
       };
+      if (!readOnlyControl) {
+        card.content.onChanged = [setStateStep(valuePath, '{event.value}')];
+        card.content.onChangeEnd = [invokeAction(actionId, { parameter: key, value: '{event.value}' })];
+      }
       if (isTimer) {
         card.content.variant = 'timer';
         card.content.valueSuffix = 's';
@@ -493,10 +499,12 @@
     if (type === 'dropdown') {
       card.content = {
         type: 'dropdown',
-        valueBinding: binding(valuePath, 'twoWay'),
-        options: options,
-        onChanged: writeSteps(actionId, key, '{event.value}')
+        valueBinding: binding(valuePath, readOnlyControl ? 'oneWay' : 'twoWay'),
+        options: options
       };
+      if (!readOnlyControl) {
+        card.content.onChanged = writeSteps(actionId, key, '{event.value}');
+      }
       return card;
     }
 
@@ -510,9 +518,11 @@
         type: 'segmentedControl',
         valueBinding: binding(valuePath, 'twoWay'),
         options: segmentOptions,
-        selectedColor: accent,
-        onChanged: writeSteps(actionId, key, '{event.value}')
+        selectedColor: accent
       };
+      if (!readOnlyControl) {
+        card.content.onChanged = writeSteps(actionId, key, '{event.value}');
+      }
       return card;
     }
 
@@ -521,10 +531,12 @@
         type: 'textField',
         textBinding: binding(valuePath, 'twoWay'),
         placeholder: control.parameterName || control.label || 'Enter value',
-        sendButton: { visible: true, label: 'Send' },
-        onChanged: [setStateStep(valuePath, '{event.value}')],
-        onSubmitted: [invokeAction(actionId, { parameter: key, value: '{event.value}' })]
+        sendButton: { visible: !readOnlyControl, label: 'Send' }
       };
+      if (!readOnlyControl) {
+        card.content.onChanged = [setStateStep(valuePath, '{event.value}')];
+        card.content.onSubmitted = [invokeAction(actionId, { parameter: key, value: '{event.value}' })];
+      }
       return card;
     }
 
@@ -535,12 +547,14 @@
         text: { type: 'expression', op: 'if', args: [valuePath, 'ON', 'OFF'] },
         variant: 'primary',
         backgroundColor: normalizeColor(styles.accentColor || theme.buttonBgColor || theme.accentColor, '#2563EB'),
-        foregroundColor: normalizeColor(theme.buttonTextColor, '#FFFFFF'),
-        onTap: [
+        foregroundColor: normalizeColor(theme.buttonTextColor, '#FFFFFF')
+      };
+      if (!readOnlyControl) {
+        card.accessory.onTap = [
           setStateStep(valuePath, { type: 'expression', op: 'not', args: [valuePath] }),
           invokeAction(actionId, { parameter: key, value: '{event.value}' })
-        ]
-      };
+        ];
+      }
       return card;
     }
 
@@ -550,9 +564,11 @@
         text: String(control.value || control.label || 'EXECUTE'),
         variant: 'primary',
         backgroundColor: normalizeColor(styles.accentColor || theme.buttonBgColor || theme.accentColor, '#2563EB'),
-        foregroundColor: normalizeColor(theme.buttonTextColor, '#FFFFFF'),
-        onTap: [invokeAction(actionId, { parameter: key, value: '{event.value}', operation: 'execute' })]
+        foregroundColor: normalizeColor(theme.buttonTextColor, '#FFFFFF')
       };
+      if (!readOnlyControl) {
+        card.accessory.onTap = [invokeAction(actionId, { parameter: key, value: '{event.value}', operation: 'execute' })];
+      }
       return card;
     }
 

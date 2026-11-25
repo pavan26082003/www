@@ -228,7 +228,8 @@ public function extract_api_default_names($user_id, $modelno)
                         $row,
                         $rowIndex + 1,
                         null,
-                        $frameGroup
+                        $frameGroup,
+                        $configId
                     );
     
                     if (!empty($row['bitwise']) && is_array($row['bitwise'])) {
@@ -244,7 +245,8 @@ public function extract_api_default_names($user_id, $modelno)
                                 $bitRow,
                                 $rowIndex + 1,
                                 $bitIndex + 1,
-                                $frameGroup
+                                $frameGroup,
+                                $configId
                             );
                         }
                     }
@@ -769,12 +771,12 @@ private function apiTreeDbFieldToEditBitRow($field)
                         continue;
                     }
     
-                    $parentFieldId = $this->insertApiTreeField($frameId, null, 'bytewise', $row, $rowIndex + 1, null, $frameGroup);
+                    $parentFieldId = $this->insertApiTreeField($frameId, null, 'bytewise', $row, $rowIndex + 1, null, $frameGroup, $configId);
     
                     if (!empty($row['bitwise']) && is_array($row['bitwise'])) {
                         foreach ($row['bitwise'] as $bitIndex => $bitRow) {
                             if (is_array($bitRow)) {
-                                $this->insertApiTreeField($frameId, $parentFieldId, 'bitwise', $bitRow, $rowIndex + 1, $bitIndex + 1, $frameGroup);
+                                $this->insertApiTreeField($frameId, $parentFieldId, 'bitwise', $bitRow, $rowIndex + 1, $bitIndex + 1, $frameGroup, $configId);
                             }
                         }
                     }
@@ -849,7 +851,31 @@ public function deleteApiTreeConfig($configId, $userId = null)
     }
 
 
-    private function insertApiTreeField($frameId, $parentFieldId, $fieldLevel, $row, $rowSequence, $subFieldSequence, $frameGroup)
+    /**
+     * Resolve config_id from api_frames when callers did not pass it.
+     */
+    private function resolveApiFrameConfigId($frameId)
+    {
+        $frameId = (int) $frameId;
+        if ($frameId <= 0 || !$this->db->tableExists('api_frames')) {
+            return null;
+        }
+
+        $row = $this->db->table('api_frames')
+            ->select('config_id')
+            ->where('id', $frameId)
+            ->get()
+            ->getRowArray();
+
+        if (empty($row) || !isset($row['config_id'])) {
+            return null;
+        }
+
+        $configId = (int) $row['config_id'];
+        return $configId > 0 ? $configId : null;
+    }
+
+    private function insertApiTreeField($frameId, $parentFieldId, $fieldLevel, $row, $rowSequence, $subFieldSequence, $frameGroup, $configId = null)
     {
         $prefixes = $this->apiTreePrefixes($frameGroup);
     
@@ -924,6 +950,18 @@ public function deleteApiTreeConfig($configId, $userId = null)
             }
         }
     
+        $fieldDescription = $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'fieldDescription'));
+        $fieldName = $this->apiTreeCleanValue($this->apiTreeFirst($row, array(
+            'name',
+            'fieldName',
+            'field_name',
+            'default_name',
+            'defaultName'
+        )));
+        if ($fieldName === null || $fieldName === '') {
+            $fieldName = $fieldDescription;
+        }
+
         $data = array(
             'frame_id'              => $frameId,
             'parent_field_id'       => $parentFieldId,
@@ -938,8 +976,9 @@ public function deleteApiTreeConfig($configId, $userId = null)
             'end_bit'               => $endBit,
             'no_of_bytes'           => $noOfBytes,
             'bit_size'              => $bitSize,
-    
-            'field_description'     => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'fieldDescription')),
+
+            'name'                  => $fieldName,
+            'field_description'     => $fieldDescription,
             'data_type'             => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'dataType')),
             'value_definition'      => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'valueDefinition')),
     
@@ -983,6 +1022,17 @@ public function deleteApiTreeConfig($configId, $userId = null)
             'scaling'               => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'scaling')),
             'raw_row_json'          => json_encode($row, JSON_UNESCAPED_UNICODE)
         );
+
+        // Denormalized join key (safe: only when column exists).
+        if ($this->db->fieldExists('config_id', 'api_frame_fields')) {
+            $resolvedConfigId = (int) $configId;
+            if ($resolvedConfigId <= 0) {
+                $resolvedConfigId = (int) $this->resolveApiFrameConfigId($frameId);
+            }
+            if ($resolvedConfigId > 0) {
+                $data['config_id'] = $resolvedConfigId;
+            }
+        }
     
         $insertField = $this->db->table('api_frame_fields')->insert($data);
     

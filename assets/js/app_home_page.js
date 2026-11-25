@@ -5033,7 +5033,606 @@
       return '<img class="ahp-avatar-photo" src="' + esc(url) + '" alt="" onerror="var box=this.parentNode;this.remove();if(box){box.classList.remove(\'ahp-has-photo\');var n=box.querySelector(\'.ahp-avatar-initials\');if(n)n.classList.remove(\'ahp-is-hidden\');}">' +
         '<span class="ahp-avatar-initials ahp-is-hidden">' + initials + '</span>';
     }
-    return initials;
+    return '<span class="ahp-avatar-initials">' + initials + '</span>';
+  }
+
+  function profileAvatarButtonHtml(profile) {
+    var p = profile || getProfilePage();
+    var hasPhoto = !!getProfileAvatarUrl(p);
+    return '<button type="button" class="ahp-profile-avatar' + (hasPhoto ? ' ahp-has-photo' : '') + '" data-profile-action="photo" aria-label="Edit profile photo">' +
+      buildProfileAvatarHtml(p) +
+      '<span class="ahp-avatar-edit" aria-hidden="true"><i class="fas fa-pen"></i></span>' +
+    '</button>';
+  }
+
+  function profilePhotoApiUrl() {
+    return String(cfg.apiBase || '/index.php/app-home-page/api').replace(/\/+$/, '') + '/profile-photo';
+  }
+
+  function applyProfilePhotoResult(res) {
+    if (!res || !res.success) return;
+    var url = String((res.avatarUrl != null ? res.avatarUrl : '') || '').trim();
+    if (!cfg.loginUserProfile || typeof cfg.loginUserProfile !== 'object') {
+      cfg.loginUserProfile = {};
+    }
+    cfg.loginUserProfile.avatarUrl = url;
+    var page = getProfilePage();
+    page.avatarUrl = url;
+    renderHomeAvatar();
+    renderWelcomeAvatar();
+    renderHeader();
+  }
+
+  function submitProfilePhotoFile(file, intent, done) {
+    if (!file) {
+      if (done) done({ success: false, message: 'No image selected.' });
+      return;
+    }
+    var fd = new FormData();
+    fd.append('intent', intent || 'upload');
+    fd.append('profile_image_file', file);
+    if (cfg.csrfName && cfg.csrfHash) fd.append(cfg.csrfName, cfg.csrfHash);
+    fetch(profilePhotoApiUrl(), {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(function (r) { return r.json().catch(function () { return { success: false, message: 'Could not update the profile photo.' }; }); })
+      .then(function (res) {
+        if (res && res.csrfHash && cfg.csrfName) cfg.csrfHash = res.csrfHash;
+        applyProfilePhotoResult(res);
+        if (done) done(res || { success: false, message: 'Could not update the profile photo.' });
+      })
+      .catch(function () {
+        if (done) done({ success: false, message: 'Could not update the profile photo. Please try again.' });
+      });
+  }
+
+  function removeProfilePhoto(done) {
+    var fd = new FormData();
+    fd.append('intent', 'remove');
+    if (cfg.csrfName && cfg.csrfHash) fd.append(cfg.csrfName, cfg.csrfHash);
+    fetch(profilePhotoApiUrl(), {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(function (r) { return r.json().catch(function () { return { success: false, message: 'Could not remove the profile photo.' }; }); })
+      .then(function (res) {
+        if (res && res.csrfHash && cfg.csrfName) cfg.csrfHash = res.csrfHash;
+        applyProfilePhotoResult(res);
+        if (done) done(res || { success: false, message: 'Could not remove the profile photo.' });
+      })
+      .catch(function () {
+        if (done) done({ success: false, message: 'Could not remove the profile photo. Please try again.' });
+      });
+  }
+
+  var profileCameraStream = null;
+
+  function stopProfileCameraStream() {
+    if (!profileCameraStream) return;
+    try {
+      profileCameraStream.getTracks().forEach(function (track) {
+        try { track.stop(); } catch (e) {}
+      });
+    } catch (e2) {}
+    profileCameraStream = null;
+  }
+
+  function handleProfilePhotoSelected(file, intent) {
+    if (!file) return;
+    showToast(intent === 'change' ? 'Updating photo…' : 'Uploading photo…');
+    submitProfilePhotoFile(file, intent, function (res) {
+      showToast((res && res.message) || (res && res.success ? 'Profile photo updated.' : 'Could not update the profile photo.'));
+      closeProfilePictureSheet();
+      if (res && res.success) {
+        renderProfilePage(getTheme().accentColor || '#202940');
+      }
+    });
+  }
+
+  var profileCropState = null;
+  var PROFILE_CROP_OUTPUT = 640;
+
+  function clampProfileCrop(n, min, max) {
+    return Math.max(min, Math.min(max, n));
+  }
+
+  function closeProfileCropper() {
+    if (profileCropState && profileCropState.objectUrl) {
+      try { URL.revokeObjectURL(profileCropState.objectUrl); } catch (e) {}
+    }
+    profileCropState = null;
+    var host = profilePictureSheetHost();
+    if (!host) return;
+    var crop = host.querySelector('#ahpProfileCrop');
+    if (crop) crop.remove();
+  }
+
+  function profileCropDiameter(stage) {
+    var w = stage.clientWidth || 320;
+    var h = stage.clientHeight || 480;
+    return Math.floor(Math.min(w, h) * 0.78);
+  }
+
+  function applyProfileCropTransform() {
+    if (!profileCropState || !profileCropState.img) return;
+    var img = profileCropState.img;
+    var scale = profileCropState.scale;
+    img.style.width = (profileCropState.nw * scale) + 'px';
+    img.style.height = (profileCropState.nh * scale) + 'px';
+    img.style.transform = 'translate(calc(-50% + ' + profileCropState.ox + 'px), calc(-50% + ' + profileCropState.oy + 'px))';
+    if (profileCropState.zoomRange) {
+      profileCropState.zoomRange.value = String(scale);
+    }
+  }
+
+  function constrainProfileCropOffset() {
+    if (!profileCropState) return;
+    var dia = profileCropDiameter(profileCropState.stage);
+    var half = dia / 2;
+    var halfW = (profileCropState.nw * profileCropState.scale) / 2;
+    var halfH = (profileCropState.nh * profileCropState.scale) / 2;
+    var maxX = Math.max(0, halfW - half);
+    var maxY = Math.max(0, halfH - half);
+    profileCropState.ox = clampProfileCrop(profileCropState.ox, -maxX, maxX);
+    profileCropState.oy = clampProfileCrop(profileCropState.oy, -maxY, maxY);
+  }
+
+  function fitProfileCropImage() {
+    if (!profileCropState || !profileCropState.stage) return;
+    var dia = profileCropDiameter(profileCropState.stage);
+    if (profileCropState.hole) {
+      profileCropState.hole.style.width = dia + 'px';
+      profileCropState.hole.style.height = dia + 'px';
+    }
+    var minScale = Math.max(dia / profileCropState.nw, dia / profileCropState.nh);
+    profileCropState.minScale = minScale;
+    profileCropState.maxScale = Math.max(minScale * 4, minScale + 0.01);
+    if (!profileCropState.scale || profileCropState.scale < minScale) {
+      profileCropState.scale = minScale;
+    }
+    profileCropState.scale = clampProfileCrop(profileCropState.scale, profileCropState.minScale, profileCropState.maxScale);
+    profileCropState.ox = 0;
+    profileCropState.oy = 0;
+    if (profileCropState.zoomRange) {
+      profileCropState.zoomRange.min = String(profileCropState.minScale);
+      profileCropState.zoomRange.max = String(profileCropState.maxScale);
+      profileCropState.zoomRange.step = String((profileCropState.maxScale - profileCropState.minScale) / 100 || 0.01);
+    }
+    constrainProfileCropOffset();
+    applyProfileCropTransform();
+  }
+
+  function exportProfileCroppedSquare(done) {
+    if (!profileCropState || !profileCropState.img) {
+      done(null);
+      return;
+    }
+    var stage = profileCropState.stage;
+    var dia = profileCropDiameter(stage);
+    var scale = profileCropState.scale;
+    var drawW = profileCropState.nw * scale;
+    var drawH = profileCropState.nh * scale;
+    var vw = stage.clientWidth;
+    var vh = stage.clientHeight;
+    var drawX = (vw / 2) + profileCropState.ox - (drawW / 2);
+    var drawY = (vh / 2) + profileCropState.oy - (drawH / 2);
+    var viewLeft = (vw / 2) - (dia / 2);
+    var viewTop = (vh / 2) - (dia / 2);
+    var sx = (viewLeft - drawX) / scale;
+    var sy = (viewTop - drawY) / scale;
+    var sSize = dia / scale;
+    var canvas = document.createElement('canvas');
+    canvas.width = PROFILE_CROP_OUTPUT;
+    canvas.height = PROFILE_CROP_OUTPUT;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) {
+      done(null);
+      return;
+    }
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, PROFILE_CROP_OUTPUT, PROFILE_CROP_OUTPUT);
+    try {
+      ctx.drawImage(profileCropState.img, sx, sy, sSize, sSize, 0, 0, PROFILE_CROP_OUTPUT, PROFILE_CROP_OUTPUT);
+    } catch (err) {
+      done(null);
+      return;
+    }
+    canvas.toBlob(function (blob) {
+      done(blob || null);
+    }, 'image/jpeg', 0.92);
+  }
+
+  function openProfileCropper(sourceUrl, intent, revokeUrl) {
+    var host = profilePictureSheetHost();
+    if (!host) {
+      showToast('Cropper unavailable.');
+      return;
+    }
+    closeProfileCropper();
+    stopProfileCameraStream();
+    var existingCam = host.querySelector('#ahpProfileCameraCapture');
+    if (existingCam) existingCam.remove();
+
+    var wrap = document.createElement('div');
+    wrap.id = 'ahpProfileCrop';
+    wrap.className = 'ahp-pp-crop-root';
+    wrap.innerHTML =
+      '<div class="ahp-pp-crop-stage" id="ahpProfileCropStage">' +
+        '<img class="ahp-pp-crop-img" id="ahpProfileCropImg" alt="Crop photo" draggable="false">' +
+        '<div class="ahp-pp-crop-mask"><div class="ahp-pp-crop-hole" id="ahpProfileCropHole"></div></div>' +
+        '<div class="ahp-pp-crop-hint">Move and zoom to fit the circle</div>' +
+      '</div>' +
+      '<div class="ahp-pp-crop-zoom">' +
+        '<button type="button" id="ahpProfileCropZoomOut" aria-label="Zoom out"><i class="fas fa-minus"></i></button>' +
+        '<input type="range" id="ahpProfileCropZoomRange" aria-label="Zoom">' +
+        '<button type="button" id="ahpProfileCropZoomIn" aria-label="Zoom in"><i class="fas fa-plus"></i></button>' +
+      '</div>' +
+      '<div class="ahp-pp-crop-actions">' +
+        '<button type="button" class="ahp-pp-crop-btn" data-crop="cancel">Cancel</button>' +
+        '<button type="button" class="ahp-pp-crop-btn is-done" data-crop="done">Done</button>' +
+      '</div>';
+    host.appendChild(wrap);
+
+    var stage = wrap.querySelector('#ahpProfileCropStage');
+    var img = wrap.querySelector('#ahpProfileCropImg');
+    var hole = wrap.querySelector('#ahpProfileCropHole');
+    var zoomRange = wrap.querySelector('#ahpProfileCropZoomRange');
+    profileCropState = {
+      intent: intent || 'upload',
+      objectUrl: revokeUrl || null,
+      stage: stage,
+      img: img,
+      hole: hole,
+      zoomRange: zoomRange,
+      nw: 1,
+      nh: 1,
+      scale: 1,
+      minScale: 1,
+      maxScale: 4,
+      ox: 0,
+      oy: 0,
+      dragging: false,
+      lastX: 0,
+      lastY: 0,
+      pinchStartDist: 0,
+      pinchStartScale: 1
+    };
+
+    img.onload = function () {
+      profileCropState.nw = img.naturalWidth || img.width || 1;
+      profileCropState.nh = img.naturalHeight || img.height || 1;
+      fitProfileCropImage();
+    };
+    img.onerror = function () {
+      showToast('Could not load the photo for cropping.');
+      closeProfileCropper();
+    };
+    img.src = sourceUrl;
+
+    wrap.querySelectorAll('[data-crop]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var action = btn.getAttribute('data-crop') || '';
+        if (action === 'cancel') {
+          closeProfileCropper();
+          return;
+        }
+        if (action !== 'done') return;
+        exportProfileCroppedSquare(function (blob) {
+          if (!blob) {
+            showToast('Could not crop the photo.');
+            return;
+          }
+          var file = new File([blob], 'profile-crop.jpg', { type: 'image/jpeg' });
+          var intentOut = profileCropState.intent || 'upload';
+          closeProfileCropper();
+          handleProfilePhotoSelected(file, intentOut);
+        });
+      });
+    });
+    wrap.querySelector('#ahpProfileCropZoomIn').addEventListener('click', function (e) {
+      e.preventDefault();
+      profileCropState.scale = clampProfileCrop(profileCropState.scale * 1.12, profileCropState.minScale, profileCropState.maxScale);
+      constrainProfileCropOffset();
+      applyProfileCropTransform();
+    });
+    wrap.querySelector('#ahpProfileCropZoomOut').addEventListener('click', function (e) {
+      e.preventDefault();
+      profileCropState.scale = clampProfileCrop(profileCropState.scale / 1.12, profileCropState.minScale, profileCropState.maxScale);
+      constrainProfileCropOffset();
+      applyProfileCropTransform();
+    });
+    zoomRange.addEventListener('input', function () {
+      profileCropState.scale = clampProfileCrop(parseFloat(zoomRange.value) || profileCropState.minScale, profileCropState.minScale, profileCropState.maxScale);
+      constrainProfileCropOffset();
+      applyProfileCropTransform();
+    });
+
+    stage.addEventListener('pointerdown', function (e) {
+      profileCropState.dragging = true;
+      profileCropState.lastX = e.clientX;
+      profileCropState.lastY = e.clientY;
+      stage.classList.add('is-dragging');
+      try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    stage.addEventListener('pointermove', function (e) {
+      if (!profileCropState.dragging) return;
+      var dx = e.clientX - profileCropState.lastX;
+      var dy = e.clientY - profileCropState.lastY;
+      profileCropState.lastX = e.clientX;
+      profileCropState.lastY = e.clientY;
+      profileCropState.ox += dx;
+      profileCropState.oy += dy;
+      constrainProfileCropOffset();
+      applyProfileCropTransform();
+    });
+    function endDrag(e) {
+      profileCropState.dragging = false;
+      stage.classList.remove('is-dragging');
+      try { stage.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+    stage.addEventListener('pointerup', endDrag);
+    stage.addEventListener('pointercancel', endDrag);
+    stage.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var factor = e.deltaY > 0 ? (1 / 1.08) : 1.08;
+      profileCropState.scale = clampProfileCrop(profileCropState.scale * factor, profileCropState.minScale, profileCropState.maxScale);
+      constrainProfileCropOffset();
+      applyProfileCropTransform();
+    }, { passive: false });
+  }
+
+  function beginProfileCropFromBlob(blob, intent) {
+    if (!blob) {
+      showToast('Could not load the photo.');
+      return;
+    }
+    var url = URL.createObjectURL(blob);
+    openProfileCropper(url, intent, url);
+  }
+
+  function beginProfileCropFromFile(file, intent) {
+    if (!file) return;
+    beginProfileCropFromBlob(file, intent);
+  }
+
+  function bindDedicatedPhotoInput(input, intent) {
+    if (!input || input.dataset.bound === '1') return;
+    input.dataset.bound = '1';
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      input.value = '';
+      if (!file) return;
+      beginProfileCropFromFile(file, intent);
+    });
+  }
+
+  function profilePictureSheetHost() {
+    var phone = el.phone || document.getElementById('ahpPhone');
+    if (!phone) return null;
+    var screen = phone.querySelector('.ahp-phone-screen') || phone;
+    var style = window.getComputedStyle(screen);
+    if (style.position === 'static') {
+      screen.style.position = 'relative';
+    }
+    return screen;
+  }
+
+  function closeProfilePictureSheet() {
+    stopProfileCameraStream();
+    closeProfileCropper();
+    var host = profilePictureSheetHost();
+    if (!host) return;
+    var sheet = host.querySelector('#ahpProfilePictureSheet');
+    if (sheet) sheet.remove();
+    var cam = host.querySelector('#ahpProfileCameraCapture');
+    if (cam) cam.remove();
+  }
+
+  function profilePictureOptionHtml(iconClass, label, action) {
+    return '<button type="button" class="ahp-pp-option" data-profile-action="' + esc(action) + '">' +
+      '<span class="ahp-pp-option-icon"><i class="' + iconClass + '"></i></span>' +
+      '<span class="ahp-pp-option-label">' + esc(label) + '</span>' +
+    '</button>';
+  }
+
+  function openProfilePictureSheet() {
+    var host = profilePictureSheetHost();
+    if (!host) return;
+    closeProfilePictureSheet();
+    var hasPhoto = !!getProfileAvatarUrl(getProfilePage());
+    var sheet = document.createElement('div');
+    sheet.id = 'ahpProfilePictureSheet';
+    sheet.className = 'ahp-pp-sheet-root';
+    sheet.innerHTML =
+      '<div class="ahp-pp-backdrop" data-profile-action="photo-close"></div>' +
+      '<div class="ahp-pp-sheet" role="dialog" aria-modal="true" aria-label="Profile picture">' +
+        '<div class="ahp-pp-handle" aria-hidden="true"></div>' +
+        '<div class="ahp-pp-header">' +
+          '<button type="button" class="ahp-pp-close" data-profile-action="photo-close" aria-label="Close"><i class="fas fa-times"></i></button>' +
+          '<div class="ahp-pp-title">Profile picture</div>' +
+        '</div>' +
+        '<div class="ahp-pp-list">' +
+          profilePictureOptionHtml('fas fa-camera', 'Camera', 'photo-update') +
+          profilePictureOptionHtml('far fa-image', 'Gallery', 'photo-upload') +
+          (hasPhoto ? profilePictureOptionHtml('far fa-trash-alt', 'Remove', 'photo-remove') : '') +
+        '</div>' +
+      '</div>' +
+      // Separate inputs: camera uses capture, gallery never does.
+      '<input type="file" id="ahpProfilePhotoCamera" class="ahp-profile-photo-file" accept="image/*" capture="user">' +
+      '<input type="file" id="ahpProfilePhotoGallery" class="ahp-profile-photo-file" accept="image/jpeg,image/png,image/webp,image/gif">';
+    host.appendChild(sheet);
+    requestAnimationFrame(function () {
+      sheet.classList.add('is-open');
+    });
+    bindDedicatedPhotoInput(document.getElementById('ahpProfilePhotoCamera'), 'change');
+    bindDedicatedPhotoInput(document.getElementById('ahpProfilePhotoGallery'), 'upload');
+    sheet.querySelectorAll('[data-profile-action]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var action = btn.getAttribute('data-profile-action') || '';
+        var color = getTheme().accentColor || '#202940';
+        if (action === 'photo-close') {
+          closeProfilePictureSheet();
+          return;
+        }
+        if (action === 'photo-update') {
+          openProfileCamera();
+          return;
+        }
+        if (action === 'photo-upload') {
+          openProfileGallery();
+          return;
+        }
+        if (action === 'photo-remove') {
+          if (!window.confirm('Remove the current profile photo?')) return;
+          showToast('Removing photo…');
+          removeProfilePhoto(function (res) {
+            showToast((res && res.message) || (res && res.success ? 'Profile photo removed.' : 'Could not remove the profile photo.'));
+            closeProfilePictureSheet();
+            if (res && res.success) {
+              renderProfilePage(color);
+            }
+          });
+        }
+      });
+    });
+  }
+
+  function openProfileGallery() {
+    var input = document.getElementById('ahpProfilePhotoGallery');
+    if (!input) {
+      openProfilePictureSheet();
+      input = document.getElementById('ahpProfilePhotoGallery');
+    }
+    if (!input) {
+      showToast('Gallery unavailable.');
+      return;
+    }
+    try {
+      input.click();
+    } catch (e) {
+      showToast('Could not open the gallery.');
+    }
+  }
+
+  function openProfileCameraFileFallback() {
+    var input = document.getElementById('ahpProfilePhotoCamera');
+    if (!input) {
+      openProfilePictureSheet();
+      input = document.getElementById('ahpProfilePhotoCamera');
+    }
+    if (!input) {
+      showToast('Camera unavailable.');
+      return;
+    }
+    try {
+      input.click();
+    } catch (e) {
+      showToast('Could not open the camera.');
+    }
+  }
+
+  function openProfileCamera() {
+    var host = profilePictureSheetHost();
+    if (!host) {
+      openProfileCameraFileFallback();
+      return;
+    }
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+      openProfileCameraFileFallback();
+      return;
+    }
+
+    stopProfileCameraStream();
+    var existing = host.querySelector('#ahpProfileCameraCapture');
+    if (existing) existing.remove();
+
+    var wrap = document.createElement('div');
+    wrap.id = 'ahpProfileCameraCapture';
+    wrap.className = 'ahp-pp-camera-root';
+    wrap.innerHTML =
+      '<div class="ahp-pp-camera-frame">' +
+        '<video id="ahpProfileCameraVideo" class="ahp-pp-camera-video" playsinline autoplay muted></video>' +
+        '<div class="ahp-pp-camera-actions">' +
+          '<button type="button" class="ahp-pp-camera-btn is-cancel" data-cam="cancel">Cancel</button>' +
+          '<button type="button" class="ahp-pp-camera-btn is-shutter" data-cam="capture" aria-label="Take photo"><span></span></button>' +
+        '</div>' +
+      '</div>';
+    host.appendChild(wrap);
+
+    var video = wrap.querySelector('#ahpProfileCameraVideo');
+    navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: 'user' },
+        width: { ideal: 1280 },
+        height: { ideal: 1280 }
+      }
+    }).then(function (stream) {
+      profileCameraStream = stream;
+      if (!video) return;
+      video.srcObject = stream;
+      var playPromise = video.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(function () {});
+      }
+    }).catch(function () {
+      wrap.remove();
+      openProfileCameraFileFallback();
+    });
+
+    wrap.querySelectorAll('[data-cam]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var camAction = btn.getAttribute('data-cam') || '';
+        if (camAction === 'cancel') {
+          stopProfileCameraStream();
+          wrap.remove();
+          return;
+        }
+        if (camAction !== 'capture' || !video) return;
+        try {
+          var w = video.videoWidth || 640;
+          var h = video.videoHeight || 640;
+          var canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          var ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('canvas');
+          ctx.drawImage(video, 0, 0, w, h);
+          canvas.toBlob(function (blob) {
+            stopProfileCameraStream();
+            wrap.remove();
+            if (!blob) {
+              showToast('Could not capture the photo.');
+              return;
+            }
+            beginProfileCropFromBlob(blob, 'change');
+          }, 'image/jpeg', 0.92);
+        } catch (err) {
+          stopProfileCameraStream();
+          wrap.remove();
+          openProfileCameraFileFallback();
+        }
+      });
+    });
+  }
+
+  function openProfilePhotoPicker(intent) {
+    if (intent === 'change') {
+      openProfileCamera();
+      return;
+    }
+    openProfileGallery();
   }
 
   function getProfilePage() {
@@ -5140,6 +5739,30 @@
       btn.addEventListener('click', function () {
         var action = btn.getAttribute('data-profile-action') || '';
         var color = getTheme().accentColor || '#202940';
+        if (action === 'photo' || action === 'photo-edit') {
+          openProfilePictureSheet();
+          return;
+        }
+        if (action === 'photo-close' || action === 'photo-back') {
+          closeProfilePictureSheet();
+          return;
+        }
+        if (action === 'photo-update' || action === 'photo-upload') {
+          openProfilePhotoPicker(action === 'photo-update' ? 'change' : 'upload');
+          return;
+        }
+        if (action === 'photo-remove') {
+          if (!window.confirm('Remove the current profile photo?')) return;
+          showToast('Removing photo…');
+          removeProfilePhoto(function (res) {
+            showToast((res && res.message) || (res && res.success ? 'Profile photo removed.' : 'Could not remove the profile photo.'));
+            closeProfilePictureSheet();
+            if (res && res.success) {
+              renderProfilePage(color);
+            }
+          });
+          return;
+        }
         if (action === 'edit') {
           setEditMode(true);
           setActiveMenu('profile');
@@ -5273,7 +5896,7 @@
     hintEl.innerHTML =
       brandBarHtml('Account') +
       '<div class="ahp-profile-card">' +
-        '<div class="ahp-profile-avatar' + (getProfileAvatarUrl(p) ? ' ahp-has-photo' : '') + '">' + buildProfileAvatarHtml(p) + '</div>' +
+        profileAvatarButtonHtml(p) +
         (memberId ? '<p class="ahp-profile-gridid">' + esc(memberId) + '</p>' : '') +
         '<h2>' + esc(name) + '</h2>' +
         '<p>' + esc(email) + '</p>' +

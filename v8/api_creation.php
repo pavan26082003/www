@@ -88,10 +88,16 @@ if ($userId < 1) {
 }
 
 // Warm cache: same JSON shape; keyed by user + schema contentHash/updated stamp when known.
-$homeCacheProbeKey = efactor_schema_cache_key(array('api_creation', 'get_schema', (string) $userId));
+// photo_webview_v2: bust stale cache that used navigate for profile-photo-options.
+$homeCacheProbeKey = efactor_schema_cache_key(array('api_creation', 'get_schema', 'photo_webview_v2', (string) $userId));
 // Probe uses a short-lived sticky key; real key includes contentHash after build.
 $cachedHome = efactor_schema_cache_get($homeCacheProbeKey, 60);
-if (is_string($cachedHome) && $cachedHome !== '' && strpos($cachedHome, '"success":true') !== false) {
+// Stale HIT without open-url photo actions must rebuild so Account avatar tap works.
+$cachedHasPhotoActions = is_string($cachedHome)
+    && strpos($cachedHome, 'profile-photo-options') !== false
+    && strpos($cachedHome, 'app-home-page/profile-photo') !== false
+    && preg_match('/"profile-photo-options"\s*:\s*\{.{0,500}?"type"\s*:\s*"open-url"/s', $cachedHome) === 1;
+if (is_string($cachedHome) && $cachedHome !== '' && strpos($cachedHome, '"success":true') !== false && $cachedHasPhotoActions) {
     $cachedHash = '';
     if (preg_match('/"contentHash":"([a-f0-9]+)"/', $cachedHome, $hashMatch)) {
         $cachedHash = substr($hashMatch[1], 0, 32);
@@ -154,6 +160,18 @@ try {
     // Serve-time P2 fix: merge 0–599dp into compact without changing other keys.
     if (method_exists($model, 'normalizeSmartphoneBreakpoints')) {
         $schema = $model->normalizeSmartphoneBreakpoints($schema);
+    }
+    // Grid featureCard rows are not Home components. Drop them if a saved schema still has them.
+    if (class_exists(\App\Libraries\GridSduiSchemaBuilder::class)) {
+        $schema = \App\Libraries\GridSduiSchemaBuilder::omitDisallowedGridExploreComponents($schema);
+    }
+    // Always enrich photo + rating open-url here so fallback/cached-miss paths still
+    // expose Account avatar tap → in-app WebView (same contract as Rating).
+    if (method_exists($model, 'prepareRatingOpenUrlForClient')) {
+        $schema = $model->prepareRatingOpenUrlForClient($schema, $userId);
+    }
+    if (method_exists($model, 'attachProfilePhotoOptions')) {
+        $schema = $model->attachProfilePhotoOptions($schema, $userId);
     }
 
     $version = (string) ($schema['schemaVersion'] ?? $schema['schema_version'] ?? '1.0.0');

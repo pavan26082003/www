@@ -7,6 +7,35 @@
  * Safe for older app versions: body bytes are unchanged; only encoding/headers differ.
  */
 
+if (!function_exists('efactor_schema_revision')) {
+    /**
+     * Revision the app compares with <=. A floor above the cached Get Status
+     * schemaRevision forces one refresh when updated_at itself did not move.
+     *
+     * @param string $updatedAt
+     * @return int
+     */
+    function efactor_schema_revision($updatedAt)
+    {
+        $updatedAt = trim((string) $updatedAt);
+        if ($updatedAt === '') {
+            return 0;
+        }
+        $ts = strtotime($updatedAt);
+        if (!$ts) {
+            return 0;
+        }
+        $revision = (int) $ts;
+        // 2026-11-23 20:06:40 UTC. Above the bad cached revision 1795457179.
+        $floor = 1795464400;
+        if ($revision < $floor) {
+            return $floor;
+        }
+
+        return $revision;
+    }
+}
+
 if (!function_exists('efactor_schema_client_accepts_gzip')) {
     /**
      * @return bool

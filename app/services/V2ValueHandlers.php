@@ -103,6 +103,76 @@ class V2ValueHandlers
         $dataType = (string) ($field['data_type'] ?? $field['dataType'] ?? $field['datatype'] ?? '');
         $wire = $field['value'] ?? null;
         $currentDisplay = $field['asperui_value'] ?? null;
+        $role = self::fieldRole($field);
+        $normalizedType = self::normalizeDataType($dataType);
+
+        // CommandId / Function Code / Terminator are protocol bytes, not measurements.
+        if (self::isProtocolIdentityRole($role)) {
+            if (!self::isEmptyValue($currentDisplay)
+                && !self::looksLikeProtocolHex($currentDisplay)
+                && !self::isDecodedWireInteger($currentDisplay, $wire)
+            ) {
+                return $field;
+            }
+            $hex = self::normalizeHex(!self::isEmptyValue($wire) ? $wire : $currentDisplay);
+            if ($hex !== '') {
+                $field['asperui_value'] = $hex;
+            }
+
+            return $field;
+        }
+
+        // Drop down / toggle: 00 → false, 06 → IDLY. Do not publish the raw hex
+        // when the field already has a label map.
+        if (self::hasChoiceLabels($field)) {
+            $label = self::labelForWire($field, !self::isEmptyValue($wire) ? $wire : $currentDisplay);
+            if ($label !== null && $label !== '') {
+                $field['asperui_value'] = $label;
+
+                return $field;
+            }
+            if (!self::isEmptyValue($currentDisplay)
+                && !self::looksLikeProtocolHex($currentDisplay)
+                && !self::isDecodedWireInteger($currentDisplay, $wire)
+            ) {
+                return $field;
+            }
+            $hex = self::normalizeHex(!self::isEmptyValue($wire) ? $wire : $currentDisplay);
+            if ($hex !== '') {
+                $field['asperui_value'] = $hex;
+            }
+
+            return $field;
+        }
+
+        $uiType = strtolower(trim((string) ($field['ui_type'] ?? $field['uiType'] ?? '')));
+        $byteCount = (int) ($field['no_of_bytes'] ?? ($field['number_of_bytes'] ?? 0));
+        $measurementUi = in_array($uiType, [
+            'text', 'slider', 'hue slider', 'toggle switch', 'drop down', 'dropdown',
+            'trigger', 'button', 'enter text', 'notification',
+        ], true);
+        $shortMeasure = $byteCount > 0 && $byteCount <= 4;
+        // A long Data blob with no range is the command payload. A short Text/Slider
+        // reading (temperature, timer) still converts hex to a number.
+        $fixedCommandPayload = in_array($role, ['data', 'trigger'], true)
+            && !self::hasNumericRange($field)
+            && ($normalizedType === '' || self::isNumericDataType($normalizedType))
+            && !($measurementUi && $shortMeasure);
+
+        if ($fixedCommandPayload) {
+            if (!self::isEmptyValue($currentDisplay)
+                && !self::looksLikeProtocolHex($currentDisplay)
+                && !self::isDecodedWireInteger($currentDisplay, $wire)
+            ) {
+                return $field;
+            }
+            $hex = self::normalizeHex(!self::isEmptyValue($wire) ? $wire : $currentDisplay);
+            if ($hex !== '') {
+                $field['asperui_value'] = $hex;
+            }
+
+            return $field;
+        }
 
         // Protocol-only slots without UI type usually drop asperui — leave alone
         // when there is no data_type and no asperui_value to fix.
@@ -466,6 +536,15 @@ class V2ValueHandlers
         if ($text === '') {
             return $fallback;
         }
+        // Wire bytes are not always UTF-8. json_encode rejects those strings
+        // and Save Changes reports "Schema JSON could not be encoded."
+        if (preg_match('//u', $text) !== 1) {
+            $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $text);
+            $text = trim(is_string($clean) ? $clean : '');
+            if ($text === '') {
+                return $fallback;
+            }
+        }
 
         return $text;
     }
@@ -495,6 +574,128 @@ class V2ValueHandlers
         }
 
         return $value;
+    }
+
+    private static function fieldRole(array $field)
+    {
+        $raw = strtolower((string) ($field['Field_description'] ?? $field['field_description'] ?? $field['default_name'] ?? $field['name'] ?? ''));
+
+        return (string) preg_replace('/[^a-z0-9]+/', '', $raw);
+    }
+
+    private static function isProtocolIdentityRole($role)
+    {
+        return in_array($role, ['commandid', 'functioncode', 'actionid', 'terminator'], true);
+    }
+
+    /**
+     * True when a display value is just the unsigned integer of the wire hex.
+     */
+    private static function isDecodedWireInteger($display, $wire)
+    {
+        if (!is_numeric($display)) {
+            return false;
+        }
+        $hex = self::normalizeHex($wire);
+        if ($hex === '') {
+            return false;
+        }
+
+        return (int) $display === self::hexToUnsignedInt($hex);
+    }
+
+    /**
+     * A real user range (display min and max differ). Fixed command bytes have none.
+     */
+    private static function choiceList($value)
+    {
+        if (is_array($value)) {
+            $items = [];
+            foreach ($value as $item) {
+                if (is_scalar($item) && trim((string) $item) !== '') {
+                    $items[] = trim((string) $item);
+                }
+            }
+
+            return $items;
+        }
+        if (!is_string($value)) {
+            return [];
+        }
+        $trim = trim($value);
+        if ($trim === '') {
+            return [];
+        }
+        if (isset($trim[0]) && $trim[0] === '[') {
+            $parts = explode('][', trim($trim, '[]'));
+        } else {
+            $parts = explode(',', $trim);
+        }
+        $items = [];
+        foreach ($parts as $part) {
+            $part = trim((string) $part);
+            if ($part !== '') {
+                $items[] = $part;
+            }
+        }
+
+        return $items;
+    }
+
+    private static function hasChoiceLabels(array $field)
+    {
+        return self::choiceList($field['asperui'] ?? []) !== []
+            && self::choiceList($field['asperui_values'] ?? ($field['asperuiValues'] ?? [])) !== [];
+    }
+
+    /**
+     * Label whose wire value matches this field. Null when the map does not hit.
+     *
+     * @param mixed $wire
+     * @return string|null
+     */
+    private static function labelForWire(array $field, $wire)
+    {
+        $labels = self::choiceList($field['asperui'] ?? []);
+        $values = self::choiceList($field['asperui_values'] ?? ($field['asperuiValues'] ?? []));
+        if ($labels === [] || $values === []) {
+            return null;
+        }
+        $hex = self::normalizeHex($wire);
+        if ($hex === '') {
+            return null;
+        }
+        $loose = ltrim($hex, '0');
+        $looseMatch = null;
+        foreach ($values as $index => $value) {
+            $valueHex = self::normalizeHex($value);
+            if ($valueHex === '' || !isset($labels[$index])) {
+                continue;
+            }
+            if ($valueHex === $hex) {
+                return $labels[$index];
+            }
+            if ($looseMatch === null && ltrim($valueHex, '0') === $loose) {
+                $looseMatch = $labels[$index];
+            }
+        }
+
+        return $looseMatch;
+    }
+
+    private static function hasNumericRange(array $field)
+    {
+        $display = $field['display_value'] ?? ($field['displayValue'] ?? null);
+        if (!is_array($display)) {
+            return false;
+        }
+        $min = $display['min'] ?? ($display['minimum'] ?? null);
+        $max = $display['max'] ?? ($display['maximum'] ?? null);
+        if ($min === null || $min === '' || $max === null || $max === '') {
+            return false;
+        }
+
+        return trim((string) $min) !== trim((string) $max);
     }
 
     private static function guessDataTypeFromFrame(array $frame)

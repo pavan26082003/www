@@ -123,6 +123,40 @@ public function view_page_ui($id = 0)
             'mapping' => is_array($model_data) ? $model_data : [],
         ]
     );
+    if (!is_array($deviceUiInfo)) {
+        $deviceUiInfo = [];
+    }
+    // New V2 models: schema node_details must be the live v2 test node.
+    // Legacy models get status=false here and keep the mapping built above.
+    if (method_exists($this->View_page_ui_model, 'buildV2TestNodesPayload')) {
+        try {
+            $v2Payload = $this->View_page_ui_model->buildV2TestNodesPayload(
+                $requestNodeId !== '' ? $requestNodeId : $resolvedNodeId,
+                $modelno
+            );
+        } catch (\Throwable $exception) {
+            $v2Payload = null;
+        }
+        if (is_array($v2Payload) && !empty($v2Payload['status']) && !empty($v2Payload['node_details']) && is_array($v2Payload['node_details'])) {
+            $deviceUiInfo['node_details'] = $v2Payload['node_details'];
+            $deviceUiInfo['v2_node_details'] = (!empty($v2Payload['v2_node_details']) && is_array($v2Payload['v2_node_details']))
+                ? $v2Payload['v2_node_details']
+                : $v2Payload['node_details'];
+            $v2Config = $v2Payload['node_details'][0]['config'] ?? null;
+            if (is_array($v2Config) && $v2Config !== []) {
+                $deviceUiInfo['deviceConfig'] = $v2Config;
+            }
+            if (!empty($v2Payload['nodes'])) {
+                $deviceUiInfo['nodes'] = $v2Payload['nodes'];
+            }
+        }
+    }
+
+    $accountAppearanceMode = 'system';
+    $appearanceUserId = (int) ($this->login_user->id ?? 0);
+    if ($appearanceUserId > 0 && class_exists(\App\Libraries\AppAppearance::class)) {
+        $accountAppearanceMode = \App\Libraries\AppAppearance::resolve($appearanceUserId);
+    }
 
     $schemaApiUrl = base_url('v8/api_schema.php') . '?model_no=' . rawurlencode((string) $modelno);
     $schemaNodeId = $resolvedNodeId !== '' ? $resolvedNodeId : $requestNodeId;
@@ -147,6 +181,7 @@ public function view_page_ui($id = 0)
         // Mapping→schema persistence now happens server-side on save.
         'schema_sync' => !$isRowView && trim((string) $this->request->getGet('schema_sync')) === '1',
         'ui_theme' => $uiTheme,
+        'account_appearance_mode' => $accountAppearanceMode,
         'device_ui_info' => is_array($deviceUiInfo) ? $deviceUiInfo : [],
         'resolved_node_id' => $schemaNodeId !== '' ? $schemaNodeId : $resolvedNodeId,
         // The Flutter app and Studio now use only the V8 schema endpoint.

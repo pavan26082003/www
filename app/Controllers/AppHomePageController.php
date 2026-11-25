@@ -31,14 +31,17 @@ class AppHomePageController extends Security_Controller
     public function rating()
     {
         helper(array('url'));
-        if ((int) ($this->login_user->id ?? 0) <= 0) {
+        $userId = (int) ($this->login_user->id ?? 0);
+        if ($userId <= 0) {
             return redirect()->to(site_url('signin?redirect=app-home-page/rating'));
         }
 
         $logoUrlLight = 'https://efactor.tech/assets/images/efactor-logo.png';
         $logoUrlDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+        $appearanceMode = 'system';
+        $accentColor = '#7c3aed';
         try {
-            $cfg = $this->appHomePageModel->buildSchemaConfig((int) $this->login_user->id);
+            $cfg = $this->appHomePageModel->buildSchemaConfig($userId);
             if (!empty($cfg['logoUrl'])) {
                 $logoUrlLight = (string) $cfg['logoUrl'];
             }
@@ -48,12 +51,90 @@ class AppHomePageController extends Security_Controller
         } catch (\Throwable $e) {
             // keep default logos
         }
+        try {
+            if (class_exists(\App\Libraries\AppAppearance::class)) {
+                $appearanceMode = \App\Libraries\AppAppearance::resolve($userId);
+            }
+        } catch (\Throwable $e) {
+            $appearanceMode = 'system';
+        }
+        try {
+            // The incoming patch called GridSduiSchemaBuilder::resolveThemeAccent(),
+            // which is not in this codebase. Use it when present; otherwise the
+            // saved Home theme accent.
+            if (class_exists(\App\Libraries\GridSduiSchemaBuilder::class)
+                && method_exists(\App\Libraries\GridSduiSchemaBuilder::class, 'resolveThemeAccent')) {
+                $accentColor = (string) \App\Libraries\GridSduiSchemaBuilder::resolveThemeAccent($userId);
+            } else {
+                $layout = $this->appHomePageModel->getLayout($userId);
+                $savedAccent = trim((string) ($layout['theme']['accentColor'] ?? ''));
+                if (preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $savedAccent)) {
+                    $accentColor = $savedAccent;
+                }
+            }
+        } catch (\Throwable $e) {
+            $accentColor = '#7c3aed';
+        }
 
         return view('app_home_page/rating', array(
             'apiBase' => site_url('app-home-page/api'),
             'logoUrl' => $logoUrlLight,
             'logoUrlLight' => $logoUrlLight,
             'logoUrlDark' => $logoUrlDark,
+            'appearanceMode' => $appearanceMode,
+            'accentColor' => $accentColor,
+        ));
+    }
+
+    /**
+     * In-app profile photo page. Opened from the Account photo.
+     * intent=change opens the camera, upload opens the gallery, remove confirms.
+     */
+    public function profilePhoto()
+    {
+        helper(array('url'));
+        $userId = (int) ($this->login_user->id ?? 0);
+        if ($userId <= 0) {
+            return redirect()->to(site_url('signin?redirect=app-home-page/profile-photo'));
+        }
+
+        $intent = strtolower(trim((string) $this->request->getGet('intent')));
+        if (!in_array($intent, array('change', 'upload', 'remove'), true)) {
+            $intent = 'change';
+        }
+
+        $avatarUrl = '';
+        $appearanceMode = 'system';
+        $accentColor = '#7c3aed';
+        try {
+            $profile = $this->appHomePageModel->getUserProfile($userId);
+            $avatarUrl = trim((string) ($profile['avatarUrl'] ?? ''));
+        } catch (\Throwable $e) {
+            $avatarUrl = '';
+        }
+        try {
+            if (class_exists(\App\Libraries\AppAppearance::class)) {
+                $appearanceMode = \App\Libraries\AppAppearance::resolve($userId);
+            }
+        } catch (\Throwable $e) {
+            $appearanceMode = 'system';
+        }
+        try {
+            $layout = $this->appHomePageModel->getLayout($userId);
+            $savedAccent = trim((string) ($layout['theme']['accentColor'] ?? ''));
+            if (preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $savedAccent)) {
+                $accentColor = $savedAccent;
+            }
+        } catch (\Throwable $e) {
+            $accentColor = '#7c3aed';
+        }
+
+        return view('app_home_page/profile_photo', array(
+            'apiBase' => site_url('app-home-page/api'),
+            'intent' => $intent,
+            'avatarUrl' => $avatarUrl,
+            'appearanceMode' => $appearanceMode,
+            'accentColor' => $accentColor,
         ));
     }
 
@@ -143,6 +224,17 @@ class AppHomePageController extends Security_Controller
                     return $this->jsonResponse(array('success' => false, 'message' => 'Method not allowed'), 405);
                 }
                 return $this->jsonResponse($this->saveProfilePreferencesPayload());
+
+            case 'profile-photo':
+                if (strtolower($this->request->getMethod()) !== 'post') {
+                    return $this->jsonResponse(array('success' => false, 'message' => 'Method not allowed'), 405);
+                }
+                $photoResult = $this->saveProfilePhotoPayload();
+                $photoStatus = !empty($photoResult['success']) ? 200 : 400;
+                if (($photoResult['message'] ?? '') === 'Not signed in') {
+                    $photoStatus = 401;
+                }
+                return $this->jsonResponse($photoResult, $photoStatus);
 
             case 'rating-feedback':
                 if (strtolower($this->request->getMethod()) !== 'post') {
@@ -634,6 +726,34 @@ class AppHomePageController extends Security_Controller
     }
 
     /**
+     * Change or upload writes the existing profile image. Remove clears it.
+     *
+     * @return array{success: bool, message: string, avatarUrl?: string}
+     */
+    private function saveProfilePhotoPayload(): array
+    {
+        $userId = (int) ($this->login_user->id ?? 0);
+        if ($userId <= 0) {
+            return array('success' => false, 'message' => 'Not signed in');
+        }
+
+        $intent = strtolower(trim((string) $this->request->getPost('intent')));
+        if ($intent === 'remove') {
+            return $this->appHomePageModel->removeAccountProfilePhoto($userId);
+        }
+
+        $file = $this->request->getFile('profile_image_file');
+        if (!$file || !$file->isValid()) {
+            $file = $this->request->getFile('avatar') ?: $this->request->getFile('image') ?: $this->request->getFile('file');
+        }
+        if (!$file || !$file->isValid()) {
+            return array('success' => false, 'message' => 'No valid image file uploaded.');
+        }
+
+        return $this->appHomePageModel->saveAccountProfilePhoto($userId, (string) $file->getTempName());
+    }
+
+    /**
      * Persist Profile tab preferences (language / notifications) and rebuild schema.
      */
     private function saveProfilePreferencesPayload(): array
@@ -1090,6 +1210,8 @@ class AppHomePageController extends Security_Controller
         return $this->response
             ->setStatusCode($status)
             ->setContentType('application/json')
+            ->setHeader('Cache-Control', 'private, no-cache, no-store, max-age=0, must-revalidate')
+            ->setHeader('Pragma', 'no-cache')
             ->setBody($json);
     }
 }

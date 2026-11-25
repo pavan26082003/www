@@ -127,8 +127,12 @@ class DeviceUiSchemaGenerator
             if (!is_string($key)) {
                 continue;
             }
-            $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            if ($json !== false && strlen($json) >= self::PART_LIMIT) {
+            $json = self::encodeJson($value);
+            if ($json === false) {
+                self::$lastError = 'Schema JSON could not be encoded for "' . $key . '" (' . json_last_error_msg() . ').';
+                return '';
+            }
+            if (strlen($json) >= self::PART_LIMIT) {
                 if (!self::writePart($relativeDir, $key, $json)) {
                     if (self::$lastError === '') {
                         self::$lastError = 'Could not write schema part "' . $key . '". The schema storage directory is not writable.';
@@ -148,10 +152,10 @@ class DeviceUiSchemaGenerator
         while ($guard < 80) {
             $guard++;
             $payload = $parts === [] ? $document : self::manifest($schema, $relativeDir, $parts, $document);
-            $packed = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $packed = self::encodeJson($payload);
             unset($payload);
             if ($packed === false) {
-                self::$lastError = 'Schema JSON could not be encoded.';
+                self::$lastError = 'Schema JSON could not be encoded (' . json_last_error_msg() . ').';
                 return '';
             }
             if (strlen($packed) <= self::INLINE_LIMIT) {
@@ -163,9 +167,9 @@ class DeviceUiSchemaGenerator
             if ($spillKey === null) {
                 break;
             }
-            $spillJson = json_encode($document[$spillKey], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $spillJson = self::encodeJson($document[$spillKey]);
             if ($spillJson === false) {
-                self::$lastError = 'Schema JSON could not be encoded.';
+                self::$lastError = 'Schema JSON could not be encoded for "' . $spillKey . '" (' . json_last_error_msg() . ').';
                 return '';
             }
             if (!self::writePart($relativeDir, $spillKey, $spillJson)) {
@@ -181,6 +185,101 @@ class DeviceUiSchemaGenerator
 
         self::$lastError = 'Schema is still too large to store in MySQL after splitting.';
         return '';
+    }
+
+    /**
+     * Encode a schema document. Invalid UTF-8, non-finite numbers, and widget
+     * trees deeper than PHP's default limit are rewritten so Save Changes and
+     * the schema API can persist the same document.
+     *
+     * @param mixed $value
+     * @return string empty when encoding still fails
+     */
+    public static function encode($value)
+    {
+        self::$lastError = '';
+        $json = self::encodeJson($value);
+        if (!is_string($json) || $json === '') {
+            if (self::$lastError === '') {
+                self::$lastError = 'Schema JSON could not be encoded (' . json_last_error_msg() . ').';
+            }
+            return '';
+        }
+
+        return $json;
+    }
+
+    private static function jsonFlags()
+    {
+        $flags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+        if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+            $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+        }
+
+        return $flags;
+    }
+
+    /**
+     * @param mixed $value
+     * @return string|false
+     */
+    private static function encodeJson($value)
+    {
+        $flags = self::jsonFlags();
+        $json = json_encode($value, $flags, 2048);
+        if ($json !== false) {
+            return $json;
+        }
+
+        $clean = self::sanitizeJsonValue($value);
+        $json = json_encode($clean, $flags, 2048);
+        unset($clean);
+
+        return $json;
+    }
+
+    /**
+     * @param mixed $value
+     * @return mixed
+     */
+    private static function sanitizeJsonValue($value, $depth = 0)
+    {
+        if ($depth > 2048) {
+            return null;
+        }
+        if (is_array($value)) {
+            $clean = [];
+            foreach ($value as $key => $child) {
+                $cleanKey = is_string($key) ? self::utf8String($key) : $key;
+                $clean[$cleanKey] = self::sanitizeJsonValue($child, $depth + 1);
+            }
+
+            return $clean;
+        }
+        if (is_string($value)) {
+            return self::utf8String($value);
+        }
+        if (is_float($value)) {
+            return is_finite($value) ? $value : null;
+        }
+        if (is_int($value) || is_bool($value) || $value === null) {
+            return $value;
+        }
+        if ($value instanceof \JsonSerializable) {
+            return self::sanitizeJsonValue($value->jsonSerialize(), $depth + 1);
+        }
+
+        return null;
+    }
+
+    private static function utf8String($value)
+    {
+        if ($value === '' || preg_match('//u', $value) === 1) {
+            return $value;
+        }
+        $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+
+        return is_string($clean) ? $clean : '';
     }
 
     private static function manifest(array $schema, $relativeDir, array $parts, array $document)
@@ -203,7 +302,7 @@ class DeviceUiSchemaGenerator
             if (!is_string($key)) {
                 continue;
             }
-            $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $json = self::encodeJson($value);
             if ($json === false) {
                 continue;
             }

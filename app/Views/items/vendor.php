@@ -57,16 +57,138 @@ body {
     padding: 20px;
     margin: 0;
 }
-/* Page Title */
+/* Page title: heading and PDF Guide on top, existing actions underneath */
 .page-title {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
     margin-bottom: 20px;
     padding-bottom: 16px;
     border-bottom: 1px solid var(--iot-border);
+}
+.page-title-heading-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     flex-wrap: wrap;
+    gap: 12px;
+    width: 100%;
+}
+.page-title-heading-row > div {
+    min-width: 0;
+}
+.page-title-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+    width: 100%;
+}
+/* PDF Guide only: dark ripple button (keeps other button styles intact). */
+.btn-pdf-guide {
+    outline: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 0 0 auto;
+    gap: 14px;
+    background: #404040;
+    min-width: 200px;
+    min-height: 44px;
+    border: 0;
+    border-radius: 22px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .1);
+    box-sizing: border-box;
+    padding: 16px 20px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    line-height: 1.25;
+    text-transform: uppercase;
+    text-decoration: none;
+    overflow: hidden;
+    cursor: pointer;
+    transition: opacity .2s ease;
+    /* Keep the PDF Guide highlighted continuously while the page is open. */
+    transform-origin: center;
+    animation: pdfGuideAutoHighlight 3.4s ease-in-out infinite;
+}
+/* Two highlight pulses repeat continuously without changing other buttons. */
+@keyframes pdfGuideAutoHighlight {
+    0%, 100% {
+        background: #404040;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, .1);
+        transform: scale(1);
+    }
+    18%, 58% {
+        background: #404040;
+        box-shadow: 0 0 0 4px rgba(192, 132, 87, .32),
+                    0 0 0 10px rgba(192, 132, 87, .16),
+                    0 12px 28px rgba(68, 0, 34, .32);
+        transform: scale(1.045);
+    }
+    38%, 78% {
+        background: #404040;
+        box-shadow: 0 0 0 2px rgba(192, 132, 87, .13),
+                    0 5px 14px rgba(0, 0, 0, .12);
+        transform: scale(1);
+    }
+}
+.btn-pdf-guide:hover {
+    opacity: .95;
+    color: #fff;
+    text-decoration: none;
+}
+.btn-pdf-guide:focus-visible {
+    outline: 3px solid var(--iot-copper);
+    outline-offset: 3px;
+}
+.btn-pdf-guide .animation {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    border-radius: 100%;
+    animation: pdfGuideRipple 0.6s linear infinite;
+}
+@keyframes pdfGuideRipple {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.1),
+                    0 0 0 20px rgba(255, 255, 255, 0.1),
+                    0 0 0 40px rgba(255, 255, 255, 0.1),
+                    0 0 0 60px rgba(255, 255, 255, 0.1);
+    }
+    100% {
+        box-shadow: 0 0 0 20px rgba(255, 255, 255, 0.1),
+                    0 0 0 40px rgba(255, 255, 255, 0.1),
+                    0 0 0 60px rgba(255, 255, 255, 0.1),
+                    0 0 0 80px rgba(255, 255, 255, 0);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .btn-pdf-guide,
+    .btn-pdf-guide .animation {
+        animation: none;
+    }
+    .btn-pdf-guide {
+        outline: 2px solid var(--iot-copper);
+        outline-offset: 2px;
+    }
+}
+/* Keep the PDF Guide label/icon white in every link state, even if the app theme overrides link colors. */
+.page-title .page-title-heading-row a.btn-pdf-guide,
+.page-title .page-title-heading-row a.btn-pdf-guide:link,
+.page-title .page-title-heading-row a.btn-pdf-guide:visited,
+.page-title .page-title-heading-row a.btn-pdf-guide:hover,
+.page-title .page-title-heading-row a.btn-pdf-guide:focus,
+.page-title .page-title-heading-row a.btn-pdf-guide:active,
+.page-title .page-title-heading-row a.btn-pdf-guide i {
+    color: #FFFFFF !important;
 }
 .page-title h2 {
     font-weight: 700;
@@ -774,18 +896,27 @@ body.edit-modal-open {
         grid-template-columns: 1fr;
     }
     .page-title {
-        flex-direction: column;
-        align-items: stretch;
+        gap: 14px;
+    }
+    .page-title-heading-row {
+        align-items: flex-start;
+    }
+    .page-title-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .btn-pdf-guide {
+        margin-left: auto;
     }
     .page-title h2 {
         font-size: 1.35rem;
         line-height: 1.25;
     }
-    .page-title > .d-flex {
-        display: grid !important;
-        grid-template-columns: 1fr;
-        gap: 10px !important;
-        width: 100%;
+    @media (max-width: 450px) {
+        .page-title-actions {
+            grid-template-columns: 1fr;
+        }
     }
     .page-title .btn-gradient,
     .page-title .btn-success-modern,
@@ -897,16 +1028,81 @@ body.edit-modal-open {
 #edit-model-logo-file { padding: 10px; }
 #edit-logo-feedback { margin-top: 7px; font-size: 12px; color: var(--iot-muted); }
 @media (max-width: 530px) { .edit-model-logo-grid { flex-direction: column; align-items: flex-start; } }
+
+/* Admin-only EFDEFLT API view, using the existing page's design tokens. */
+.default-api-overview {
+    padding: 20px;
+    border: 1px solid var(--iot-border);
+    border-radius: 16px;
+    background: var(--iot-card);
+}
+.default-api-overview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+.default-api-overview h3 {
+    font-size: 1.25rem;
+    color: var(--iot-graphite);
+    font-weight: 700;
+    margin: 0 0 5px;
+}
+.default-api-overview p { color: var(--iot-muted); margin: 0; font-size: .88rem; }
+.default-api-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.default-api-actions a { min-height: 40px; padding: 9px 15px; font-size: .86rem; border-radius: 10px; }
+.default-api-table-scroll { max-height: 65vh; overflow: auto; border: 1px solid var(--iot-border); border-radius: 10px; }
+.default-api-table { width: 100%; border-collapse: collapse; min-width: 560px; font-size: .87rem; }
+.default-api-table th, .default-api-table td { padding: 11px 14px; border-bottom: 1px solid var(--iot-border); text-align: left; }
+.default-api-table th { position: sticky; top: 0; z-index: 1; background: var(--iot-bg); color: var(--iot-graphite); font-weight: 600; }
+.default-api-table tr:last-child td { border-bottom: none; }
+.default-api-type { display: inline-block; border: 1px solid var(--iot-border); border-radius: 6px; padding: 3px 8px; color: var(--iot-muted); font-size: .74rem; }
+
+/* Read-only EFDEFLT V1.0 page. Does not affect other models. */
+.default-api-shell { padding: 0 !important; overflow: hidden; }
+.default-api-hero { background: var(--iot-graphite); color: #fff; padding: 24px 28px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 15px; }
+.default-api-kicker { font-size: 11px; font-weight: 700; letter-spacing: .075em; text-transform: uppercase; color: var(--iot-metallic); }
+.default-api-hero h2 { font-size: 27px; font-weight: 700; margin: 3px 0 0; color: #fff; }
+.default-api-hero .default-api-actions a { border-radius: 8px; font-size: 13px; }
+.default-api-main { padding: 24px; }
+.default-api-subtitle { font-size: 20px; font-weight: 650; color: var(--iot-graphite); margin-bottom: 2px; }
+.default-api-notice { font-size: 13px; color: var(--iot-muted); margin-bottom: 18px; }
+.default-api-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.default-api-search { width: min(300px,100%); border: 1px solid var(--iot-border); border-radius: 8px; padding: 10px 12px; background: var(--iot-card); color: var(--iot-text); font: inherit; }
+.default-api-search:focus { outline: none; border-color: var(--iot-copper); box-shadow: var(--iot-focus-ring); }
+.default-api-readonly-table { min-width: 550px; }
+.default-api-readonly-table th { background: #f1ede9; }
+.default-api-readonly-table td { vertical-align: middle; }
+.default-api-view-button { cursor: pointer; border: 1px solid var(--iot-border); border-radius: 8px; color: var(--iot-graphite); background: white; padding: 7px 12px; font: inherit; font-size: 12px; font-weight: 600; }
+.default-api-view-button:hover { border-color: var(--iot-copper); }
+.default-api-lock { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--iot-muted); }
+.default-api-count { font-size: 12px; color: var(--iot-muted); }
+.default-api-detail-cell { background: #fbfaf8; padding: 14px 16px !important; }
+.default-api-detail-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap: 10px; }
+.default-api-detail-field { overflow: hidden; border: 1px solid var(--iot-border); border-radius: 8px; padding: 10px; background: white; }
+.default-api-detail-field b { display: block; font-size: 11px; margin-bottom: 5px; color: var(--iot-muted); }
+.default-api-detail-field pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow-y: auto; font-size: 12px; color: var(--iot-text); }
+@media (max-width: 680px) { .default-api-hero { padding: 20px; } .default-api-hero h2 { font-size: 22px; } .default-api-main { padding: 15px; } }
 </style>
 
 
 
 <!-- ==================== PHP / HTML ==================== -->
 <?php
-$user_id = $login_user->id;
+$user_id = (int) ($login_user->id ?? 0);
+// Compatibility: legacy Items::vendor can still render this view before routes
+// are remapped to vendor_controller. Keep the read-only page working either way.
+$requestedDefaultId = isset($_GET['admin_default_apis']) ? (int) $_GET['admin_default_apis'] : 0;
+if ($requestedDefaultId > 0 && $user_id === 1 && empty($default_api_overview)) {
+    $default_api_overview = (new \App\Models\vendor_modal())
+        ->getAdminDefaultApiOverview($requestedDefaultId, $user_id);
+}
+$showDefaultApiView = $user_id === 1 && !empty($default_api_overview);
 ?>
 <div id="page-content" class="page-wrapper clearfix px-4 py-6">
-    <div class="card" style="position: relative;">
+    <div class="card <?= $showDefaultApiView ? 'default-api-shell' : '' ?>" style="position: relative;">
         <?php if(session()->has('error')): ?>
             <div class="alert alert-danger">
                 <i class="fas fa-exclamation-circle"></i>
@@ -919,13 +1115,22 @@ $user_id = $login_user->id;
                 <?= session('success'); ?>
             </div>
         <?php endif; ?>
-        <!-- Header -->
+        <?php if (!$showDefaultApiView): ?>
+        <!-- Header: PDF Guide beside heading, action buttons below -->
         <div class="page-title">
-            <div>
-                <h2><i class="fas fa-cubes"></i> Efactor Model Management</h2>
-                <small class="text-muted">Manage Brands, Products & Models</small>
+            <div class="page-title-heading-row">
+                <div>
+                    <h2><i class="fas fa-cubes"></i> Efactor Model Management</h2>
+                    <small class="text-muted">Manage Brands, Products & Models</small>
+                </div>
+                <a href="<?= base_url('assets/images/pdf_guide.pdf') ?>"
+                   class="btn-pdf-guide" target="_blank" rel="noopener noreferrer"
+                   title="Open Efactor Model Management PDF guide">
+                    <span>PDF Guide</span>
+                    <span class="animation" aria-hidden="true"><i class="fas fa-file-pdf"></i></span>
+                </a>
             </div>
-            <div class="d-flex gap-3 flex-wrap">
+            <div class="page-title-actions">
                 <a href="<?= site_url('items/brand') ?>" class="btn-gradient">
                     <i class="fas fa-building"></i> Add Brand
                 </a>
@@ -955,6 +1160,90 @@ $user_id = $login_user->id;
                 </a> -->
             </div>
         </div>
+        <?php else: ?>
+        <?php
+            $adminDefaultId = (int) $default_api_overview['item_id'];
+            $adminApiLink = get_uri('items/modal_api/' . $adminDefaultId);
+            $currentApiRows = $default_api_overview['api_rows'] ?? array();
+        ?>
+        <div class="default-api-hero">
+            <div>
+                <div class="default-api-kicker">API Library · EFDEFLT V1.0 · Read only</div>
+                <h2>View APIs</h2>
+            </div>
+            <div class="default-api-actions">
+                <a class="btn-dark-modern" href="<?= get_uri('items/vendor') ?>"><i class="fas fa-arrow-left"></i> Back</a>
+                <a class="btn-dark-modern" href="<?= get_uri('items/vendor') . '?admin_default_apis=' . $adminDefaultId ?>"><i class="fas fa-sync-alt"></i> Refresh</a>
+                <a class="btn-success-modern modal-action" href="<?= $adminApiLink ?>" data-url="<?= $adminApiLink ?>"><i class="fas fa-plus-circle"></i> Create API</a>
+            </div>
+        </div>
+        <div class="default-api-main">
+            <h3 class="default-api-subtitle">Saved API Configurations</h3>
+            <p class="default-api-notice">These existing EFDEFLT V1.0 API configurations can be viewed but not edited or deleted from this page.</p>
+            <div class="default-api-toolbar">
+                <span class="default-api-count" id="default-api-total"><?= count($currentApiRows) ?> API(s) found</span>
+                <input type="search" id="default-api-search" class="default-api-search" placeholder="Search API parameters..." aria-label="Search saved APIs">
+            </div>
+            <div class="default-api-table-scroll">
+                <table class="default-api-table default-api-readonly-table">
+                    <thead><tr><th>Parameter Name</th><th>Action</th><th>Update</th></tr></thead>
+                    <tbody>
+                    <?php if (empty($currentApiRows)): ?>
+                        <tr><td colspan="3">No API rows were found in product_api or api_product_configs for EFDEFLT V1.0. Verify the database connection and model_name.</td></tr>
+                    <?php else: ?>
+                        <?php foreach ($currentApiRows as $i => $apiRow): ?>
+                            <tr class="default-api-data-row" data-api-search="<?= esc(strtolower((string) ($apiRow['label'] ?? '')), 'attr') ?>">
+                                <td><strong><?= esc($apiRow['label'] ?: 'Unnamed API') ?></strong>
+                                    <small style="display:block;color:var(--iot-muted);font-size:11px;"><?= esc($apiRow['source']) ?> · ID <?= (int) $apiRow['id'] ?></small>
+                                </td>
+                                <td><button type="button" class="default-api-view-button" aria-expanded="false" aria-controls="efdefault-detail-<?= (int) $i ?>" data-readonly-target="efdefault-detail-<?= (int) $i ?>"><i class="fas fa-eye"></i> View</button></td>
+                                <td><span class="default-api-lock"><i class="fas fa-lock"></i> Locked</span></td>
+                            </tr>
+                            <tr id="efdefault-detail-<?= (int) $i ?>" class="default-api-details-row" style="display:none;">
+                                <td colspan="3" class="default-api-detail-cell">
+                                    <div class="default-api-detail-grid">
+                                        <?php foreach (($apiRow['details'] ?? array()) as $field => $value): ?>
+                                            <div class="default-api-detail-field"><b><?= esc(str_replace('_',' ',ucwords((string) $field,'_'))) ?></b><pre><?= esc((string) $value) ?></pre></div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <script>
+            (function () {
+                const search = document.getElementById('default-api-search');
+                if (search) {
+                    search.addEventListener('input', function () {
+                        const term = (this.value || '').trim().toLowerCase();
+                        let shown = 0;
+                        document.querySelectorAll('.default-api-data-row').forEach(function (row) {
+                            const match = row.getAttribute('data-api-search').includes(term);
+                            row.style.display = match ? '' : 'none';
+                            const detail = row.nextElementSibling;
+                            if (!match && detail && detail.classList.contains('default-api-details-row')) detail.style.display = 'none';
+                            if (match) shown++;
+                        });
+                        document.getElementById('default-api-total').textContent = shown + ' API(s) found';
+                    });
+                }
+                document.addEventListener('click', function (e) {
+                    const button = e.target.closest('[data-readonly-target]');
+                    if (!button) return;
+                    const detail = document.getElementById(button.getAttribute('data-readonly-target'));
+                    if (!detail) return;
+                    const opening = detail.style.display === 'none';
+                    detail.style.display = opening ? 'table-row' : 'none';
+                    button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+                });
+            })();
+        </script>
+        <?php endif; ?>
+        <?php if (!$showDefaultApiView): ?>
         <!-- Datatable Tools -->
         <div class="datatable-tools" id="model-toolbar">
             <div class="toolbar-left-top">
@@ -1005,6 +1294,7 @@ $user_id = $login_user->id;
         <div id="item-table_processing" class="dataTables_processing card" style="display: none;">
             <div class="loading"></div>
         </div>
+        <?php endif; // admin-only EFDEFLT API view ?>
     </div>
 </div>
 <!-- ==================== EDIT MODAL ==================== -->
@@ -1529,7 +1819,14 @@ $(document).ready(function () {
         item.actions.forEach((action, index) => {
             const icon = action.icon || 'fa-circle';
             const label = escapeHtml(action.label);
-            const url = action.url || '#';
+            // Admin ID 1 + EFDEFLT V1.0: override legacy Items-generated
+            // View APIs URL, which reads V2 only and incorrectly shows 0 rows.
+            const adminDefault = <?= $user_id === 1 ? 'true' : 'false' ?>
+                && /\bEFDEFLT\s+V1\.0\b/i.test(String(item.model_name || item.model_no || ''));
+            let url = action.url || '#';
+            if (adminDefault && String(action.label || '').trim().toLowerCase() === 'view apis') {
+                url = <?= json_encode(get_uri('items/vendor')) ?> + '?admin_default_apis=' + encodeURIComponent(id);
+            }
             const safeUrl = escapeAttr(url);
             if (action.class === 'delete-action') {
                 actionsHtml += `<a href="#" class="dropdown-item" onclick="deleteModel(${id}); return false;">
@@ -1870,14 +2167,18 @@ $(document).ready(function () {
         }
     });
     // Restore the search/filter controls first, then fetch and render cards.
-    restoreVendorViewState();
-    loadData();
+    if (document.getElementById('cards-container')) {
+        restoreVendorViewState();
+        loadData();
+    }
     // pagehide also covers browser Back/Forward cache and mobile navigation.
-    window.addEventListener('pagehide', saveVendorViewState);
+    window.addEventListener('pagehide', function () {
+        if (document.getElementById('cards-container')) saveVendorViewState();
+    });
     // Browsers may restore this page from the back/forward cache after an edit.
     // Reload from the database instead of showing the old in-memory card data.
     window.addEventListener('pageshow', function(event) {
-        if (event.persisted) {
+        if (event.persisted && document.getElementById('cards-container')) {
             restoreVendorViewState();
             loadData();
         }

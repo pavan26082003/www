@@ -8,16 +8,32 @@ namespace App\Libraries;
  * Delivery uses the Firebase HTTP v1 API when FCM_SERVICE_ACCOUNT (or
  * GOOGLE_APPLICATION_CREDENTIALS, or Config/firebase-service-account.json) points
  * at a service account for the same Firebase project as the mobile app.
- * Call and chat messages are data-only (no notification block) so Android can
- * run the app background handler. Incoming calls are sent on every dial,
+ * Call and chat messages are data-only (no notification block) for Android so
+ * it can run the app background handler. Tokens registered as platform "ios"
+ * also get a top-level notification block plus the apns alert/category, since
+ * APNs drops data-only pushes on a locked phone or killed app. Incoming calls are sent on every dial,
  * including when a WebSocket still looks connected.
  * Delivery is FCM HTTP v1 only. The legacy https://fcm.googleapis.com/fcm/send
  * endpoint was shut down and now returns HTTP 404.
  * Tokens are still saved when the service account file is missing.
+ *
+ * iOS calls: the app also registers its PushKit token as token_type
+ * "apns_voip". INCOMING_CALL / CALL_CANCELLED / MISSED_CALL for the callee
+ * are sent straight to APNs (apns-push-type: voip, topic <bundle-id>.voip,
+ * .p8 token auth) because FCM cannot deliver VoIP pushes. See sendApnsVoip().
  */
 class DevicePushService
 {
     private const ROOM_PATH = 'grid-chat';
+
+    /** token_type stored for an iOS PushKit (VoIP) token. */
+    public const VOIP_TOKEN_TYPE = 'apns_voip';
+
+    /** Call signals that go to iOS callees as APNs VoIP pushes. */
+    private const VOIP_TYPES = ['INCOMING_CALL', 'CALL_CANCELLED', 'MISSED_CALL'];
+
+    /** @var array<string, string>|null|false APNs settings; false = not loaded yet */
+    private $apnsConfig = false;
 
     /** @var array{status: int, body: string} */
     private array $lastFcmResult = ['status' => 0, 'body' => ''];
@@ -88,6 +104,118 @@ class DevicePushService
         }
 
         return (int) ($row['id'] ?? 0);
+    }
+
+    /**
+     * Key the app sends as X-Device-Key from a notification action while it
+     * has no session cookie. Signed from the user id and this device's push
+     * token, so it stops working when the token is unregistered or replaced.
+     */
+    public function deviceKeyFor(int $userId, string $deviceToken): string
+    {
+        $deviceToken = trim($deviceToken);
+        $secret = $this->deviceKeySecret();
+        if ($userId <= 0 || $deviceToken === '' || $secret === '') {
+            return '';
+        }
+
+        return 'dk1.' . $userId . '.' . $this->base64Url(hash_hmac('sha256', $userId . '|' . $deviceToken, $secret, true));
+    }
+
+    /**
+     * Resolves X-Device-Key to a user id. Accepts a key from deviceKeyFor(),
+     * or the user's access_token (the same secret Bearer auth already accepts).
+     */
+    public function userIdForDeviceKey(string $key): int
+    {
+        $key = trim($key);
+        if ($key === '' || strlen($key) > 512) {
+            return 0;
+        }
+        if (!preg_match('/^dk1\.(\d{1,10})\.([A-Za-z0-9_-]{20,})$/', $key, $match)) {
+            return $this->userIdForAccessToken($key);
+        }
+
+        $userId = (int) $match[1];
+        if ($userId <= 0) {
+            return 0;
+        }
+
+        try {
+            $db = \Config\Database::connect();
+            foreach ($this->tokenTables($db) as $table) {
+                foreach ($db->table($table)->select('device_token')->where('user_id', $userId)->get()->getResultArray() as $row) {
+                    $expected = $this->deviceKeyFor($userId, (string) ($row['device_token'] ?? ''));
+                    if ($expected !== '' && hash_equals($expected, $key)) {
+                        return $this->isActiveUser($userId) ? $userId : 0;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Device key auth: ' . $e->getMessage());
+        }
+
+        return 0;
+    }
+
+    private function isActiveUser(int $userId): bool
+    {
+        try {
+            $row = \Config\Database::connect()->table('users')
+                ->select('id, status, deleted')
+                ->where('id', $userId)
+                ->get()
+                ->getRowArray();
+        } catch (\Throwable $e) {
+            log_message('error', 'Device key user check: ' . $e->getMessage());
+            return false;
+        }
+
+        if (!is_array($row) || (int) ($row['deleted'] ?? 0) === 1) {
+            return false;
+        }
+
+        return !(isset($row['status']) && $row['status'] !== '' && $row['status'] !== 'active');
+    }
+
+    /**
+     * GRID_DEVICE_KEY_SECRET from the environment, otherwise a random secret
+     * created once under writable/ (outside the web root and source control).
+     */
+    private function deviceKeySecret(): string
+    {
+        $env = getenv('GRID_DEVICE_KEY_SECRET');
+        if (is_string($env) && strlen(trim($env)) >= 32) {
+            return trim($env);
+        }
+
+        $file = WRITEPATH . 'keys/device-key-secret.txt';
+        if (is_file($file)) {
+            $stored = trim((string) file_get_contents($file));
+            if (strlen($stored) >= 32) {
+                return $stored;
+            }
+        }
+
+        $dir = dirname($file);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0700, true);
+        }
+        $secret = bin2hex(random_bytes(32));
+        // x mode: if two requests race, the first write wins and both re-read it
+        $handle = @fopen($file, 'x');
+        if ($handle !== false) {
+            fwrite($handle, $secret);
+            fclose($handle);
+            return $secret;
+        }
+        $stored = is_file($file) ? trim((string) file_get_contents($file)) : '';
+        if (strlen($stored) >= 32) {
+            return $stored;
+        }
+
+        log_message('error', 'Device key secret could not be saved in ' . $dir . '. Set GRID_DEVICE_KEY_SECRET.');
+        return '';
     }
 
     public function userIdForGridId(string $gridId): int
@@ -223,9 +351,9 @@ class DevicePushService
             'room_url' => $this->roomUrl(),
             'url' => $this->chatUrl($conversationId, $callId),
             'timestamp' => (string) time(),
-        ]);
+        ], true);
         if ($sent > 0) {
-            log_message('info', 'FCM INCOMING_CALL dispatched to ' . $sent . ' token(s) for user ' . $calleeId . ' call_id ' . $callId . ' HTTP ' . $this->lastFcmResult['status']);
+            log_message('info', 'Push INCOMING_CALL dispatched to ' . $sent . ' token(s) for user ' . $calleeId . ' call_id ' . $callId . ' HTTP ' . $this->lastFcmResult['status']);
         }
 
         return [
@@ -254,11 +382,16 @@ class DevicePushService
             $conversationId = $this->directConversationId($callerId, $call['callee_id']);
         }
 
+        // VoIP only goes to the saved callee of this call. The caller's phone
+        // never rang through CallKit, and iOS penalises a VoIP push that is
+        // not reported as a call, so the caller keeps the FCM path.
+        $isCallee = $call['callee_id'] > 0 && $call['callee_id'] === $userId;
+
         if ($type === 'CALL_CANCELLED') {
             $this->pushToUser($userId, [
                 'type' => 'CALL_CANCELLED',
                 'call_id' => trim($callId),
-            ]);
+            ], $isCallee);
             return;
         }
 
@@ -268,7 +401,7 @@ class DevicePushService
             'caller_name' => $caller['name'],
             'caller_user_id' => $callerId > 0 ? (string) $callerId : '',
             'call_type' => $callType,
-        ]);
+        ], $isCallee);
     }
 
     /**
@@ -336,6 +469,24 @@ class DevicePushService
     }
 
     /**
+     * Data-only GPS start/stop. Sent to every FCM token registered for this
+     * user (POST /api/register_device_token). Not a topic. Not apns_voip.
+     *
+     * @param array<string, scalar> $data
+     * @return array{sent: int, http_code: int}
+     */
+    public function sendFieldTracking(int $userId, array $data): array
+    {
+        $data['type'] = 'field_tracking';
+        $sent = $this->pushToUser($userId, $data, false);
+
+        return [
+            'sent' => $sent,
+            'http_code' => (int) ($this->lastFcmResult['status'] ?? 0),
+        ];
+    }
+
+    /**
      * Chat pushes wait until the user has no open socket. Incoming calls do
      * not use this: the in-page socket cannot ring a locked or killed app.
      *
@@ -354,9 +505,16 @@ class DevicePushService
     }
 
     /**
+     * Sends to every token of the user. With $allowVoip (iOS callee of a
+     * call), INCOMING_CALL / CALL_CANCELLED / MISSED_CALL also go straight to
+     * APNs for each apns_voip token, because FCM cannot deliver VoIP pushes.
+     * When the VoIP INCOMING_CALL is accepted by APNs, that user's iOS FCM
+     * banner is skipped (CallKit rings instead). If APNs is not configured or
+     * fails, the FCM push is sent as before.
+     *
      * @param array<string, string> $data
      */
-    private function pushToUser(int $userId, array $data): int
+    private function pushToUser(int $userId, array $data, bool $allowVoip = false): int
     {
         if ($userId <= 0) {
             return 0;
@@ -370,23 +528,55 @@ class DevicePushService
             return 0;
         }
 
+        $type = (string) ($data['type'] ?? '');
+        $voipUsers = [];
+        if ($allowVoip && in_array($type, self::VOIP_TYPES, true)) {
+            foreach ($rows as $row) {
+                $token = trim((string) ($row['device_token'] ?? ''));
+                if ((string) ($row['token_type'] ?? '') !== self::VOIP_TOKEN_TYPE || $token === '' || isset($seen[$token])) {
+                    continue;
+                }
+                $seen[$token] = true;
+                try {
+                    $delivered = $this->sendApnsVoip($token, $data);
+                } catch (\Throwable $e) {
+                    $delivered = false;
+                    log_message('error', 'APNs VoIP push error: ' . $e->getMessage());
+                }
+                if ($delivered) {
+                    $voipUsers[(int) ($row['user_id'] ?? 0)] = true;
+                    $sent++;
+                }
+            }
+        }
+
         foreach ($rows as $row) {
             $tokenType = (string) ($row['token_type'] ?? '');
             $token = (string) ($row['device_token'] ?? '');
             if ($token === '' || isset($seen[$token])) {
                 continue;
             }
+            if ($tokenType === self::VOIP_TOKEN_TYPE) {
+                // VoIP tokens are only valid on APNs (handled above)
+                continue;
+            }
             if ($tokenType !== '' && $tokenType !== 'fcm') {
-                log_message('notice', 'Push skipped for token_type ' . $tokenType . ' on user ' . $userId . '. Only FCM is configured.');
+                log_message('notice', 'Push skipped for token_type ' . $tokenType . ' on user ' . $userId . '.');
+                continue;
+            }
+            $platform = strtolower(trim((string) ($row['platform'] ?? '')));
+            if ($type === 'INCOMING_CALL' && $platform === 'ios' && isset($voipUsers[(int) ($row['user_id'] ?? 0)])) {
+                // CallKit already rings from the VoIP push; a banner would duplicate it
+                log_message('info', 'FCM INCOMING_CALL banner skipped for iOS user ' . (int) ($row['user_id'] ?? 0) . ': VoIP push delivered.');
                 continue;
             }
             $seen[$token] = true;
-            $this->sendFcm($token, $data, strtolower(trim((string) ($row['platform'] ?? ''))));
+            $this->sendFcm($token, $data, $platform);
             $sent++;
         }
 
         if ($sent === 0) {
-            log_message('error', 'FCM not sent. user ' . $userId . ' has device rows but no fcm token. type ' . ($data['type'] ?? '') . '.');
+            log_message('error', 'Push not sent. user ' . $userId . ' has device rows but no usable token. type ' . $type . '.');
         }
 
         return $sent;
@@ -418,11 +608,14 @@ class DevicePushService
                     if ($token === '') {
                         continue;
                     }
+                    // Platform is unknown for this legacy column. Leaving it
+                    // empty attaches the apns block, which Android ignores,
+                    // so an iPhone stored here still gets a lock-screen banner.
                     $rows[] = [
                         'user_id' => (int) ($userRow[$idColumn] ?? 0),
                         'device_token' => $token,
                         'token_type' => 'fcm',
-                        'platform' => 'android',
+                        'platform' => '',
                     ];
                 }
             }
@@ -781,7 +974,9 @@ class DevicePushService
     private function apnsBlock(array $data): ?array
     {
         $type = $data['type'] ?? '';
-        if ($type === 'CALL_CANCELLED') {
+        if ($type === 'CALL_CANCELLED' || $type === 'field_tracking') {
+            // Silent data push. field_tracking must reach the background
+            // handler with no banner; a notification block would not start GPS.
             return [
                 'headers' => [
                     'apns-priority' => '5',
@@ -796,9 +991,9 @@ class DevicePushService
         }
 
         if ($type === 'INCOMING_CALL') {
-            $name = trim($data['caller_name'] ?? '') !== '' ? $data['caller_name'] : 'Efactor';
-            $title = ($data['call_type'] ?? '') === 'video' ? 'Incoming Video Call' : 'Incoming Audio Call';
-            $body = $name . ' is calling you...';
+            // iOS contract: title is the caller, body names the call type
+            $title = trim($data['caller_name'] ?? '') !== '' ? $data['caller_name'] : 'Efactor';
+            $body = ($data['call_type'] ?? '') === 'video' ? 'Incoming Video Call...' : 'Incoming Audio Call...';
         } elseif ($type === 'NEW_MESSAGE' || $type === 'CHAT_MESSAGE') {
             if (($data['locked'] ?? '') === '1') {
                 $title = 'GRID Chat';
@@ -823,7 +1018,18 @@ class DevicePushService
             'content-available' => 1,
         ];
         if ($type === 'INCOMING_CALL') {
-            $aps['category'] = 'INCOMING_CALL';
+            // iOS app registers this category for the Accept / Decline buttons
+            $aps['category'] = 'calls_category';
+        } elseif ($type === 'NEW_MESSAGE' || $type === 'CHAT_MESSAGE') {
+            $aps['badge'] = 1;
+            // Lets an iOS Notification Service Extension run (delivery receipt)
+            // even when the app was swiped away. Ignored if the app has none.
+            $aps['mutable-content'] = 1;
+            // Reply / Mark as read / Mute buttons. A locked chat gets no
+            // lock-screen Reply, so its content stays behind the chat lock.
+            if (($data['locked'] ?? '') !== '1') {
+                $aps['category'] = 'messages_category';
+            }
         }
 
         return [
@@ -850,6 +1056,9 @@ class DevicePushService
         }
 
         $data = $this->stringData($data);
+        if ($platform === 'ios') {
+            $data = $this->iosData($data);
+        }
         $isCall = ($data['type'] ?? '') === 'INCOMING_CALL';
         // No top-level notification block. Android delivers the data map to
         // the call handler. The apns block is only for Apple.
@@ -866,16 +1075,36 @@ class DevicePushService
             $message['android']['ttl'] = $isCall ? '60s' : '30s';
             $message['android']['direct_boot_ok'] = true;
         }
+        if (($data['type'] ?? '') === 'field_tracking') {
+            // Data-only, high priority. 1h TTL so a phone that was offline
+            // still receives start/stop; the app drops it when issued_at is stale.
+            $message['android']['ttl'] = '3600s';
+            $message['android']['direct_boot_ok'] = true;
+        }
         // Android stays data-only. The Apple banner is attached for an iOS
         // token, and also when the stored row has no platform.
         if ($platform !== 'android') {
             $apns = $this->apnsBlock($data);
             if ($apns !== null) {
                 $message['apns'] = $apns;
+                // A known iOS token also gets the top-level notification block
+                // (same text as the Apple alert). Android and legacy rows with
+                // no platform stay data-only so the Android handler still runs.
+                $alert = $apns['payload']['aps']['alert'] ?? null;
+                if ($platform === 'ios' && is_array($alert)) {
+                    $message['notification'] = [
+                        'title' => (string) ($alert['title'] ?? ''),
+                        'body' => (string) ($alert['body'] ?? ''),
+                    ];
+                }
             }
         }
 
         $result = $this->postFcmV1($account, $accessToken, $message);
+        if ($result['status'] === 400 && isset($message['notification']) && stripos($result['body'], 'notification') !== false) {
+            unset($message['notification']);
+            $result = $this->postFcmV1($account, $accessToken, $message);
+        }
         if ($result['status'] === 400 && stripos($result['body'], 'ttl') !== false) {
             unset($message['android']['ttl']);
             $result = $this->postFcmV1($account, $accessToken, $message);
@@ -913,6 +1142,323 @@ class DevicePushService
             'Authorization: Bearer ' . $accessToken,
             'Content-Type: application/json',
         ]);
+    }
+
+    /**
+     * Sends a PushKit (VoIP) push straight to APNs over HTTP/2 with a .p8
+     * token key. Returns true when APNs accepted it (HTTP 200).
+     *
+     * Settings (server only, never sent to the app):
+     *   APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID (topic becomes <bundle>.voip),
+     *   APNS_KEY_PATH (path to AuthKey_XXXX.p8) or APNS_PRIVATE_KEY (PEM text),
+     *   APNS_ENVIRONMENT = production (default) or sandbox.
+     * Or the same keys in app/Config/apns.json:
+     *   {"key_id","team_id","bundle_id","key_path","environment"}.
+     *
+     * @param array<string, string> $data
+     */
+    private function sendApnsVoip(string $token, array $data): bool
+    {
+        $config = $this->apnsConfig();
+        if ($config === null) {
+            return false;
+        }
+        if (!defined('CURL_VERSION_HTTP2') || !(curl_version()['features'] & CURL_VERSION_HTTP2)) {
+            log_message('error', 'APNs VoIP not sent: this PHP cURL build has no HTTP/2 support, which APNs requires.');
+            return false;
+        }
+
+        $storedToken = $token;
+        $token = strtolower(preg_replace('/[^0-9a-fA-F]/', '', $token) ?? '');
+        if ($token === '') {
+            return false;
+        }
+
+        $type = (string) ($data['type'] ?? '');
+        $payload = $this->stringData($data);
+        $ttl = $type === 'CALL_CANCELLED' ? 30 : 60;
+        $headers = [
+            'apns-push-type: voip',
+            'apns-topic: ' . $config['topic'],
+            'apns-priority: 10',
+            'apns-expiration: ' . (time() + $ttl),
+            'Content-Type: application/json',
+        ];
+
+        $hosts = $config['environment'] === 'sandbox'
+            ? ['https://api.sandbox.push.apple.com', 'https://api.push.apple.com']
+            : ['https://api.push.apple.com', 'https://api.sandbox.push.apple.com'];
+
+        $result = ['status' => 0, 'errno' => 0, 'body' => ''];
+        foreach ($hosts as $index => $host) {
+            $jwt = $this->apnsJwt($config, false);
+            if ($jwt === '') {
+                return false;
+            }
+            $result = $this->postApns($host . '/3/device/' . $token, $payload, array_merge($headers, ['Authorization: bearer ' . $jwt]));
+            $reason = $this->apnsReason($result['body']);
+
+            if ($result['status'] === 403 && in_array($reason, ['ExpiredProviderToken', 'InvalidProviderToken'], true)) {
+                $jwt = $this->apnsJwt($config, true);
+                if ($jwt === '') {
+                    return false;
+                }
+                $result = $this->postApns($host . '/3/device/' . $token, $payload, array_merge($headers, ['Authorization: bearer ' . $jwt]));
+                $reason = $this->apnsReason($result['body']);
+            }
+
+            // A debug (Xcode) build token only works on sandbox and a
+            // TestFlight / App Store token only on production: try the other host once.
+            if ($index === 0 && $result['status'] === 400 && $reason === 'BadDeviceToken') {
+                continue;
+            }
+            break;
+        }
+
+        $this->lastFcmResult = ['status' => $result['status'], 'body' => $result['body']];
+        $label = 'APNs VoIP ' . $type . ' token ' . substr($token, 0, 8) . '... HTTP ' . $result['status'] . ' curl ' . $result['errno'];
+        if ($result['status'] === 200) {
+            log_message('info', $label);
+            return true;
+        }
+
+        $reason = $this->apnsReason($result['body']);
+        log_message('error', $label . ' reason ' . ($reason !== '' ? $reason : substr($result['body'], 0, 200)));
+        if ($result['status'] === 410 || ($result['status'] === 400 && $reason === 'BadDeviceToken')) {
+            // 410 = app uninstalled / token no longer valid; BadDeviceToken failed on both hosts
+            $this->deleteToken($storedToken);
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, string> $payload
+     * @param string[] $headers
+     * @return array{status: int, errno: int, body: string}
+     */
+    private function postApns(string $url, array $payload, array $headers): array
+    {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_POSTFIELDS => json_encode($payload === [] ? new \stdClass() : $payload),
+            CURLOPT_HTTP_VERSION => defined('CURL_HTTP_VERSION_2TLS') ? CURL_HTTP_VERSION_2TLS : CURL_HTTP_VERSION_2_0,
+            CURLOPT_CONNECTTIMEOUT => 6,
+            CURLOPT_TIMEOUT => 12,
+        ]);
+        $this->applyCaBundle($ch);
+        $response = curl_exec($ch);
+        $errno = curl_errno($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return [
+            'status' => $status,
+            'errno' => $errno,
+            'body' => is_string($response) ? $response : '',
+        ];
+    }
+
+    private function apnsReason(string $body): string
+    {
+        $decoded = json_decode($body, true);
+
+        return is_array($decoded) ? trim((string) ($decoded['reason'] ?? '')) : '';
+    }
+
+    /**
+     * @return array{key_id: string, team_id: string, topic: string, environment: string, private_key: string}|null
+     */
+    private function apnsConfig(): ?array
+    {
+        if ($this->apnsConfig !== false) {
+            return $this->apnsConfig;
+        }
+        $this->apnsConfig = null;
+
+        $file = [];
+        $jsonPath = APPPATH . 'Config/apns.json';
+        if (is_file($jsonPath)) {
+            $decoded = json_decode((string) file_get_contents($jsonPath), true);
+            if (is_array($decoded)) {
+                $file = $decoded;
+            } else {
+                log_message('error', 'APNs: app/Config/apns.json is not valid JSON.');
+            }
+        }
+
+        $value = function (string $envName, string $fileKey) use ($file): string {
+            $env = function_exists('env') ? env($envName) : getenv($envName);
+            if (is_string($env) && trim($env) !== '') {
+                return trim($env);
+            }
+
+            return trim((string) ($file[$fileKey] ?? ''));
+        };
+
+        $keyId = $value('APNS_KEY_ID', 'key_id');
+        $teamId = $value('APNS_TEAM_ID', 'team_id');
+        $bundleId = $value('APNS_BUNDLE_ID', 'bundle_id');
+        $environment = strtolower($value('APNS_ENVIRONMENT', 'environment')) === 'sandbox' ? 'sandbox' : 'production';
+
+        $privateKey = $value('APNS_PRIVATE_KEY', 'private_key');
+        if ($privateKey !== '') {
+            $privateKey = str_replace('\n', "\n", $privateKey);
+        } else {
+            $keyPath = $value('APNS_KEY_PATH', 'key_path');
+            if ($keyPath !== '' && !preg_match('#^([A-Za-z]:[\\\\/]|/)#', $keyPath)) {
+                $keyPath = APPPATH . 'Config/' . $keyPath;
+            }
+            if ($keyPath === '' && $keyId !== '' && is_file(APPPATH . 'Config/AuthKey_' . $keyId . '.p8')) {
+                $keyPath = APPPATH . 'Config/AuthKey_' . $keyId . '.p8';
+            }
+            if ($keyPath !== '' && is_file($keyPath)) {
+                $privateKey = (string) file_get_contents($keyPath);
+            }
+        }
+
+        if ($keyId === '' || $teamId === '' || $bundleId === '' || trim($privateKey) === '') {
+            log_message('notice', 'APNs VoIP is not configured (APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID and the .p8 key are required). iOS calls fall back to FCM.');
+            return null;
+        }
+
+        $topic = substr($bundleId, -5) === '.voip' ? $bundleId : $bundleId . '.voip';
+        $this->apnsConfig = [
+            'key_id' => $keyId,
+            'team_id' => $teamId,
+            'topic' => $topic,
+            'environment' => $environment,
+            'private_key' => $privateKey,
+        ];
+
+        return $this->apnsConfig;
+    }
+
+    /**
+     * ES256 provider token. Apple accepts one for up to 60 minutes and rejects
+     * refreshing more than once every 20, so it is cached for 40.
+     *
+     * @param array{key_id: string, team_id: string, private_key: string} $config
+     */
+    private function apnsJwt(array $config, bool $forceNew): string
+    {
+        $cacheFile = WRITEPATH . 'cache/apns-jwt.json';
+        $now = time();
+        if (!$forceNew && is_file($cacheFile)) {
+            $cached = json_decode((string) @file_get_contents($cacheFile), true);
+            if (is_array($cached)
+                && ($cached['kid'] ?? '') === $config['key_id']
+                && ($cached['iss'] ?? '') === $config['team_id']
+                && (int) ($cached['iat'] ?? 0) > $now - 2400
+                && trim((string) ($cached['token'] ?? '')) !== '') {
+                return trim((string) $cached['token']);
+            }
+        }
+
+        $key = openssl_pkey_get_private($config['private_key']);
+        if ($key === false) {
+            log_message('error', 'APNs: the .p8 key could not be read. Check the file is the original AuthKey_' . $config['key_id'] . '.p8 from Apple.');
+            return '';
+        }
+
+        $input = $this->base64Url((string) json_encode(['alg' => 'ES256', 'kid' => $config['key_id']]))
+            . '.' . $this->base64Url((string) json_encode(['iss' => $config['team_id'], 'iat' => $now]));
+        $der = '';
+        if (!openssl_sign($input, $der, $key, OPENSSL_ALGO_SHA256)) {
+            log_message('error', 'APNs: signing the provider token with the .p8 key failed.');
+            return '';
+        }
+        $raw = $this->ecdsaDerToRaw($der);
+        if ($raw === '') {
+            log_message('error', 'APNs: the .p8 key did not produce an ES256 signature (is it an Apple EC P-256 key?).');
+            return '';
+        }
+
+        $jwt = $input . '.' . $this->base64Url($raw);
+        $dir = dirname($cacheFile);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        @file_put_contents($cacheFile, json_encode([
+            'kid' => $config['key_id'],
+            'iss' => $config['team_id'],
+            'iat' => $now,
+            'token' => $jwt,
+        ]), LOCK_EX);
+
+        return $jwt;
+    }
+
+    /**
+     * openssl_sign returns an ASN.1 DER ECDSA signature; JWT ES256 needs R || S (64 bytes).
+     */
+    private function ecdsaDerToRaw(string $der, int $partLength = 32): string
+    {
+        $length = strlen($der);
+        if ($length < 8 || ord($der[0]) !== 0x30) {
+            return '';
+        }
+        $offset = 2;
+        if (ord($der[1]) & 0x80) {
+            $offset += ord($der[1]) & 0x7f;
+        }
+
+        $raw = '';
+        for ($i = 0; $i < 2; $i++) {
+            if ($offset + 2 > $length || ord($der[$offset]) !== 0x02) {
+                return '';
+            }
+            $partLen = ord($der[$offset + 1]);
+            $offset += 2;
+            if ($offset + $partLen > $length) {
+                return '';
+            }
+            $part = ltrim(substr($der, $offset, $partLen), "\x00");
+            $offset += $partLen;
+            if (strlen($part) > $partLength) {
+                return '';
+            }
+            $raw .= str_pad($part, $partLength, "\x00", STR_PAD_LEFT);
+        }
+
+        return $raw;
+    }
+
+    /**
+     * Data keys the iOS app expects (CHAT_MESSAGE, url = chat API base).
+     * Only applied to tokens registered with platform "ios"; Android
+     * payloads are unchanged. The open-chat link moves to chat_url.
+     *
+     * @param array<string, string> $data
+     * @return array<string, string>
+     */
+    private function iosData(array $data): array
+    {
+        if (($data['type'] ?? '') !== 'NEW_MESSAGE') {
+            return $data;
+        }
+
+        $data['type'] = 'CHAT_MESSAGE';
+        if (isset($data['url'])) {
+            $data['chat_url'] = $data['url'];
+        }
+        $data['url'] = $this->apiUrl();
+
+        return $data;
+    }
+
+    private function apiUrl(): string
+    {
+        $url = GridWebSso::publicWebUrl(self::ROOM_PATH . '/api');
+        if ($url !== '') {
+            return $url;
+        }
+        helper('url');
+
+        return site_url(self::ROOM_PATH . '/api');
     }
 
     /**

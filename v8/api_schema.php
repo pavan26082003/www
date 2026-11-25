@@ -119,13 +119,9 @@ $schemaUpdatedAtEarly = is_array($schemaMeta) && isset($schemaMeta['updated_at']
 
 // Tiny revision-only probe — no ensure/normalize/full JSON (for future app short-circuit).
 if ($revisionOnly) {
-    $revision = 0;
-    if ($schemaUpdatedAtEarly !== '') {
-        $ts = strtotime($schemaUpdatedAtEarly);
-        if ($ts) {
-            $revision = (int) $ts;
-        }
-    }
+    $revision = function_exists('efactor_schema_revision')
+        ? efactor_schema_revision($schemaUpdatedAtEarly)
+        : 0;
     $revisionBody = json_encode([
         'status' => $revision > 0,
         'message' => $revision > 0 ? 'Schema revision' : 'Schema not found',
@@ -148,6 +144,50 @@ if ($revisionOnly) {
     exit();
 }
 
+// Sync linked pages before the cache lookup. A warm cache used to skip this,
+// so pages stayed hidden until somebody opened Studio and clicked Save Changes.
+try {
+    require_once __DIR__ . '/bootstrap_device_ui_schema.php';
+    if (function_exists('efactor_ensure_device_ui_schema')) {
+        efactor_ensure_device_ui_schema($model_no, $node_id);
+    }
+} catch (Throwable $exception) {
+    error_log('v8 auto schema sync failed: ' . $exception->getMessage());
+}
+
+$schemaAppearanceMode = 'system';
+try {
+    $appearanceNormalizer = dirname(__DIR__) . '/app/services/DeviceUiSchemaNormalizer.php';
+    if (!is_file($appearanceNormalizer)) {
+        $appearanceNormalizer = dirname(__DIR__) . '/app/Services/DeviceUiSchemaNormalizer.php';
+    }
+    if (!class_exists('\\App\\Services\\DeviceUiSchemaNormalizer', false) && is_file($appearanceNormalizer)) {
+        require_once $appearanceNormalizer;
+    }
+    $appearanceLibrary = dirname(__DIR__) . '/app/Libraries/AppAppearance.php';
+    if (!class_exists('\\App\\Libraries\\AppAppearance', false) && is_file($appearanceLibrary)) {
+        require_once $appearanceLibrary;
+    }
+    if (class_exists('\\App\\Services\\DeviceUiSchemaNormalizer', false) && class_exists('\\App\\Libraries\\AppAppearance', false)) {
+        $appearanceUserId = \App\Services\DeviceUiSchemaNormalizer::resolveRequestUserId();
+        if ($appearanceUserId > 0) {
+            $schemaAppearanceMode = \App\Libraries\AppAppearance::resolve($appearanceUserId);
+        }
+    }
+} catch (Throwable $exception) {
+    $schemaAppearanceMode = 'system';
+}
+if ($schemaAppearanceMode !== 'light' && $schemaAppearanceMode !== 'dark' && $schemaAppearanceMode !== 'system') {
+    $schemaAppearanceMode = 'system';
+}
+
+if ($schemaUpdatedAtEarly !== '') {
+    $schemaMetaAfterSync = $db->get_row($schemaMetaSql);
+    if (is_array($schemaMetaAfterSync) && isset($schemaMetaAfterSync['updated_at'])) {
+        $schemaUpdatedAtEarly = (string) $schemaMetaAfterSync['updated_at'];
+    }
+}
+
 $schemaCacheKey = '';
 $cachedBody = null;
 if ($schemaUpdatedAtEarly !== '') {
@@ -160,8 +200,10 @@ if ($schemaUpdatedAtEarly !== '') {
         $page_no,
         $wantCompact ? 'compact-v1' : 'full',
         $schemaUpdatedAtEarly,
+        'frame-index-v2',
+        'appearance-' . $schemaAppearanceMode,
     ]);
-    // 10 minutes: layout rarely changes; Studio save bumps updated_at and misses cache.
+    // 10 minutes: layout rarely changes; a sync or Studio save bumps updated_at and misses cache.
     $cachedBody = efactor_schema_cache_get($schemaCacheKey, 600);
 }
 
@@ -173,15 +215,6 @@ if (is_string($cachedBody) && $cachedBody !== '') {
     $body = $cachedBody;
     $servedFromCache = true;
 } else {
-    // Create/refresh from current pages+APIs before serving (cache miss / first publish).
-    try {
-        require_once __DIR__ . '/bootstrap_device_ui_schema.php';
-        if (function_exists('efactor_ensure_device_ui_schema')) {
-            efactor_ensure_device_ui_schema($model_no, $node_id);
-        }
-    } catch (Throwable $exception) {
-        error_log('v8 auto schema sync failed: ' . $exception->getMessage());
-    }
 
     $sql = "SELECT *
             FROM device_ui_schemas
@@ -313,12 +346,32 @@ $efactor_finalize_schema_response = static function (array $row, array $decoded)
         : trim((string) ($row['node_id'] ?? ''));
 
     try {
-        $normalizerFile = dirname(__DIR__) . '/app/services/DeviceUiSchemaNormalizer.php';
-        if (!is_file($normalizerFile)) {
-            $normalizerFile = dirname(__DIR__) . '/app/Services/DeviceUiSchemaNormalizer.php';
+        // Prefer lowercase services/ (repo path). Fall back to Services/ for hosts
+        // that only have the PSR-4 capitalised folder — never load both.
+        $normalizerCandidates = [
+            dirname(__DIR__) . '/app/services/DeviceUiSchemaNormalizer.php',
+            dirname(__DIR__) . '/app/Services/DeviceUiSchemaNormalizer.php',
+        ];
+        $normalizerFile = '';
+        foreach ($normalizerCandidates as $candidate) {
+            if (is_file($candidate)) {
+                $normalizerFile = $candidate;
+                break;
+            }
         }
-        if (!class_exists('\\App\\Services\\DeviceUiSchemaNormalizer', false) && is_file($normalizerFile)) {
-            require_once $normalizerFile;
+        if (!class_exists('\\App\\Services\\DeviceUiSchemaNormalizer', false) && $normalizerFile !== '') {
+            // Avoid leaking compile warnings into the JSON body.
+            $prevDisplay = ini_get('display_errors');
+            $prevReporting = error_reporting(E_ALL & ~E_WARNING & ~E_NOTICE & ~E_DEPRECATED);
+            ini_set('display_errors', '0');
+            try {
+                require_once $normalizerFile;
+            } finally {
+                if ($prevDisplay !== false) {
+                    ini_set('display_errors', (string) $prevDisplay);
+                }
+                error_reporting($prevReporting);
+            }
         }
         if (class_exists('\\App\\Services\\DeviceUiSchemaNormalizer', false)) {
             $schemaUserId = \App\Services\DeviceUiSchemaNormalizer::resolveRequestUserId();
@@ -328,6 +381,9 @@ $efactor_finalize_schema_response = static function (array $row, array $decoded)
                 $resolvedNodeId,
                 $schemaUserId
             );
+        } else {
+            error_log('v8 schema normalize skipped: DeviceUiSchemaNormalizer class not available'
+                . ($normalizerFile !== '' ? (' at ' . $normalizerFile) : ''));
         }
     } catch (Throwable $exception) {
         error_log('v8 schema normalize failed: ' . $exception->getMessage());
@@ -342,13 +398,9 @@ $efactor_finalize_schema_response = static function (array $row, array $decoded)
 
     // Additive revision for app layout cache (numeric; app skips re-sync when ≤ cached).
     // Does not remove any fields — older clients ignore unknown keys.
-    $revision = 0;
-    if ($schemaUpdatedAt !== '') {
-        $revisionTs = strtotime($schemaUpdatedAt);
-        if ($revisionTs) {
-            $revision = (int) $revisionTs;
-        }
-    }
+    $revision = function_exists('efactor_schema_revision')
+        ? efactor_schema_revision($schemaUpdatedAt)
+        : 0;
     if ($revision <= 0) {
         $revision = (int) time();
     }
@@ -509,6 +561,7 @@ if (!$servedFromCache) {
             $page_no,
             $wantCompact ? 'compact-v1' : 'full',
             $schemaUpdatedAt,
+            'frame-index-v2',
         ]);
         efactor_schema_cache_set($schemaCacheKey, $body);
     }

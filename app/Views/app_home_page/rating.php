@@ -3,6 +3,14 @@ helper('url');
 $apiBase = rtrim((string) ($apiBase ?? site_url('app-home-page/api')), '/');
 $logoUrlLight = trim((string) ($logoUrlLight ?? ($logoUrl ?? 'https://efactor.tech/assets/images/efactor-logo.png')));
 $logoUrlDark = trim((string) ($logoUrlDark ?? 'https://efactor.tech/assets/images/efactor-logo_light.png'));
+$appearanceMode = strtolower(trim((string) ($appearanceMode ?? 'system')));
+if (!in_array($appearanceMode, array('light', 'dark', 'system'), true)) {
+    $appearanceMode = 'system';
+}
+$accentColor = trim((string) ($accentColor ?? '#7c3aed'));
+if (!preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $accentColor)) {
+    $accentColor = '#7c3aed';
+}
 if ($logoUrlLight === '') {
     $logoUrlLight = 'https://efactor.tech/assets/images/efactor-logo.png';
 }
@@ -11,30 +19,55 @@ if ($logoUrlDark === '') {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-appearance="<?= esc($appearanceMode) ?>">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
   <title>Rating — eFactor</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <style>
     :root {
+      --accent: <?= esc($accentColor) ?>;
+      --star-on: #f5b942;
+    }
+    /* Light palette (Profile → Light, or System when OS is light) */
+    html[data-theme="light"] {
+      --bg: #f3f4f6;
+      --bg-glow: rgba(124, 58, 237, 0.10);
+      --bg-grad-a: #f8fafc;
+      --bg-grad-b: #eef2ff;
+      --bg-grad-c: #f1f5f9;
+      --surface: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --star-off: rgba(100, 116, 139, 0.45);
+      --line: rgba(15, 23, 42, 0.10);
+      --toast-bg: rgba(255, 255, 255, 0.96);
+      --focus: color-mix(in srgb, var(--accent, #7c3aed) 45%, transparent);
+    }
+    /* Dark palette (Profile → Dark, or System when OS is dark) */
+    html[data-theme="dark"] {
       --bg: #0b1220;
+      --bg-glow: rgba(124, 58, 237, 0.18);
+      --bg-grad-a: #0b1220;
+      --bg-grad-b: #111827;
+      --bg-grad-c: #07111f;
       --surface: #151b2e;
       --text: #f8fafc;
       --muted: #94a3b8;
-      --accent: #7c3aed;
       --star-off: rgba(148, 163, 184, 0.45);
-      --star-on: #f5b942;
       --line: rgba(255, 255, 255, 0.12);
+      --toast-bg: rgba(15, 23, 42, 0.95);
+      --focus: color-mix(in srgb, var(--accent, #7c3aed) 45%, transparent);
     }
     * { box-sizing: border-box; }
     html, body {
       margin: 0;
       min-height: 100%;
       font-family: Sora, Inter, system-ui, -apple-system, sans-serif;
-      background: radial-gradient(circle at 12% 18%, rgba(124, 58, 237, 0.18), transparent 30%),
-                  linear-gradient(160deg, #0b1220, #111827 55%, #07111f);
+      background: radial-gradient(circle at 12% 18%, var(--bg-glow), transparent 30%),
+                  linear-gradient(160deg, var(--bg-grad-a), var(--bg-grad-b) 55%, var(--bg-grad-c));
       color: var(--text);
     }
     body { padding: 20px 18px calc(28px + env(safe-area-inset-bottom)); }
@@ -52,12 +85,6 @@ if ($logoUrlDark === '') {
       object-fit: contain;
       border-radius: 0;
       background: transparent;
-    }
-    .brandbar span {
-      margin-left: auto;
-      color: var(--muted);
-      font-size: 13px;
-      font-weight: 600;
     }
     h1 { margin: 8px 0 4px; font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
     .sub { margin: 0 0 22px; color: var(--muted); font-size: 13px; line-height: 1.4; }
@@ -99,7 +126,8 @@ if ($logoUrlDark === '') {
       font-size: 14px;
       line-height: 1.4;
     }
-    textarea:focus { outline: 2px solid rgba(124, 58, 237, 0.45); outline-offset: 1px; }
+    textarea::placeholder { color: var(--muted); opacity: 0.9; }
+    textarea:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
     .send {
       width: 100%;
       border: 0;
@@ -121,7 +149,7 @@ if ($logoUrlDark === '') {
       left: 50%;
       bottom: 24px;
       transform: translateX(-50%);
-      background: rgba(15, 23, 42, 0.95);
+      background: var(--toast-bg);
       border: 1px solid var(--line);
       color: var(--text);
       padding: 10px 14px;
@@ -141,12 +169,11 @@ if ($logoUrlDark === '') {
     <div class="brandbar">
       <img
         id="ratingLogo"
-        src="<?= esc($logoUrlDark) ?>"
-        alt=""
+        src="<?= esc($logoUrlLight) ?>"
+        alt="eFactor"
         data-logo-light="<?= esc($logoUrlLight) ?>"
         data-logo-dark="<?= esc($logoUrlDark) ?>"
       >
-      <span>Account</span>
     </div>
     <h1>Rating</h1>
     <p class="sub">Select a star, then write what went wrong</p>
@@ -161,26 +188,37 @@ if ($logoUrlDark === '') {
   <script>
     (function () {
       var apiBase = <?= json_encode($apiBase) ?>;
+      var appearanceMode = <?= json_encode($appearanceMode) ?>;
       var stars = 0;
       var row = document.getElementById('starRow');
       var commentEl = document.getElementById('comment');
       var sendBtn = document.getElementById('sendBtn');
       var toast = document.getElementById('toast');
       var logoEl = document.getElementById('ratingLogo');
+      var root = document.documentElement;
 
-      function isDarkMode() {
+      function systemPrefersDark() {
         try {
           return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
         } catch (e) {
-          return true;
+          return false;
         }
       }
 
-      function syncRatingLogo() {
+      function resolveTheme() {
+        var mode = String(appearanceMode || 'system').toLowerCase();
+        if (mode === 'light' || mode === 'dark') return mode;
+        return systemPrefersDark() ? 'dark' : 'light';
+      }
+
+      function applyAppearance() {
+        var theme = resolveTheme();
+        root.setAttribute('data-theme', theme);
+        root.style.colorScheme = theme;
         if (!logoEl) return;
         var lightUrl = logoEl.getAttribute('data-logo-light') || 'https://efactor.tech/assets/images/efactor-logo.png';
         var darkUrl = logoEl.getAttribute('data-logo-dark') || 'https://efactor.tech/assets/images/efactor-logo_light.png';
-        var next = isDarkMode() ? darkUrl : lightUrl;
+        var next = theme === 'dark' ? darkUrl : lightUrl;
         if (next && logoEl.getAttribute('src') !== next) {
           logoEl.setAttribute('src', next);
         }
@@ -266,11 +304,16 @@ if ($logoUrlDark === '') {
           });
       });
 
-      syncRatingLogo();
+      applyAppearance();
       try {
         var mq = window.matchMedia('(prefers-color-scheme: dark)');
-        if (mq && mq.addEventListener) mq.addEventListener('change', syncRatingLogo);
-        else if (mq && mq.addListener) mq.addListener(syncRatingLogo);
+        var onOsChange = function () {
+          if (String(appearanceMode || 'system').toLowerCase() === 'system') {
+            applyAppearance();
+          }
+        };
+        if (mq && mq.addEventListener) mq.addEventListener('change', onOsChange);
+        else if (mq && mq.addListener) mq.addListener(onOsChange);
       } catch (e) {}
 
       renderStars();

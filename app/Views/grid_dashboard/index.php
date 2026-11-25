@@ -826,10 +826,27 @@ window.GRID_DASHBOARD_BOOT = {
     closeScanner();
     var avatar = headerAvatar();
     stage.innerHTML = '';
-    if (avatar.url) {
+    // Image-only preview. Never navigate to Profile / settings from here.
+    // Prefer a real photo URL; otherwise show the same letter already on the button.
+    var photoUrl = avatar.url;
+    if (photoUrl && !/\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(photoUrl)
+        && !/^data:image\//i.test(photoUrl)
+        && !/grid_initials\.php/i.test(photoUrl)
+        && /\/(profile|sign-?in|login|account)(\/|\?|#|$)/i.test(photoUrl)) {
+      photoUrl = '';
+    }
+    if (photoUrl) {
       var photo = document.createElement('img');
-      photo.src = avatar.url;
+      photo.src = photoUrl;
       photo.alt = 'Profile photo';
+      photo.addEventListener('error', function () {
+        stage.innerHTML = '';
+        var fallback = document.createElement('div');
+        fallback.className = 'gd-photo-fallback';
+        fallback.style.background = avatar.color;
+        fallback.textContent = avatar.initial;
+        stage.appendChild(fallback);
+      });
       stage.appendChild(photo);
     } else {
       var fallback = document.createElement('div');
@@ -1165,6 +1182,8 @@ window.GRID_DASHBOARD_BOOT = {
           openScanner();
           return;
         }
+        // Header avatar only: show the photo / initials. Never open Profile,
+        // Sign In, settings, or the in-app browser from this action id.
         if (actionId === 'navigate-profile') {
           openProfilePhoto();
           return;
