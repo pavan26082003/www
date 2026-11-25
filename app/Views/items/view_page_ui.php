@@ -512,20 +512,19 @@ if (!function_exists('view_ui_resolve_brand_logo_asset')) {
 $brand_logo_asset = view_ui_resolve_brand_logo_asset(
     (isset($brand_logo_asset) && is_array($brand_logo_asset)) ? $brand_logo_asset : []
 );
-// Only fill missing eFactor companions when the active mark is already the eFactor brand pair.
+// Always force-correct the official Efactor pair (do not trust stale/swapped companions).
 $brand_logo_is_efactor = ((string) ($brand_logo_asset['source'] ?? '') === 'cdn')
     || stripos((string) ($brand_logo_asset['url'] ?? ''), 'efactor-logo') !== false
     || stripos((string) ($brand_logo_asset['previewUrl'] ?? ''), 'efactor-logo') !== false
+    || stripos((string) ($brand_logo_asset['urlDark'] ?? ''), 'efactor-logo') !== false
     || stripos((string) ($brand_logo_asset['fileName'] ?? ''), 'efactor-logo') !== false;
 if ($brand_logo_is_efactor) {
-    if (empty($brand_logo_asset['url']) && empty($brand_logo_asset['previewUrl'])) {
-        $brand_logo_asset['url'] = 'https://efactor.tech/assets/images/efactor-logo.png';
-        $brand_logo_asset['previewUrl'] = 'https://efactor.tech/assets/images/efactor-logo.png';
-    }
-    if (empty($brand_logo_asset['urlDark']) && empty($brand_logo_asset['previewUrlDark'])) {
-        $brand_logo_asset['urlDark'] = 'https://efactor.tech/assets/images/efactor-logo_light.png';
-        $brand_logo_asset['previewUrlDark'] = 'https://efactor.tech/assets/images/efactor-logo_light.png';
-    }
+    $brand_logo_asset['url'] = 'https://efactor.tech/assets/images/efactor-logo.png';
+    $brand_logo_asset['previewUrl'] = 'https://efactor.tech/assets/images/efactor-logo.png';
+    $brand_logo_asset['urlDark'] = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+    $brand_logo_asset['previewUrlDark'] = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+    $brand_logo_asset['fileName'] = 'efactor-logo.png';
+    $brand_logo_asset['path'] = '/assets/images/efactor-logo.png';
 }
 $brand_logo_preview_url = (string) ($brand_logo_asset['previewUrl'] ?? ($brand_logo_asset['url'] ?? ''));
 $account_appearance_passed = strtolower(trim((string) ($account_appearance_mode ?? '')));
@@ -1516,6 +1515,21 @@ if (!function_exists('view_ui_pick_display_default')) {
     }
 }
 
+if (!function_exists('view_ui_is_protocol_bracket_dump')) {
+    function view_ui_is_protocol_bracket_dump($value)
+    {
+        if (is_array($value) || is_bool($value) || is_int($value) || is_float($value)) {
+            return false;
+        }
+        $text = trim((string) $value);
+        if ($text === '' || $text[0] !== '[') {
+            return false;
+        }
+
+        return (bool) preg_match('/^(\[[^\]]*\])+$/', $text);
+    }
+}
+
 if (!function_exists('view_ui_resolve_component_value')) {
     /**
      * Value shown on the card in place of the old UI-type caption. Only values that
@@ -1536,7 +1550,7 @@ if (!function_exists('view_ui_resolve_component_value')) {
         if (($value === '' || view_ui_value_looks_like_wire_padding($value)) && !empty($apiMeta['items']) && is_array($apiMeta['items'])) {
             foreach ($apiMeta['items'] as $item) {
                 $item = trim((string) $item);
-                if ($item !== '' && !view_ui_value_looks_like_wire_padding($item)) {
+                if ($item !== '' && !view_ui_value_looks_like_wire_padding($item) && !view_ui_is_protocol_bracket_dump($item)) {
                     $value = $item;
                     break;
                 }
@@ -1546,11 +1560,15 @@ if (!function_exists('view_ui_resolve_component_value')) {
         if (($value === '' || view_ui_value_looks_like_wire_padding($value)) && !empty($apiMeta['item_values']) && is_array($apiMeta['item_values'])) {
             foreach ($apiMeta['item_values'] as $item) {
                 $item = trim((string) $item);
-                if ($item !== '' && !view_ui_value_looks_like_wire_padding($item)) {
+                if ($item !== '' && !view_ui_value_looks_like_wire_padding($item) && !view_ui_is_protocol_bracket_dump($item)) {
                     $value = $item;
                     break;
                 }
             }
+        }
+
+        if (view_ui_is_protocol_bracket_dump($value)) {
+            $value = '';
         }
 
         if ($value === '' && is_numeric($apiMeta['minimum'] ?? null)) {
@@ -1655,6 +1673,9 @@ if (!function_exists('view_ui_match_icon_keyword_rules')) {
 if (!function_exists('view_ui_label_is_protocol_role')) {
     function view_ui_label_is_protocol_role($name)
     {
+        if (function_exists('view_ui_is_protocol_bracket_dump') && view_ui_is_protocol_bracket_dump($name)) {
+            return true;
+        }
         $name = strtolower(trim((string) $name));
         $name = str_replace(['_', '-'], ' ', $name);
 
@@ -2018,6 +2039,12 @@ if (!function_exists('view_ui_icon')) {
         pointer-events: auto;
         position: relative;
       }
+      body[data-studio-theme-mode="dark"] .desktop-flow-btn {
+        border-color: rgba(148, 163, 184, .28);
+        background: #1e293b;
+        color: #e2e8f0;
+        box-shadow: 0 10px 28px rgba(2, 6, 23, .4);
+      }
       .desktop-flow-btn svg { width: 17px; height: 17px; }
       .desktop-flow-studio { border-color: #C2410C; background: #C2410C; color: #fff; }
       .desktop-flow-actions-right {
@@ -2368,15 +2395,37 @@ if (!function_exists('view_ui_icon')) {
       text-align: left;
     }
 
+    /* Studio chrome follows account/studio theme mode (not OS alone). */
+    body[data-studio-theme-mode="dark"] {
+      background: linear-gradient(140deg, #050b16, #0b1220 55%, #111827);
+      color: #e2e8f0;
+      color-scheme: dark;
+    }
+    body[data-studio-theme-mode="dark"] .ui-studio,
+    body[data-studio-theme-mode="dark"] .icon-picker,
+    body[data-studio-theme-mode="dark"] .component-picker,
+    body[data-studio-theme-mode="dark"] .save-toast {
+      --ui-bg: #0B1220;
+      --ui-shell: #0F172A;
+      --ui-surface: #1E293B;
+      --ui-surface-2: #0F172A;
+      --ui-text: #F8FAFC;
+      --ui-muted: #94A3B8;
+      --ui-border: #334155;
+      --ui-border-color: #334155;
+      --ui-graphite: #020617;
+      color: #F8FAFC;
+    }
+    /* Fallback when studio mode unset: follow OS preference. */
     @media (prefers-color-scheme: dark) {
-      body {
+      body:not([data-studio-theme-mode="light"]) {
         background: linear-gradient(140deg, #050b16, #0b1220 55%, #111827);
         color: #e2e8f0;
       }
-      .ui-studio,
-      .icon-picker,
-      .component-picker,
-      .save-toast {
+      body:not([data-studio-theme-mode="light"]) .ui-studio,
+      body:not([data-studio-theme-mode="light"]) .icon-picker,
+      body:not([data-studio-theme-mode="light"]) .component-picker,
+      body:not([data-studio-theme-mode="light"]) .save-toast {
         --ui-bg: #0B1220;
         --ui-shell: #0F172A;
         --ui-surface: #1E293B;
@@ -2560,8 +2609,9 @@ if (!function_exists('view_ui_icon')) {
       padding: 16px;
       border-radius: calc(var(--ui-radius) + 4px);
       background:
-        linear-gradient(145deg, var(--ui-graphite), var(--ui-blue)),
-        var(--ui-graphite);
+        linear-gradient(145deg, var(--ui-accent), color-mix(in srgb, var(--ui-accent) 42%, #0F172A)),
+        var(--ui-accent);
+      color: #FFFFFF;
       box-shadow: 0 10px 28px rgba(15, 23, 42, .16);
     }
 
@@ -15655,12 +15705,16 @@ if (!function_exists('view_ui_icon')) {
         return '';
       }
       const labelElement = card ? card.querySelector('.field-label') : null;
-      return String(
+      const label = String(
         (override && override.title)
         || (labelElement ? labelElement.textContent.trim() : '')
         || (card && (card.dataset.componentLabel || card.dataset.paramName))
         || 'Parameter'
       );
+      if (typeof isBracketOptionListDisplay === 'function' && isBracketOptionListDisplay(label)) {
+        return '';
+      }
+      return label;
     }
 
     function validateCanonicalDeviceUiSchema(schema) {
@@ -16068,11 +16122,15 @@ if (!function_exists('view_ui_icon')) {
         if (!field || typeof field !== 'object') return field;
         const current = String(field.default_name || '').trim();
         const description = String(field.Field_description || field.field_description || '').trim();
-        if (!telemetryNameIsGeneric(current)) return field;
-        const nextLabel = !telemetryNameIsGeneric(description) ? description : (label && label.toLowerCase() !== 'frame' ? label : 'Value');
+        const currentIsDump = typeof isBracketOptionListDisplay === 'function' && isBracketOptionListDisplay(current);
+        const descriptionIsDump = typeof isBracketOptionListDisplay === 'function' && isBracketOptionListDisplay(description);
+        if (!telemetryNameIsGeneric(current) && !currentIsDump) return field;
+        const nextLabel = (!telemetryNameIsGeneric(description) && !descriptionIsDump)
+          ? description
+          : (label && label.toLowerCase() !== 'frame' ? label : 'Value');
         const next = Object.assign({}, field);
         next.default_name = nextLabel;
-        if (telemetryNameIsGeneric(description)) {
+        if (telemetryNameIsGeneric(description) || descriptionIsDump) {
           next.Field_description = nextLabel;
           next.field_description = nextLabel;
         }
@@ -16986,20 +17044,28 @@ if (!function_exists('view_ui_icon')) {
     function getParamDisplayValue(card, componentType, override, valueText) {
       const valueEl = card.querySelector('.field-value');
       const fieldText = valueEl ? valueEl.textContent.trim() : '';
-      if (override.value) return String(override.value);
+      const clean = function(raw) {
+        const text = raw == null ? '' : String(raw);
+        if (typeof isBracketOptionListDisplay === 'function' && isBracketOptionListDisplay(text)) {
+          const fallback = valueText == null ? '' : String(valueText);
+          return (fallback && !isBracketOptionListDisplay(fallback)) ? fallback : '';
+        }
+        return text;
+      };
+      if (override.value) return clean(override.value);
       const renderType = resolveParameterRenderType(componentType);
       if (renderType === 'dropdown') {
         const select = card.querySelector('.param-dropdown');
-        if (select) return String(select.value || '');
-        return String(valueText || '');
+        if (select) return clean(select.value || '');
+        return clean(valueText || '');
       }
       if (renderType === 'switch') {
         return parseToggleInitialValue(valueText) ? 'ON' : 'OFF';
       }
       if (renderType === 'slider' || renderType === 'powerGauge') {
-        return fieldText || String(valueText || '');
+        return clean(fieldText || String(valueText || ''));
       }
-      return fieldText || String(valueText || '');
+      return clean(fieldText || String(valueText || ''));
     }
 
     /**
@@ -22987,14 +23053,22 @@ if (!function_exists('view_ui_icon')) {
 
       // Theme-aware Efactor brand mark: light → efactor-logo.png, dark → efactor-logo_light.png.
       (function syncBrandLogoForTheme() {
-        const isDarkMode = String(theme.themeMode || '').toLowerCase() === 'dark';
-        const lightFallback = (brandLogo && (brandLogo.url || brandLogo.previewUrl)) || 'https://efactor.tech/assets/images/efactor-logo.png';
-        const darkFallback = (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png';
+        // Use account/OS preview darkness (not authored studioMode alone).
+        const isDarkMode = (typeof isPreviewDarkTheme === 'function')
+          ? isPreviewDarkTheme()
+          : (String(theme.themeMode || '').toLowerCase() === 'dark');
+        const lightFallback = 'https://efactor.tech/assets/images/efactor-logo.png';
+        const darkFallback = 'https://efactor.tech/assets/images/efactor-logo_light.png';
         queryPreviewAll('.brand-mark img').forEach(function(img) {
-          const lightUrl = img.getAttribute('data-logo-light') || lightFallback;
-          const darkUrl = img.getAttribute('data-logo-dark') || darkFallback;
-          if (!img.getAttribute('data-logo-light')) img.setAttribute('data-logo-light', lightUrl);
-          if (!img.getAttribute('data-logo-dark')) img.setAttribute('data-logo-dark', darkUrl);
+          let lightUrl = img.getAttribute('data-logo-light') || (brandLogo && (brandLogo.url || brandLogo.previewUrl)) || lightFallback;
+          let darkUrl = img.getAttribute('data-logo-dark') || (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || darkFallback;
+          // Guard against swapped/stale attributes for the official Efactor pair.
+          if (String(lightUrl).indexOf('efactor-logo_light') !== -1 || String(darkUrl).indexOf('efactor-logo.png') !== -1 && String(darkUrl).indexOf('efactor-logo_light') === -1) {
+            lightUrl = lightFallback;
+            darkUrl = darkFallback;
+          }
+          img.setAttribute('data-logo-light', lightUrl);
+          img.setAttribute('data-logo-dark', darkUrl);
           const next = isDarkMode ? darkUrl : lightUrl;
           if (next && img.getAttribute('src') !== next) {
             img.setAttribute('src', next);
@@ -24712,16 +24786,26 @@ if (!function_exists('view_ui_icon')) {
                 type: 'BrandBar',
                 visible: boolValue(currentTheme.brandVisible),
                 props: {
-                  logo: {
-                    src: (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || 'https://efactor.tech/assets/images/efactor-logo.png',
-                    url: (brandLogo && brandLogo.url) || 'https://efactor.tech/assets/images/efactor-logo.png',
-                    srcDark: (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
-                    urlDark: (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
-                    path: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.png',
-                    fileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.png',
-                    alt: (brandLogo && brandLogo.alt) || 'Efactor',
-                    fit: 'contain'
-                  },
+                  logo: (function() {
+                    const brandLightUrl = 'https://efactor.tech/assets/images/efactor-logo.png';
+                    const brandDarkUrl = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+                    const brandThemeDark = (typeof isPreviewDarkTheme === 'function')
+                      ? isPreviewDarkTheme()
+                      : (String(currentTheme.themeMode || '').toLowerCase() !== 'light');
+                    const brandActiveUrl = brandThemeDark ? brandDarkUrl : brandLightUrl;
+                    return {
+                      src: brandActiveUrl,
+                      url: brandActiveUrl,
+                      srcLight: brandLightUrl,
+                      urlLight: brandLightUrl,
+                      srcDark: brandDarkUrl,
+                      urlDark: brandDarkUrl,
+                      path: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.png',
+                      fileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.png',
+                      alt: (brandLogo && brandLogo.alt) || 'Efactor',
+                      fit: 'contain'
+                    };
+                  })(),
                   title: modelNo || 'Linked UI',
                   subtitle: normalizedPages.length + ' linked page' + (normalizedPages.length === 1 ? '' : 's'),
                   status: { visible: boolValue(currentTheme.showStatus), text: getDeviceConnectivityState().label, stateBinding: 'state.online', labelBinding: 'state.onlineLabel', color: getDeviceConnectivityState().online ? currentTheme.successColor : currentTheme.errorColor }
@@ -24833,8 +24917,10 @@ if (!function_exists('view_ui_icon')) {
             }
           })();
           const apiMeta = mergeParamMetaWithOverride(apiMetaRaw, override);
-          const labelText = override.title || (labelElement ? labelElement.textContent.trim() : (card.dataset.componentLabel || card.dataset.paramName));
-          const valueText = override.value || (valueElement ? valueElement.textContent.trim() : '');
+          let labelText = override.title || (labelElement ? labelElement.textContent.trim() : (card.dataset.componentLabel || card.dataset.paramName));
+          let valueText = override.value || (valueElement ? valueElement.textContent.trim() : '');
+          if (typeof isBracketOptionListDisplay === 'function' && isBracketOptionListDisplay(labelText)) labelText = '';
+          if (typeof isBracketOptionListDisplay === 'function' && isBracketOptionListDisplay(valueText)) valueText = '';
           const controlKind = isSwitch ? 'Switch' : (isRange ? 'Slider' : (isGauge ? (isPowerGauge ? 'AnimatedRadialGauge' : 'NeedleGauge') : (isSegmented ? 'SegmentedControl' : 'Action')));
           const rangeMin = apiMeta.minimum === null || typeof apiMeta.minimum === 'undefined' || apiMeta.minimum === '' ? 0 : parseFloat(apiMeta.minimum);
           const rangeMax = apiMeta.maximum === null || typeof apiMeta.maximum === 'undefined' || apiMeta.maximum === '' ? 255 : parseFloat(apiMeta.maximum);
@@ -25008,13 +25094,21 @@ if (!function_exists('view_ui_icon')) {
               required: true,
               visible: toBool(currentTheme.brandVisible),
               className: 'brand-strip',
-              brand: {
-                logoUrl: (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || 'https://efactor.tech/assets/images/efactor-logo.png',
-                logoUrlDark: (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
-                logoPath: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.png',
-                logoFileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.png',
-                alt: (brandLogo && brandLogo.alt) || 'Efactor'
-              },
+              brand: (function() {
+                const brandLightUrl = 'https://efactor.tech/assets/images/efactor-logo.png';
+                const brandDarkUrl = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+                const brandThemeDark = (typeof isPreviewDarkTheme === 'function')
+                  ? isPreviewDarkTheme()
+                  : (String(currentTheme.themeMode || '').toLowerCase() !== 'light');
+                return {
+                  logoUrl: brandThemeDark ? brandDarkUrl : brandLightUrl,
+                  logoUrlLight: brandLightUrl,
+                  logoUrlDark: brandDarkUrl,
+                  logoPath: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.png',
+                  logoFileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.png',
+                  alt: (brandLogo && brandLogo.alt) || 'Efactor'
+                };
+              })(),
               title: modelNo || 'Linked UI',
               subtitle: pageData.length + ' linked page' + (pageData.length === 1 ? '' : 's'),
               status: {
@@ -25148,9 +25242,9 @@ if (!function_exists('view_ui_icon')) {
           brandStrip: (function() {
             const brandThemeDark = (typeof isPreviewDarkTheme === 'function')
               ? isPreviewDarkTheme()
-              : (String(currentTheme.themeMode || '').toLowerCase() === 'dark');
-            const brandLightUrl = (brandLogo && (brandLogo.previewUrl || brandLogo.url)) || 'https://efactor.tech/assets/images/efactor-logo.png';
-            const brandDarkUrl = (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png';
+              : (String(currentTheme.themeMode || '').toLowerCase() !== 'light');
+            const brandLightUrl = 'https://efactor.tech/assets/images/efactor-logo.png';
+            const brandDarkUrl = 'https://efactor.tech/assets/images/efactor-logo_light.png';
             const brandActiveUrl = brandThemeDark ? brandDarkUrl : brandLightUrl;
             return '<div class="brand-mark"><img src="' + brandActiveUrl + '" alt="' + ((brandLogo && brandLogo.alt) || 'Efactor') + '" data-logo-light="' + brandLightUrl + '" data-logo-dark="' + brandDarkUrl + '"></div><div class="brand-copy"><strong>{{modelNo}}</strong><span>{{linkedPagesText}}</span></div><div class="online-state ' + (getDeviceConnectivityState().online ? 'is-online' : 'is-offline') + '" data-online-state="' + (getDeviceConnectivityState().online ? '1' : '0') + '">' + getDeviceConnectivityState().label + '</div>';
           })(),
@@ -25208,17 +25302,25 @@ if (!function_exists('view_ui_icon')) {
               { id: 'info', icon: 'info', label: 'Information' }
             ]
           },
-          brandStrip: {
-            visible: String(currentTheme.brandVisible) !== '0',
-            modelNo: modelNo,
-            showStatus: String(currentTheme.showStatus) !== '0',
-            statusText: getDeviceConnectivityState().label,
-            statusColor: getDeviceConnectivityState().online ? currentTheme.successColor : currentTheme.errorColor,
-            logoUrl: (brandLogo && brandLogo.url) || 'https://efactor.tech/assets/images/efactor-logo.png',
-            logoUrlDark: (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
-            logoPath: (brandLogo && brandLogo.path) || '',
-            logoFileName: (brandLogo && brandLogo.fileName) || ''
-          },
+          brandStrip: (function() {
+            const brandLightUrl = 'https://efactor.tech/assets/images/efactor-logo.png';
+            const brandDarkUrl = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+            const brandThemeDark = (typeof isPreviewDarkTheme === 'function')
+              ? isPreviewDarkTheme()
+              : (String(currentTheme.themeMode || '').toLowerCase() !== 'light');
+            return {
+              visible: String(currentTheme.brandVisible) !== '0',
+              modelNo: modelNo,
+              showStatus: String(currentTheme.showStatus) !== '0',
+              statusText: getDeviceConnectivityState().label,
+              statusColor: getDeviceConnectivityState().online ? currentTheme.successColor : currentTheme.errorColor,
+              logoUrl: brandThemeDark ? brandDarkUrl : brandLightUrl,
+              logoUrlLight: brandLightUrl,
+              logoUrlDark: brandDarkUrl,
+              logoPath: (brandLogo && brandLogo.path) || '',
+              logoFileName: (brandLogo && brandLogo.fileName) || ''
+            };
+          })(),
           cards: {
             backgroundColor: currentTheme.cardColor,
             borderColor: currentTheme.borderColor,
@@ -25513,10 +25615,10 @@ if (!function_exists('view_ui_icon')) {
           shell: { header: 'appBar', brand: 'brandBar', content: '$navigation.activePage', footer: 'pagePager' }
         },
         theme: {
-          mode: resolveAccountAppearanceMode(),
-          defaultMode: resolveAccountAppearanceMode(),
-          followSystem: resolveAccountAppearanceMode() === 'system',
-          watchOsAppearance: resolveAccountAppearanceMode() === 'system',
+          mode: 'system',
+          defaultMode: 'system',
+          followSystem: true,
+          watchOsAppearance: true,
           studioMode: currentTheme.themeMode || 'dark',
           tokens: {
             colors: {
@@ -26448,18 +26550,26 @@ if (!function_exists('view_ui_icon')) {
           }, [
             node('row', 'brand_strip_row', { mainAxisAlignment: 'spaceBetween', crossAxisAlignment: 'center', spacing: 12 }, {}, [
               node('image', 'brand_mark', (function() {
-                // Always publish light as primary + dark as companion so the app can
-                // switch on account appearance (do not bake studio themeMode into src).
-                const brandLightUrl = (brandLogo && (brandLogo.url || brandLogo.previewUrl)) || 'https://efactor.tech/assets/images/efactor-logo.png';
-                const brandDarkUrl = (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png';
+                // Flutter typically renders `src` only. Put the theme-correct mark in src,
+                // and keep light/dark companions for clients that do switch.
+                const brandLightUrl = 'https://efactor.tech/assets/images/efactor-logo.png';
+                const brandDarkUrl = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+                const brandThemeDark = (typeof isPreviewDarkTheme === 'function')
+                  ? isPreviewDarkTheme()
+                  : (String((typeof systemDisplayTheme === 'function' ? systemDisplayTheme(currentTheme) : currentTheme).themeMode || currentTheme.themeMode || '').toLowerCase() !== 'light');
+                const brandActiveUrl = brandThemeDark ? brandDarkUrl : brandLightUrl;
                 return {
-                  src: brandLightUrl,
-                  url: brandLightUrl,
+                  src: brandActiveUrl,
+                  url: brandActiveUrl,
+                  srcLight: brandLightUrl,
+                  urlLight: brandLightUrl,
                   srcDark: brandDarkUrl,
                   urlDark: brandDarkUrl,
-                  logoUrl: brandLightUrl,
+                  logoUrl: brandActiveUrl,
+                  logoUrlLight: brandLightUrl,
                   logoUrlDark: brandDarkUrl,
-                  imageUrl: brandLightUrl,
+                  imageUrl: brandActiveUrl,
+                  imageUrlLight: brandLightUrl,
                   imageUrlDark: brandDarkUrl,
                   path: (brandLogo && brandLogo.path) || '/assets/images/efactor-logo.png',
                   fileName: (brandLogo && brandLogo.fileName) || 'efactor-logo.png',
@@ -26741,8 +26851,11 @@ if (!function_exists('view_ui_icon')) {
             wifiStatus: scanApiUrlWithNode,
             wifiProvisioning: 'wifiProvisioning',
             infoPage: 'infoPage',
-            brandLogo: (brandLogo && brandLogo.url) || 'https://efactor.tech/assets/images/efactor-logo.png',
-            brandLogoDark: (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
+            brandLogo: ((typeof isPreviewDarkTheme === 'function' ? isPreviewDarkTheme() : String(currentTheme.themeMode || '').toLowerCase() !== 'light')
+              ? 'https://efactor.tech/assets/images/efactor-logo_light.png'
+              : 'https://efactor.tech/assets/images/efactor-logo.png'),
+            brandLogoLight: 'https://efactor.tech/assets/images/efactor-logo.png',
+            brandLogoDark: 'https://efactor.tech/assets/images/efactor-logo_light.png',
             parameters: schemaApiUrlWithNode,
             deviceInfo: schemaApiUrlWithNode,
             editPageLinking: editPageLinkingUrl
@@ -26752,10 +26865,10 @@ if (!function_exists('view_ui_icon')) {
         theme: {
           // Runtime appearance: system follows the phone; light/dark stay in-app.
           // Studio palette stays in colors below; switchable presets on save/serve.
-          mode: resolveAccountAppearanceMode(),
-          defaultMode: resolveAccountAppearanceMode(),
-          followSystem: resolveAccountAppearanceMode() === 'system',
-          watchOsAppearance: resolveAccountAppearanceMode() === 'system',
+          mode: 'system',
+          defaultMode: 'system',
+          followSystem: true,
+          watchOsAppearance: true,
           studioMode: currentTheme.themeMode || 'dark',
           backgroundType: currentTheme.backgroundType || 'gradient',
           tokens: {
@@ -26892,10 +27005,10 @@ if (!function_exists('view_ui_icon')) {
         },
         state: {
           global: {
-            themeMode: resolveAccountAppearanceMode(),
-            themeServerControlled: resolveAccountAppearanceMode() !== 'system',
-            followSystem: resolveAccountAppearanceMode() === 'system',
-            watchOsAppearance: resolveAccountAppearanceMode() === 'system'
+            themeMode: 'system',
+            themeServerControlled: false,
+            followSystem: true,
+            watchOsAppearance: true
           },
           activePageIndex: activeIndex,
           activePageId: activePageId,
@@ -27137,16 +27250,24 @@ if (!function_exists('view_ui_icon')) {
               { id: 'info', icon: 'info', label: 'Information', action: 'openDeviceInfo', schemaPath: 'infoPage', entryScreen: 'gatewayDetails', iconColor: headerChrome.actionForeground }
             ]
           },
-          brandStrip: {
-            visible: bool(currentTheme.brandVisible),
-            modelNo: modelNo,
-            showStatus: bool(currentTheme.showStatus),
-            statusText: getDeviceConnectivityState().label,
-            logoUrl: (brandLogo && brandLogo.url) || 'https://efactor.tech/assets/images/efactor-logo.png',
-            logoUrlDark: (brandLogo && (brandLogo.urlDark || brandLogo.previewUrlDark)) || 'https://efactor.tech/assets/images/efactor-logo_light.png',
-            logoPath: (brandLogo && brandLogo.path) || '',
-            logoFileName: (brandLogo && brandLogo.fileName) || ''
-          },
+          brandStrip: (function() {
+            const brandLightUrl = 'https://efactor.tech/assets/images/efactor-logo.png';
+            const brandDarkUrl = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+            const brandThemeDark = (typeof isPreviewDarkTheme === 'function')
+              ? isPreviewDarkTheme()
+              : (String(currentTheme.themeMode || '').toLowerCase() !== 'light');
+            return {
+              visible: bool(currentTheme.brandVisible),
+              modelNo: modelNo,
+              showStatus: bool(currentTheme.showStatus),
+              statusText: getDeviceConnectivityState().label,
+              logoUrl: brandThemeDark ? brandDarkUrl : brandLightUrl,
+              logoUrlLight: brandLightUrl,
+              logoUrlDark: brandDarkUrl,
+              logoPath: (brandLogo && brandLogo.path) || '',
+              logoFileName: (brandLogo && brandLogo.fileName) || ''
+            };
+          })(),
           pageContent: {
             heroVisible: false,
             nameCardVisible: false,

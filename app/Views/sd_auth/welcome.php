@@ -1,6 +1,17 @@
 <?= $this->extend('layouts/sd_auth') ?>
 <?= $this->section('content') ?>
 
+<script>
+(function(){var d=document,r=d.documentElement,mq=window.matchMedia?window.matchMedia('(prefers-color-scheme: dark)'):null,forced=null;try{var q=new URLSearchParams(window.location.search).get('theme');if(q==='light'||q==='dark')forced=q}catch(e){}
+function pick(){return forced||(mq&&!mq.matches?'light':'dark')}
+function logos(){var t=r.getAttribute('data-theme')==='light'?'light':'dark',a=d.querySelectorAll('img[data-logo-light][data-logo-dark]'),i,s;for(i=0;i<a.length;i++){s=a[i].getAttribute('data-logo-'+t);if(s&&a[i].getAttribute('src')!==s)a[i].setAttribute('src',s)}}
+function apply(t){t=t==='light'?'light':'dark';if(r.getAttribute('data-theme')!==t)r.setAttribute('data-theme',t);r.style.colorScheme=t;logos();try{window.dispatchEvent(new CustomEvent('eftheme',{detail:{theme:t}}))}catch(e){}}
+apply(pick());
+if(window.MutationObserver){new MutationObserver(logos).observe(r,{attributes:true,attributeFilter:['data-theme']});var po=new MutationObserver(logos);po.observe(d,{childList:true,subtree:true});d.addEventListener('DOMContentLoaded',function(){po.disconnect();logos()})}else{d.addEventListener('DOMContentLoaded',logos)}
+if(mq&&!forced){var ch=function(e){apply(e.matches?'dark':'light')};if(mq.addEventListener)mq.addEventListener('change',ch);else if(mq.addListener)mq.addListener(ch)}
+window.efTheme={set:apply,logos:logos,current:function(){return r.getAttribute('data-theme')}}})();
+</script>
+
 <style>
 :root{
   --ef-green:#202940;
@@ -255,6 +266,27 @@ body{
   .ef-brand{top:25px}.ef-actions{bottom:74px}.ef-legal-links{bottom:calc(16px + env(safe-area-inset-bottom));gap:10px}
 }
 </style>
+<style>
+/* eFactor theme: dark is the default, light overrides follow */
+html{background:#0B1220}
+body{background:linear-gradient(100deg,rgba(11,18,32,.9),rgba(17,24,39,.84)),url("<?= base_url('assets/images/efactor-ecosystem.jpg') ?>") center/cover fixed no-repeat}
+@media(max-width:430px){body{background:#101827}}
+html[data-theme="light"]{background:#E8EDF2}
+html[data-theme="light"] body{background:linear-gradient(100deg,rgba(241,246,242,.82),rgba(233,241,235,.67)),url("<?= base_url('assets/images/efactor-ecosystem.jpg') ?>") center/cover fixed no-repeat}
+@media(max-width:430px){html[data-theme="light"] body{background:#E8EDF2}}
+html[data-theme="light"] .ef-phone{background:#E2E8F0}
+@media(min-width:431px){html[data-theme="light"] .ef-phone{box-shadow:0 30px 80px rgba(32,41,64,.18),0 0 0 1px rgba(32,41,64,.14)}}
+html[data-theme="light"] .ef-screen{background:linear-gradient(to bottom,rgba(255,255,255,.72),rgba(244,247,250,.86) 45%,rgba(232,237,242,.96)),url("<?= base_url('assets/images/efactor-ecosystem.jpg') ?>") center/cover no-repeat}
+html[data-theme="light"] .ef-screen::after{background:radial-gradient(circle at 78% 18%,rgba(255,255,255,.4),transparent 24%),linear-gradient(to top,rgba(255,255,255,.35),transparent 46%)}
+html[data-theme="light"] .ef-brand-fallback{color:#202940;text-shadow:none}
+html[data-theme="light"] .ef-kicker{color:#202940;background:rgba(255,255,255,.7);border-color:rgba(32,41,64,.2)}
+html[data-theme="light"] .ef-title{color:#141C2E;text-shadow:none}
+html[data-theme="light"] .ef-description{color:rgba(27,35,54,.82)}
+html[data-theme="light"] .ef-primary{border-color:rgba(32,41,64,.3);box-shadow:0 14px 30px rgba(32,41,64,.24),inset 0 1px 0 rgba(255,255,255,.16)}
+html[data-theme="light"] .ef-secondary{color:#202940}
+html[data-theme="light"] .ef-secondary span{border-bottom-color:rgba(32,41,64,.5)}
+html[data-theme="light"] .ef-legal-links a{color:#334155}
+</style>
 
 <div class="ef-page">
 
@@ -284,8 +316,10 @@ body{
     <main class="ef-screen" aria-labelledby="welcomeTitle">
       <div class="ef-brand">
         <img src="https://efactor.tech/assets/images/efactor-logo_light.png"
+             data-logo-light="https://efactor.tech/assets/images/efactor-logo.png"
+             data-logo-dark="https://efactor.tech/assets/images/efactor-logo_light.png"
              alt="Efactor"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+             onerror="this.style.display='none';var n=this.nextElementSibling;if(n)n.style.display='block';">
         <!-- <span class="ef-brand-fallback" style="display:none">efactor</span> -->
       </div>
 

@@ -11,25 +11,87 @@ if (!in_array($appearanceMode, array('light', 'dark', 'system'), true)) {
     $appearanceMode = 'system';
 }
 $hasPhoto = $avatarUrl !== '';
+$logoUrlLight = trim((string) ($logoUrlLight ?? ($logoUrl ?? 'https://efactor.tech/assets/images/efactor-logo.png')));
+$logoUrlDark = trim((string) ($logoUrlDark ?? 'https://efactor.tech/assets/images/efactor-logo_light.png'));
+if ($logoUrlLight === '') {
+    $logoUrlLight = 'https://efactor.tech/assets/images/efactor-logo.png';
+}
+if ($logoUrlDark === '') {
+    $logoUrlDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en" data-appearance="<?= esc($appearanceMode) ?>">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="light dark">
   <title>Profile picture — eFactor</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script>
+    // Resolve theme before first paint (avoids a flash); full logic runs again at end of body.
+    (function () {
+      var mode = <?= json_encode($appearanceMode) ?>;
+      var dark = mode === 'dark';
+      if (mode !== 'light' && mode !== 'dark') {
+        try { dark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); } catch (e) {}
+      }
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+    })();
+  </script>
   <style>
+    /* Dark palette (Profile → Dark, or System when OS is dark). Also the pre-JS fallback. */
+    :root,
+    html[data-theme="dark"] {
+      --bg: #0b141a;
+      --surface: #1b242b;
+      --surface-alt: #111b21;
+      --chip: #1b242b;
+      --text: #e9edef;
+      --muted: #8696a0;
+      --line: rgba(233, 237, 239, 0.12);
+      --line-strong: #8696a0;
+      --link: #53bdeb;
+      --press: rgba(255, 255, 255, 0.06);
+      --handle: rgba(233, 237, 239, 0.28);
+      --toast-bg: rgba(17, 27, 33, 0.96);
+      --shadow-sheet: 0 -10px 40px rgba(0, 0, 0, 0.45);
+      --shadow-edit: 0 6px 16px rgba(0, 0, 0, 0.35);
+      --shutter: #e9edef;
+      --shutter-ring: rgba(233, 237, 239, 0.28);
+      --focus: rgba(83, 189, 235, 0.55);
+    }
+    /* Light palette (Profile → Light, or System when OS is light) */
+    html[data-theme="light"] {
+      --bg: #f3f4f6;
+      --surface: #ffffff;
+      --surface-alt: #f8fafc;
+      --chip: #e2e8f0;
+      --text: #0f172a;
+      --muted: #556274;
+      --line: rgba(15, 23, 42, 0.10);
+      --line-strong: #556274;
+      --link: #0369a1;
+      --press: rgba(15, 23, 42, 0.06);
+      --handle: rgba(15, 23, 42, 0.22);
+      --toast-bg: rgba(255, 255, 255, 0.96);
+      --shadow-sheet: 0 -10px 40px rgba(15, 23, 42, 0.12);
+      --shadow-edit: 0 6px 16px rgba(15, 23, 42, 0.18);
+      --shutter: #0f172a;
+      --shutter-ring: rgba(15, 23, 42, 0.20);
+      --focus: rgba(3, 105, 161, 0.45);
+    }
     * { box-sizing: border-box; }
     html, body {
       margin: 0;
       min-height: 100%;
       font-family: Sora, Inter, system-ui, -apple-system, sans-serif;
-      background: #0b141a;
-      color: #e9edef;
+      background: var(--bg);
+      color: var(--text);
       touch-action: manipulation;
     }
+    button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
     body {
       min-height: 100vh;
       display: flex;
@@ -42,23 +104,40 @@ $hasPhoto = $avatarUrl !== '';
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       padding: 28px 18px 18px;
-      background: #0b141a;
+      background: var(--bg);
       position: relative;
+    }
+    .brandbar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+    }
+    .brandbar img {
+      width: auto;
+      height: 40px;
+      max-width: 180px;
+      object-fit: contain;
+      border-radius: 0;
+      background: transparent;
+      display: block;
     }
     .photo {
       width: 168px;
       height: 168px;
       border-radius: 999px;
       overflow: visible;
-      background: #1b242b;
+      background: var(--chip);
       border: 0;
       position: relative;
       display: grid;
       place-items: center;
-      color: #8696a0;
+      color: var(--muted);
       font-size: 48px;
+      margin-top: auto;
+      margin-bottom: auto;
     }
     .photo-clip {
       width: 100%;
@@ -67,7 +146,8 @@ $hasPhoto = $avatarUrl !== '';
       overflow: hidden;
       display: grid;
       place-items: center;
-      background: #1b242b;
+      background: var(--chip);
+      border: 1px solid var(--line);
     }
     .photo img {
       width: 100%;
@@ -83,26 +163,27 @@ $hasPhoto = $avatarUrl !== '';
       width: 42px;
       height: 42px;
       border-radius: 999px;
-      background: #1b242b;
-      color: #8696a0;
+      background: var(--chip);
+      color: var(--muted);
       display: grid;
       place-items: center;
-      border: 2px solid #8696a0;
-      box-shadow: 0 6px 16px rgba(0,0,0,.35);
+      border: 2px solid var(--line-strong);
+      box-shadow: var(--shadow-edit);
       font-size: 15px;
     }
-    .edit i { color: #8696a0; }
+    .edit i { color: var(--muted); }
     .sheet {
-      background: #1b242b;
+      background: var(--surface);
       border-radius: 18px 18px 0 0;
+      border-top: 1px solid var(--line);
       padding: 8px 0 calc(14px + env(safe-area-inset-bottom));
-      box-shadow: 0 -10px 40px rgba(0,0,0,.45);
+      box-shadow: var(--shadow-sheet);
     }
     .handle {
       width: 42px;
       height: 4px;
       border-radius: 999px;
-      background: rgba(233,237,239,.28);
+      background: var(--handle);
       margin: 2px auto 8px;
     }
     .header {
@@ -124,7 +205,7 @@ $hasPhoto = $avatarUrl !== '';
       border: 0;
       border-radius: 999px;
       background: transparent;
-      color: #8696a0;
+      color: var(--muted);
       display: grid;
       place-items: center;
       cursor: pointer;
@@ -133,14 +214,14 @@ $hasPhoto = $avatarUrl !== '';
     .title {
       font-size: 17px;
       font-weight: 600;
-      color: #e9edef;
+      color: var(--text);
     }
     .list { display: flex; flex-direction: column; padding: 4px 0 8px; }
     .option {
       width: 100%;
       border: 0;
       background: transparent;
-      color: #e9edef;
+      color: var(--text);
       display: flex;
       align-items: center;
       gap: 18px;
@@ -150,22 +231,22 @@ $hasPhoto = $avatarUrl !== '';
       cursor: pointer;
       font: inherit;
     }
-    .option:active { background: rgba(255,255,255,.04); }
+    .option:active { background: var(--press); }
     .option i {
       width: 28px;
       text-align: center;
       font-size: 20px;
-      color: #8696a0;
+      color: var(--muted);
     }
-    .option span { font-size: 16px; color: #e9edef; }
+    .option span { font-size: 16px; color: var(--text); }
     .toast {
       position: fixed;
       left: 50%;
       bottom: 24px;
       transform: translateX(-50%);
-      background: rgba(17, 27, 33, 0.96);
-      border: 1px solid rgba(233,237,239,.12);
-      color: #e9edef;
+      background: var(--toast-bg);
+      border: 1px solid var(--line);
+      color: var(--text);
       padding: 10px 14px;
       border-radius: 999px;
       font-size: 13px;
@@ -181,7 +262,7 @@ $hasPhoto = $avatarUrl !== '';
       position: fixed;
       inset: 0;
       z-index: 40;
-      background: #0b141a;
+      background: var(--bg);
       display: flex;
       flex-direction: column;
     }
@@ -198,36 +279,37 @@ $hasPhoto = $avatarUrl !== '';
       justify-content: space-between;
       gap: 12px;
       padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
-      background: #1b242b;
+      background: var(--surface);
+      border-top: 1px solid var(--line);
     }
     .cam-cancel, .crop-btn {
       border: 0;
       background: transparent;
-      color: #8696a0;
+      color: var(--muted);
       font: inherit;
       font-size: 15px;
       font-weight: 600;
       cursor: pointer;
       padding: 8px 4px;
     }
-    .crop-btn.is-done { color: #53bdeb; }
+    .crop-btn.is-done { color: var(--link); }
     .cam-shutter {
       width: 58px;
       height: 58px;
       border: 0;
       border-radius: 999px;
-      background: #e9edef;
+      background: var(--shutter);
       display: grid;
       place-items: center;
       cursor: pointer;
-      box-shadow: 0 0 0 3px rgba(233,237,239,.28);
+      box-shadow: 0 0 0 3px var(--shutter-ring);
       padding: 0;
     }
     .cam-shutter span {
       width: 46px;
       height: 46px;
       border-radius: 999px;
-      border: 3px solid #1b242b;
+      border: 3px solid var(--surface);
       display: block;
     }
     .crop-stage {
@@ -284,15 +366,16 @@ $hasPhoto = $avatarUrl !== '';
       justify-content: center;
       gap: 14px;
       padding: 10px 18px;
-      background: #111b21;
+      background: var(--surface-alt);
+      border-top: 1px solid var(--line);
     }
     .crop-zoom button {
       width: 36px;
       height: 36px;
-      border: 0;
+      border: 1px solid var(--line);
       border-radius: 999px;
-      background: #1b242b;
-      color: #8696a0;
+      background: var(--chip);
+      color: var(--muted);
       display: grid;
       place-items: center;
       cursor: pointer;
@@ -301,12 +384,21 @@ $hasPhoto = $avatarUrl !== '';
     .crop-zoom input[type="range"] {
       flex: 1;
       max-width: 220px;
-      accent-color: #8696a0;
+      accent-color: var(--link);
     }
   </style>
 </head>
 <body>
   <div class="stage">
+    <div class="brandbar">
+      <img
+        id="profileLogo"
+        src="<?= esc($logoUrlLight) ?>"
+        alt="eFactor"
+        data-logo-light="<?= esc($logoUrlLight) ?>"
+        data-logo-dark="<?= esc($logoUrlDark) ?>"
+      >
+    </div>
     <div class="photo" id="photo">
       <div class="photo-clip" id="photoClip">
         <?php if ($hasPhoto): ?>
@@ -338,6 +430,9 @@ $hasPhoto = $avatarUrl !== '';
   <script>
     (function () {
       var apiBase = <?= json_encode($apiBase) ?>;
+      var appearanceMode = <?= json_encode($appearanceMode) ?>;
+      var logoEl = document.getElementById('profileLogo');
+      var root = document.documentElement;
       var toast = document.getElementById('toast');
       var closeBtn = document.getElementById('closeBtn');
       var cameraFile = document.getElementById('cameraFile');
@@ -345,6 +440,33 @@ $hasPhoto = $avatarUrl !== '';
       var stream = null;
       var cropState = null;
       var OUTPUT_SIZE = 640;
+
+      function systemPrefersDark() {
+        try {
+          return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function resolveTheme() {
+        var mode = String(appearanceMode || 'system').toLowerCase();
+        if (mode === 'light' || mode === 'dark') return mode;
+        return systemPrefersDark() ? 'dark' : 'light';
+      }
+
+      function applyAppearance() {
+        var theme = resolveTheme();
+        root.setAttribute('data-theme', theme);
+        root.style.colorScheme = theme;
+        if (!logoEl) return;
+        var lightUrl = logoEl.getAttribute('data-logo-light') || 'https://efactor.tech/assets/images/efactor-logo.png';
+        var darkUrl = logoEl.getAttribute('data-logo-dark') || 'https://efactor.tech/assets/images/efactor-logo_light.png';
+        var next = theme === 'dark' ? darkUrl : lightUrl;
+        if (next && logoEl.getAttribute('src') !== next) {
+          logoEl.setAttribute('src', next);
+        }
+      }
 
       function showToast(msg) {
         toast.textContent = msg;
@@ -811,6 +933,18 @@ $hasPhoto = $avatarUrl !== '';
       });
 
       closeBtn.addEventListener('click', returnToProfile);
+
+      applyAppearance();
+      try {
+        var mq = window.matchMedia('(prefers-color-scheme: dark)');
+        var onOsChange = function () {
+          if (String(appearanceMode || 'system').toLowerCase() === 'system') {
+            applyAppearance();
+          }
+        };
+        if (mq && mq.addEventListener) mq.addEventListener('change', onOsChange);
+        else if (mq && mq.addListener) mq.addListener(onOsChange);
+      } catch (e) {}
     })();
   </script>
 </body>

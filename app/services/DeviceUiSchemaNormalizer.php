@@ -195,6 +195,10 @@ class DeviceUiSchemaNormalizer
         // After frame display sync: direction buttons follow the byte, and
         // raw [08][08] / 00 / 01 text is not a card title.
         $schema = self::repairDirectionControls($schema);
+        // Last: sno_asperui / item_values tables must not remain in captions or values.
+        if (self::loadDisplaySanitizer()) {
+            $schema = DeviceUiDisplaySanitizer::stripLeakedProtocolBracketText($schema);
+        }
 
         return $schema;
     }
@@ -639,16 +643,32 @@ class DeviceUiSchemaNormalizer
         }
         foreach ($candidates as $candidate) {
             $text = trim((string) $candidate);
-            if ($text !== '' && !self::labelIsProtocolRole($text)) {
+            if ($text !== '' && !self::labelIsProtocolRole($text) && !self::textIsProtocolBracketDump($text)) {
                 return $text;
             }
         }
 
-        return $parameter;
+        return self::textIsProtocolBracketDump($parameter) ? '' : $parameter;
+    }
+
+    private static function textIsProtocolBracketDump($value): bool
+    {
+        if (is_array($value) || is_bool($value) || is_int($value) || is_float($value)) {
+            return false;
+        }
+        $text = trim((string) $value);
+        if ($text === '' || $text[0] !== '[') {
+            return false;
+        }
+
+        return (bool) preg_match('/^(\[[^\]]*\])+$/', $text);
     }
 
     private static function labelIsProtocolRole($name): bool
     {
+        if (self::textIsProtocolBracketDump($name)) {
+            return true;
+        }
         $name = strtolower(trim((string) $name));
         $name = str_replace(['_', '-'], ' ', $name);
 
@@ -1859,6 +1879,27 @@ class DeviceUiSchemaNormalizer
             $schema['theme']['themeMode'] = $activeMode;
         }
         $schema = self::applyAccountPaletteToExistingColors($schema, $activeMode);
+        // Header and value colors were painted from the shared model palette.
+        // Repaint them for this request only so one phone's Light does not keep
+        // another phone's Dark surfaces. Keys stay the same.
+        if ($activeMode === 'light' || $activeMode === 'dark') {
+            $schema = self::applyCanonicalHeader($schema);
+            $schema = self::applyCanonicalValueColors($schema);
+            if (isset($schema['ui']['widgetTree']) && is_array($schema['ui']['widgetTree'])) {
+                self::paintWidgetChrome($schema['ui']['widgetTree'], $activeMode);
+            }
+            if (isset($schema['extensions']['serverDrivenUi']) && is_array($schema['extensions']['serverDrivenUi'])) {
+                self::paintWidgetChrome($schema['extensions']['serverDrivenUi'], $activeMode);
+            }
+            if (isset($schema['extensions']['universalUi']) && is_array($schema['extensions']['universalUi'])) {
+                self::paintWidgetChrome($schema['extensions']['universalUi'], $activeMode);
+            }
+            foreach (array('designSystem', 'mobileView', 'controls', 'pages') as $chromeKey) {
+                if (isset($schema[$chromeKey]) && is_array($schema[$chromeKey])) {
+                    self::paintWidgetChrome($schema[$chromeKey], $activeMode);
+                }
+            }
+        }
 
         if (!isset($schema['state']) || !is_array($schema['state'])) {
             $schema['state'] = array();
@@ -2997,22 +3038,22 @@ class DeviceUiSchemaNormalizer
     {
         $current = trim((string) (isset($field['default_name']) ? $field['default_name'] : ''));
         $description = trim((string) (isset($field['Field_description']) ? $field['Field_description'] : (isset($field['field_description']) ? $field['field_description'] : '')));
-        if (!self::telemetryNameIsGeneric($current) && $current !== '') {
+        if (!self::telemetryNameIsGeneric($current) && $current !== '' && !self::textIsProtocolBracketDump($current)) {
             return $current;
         }
-        if (!self::telemetryNameIsGeneric($description) && $description !== '') {
+        if (!self::telemetryNameIsGeneric($description) && $description !== '' && !self::textIsProtocolBracketDump($description)) {
             return $description;
         }
         $raw = isset($field['asperui_value']) ? trim((string) $field['asperui_value']) : '';
-        if ($raw !== '' && !self::telemetryNameIsGeneric($raw) && !preg_match('/^[0-9A-Fa-f]+$/', $raw)) {
+        if ($raw !== '' && !self::telemetryNameIsGeneric($raw) && !self::textIsProtocolBracketDump($raw) && !preg_match('/^[0-9A-Fa-f]+$/', $raw)) {
             return $raw;
         }
         $parameterName = trim((string) $parameterName);
-        if ($parameterName !== '' && strcasecmp($parameterName, 'frame') !== 0) {
+        if ($parameterName !== '' && strcasecmp($parameterName, 'frame') !== 0 && !self::textIsProtocolBracketDump($parameterName)) {
             return $parameterName;
         }
 
-        return $current !== '' && !self::telemetryNameIsGeneric($current) ? $current : 'Value';
+        return $current !== '' && !self::telemetryNameIsGeneric($current) && !self::textIsProtocolBracketDump($current) ? $current : 'Value';
     }
 
     private static function choiceListOrNull($value)
@@ -5666,6 +5707,19 @@ class DeviceUiSchemaNormalizer
 
     private static function resolveTopbarColor(array $schema)
     {
+        $mode = strtolower(trim((string) ($schema['theme']['mode'] ?? '')));
+        $themedTopbar = self::colorAt($schema, ['theme', 'colors', 'topbar']);
+        if ($mode === 'light') {
+            return $themedTopbar ?: '#FFFFFF';
+        }
+        if ($mode === 'dark') {
+            if ($themedTopbar !== null && self::colorLuminance($themedTopbar) < 160) {
+                return $themedTopbar;
+            }
+
+            return '#020617';
+        }
+
         $candidates = [];
         $paths = [
             ['designSystem', 'colors', 'topbar'],
@@ -5704,6 +5758,115 @@ class DeviceUiSchemaNormalizer
         }
 
         return '#0F172A';
+    }
+
+    /**
+     * Swap only existing surface and text colors on the widget tree.
+     * Button, icon, status, and accent fills are left alone.
+     *
+     * @param array<string, mixed> $node
+     */
+    private static function paintWidgetChrome(&$node, string $mode, int $depth = 0): void
+    {
+        if (!is_array($node) || $depth > 60 || ($mode !== 'light' && $mode !== 'dark')) {
+            return;
+        }
+
+        $id = strtolower(trim((string) ($node['id'] ?? '')));
+        $skip = $id !== '' && (
+            strpos($id, 'button') !== false
+            || strpos($id, 'icon') !== false
+            || strpos($id, 'toggle') !== false
+            || strpos($id, 'online') !== false
+            || strpos($id, 'badge') !== false
+            || strpos($id, 'power') !== false
+            || strpos($id, 'send') !== false
+            || strpos($id, 'wifi') !== false
+        );
+        if (!$skip) {
+            $surfaceMap = $mode === 'light'
+                ? array(
+                    '0B1220' => '#F8FAFC',
+                    '111827' => '#EEF2F7',
+                    '0F172A' => '#F8FAFC',
+                    '1E293B' => '#FFFFFF',
+                    '020617' => '#FFFFFF',
+                    '0B0F17' => '#F8FAFC',
+                )
+                : array(
+                    'F8FAFC' => '#0B1220',
+                    'EEF2F7' => '#111827',
+                    'F1F5F9' => '#111827',
+                    'FFFFFF' => '#0F172A',
+                    'E2E8F0' => '#334155',
+                );
+            $textMap = $mode === 'light'
+                ? array(
+                    'F8FAFC' => '#0F172A',
+                    'E2E8F0' => '#0F172A',
+                    '94A3B8' => '#64748B',
+                )
+                : array(
+                    '0F172A' => '#F8FAFC',
+                    '1E293B' => '#F8FAFC',
+                    '64748B' => '#94A3B8',
+                );
+            $surfaceKeys = array('backgroundColor', 'background', 'fillColor', 'cardColor', 'shellColor', 'surface', 'topbar');
+            $textKeys = array('color', 'textColor', 'foregroundColor', 'titleColor', 'mutedText', 'subtitleColor');
+            foreach (array('style', 'properties', 'props') as $bag) {
+                if (!isset($node[$bag]) || !is_array($node[$bag])) {
+                    continue;
+                }
+                foreach ($surfaceKeys as $key) {
+                    if (!array_key_exists($key, $node[$bag]) || !is_string($node[$bag][$key])) {
+                        continue;
+                    }
+                    $hex = self::normalizeHex($node[$bag][$key]);
+                    if ($hex !== '' && isset($surfaceMap[$hex])) {
+                        $node[$bag][$key] = $surfaceMap[$hex];
+                    }
+                }
+                foreach ($textKeys as $key) {
+                    if (!array_key_exists($key, $node[$bag]) || !is_string($node[$bag][$key])) {
+                        continue;
+                    }
+                    $hex = self::normalizeHex($node[$bag][$key]);
+                    if ($hex !== '' && isset($textMap[$hex])) {
+                        $node[$bag][$key] = $textMap[$hex];
+                    }
+                }
+            }
+            foreach ($surfaceKeys as $key) {
+                if (!array_key_exists($key, $node) || !is_string($node[$key])) {
+                    continue;
+                }
+                $hex = self::normalizeHex($node[$key]);
+                if ($hex !== '' && isset($surfaceMap[$hex])) {
+                    $node[$key] = $surfaceMap[$hex];
+                }
+            }
+        }
+
+        foreach ($node as $key => &$child) {
+            if (!is_array($child) || self::schemaWalkSkipKey($key)) {
+                continue;
+            }
+            self::paintWidgetChrome($child, $mode, $depth + 1);
+        }
+        unset($child);
+    }
+
+    private static function normalizeHex($value): string
+    {
+        $raw = strtoupper(preg_replace('/[^0-9A-F]/', '', (string) $value));
+        if (strlen($raw) === 8) {
+            $raw = substr($raw, -6);
+        }
+        if (strlen($raw) === 3) {
+            $raw = $raw[0] . $raw[0] . $raw[1] . $raw[1] . $raw[2] . $raw[2];
+        }
+
+        return strlen($raw) === 6 ? $raw : '';
     }
 
     private static function applyCanonicalHeader(array $schema)

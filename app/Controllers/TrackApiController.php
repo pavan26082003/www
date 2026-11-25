@@ -143,8 +143,10 @@ class TrackApiController extends Controller
 
     /**
      * POST /api/track/command
-     * Admin or the user themselves. Sends a data-only FCM start/stop to the
-     * user's registered device tokens. Does not embed the policy body.
+     * Silent data-only FCM start/stop to the user's registered device tokens.
+     * Payload contract (all string values):
+     * type, action, app_id, tenant_id, user_id, device_id, command_id, issued_at
+     * Empty device_id = all of the user's devices.
      */
     public function command()
     {
@@ -155,9 +157,12 @@ class TrackApiController extends Controller
 
         $body = $this->jsonBody();
         $action = strtolower($this->str($body['action'] ?? '', 16));
-        $appId = $this->str($body['app_id'] ?? '');
+        $appId = $this->str($body['app_id'] ?? 'efactor_field_tracker');
         $tenantId = $this->str($body['tenant_id'] ?? '');
-        $deviceId = $this->str($body['device_id'] ?? '', 191);
+        // Empty string is intentional: app treats empty device_id as all devices.
+        $deviceId = array_key_exists('device_id', $body)
+            ? $this->str($body['device_id'], 191)
+            : '';
         $targetId = (int) ($body['user_id'] ?? 0);
         if ($targetId <= 0) {
             $targetId = (int) $user['id'];
@@ -165,9 +170,6 @@ class TrackApiController extends Controller
 
         if (!in_array($action, ['start', 'stop'], true)) {
             return $this->jsonFail('action must be start or stop', 422);
-        }
-        if ($appId === '' || $tenantId === '') {
-            return $this->jsonFail('app_id and tenant_id are required', 422);
         }
         if (!$this->callerMayCommand((int) $user['id'], $targetId)) {
             return $this->jsonFail('You cannot command this user', 403);
@@ -177,14 +179,31 @@ class TrackApiController extends Controller
         }
 
         $resolvedTenant = $this->track->resolveTenantIdForUser($targetId);
-        if ($resolvedTenant !== $tenantId) {
+        if ($tenantId === '') {
+            $tenantId = $resolvedTenant;
+        } elseif ($resolvedTenant !== $tenantId) {
             return $this->jsonFail('tenant_id does not match this user', 422);
         }
+        if ($appId === '' || $tenantId === '') {
+            return $this->jsonFail('app_id and tenant_id are required', 422);
+        }
 
+        // Ensure background.enabled=true so device can keep tracking when backgrounded.
         $this->track->ensureTenantPolicy($appId, $tenantId);
+        $this->track->ensureBackgroundEnabled($appId, $tenantId);
         $policy = $this->track->resolveEffectivePolicy($appId, $tenantId, $deviceId, (string) $targetId);
         $version = (string) ($policy['version'] ?? '1');
 
+        $commandId = $this->str($body['command_id'] ?? '', 64);
+        if ($commandId === '') {
+            $commandId = 'ft_' . bin2hex(random_bytes(8));
+        }
+        $issuedAt = $this->str($body['issued_at'] ?? '', 32);
+        if ($issuedAt === '' || !ctype_digit($issuedAt)) {
+            $issuedAt = (string) time();
+        }
+
+        // Exact app contract — every FCM data value must be a string.
         $data = [
             'type' => 'field_tracking',
             'action' => $action,
@@ -192,9 +211,9 @@ class TrackApiController extends Controller
             'tenant_id' => $tenantId,
             'user_id' => (string) $targetId,
             'device_id' => $deviceId,
+            'command_id' => $commandId,
+            'issued_at' => $issuedAt,
             'v' => $version,
-            'command_id' => 'ft_' . bin2hex(random_bytes(8)),
-            'issued_at' => (string) time(),
         ];
 
         $push = new DevicePushService();

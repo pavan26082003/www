@@ -1140,12 +1140,16 @@ class AppHomePageModel
                 $schema['components']['home-header']['logo'] = array();
             }
             $logo =& $schema['components']['home-header']['logo'];
-            $logo['imageUrl'] = $logoLight;
+            $logoActive = ($mode === 'dark') ? $logoDark : $logoLight;
+            // Flutter often renders `src` only — bake the active appearance into src.
+            $logo['imageUrl'] = $logoActive;
             $logo['imageUrlLight'] = $logoLight;
             $logo['imageUrlDark'] = $logoDark;
-            $logo['logoUrl'] = $logoLight;
+            $logo['logoUrl'] = $logoActive;
+            $logo['logoUrlLight'] = $logoLight;
             $logo['logoUrlDark'] = $logoDark;
-            $logo['src'] = $logoLight;
+            $logo['src'] = $logoActive;
+            $logo['srcLight'] = $logoLight;
             $logo['srcDark'] = $logoDark;
             $logo['themeAware'] = true;
             unset($logo);
@@ -1489,19 +1493,26 @@ class AppHomePageModel
             unset($welcomeAvatar);
         }
 
-        // Theme logos: light mode → efactor-logo.png, dark mode → efactor-logo_light.png.
-        // Always publish both keys so stale stored schemas still switch.
+        // Theme logos: light → efactor-logo.png, dark → efactor-logo_light.png.
+        // Bake active mark into src (Flutter often ignores srcDark).
         if (isset($schema['components']['home-header']) && is_array($schema['components']['home-header'])) {
             $logoLight = 'https://efactor.tech/assets/images/efactor-logo.png';
             $logoDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+            $logoMode = 'system';
+            if (isset($schema['meta']['themeMode'])) {
+                $logoMode = strtolower(trim((string) $schema['meta']['themeMode']));
+            }
+            $logoActive = ($logoMode === 'dark') ? $logoDark : $logoLight;
             if (!isset($schema['components']['home-header']['logo']) || !is_array($schema['components']['home-header']['logo'])) {
                 $schema['components']['home-header']['logo'] = array();
             }
             $homeLogo =& $schema['components']['home-header']['logo'];
-            $homeLogo['logoUrl'] = $logoLight;
+            $homeLogo['logoUrl'] = $logoActive;
+            $homeLogo['logoUrlLight'] = $logoLight;
             $homeLogo['imageUrlLight'] = $logoLight;
-            $homeLogo['imageUrl'] = $logoLight;
-            $homeLogo['src'] = $logoLight;
+            $homeLogo['imageUrl'] = $logoActive;
+            $homeLogo['src'] = $logoActive;
+            $homeLogo['srcLight'] = $logoLight;
             $homeLogo['logoUrlDark'] = $logoDark;
             $homeLogo['imageUrlDark'] = $logoDark;
             $homeLogo['srcDark'] = $logoDark;

@@ -2781,9 +2781,16 @@ private function collectDeviceUiApiComponents(array $frames, $parameterName = ''
             // response/error cards still publish a complete deviceFrame in the schema.
             $fieldDescription = trim((string) ($field['Field_description'] ?? $field['field_description'] ?? ''));
             $defaultName = trim((string) ($field['default_name'] ?? ''));
+            if ($this->deviceUiDisplayLooksLikeBracketList($defaultName)) {
+                $defaultName = '';
+            }
+            if ($this->deviceUiDisplayLooksLikeBracketList($fieldDescription)) {
+                $fieldDescription = '';
+            }
             if (($fieldDescription === '' || strcasecmp($fieldDescription, 'Data') === 0)
                 && $defaultName !== ''
                 && strcasecmp($defaultName, 'Data') !== 0
+                && !$this->deviceUiDisplayLooksLikeBracketList($defaultName)
             ) {
                 $fieldDescription = $defaultName;
             } elseif ($fieldDescription === '') {
@@ -3067,6 +3074,16 @@ private function buildDeviceUiFrameFieldList(array $row, $prefix)
         $fieldDescription = $description !== '' ? $description : $defaultName;
         if (in_array($prefix, ['resp', 'error'], true) && $this->deviceUiTelemetryNameIsGeneric($fieldDescription)) {
             $fieldDescription = $defaultName;
+        }
+        // defaultvalue sometimes holds the raw sno_asperui / item_values table
+        // ("[00][01]…"). That is not a field name.
+        if ($this->deviceUiDisplayLooksLikeBracketList($defaultName)) {
+            $defaultName = $description !== '' ? $description : ('field_' . ($index + 1));
+        }
+        if ($this->deviceUiDisplayLooksLikeBracketList($fieldDescription)) {
+            $fieldDescription = ($description !== '' && !$this->deviceUiDisplayLooksLikeBracketList($description))
+                ? $description
+                : 'Data';
         }
         $fieldLevel = strtolower(trim((string) ($fieldLevels[$index] ?? 'bytewise')));
         if ($fieldLevel !== 'bitwise') {
@@ -3567,6 +3584,9 @@ private function deviceUiMultiComponentLabel(array $componentMeta, $parameterNam
 
 private function deviceUiLabelIsProtocolRole($name)
 {
+    if ($this->deviceUiDisplayLooksLikeBracketList($name)) {
+        return true;
+    }
     $name = strtolower(trim((string) $name));
     $name = str_replace(['_', '-'], ' ', $name);
 
@@ -11434,6 +11454,7 @@ private function loadDeviceUiLiveProductContext($modelno, $nodeId)
         'user_id' => $userId,
         'sim_based' => $simBased,
         'brand_logo' => $brandLogoAsset['url'],
+        'brand_logo_light' => $brandLogoAsset['url'],
         'brand_logo_dark' => $brandLogoDarkUrl,
         'device_image' => $origin . '/files/brand_logo/' . $this->resolveDeviceUiDeviceImageFile($modelNumber),
         'Need_Help' => $helpUrl,
@@ -13297,10 +13318,10 @@ private function deviceUiTelemetryLabel(array $field, $parameterName)
 {
     $current = trim((string) ($field['default_name'] ?? ''));
     $description = trim((string) ($field['Field_description'] ?? $field['field_description'] ?? ''));
-    if ($current !== '' && !$this->deviceUiTelemetryNameIsGeneric($current)) {
+    if ($current !== '' && !$this->deviceUiTelemetryNameIsGeneric($current) && !$this->deviceUiDisplayLooksLikeBracketList($current)) {
         return $current;
     }
-    if ($description !== '' && !$this->deviceUiTelemetryNameIsGeneric($description)) {
+    if ($description !== '' && !$this->deviceUiTelemetryNameIsGeneric($description) && !$this->deviceUiDisplayLooksLikeBracketList($description)) {
         return $description;
     }
     $parameterName = trim((string) $parameterName);
@@ -15046,49 +15067,123 @@ private function stripDeviceUiNameCardNodes(&$node, $depth = 0)
 
 private function schemaDeviceUiBrandLogoAsset(array $brandLogo)
 {
-    $lightUrl = $brandLogo['url'] ?? 'https://efactor.tech/assets/images/efactor-logo.png';
+    $cdnLight = 'https://efactor.tech/assets/images/efactor-logo.png';
+    $cdnDark = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+    $lightUrl = trim((string) ($brandLogo['url'] ?? ($brandLogo['previewUrl'] ?? '')));
     $darkUrl = trim((string) ($brandLogo['urlDark'] ?? ($brandLogo['previewUrlDark'] ?? '')));
-    if ($darkUrl === '') {
-        $darkUrl = $this->deviceUiBrandLogoDarkUrl($brandLogo, $this->deviceUiPublicOrigin(), '');
-    }
-    if ($darkUrl === '') {
-        $darkUrl = 'https://efactor.tech/assets/images/efactor-logo_light.png';
+    $fileName = strtolower(trim((string) ($brandLogo['fileName'] ?? basename(parse_url($lightUrl, PHP_URL_PATH) ?: ''))));
+    $isEfactorCdn = ((string) ($brandLogo['source'] ?? '') === 'cdn')
+        || stripos($lightUrl, 'efactor-logo') !== false
+        || stripos($darkUrl, 'efactor-logo') !== false
+        || in_array($fileName, ['efactor-logo.png', 'efactor-logo.jpg', 'efactor-logo_light.png'], true);
+
+    // Always normalize the official Efactor pair (never trust swapped/stale companions).
+    if ($isEfactorCdn) {
+        $lightUrl = $cdnLight;
+        $darkUrl = $cdnDark;
+    } else {
+        if ($lightUrl === '') {
+            $lightUrl = $cdnLight;
+        }
+        if ($darkUrl === '') {
+            $darkUrl = $this->deviceUiBrandLogoDarkUrl($brandLogo, $this->deviceUiPublicOrigin(), '');
+        }
+        if ($darkUrl === '') {
+            $darkUrl = $cdnDark;
+        }
     }
 
     return [
-        'fileName' => $brandLogo['fileName'] ?? 'efactor-logo.png',
-        'path' => $brandLogo['path'] ?? '/assets/images/efactor-logo.png',
+        'fileName' => $isEfactorCdn ? 'efactor-logo.png' : ($brandLogo['fileName'] ?? 'efactor-logo.png'),
+        'path' => $isEfactorCdn ? '/assets/images/efactor-logo.png' : ($brandLogo['path'] ?? '/assets/images/efactor-logo.png'),
         'url' => $lightUrl,
-        'previewUrl' => $brandLogo['previewUrl'] ?? $lightUrl,
+        'previewUrl' => $lightUrl,
         'urlDark' => $darkUrl,
-        'previewUrlDark' => $brandLogo['previewUrlDark'] ?? $darkUrl,
+        'previewUrlDark' => $darkUrl,
+        'urlLight' => $lightUrl,
+        'previewUrlLight' => $lightUrl,
         'alt' => $brandLogo['alt'] ?? 'Brand',
-        'source' => $brandLogo['source'] ?? 'cdn',
+        'source' => $brandLogo['source'] ?? ($isEfactorCdn ? 'cdn' : 'cdn'),
         'usage' => $brandLogo['usage'] ?? 'brandMark',
     ];
 }
 
+/**
+ * True when the schema's painted UI is dark (so src must use the white wordmark).
+ * Flutter image nodes typically render `src` only and ignore srcDark — so src must match the visual theme.
+ */
+private function deviceUiSchemaVisualIsDark(array $schema)
+{
+    $modeCandidates = [
+        $schema['ui']['theme']['themeMode'] ?? null,
+        $schema['ui']['theme']['studioMode'] ?? null,
+        $schema['theme']['studioMode'] ?? null,
+        $schema['theme']['themeMode'] ?? null,
+        $schema['mobileView']['theme']['themeMode'] ?? null,
+        $schema['mobileView']['themeMode'] ?? null,
+    ];
+    foreach ($modeCandidates as $mode) {
+        $mode = strtolower(trim((string) $mode));
+        if ($mode === 'light') {
+            return false;
+        }
+        if ($mode === 'dark') {
+            return true;
+        }
+    }
+
+    $bg = trim((string) (
+        $schema['theme']['colors']['background']
+        ?? $schema['ui']['theme']['backgroundColor']
+        ?? $schema['theme']['colors']['surface']
+        ?? $schema['mobileView']['colors']['background']
+        ?? ''
+    ));
+    if ($bg !== '' && preg_match('/#([0-9a-fA-F]{6})/', $bg, $m)) {
+        $hex = $m[1];
+        $r = hexdec(substr($hex, 0, 2));
+        $g = hexdec(substr($hex, 2, 2));
+        $b = hexdec(substr($hex, 4, 2));
+        $luma = (0.2126 * $r + 0.7152 * $g + 0.0722 * $b) / 255;
+
+        return $luma < 0.45;
+    }
+
+    // Product default palette is dark.
+    return true;
+}
+
 private function applyDeviceUiBrandLogoToSchema(array $schema, array $brandLogo)
 {
-    if (empty($brandLogo['url'])) {
+    if (empty($brandLogo['url']) && empty($brandLogo['previewUrl']) && empty($brandLogo['urlDark'])) {
         return $schema;
     }
 
     $schemaSafe = $this->schemaDeviceUiBrandLogoAsset($brandLogo);
-    // Ensure walk helpers see resolved dark URL even if the incoming asset omitted it.
-    $brandLogo = array_merge($brandLogo, $schemaSafe);
+    $visualDark = $this->deviceUiSchemaVisualIsDark($schema);
+    $activeUrl = $visualDark ? $schemaSafe['urlDark'] : $schemaSafe['url'];
+    // Walk helpers need the resolved pair + which URL belongs in primary src.
+    $brandLogo = array_merge($brandLogo, $schemaSafe, [
+        'activeUrl' => $activeUrl,
+        'visualDark' => $visualDark,
+    ]);
     $schema['assets'] = isset($schema['assets']) && is_array($schema['assets']) ? $schema['assets'] : [];
-    $schema['assets']['brandLogo'] = $schemaSafe;
+    $schema['assets']['brandLogo'] = array_merge($schemaSafe, [
+        'activeUrl' => $activeUrl,
+        'src' => $activeUrl,
+    ]);
 
     if (isset($schema['mobileView']['brandStrip']) && is_array($schema['mobileView']['brandStrip'])) {
-        $schema['mobileView']['brandStrip']['logoUrl'] = $schemaSafe['url'];
+        $schema['mobileView']['brandStrip']['logoUrl'] = $activeUrl;
+        $schema['mobileView']['brandStrip']['logoUrlLight'] = $schemaSafe['url'];
         $schema['mobileView']['brandStrip']['logoUrlDark'] = $schemaSafe['urlDark'];
         $schema['mobileView']['brandStrip']['logoPath'] = $schemaSafe['path'];
         $schema['mobileView']['brandStrip']['logoFileName'] = $schemaSafe['fileName'];
     }
 
     if (isset($schema['meta']['links']) && is_array($schema['meta']['links'])) {
-        $schema['meta']['links']['brandLogo'] = $schemaSafe['url'];
+        $schema['meta']['links']['brandLogo'] = $activeUrl;
+        $schema['meta']['links']['brandLogoLight'] = $schemaSafe['url'];
         $schema['meta']['links']['brandLogoDark'] = $schemaSafe['urlDark'];
     }
 
@@ -15116,27 +15211,29 @@ private function applyDeviceUiBrandLogoToNode(&$node, array $brandLogo, $depth =
     $isBrandStrip = in_array($id, ['brand_strip', 'brand-strip', 'brandstrip'], true)
         || in_array($type, ['brandbar', 'brandstrip'], true);
 
-    $darkUrl = trim((string) ($brandLogo['urlDark'] ?? ($brandLogo['previewUrlDark'] ?? '')));
+    $lightUrl = trim((string) ($brandLogo['url'] ?? ($brandLogo['previewUrl'] ?? 'https://efactor.tech/assets/images/efactor-logo.png')));
+    $darkUrl = trim((string) ($brandLogo['urlDark'] ?? ($brandLogo['previewUrlDark'] ?? 'https://efactor.tech/assets/images/efactor-logo_light.png')));
+    $activeUrl = trim((string) ($brandLogo['activeUrl'] ?? ''));
+    if ($activeUrl === '') {
+        $activeUrl = !empty($brandLogo['visualDark']) ? $darkUrl : $lightUrl;
+    }
 
     if ($isBrandMark) {
-        if (array_key_exists('src', $node)) {
-            $node['src'] = $brandLogo['url'];
+        // Primary src must match the painted theme: Flutter typically renders src only.
+        if (array_key_exists('src', $node) || array_key_exists('url', $node) || array_key_exists('logoUrl', $node) || array_key_exists('imageUrl', $node)) {
+            $node['src'] = $activeUrl;
+            $node['url'] = $activeUrl;
+            $node['logoUrl'] = $activeUrl;
+            $node['imageUrl'] = $activeUrl;
         }
-        if (array_key_exists('url', $node)) {
-            $node['url'] = $brandLogo['url'];
-        }
-        if (array_key_exists('logoUrl', $node)) {
-            $node['logoUrl'] = $brandLogo['url'];
-        }
-        if (array_key_exists('imageUrl', $node)) {
-            $node['imageUrl'] = $brandLogo['url'];
-        }
-        if ($darkUrl !== '') {
-            $node['srcDark'] = $darkUrl;
-            $node['urlDark'] = $darkUrl;
-            $node['logoUrlDark'] = $darkUrl;
-            $node['imageUrlDark'] = $darkUrl;
-        }
+        $node['srcLight'] = $lightUrl;
+        $node['urlLight'] = $lightUrl;
+        $node['logoUrlLight'] = $lightUrl;
+        $node['imageUrlLight'] = $lightUrl;
+        $node['srcDark'] = $darkUrl;
+        $node['urlDark'] = $darkUrl;
+        $node['logoUrlDark'] = $darkUrl;
+        $node['imageUrlDark'] = $darkUrl;
         if (array_key_exists('path', $node) && isset($brandLogo['path'])) {
             $node['path'] = $brandLogo['path'];
         }
@@ -15150,16 +15247,12 @@ private function applyDeviceUiBrandLogoToNode(&$node, array $brandLogo, $depth =
 
     if ($isBrandStrip) {
         if (isset($node['props']['logo']) && is_array($node['props']['logo'])) {
-            if (array_key_exists('src', $node['props']['logo'])) {
-                $node['props']['logo']['src'] = $brandLogo['url'];
-            }
-            if (array_key_exists('url', $node['props']['logo'])) {
-                $node['props']['logo']['url'] = $brandLogo['url'];
-            }
-            if ($darkUrl !== '') {
-                $node['props']['logo']['srcDark'] = $darkUrl;
-                $node['props']['logo']['urlDark'] = $darkUrl;
-            }
+            $node['props']['logo']['src'] = $activeUrl;
+            $node['props']['logo']['url'] = $activeUrl;
+            $node['props']['logo']['srcLight'] = $lightUrl;
+            $node['props']['logo']['urlLight'] = $lightUrl;
+            $node['props']['logo']['srcDark'] = $darkUrl;
+            $node['props']['logo']['urlDark'] = $darkUrl;
             if (array_key_exists('path', $node['props']['logo']) && isset($brandLogo['path'])) {
                 $node['props']['logo']['path'] = $brandLogo['path'];
             }
@@ -15171,12 +15264,9 @@ private function applyDeviceUiBrandLogoToNode(&$node, array $brandLogo, $depth =
             }
         }
         if (isset($node['brand']) && is_array($node['brand'])) {
-            if (array_key_exists('logoUrl', $node['brand'])) {
-                $node['brand']['logoUrl'] = $brandLogo['url'];
-            }
-            if ($darkUrl !== '') {
-                $node['brand']['logoUrlDark'] = $darkUrl;
-            }
+            $node['brand']['logoUrl'] = $activeUrl;
+            $node['brand']['logoUrlLight'] = $lightUrl;
+            $node['brand']['logoUrlDark'] = $darkUrl;
             if (array_key_exists('logoPath', $node['brand']) && isset($brandLogo['path'])) {
                 $node['brand']['logoPath'] = $brandLogo['path'];
             }
@@ -15187,10 +15277,9 @@ private function applyDeviceUiBrandLogoToNode(&$node, array $brandLogo, $depth =
                 $node['brand']['alt'] = $brandLogo['alt'];
             }
         }
-        if (array_key_exists('logoUrl', $node)) {
-            $node['logoUrl'] = $brandLogo['url'];
-        }
-        if ($darkUrl !== '' && (array_key_exists('logoUrl', $node) || array_key_exists('logoUrlDark', $node))) {
+        if (array_key_exists('logoUrl', $node) || array_key_exists('logoUrlDark', $node)) {
+            $node['logoUrl'] = $activeUrl;
+            $node['logoUrlLight'] = $lightUrl;
             $node['logoUrlDark'] = $darkUrl;
         }
     }

@@ -201,6 +201,9 @@ class GridDashboard extends Security_Controller
             'endpoint' => $gridApiUrl,
             'ssoToken' => $ssoToken,
         ));
+        // Circle Connect QR contract (developer): mode=circle + dynamic grid_id only.
+        // Rewrites existing shareQr values only — no new schema keys/params.
+        $schema = $this->applyCircleConnectQrContract($schema, $gridId);
         $meta = $this->extractFeatureMeta(is_array($schema['content'] ?? null) ? $schema['content'] : $content);
 
         if ($persist && isset($schema['content'])) {
@@ -221,6 +224,111 @@ class GridDashboard extends Security_Controller
             'content' => $schema['content'] ?? $content,
             'schema' => $schema,
         );
+    }
+
+    /**
+     * Force Circle QR to:
+     * https://efactor.tech/index.php/grid-chat/connect?mode=circle&grid_id={dynamic}
+     * Existing shareQr / grid-share-qr keys only. Professional QR untouched.
+     */
+    private function applyCircleConnectQrContract(array $schema, string $gridId): array
+    {
+        $gridId = trim($gridId);
+        if ($gridId === '' || strcasecmp($gridId, 'grid-chat') === 0) {
+            return $schema;
+        }
+        if (!preg_match('/^[A-Za-z0-9_-]{1,80}$/', $gridId)) {
+            return $schema;
+        }
+
+        $circleUrl = $this->circleConnectScanUrl($gridId);
+        if ($circleUrl === '') {
+            return $schema;
+        }
+        $circleImage = $this->circleConnectQrImageUrl($circleUrl, $schema);
+
+        if (isset($schema['components']['grid-share-qr']) && is_array($schema['components']['grid-share-qr'])) {
+            $schema['components']['grid-share-qr'] = $this->patchShareQrCircleValues(
+                $schema['components']['grid-share-qr'],
+                $circleUrl,
+                $circleImage
+            );
+        }
+
+        if (isset($schema['content']) && is_array($schema['content'])) {
+            if (isset($schema['content']['shareQr']) && is_array($schema['content']['shareQr'])) {
+                $schema['content']['shareQr'] = $this->patchShareQrCircleValues(
+                    $schema['content']['shareQr'],
+                    $circleUrl,
+                    $circleImage
+                );
+            }
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Same path Circle Connect uses for 1:1 scan — dynamic grid_id only.
+     */
+    private function circleConnectScanUrl(string $gridId): string
+    {
+        $path = 'grid-chat/connect';
+        $base = 'https://efactor.tech/index.php/' . $path;
+        if (class_exists(\App\Libraries\GridWebSso::class)) {
+            $candidate = \App\Libraries\GridWebSso::publicWebUrl($path);
+            $host = strtolower((string) (parse_url($candidate, PHP_URL_HOST) ?: ''));
+            if ($host !== '' && !in_array($host, array('localhost', '127.0.0.1', '::1'), true)) {
+                $base = $candidate;
+            }
+            $base = \App\Libraries\GridWebSso::preferHttps($base);
+        }
+        return rtrim($base, '?&') . '?mode=circle&grid_id=' . rawurlencode($gridId);
+    }
+
+    private function circleConnectQrImageUrl(string $circleUrl, array $schema): string
+    {
+        $template = '';
+        $share = $schema['components']['grid-share-qr'] ?? null;
+        if (is_array($share)) {
+            $template = trim((string) ($share['qrImageUrlTemplate'] ?? ''));
+        }
+        if ($template !== '' && (strpos($template, '{data}') !== false || strpos($template, '{payload}') !== false)) {
+            return str_replace(
+                array('{data}', '{payload}', '{mode}'),
+                array(rawurlencode($circleUrl), rawurlencode($circleUrl), rawurlencode('circle')),
+                $template
+            );
+        }
+        return 'https://efactor.tech/v8/qr_image.php?data=' . rawurlencode($circleUrl) . '&mode=circle&size=200';
+    }
+
+    /**
+     * Update circle mode values only. Keys/structure unchanged.
+     */
+    private function patchShareQrCircleValues(array $shareQr, string $circleUrl, string $circleImage): array
+    {
+        $byMode = is_array($shareQr['qrImageUrlsByMode'] ?? null) ? $shareQr['qrImageUrlsByMode'] : array();
+        $byMode['circle'] = $circleImage;
+        $shareQr['qrImageUrlsByMode'] = $byMode;
+
+        if (strtolower((string) ($shareQr['selectedMode'] ?? '')) === 'circle') {
+            $shareQr['qrPayload'] = $circleUrl;
+            if (array_key_exists('data', $shareQr)) {
+                $shareQr['data'] = $circleUrl;
+            }
+            if (array_key_exists('qrImageUrl', $shareQr)) {
+                $shareQr['qrImageUrl'] = $circleImage;
+            }
+            if (array_key_exists('imageUrl', $shareQr)) {
+                $shareQr['imageUrl'] = $circleImage;
+            }
+            if (array_key_exists('image', $shareQr)) {
+                $shareQr['image'] = $circleImage;
+            }
+        }
+
+        return $shareQr;
     }
 
     private function jsonResponse(array $data, int $status = 200): ResponseInterface

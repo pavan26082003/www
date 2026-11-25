@@ -78,8 +78,26 @@ if (is_readable($jsPath)) {
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 :root{
   --gd-ink:#1f2a44;
-  --gd-muted:#71819a;
-  --gd-line:rgba(148,163,184,.26);
+  --gd-muted:#64748b;
+  --gd-line:rgba(100,116,139,.30);
+  --gd-surface:#ffffff;
+  --gd-card:rgba(255,255,255,.88);
+  --gd-card-line:rgba(100,116,139,.22);
+  --gd-toolbar-bg:rgba(255,255,255,.94);
+  --gd-btn-bg:#ffffff;
+  --gd-btn-ink:#24304a;
+  --gd-btn-hover:#f1f5f9;
+  --gd-field-bg:#ffffff;
+  --gd-code-bg:#f8fafc;
+  --gd-code-ink:#334155;
+  --gd-shell-bg:linear-gradient(120deg,#f3e8ff,#eef4fb 48%,#dbeafe);
+  --gd-phone-bg:#f7fbff;
+  --gd-br-bg:#ffffff;
+  --gd-br-bar:#f8fafc;
+  --gd-br-ink:#475569;
+  --gd-br-btn:#e2e8f0;
+  --gd-br-btn-ink:#1e293b;
+  --gd-br-line:#e2e8f0;
   --gd-accent:#7c3aed;
   --gd-accent-2:#5b6cff;
   --gd-font:'Plus Jakarta Sans',Inter,system-ui,sans-serif;
@@ -95,7 +113,7 @@ if (is_readable($jsPath)) {
   height:calc(100vh - 72px);
   min-height:0;
   display:flex;flex-direction:column;
-  background:linear-gradient(120deg,#f3e8ff,#eef4fb 48%,#dbeafe);
+  background:var(--gd-shell-bg);
   font-family:var(--gd-font);
   color:var(--gd-ink);
   -webkit-font-smoothing:antialiased;
@@ -105,39 +123,38 @@ if (is_readable($jsPath)) {
 }
 .gd-shell *,.gd-shell *::before,.gd-shell *::after{box-sizing:border-box}
 .gd-shell.is-dark{
-  background:linear-gradient(140deg,#050b16,#0b1220 55%,#111827);
-  color:#e2e8f0;
-}
-.gd-shell.is-dark .gd-toolbar,
-.gd-shell.is-dark .gd-glass{
-  background:rgba(15,23,42,.92)!important;
-  border-color:rgba(148,163,184,.22)!important;
-  color:#e2e8f0;
+  color-scheme:dark;
+  --gd-ink:#e2e8f0;
+  --gd-muted:#94a3b8;
+  --gd-line:rgba(148,163,184,.28);
+  --gd-surface:#0f172a;
+  --gd-card:rgba(15,23,42,.92);
+  --gd-card-line:rgba(148,163,184,.24);
+  --gd-toolbar-bg:rgba(15,23,42,.94);
+  --gd-btn-bg:#0f172a;
+  --gd-btn-ink:#e2e8f0;
+  --gd-btn-hover:#1e293b;
+  --gd-field-bg:#0f172a;
+  --gd-code-bg:#0f172a;
+  --gd-code-ink:#cbd5e1;
+  --gd-shell-bg:linear-gradient(140deg,#050b16,#0b1220 55%,#111827);
+  --gd-phone-bg:#050b16;
+  --gd-br-bg:#0f172a;
+  --gd-br-bar:#1e293b;
+  --gd-br-ink:#e2e8f0;
+  --gd-br-btn:#334155;
+  --gd-br-btn-ink:#e2e8f0;
+  --gd-br-line:rgba(148,163,184,.28);
+  --gd-accent:#a78bfa;
+  --gd-accent-2:#818cf8;
 }
 .gd-shell.is-dark .gd-title-block h1,
 .gd-shell.is-dark .gd-glass strong{color:#f8fafc}
-.gd-shell.is-dark .gd-title-block p,
-.gd-shell.is-dark .gd-glass p,
-.gd-shell.is-dark .gd-field small{color:#94a3b8!important}
-.gd-shell.is-dark .gd-icon-btn,
-.gd-shell.is-dark .gd-copy-btn,
-.gd-shell.is-dark .gd-field input{
-  background:#0f172a!important;
-  color:#e2e8f0!important;
-  border-color:rgba(148,163,184,.28)!important;
-}
-.gd-shell.is-dark .gd-icon-btn:hover,
-.gd-shell.is-dark .gd-copy-btn:hover{background:#1e293b!important}
-.gd-shell.is-dark .gd-side-panel code{
-  color:#cbd5e1;
-  background:#0f172a;
-  border-color:rgba(148,163,184,.22);
-}
-.gd-shell.is-dark .gd-phone-screen{background:#050b16;color:#f8fafc}
+.gd-shell.is-dark .gd-phone-screen{color:#f8fafc}
 .gd-toolbar{
   min-height:60px;padding:10px 20px;
   display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;
-  background:rgba(255,255,255,.92);
+  background:var(--gd-toolbar-bg);
   border-bottom:1px solid var(--gd-line);
   flex-shrink:0;
   position:sticky;top:0;z-index:40;
@@ -158,9 +175,9 @@ if (is_readable($jsPath)) {
 .gd-icon-btn{
   min-width:38px;height:38px;padding:0 12px;
   border:1px solid var(--gd-line);border-radius:10px;
-  background:#fff;color:#24304a;font-size:12px;font-weight:700;cursor:pointer;
+  background:var(--gd-btn-bg);color:var(--gd-btn-ink);font-size:12px;font-weight:700;cursor:pointer;
 }
-.gd-icon-btn:hover{background:#f8fafc}
+.gd-icon-btn:hover{background:var(--gd-btn-hover)}
 .gd-theme-btn{
   width:38px;padding:0;display:inline-grid;place-items:center;
   font-size:18px;line-height:1;
@@ -188,8 +205,8 @@ if (is_readable($jsPath)) {
 }
 .gd-schema-btn:disabled{opacity:.6;cursor:wait}
 .gd-glass{
-  background:rgba(255,255,255,.82);
-  border:1px solid rgba(255,255,255,.7);
+  background:var(--gd-card);
+  border:1px solid var(--gd-card-line);
   box-shadow:0 14px 38px rgba(31,42,68,.09);
   backdrop-filter:blur(18px);
   padding:14px;border-radius:14px;
@@ -228,22 +245,23 @@ if (is_readable($jsPath)) {
   height:min(680px,calc(100vh - 220px));
   min-height:480px;
   overflow-y:auto;overflow-x:hidden;
-  background:#f7fbff;
+  background:var(--gd-phone-bg);
   overscroll-behavior:contain;
   font-family:var(--gd-font);
   -webkit-font-smoothing:antialiased;
 }
-.gd-phone-screen[data-theme="dark"]{background:#050b16}
+.gd-phone-screen[data-theme="dark"]{background:#050b16;color-scheme:dark}
 .gd-side-panel{display:flex;flex-direction:column;gap:12px;min-width:0}
 .gd-side-panel .gd-glass{min-width:0}
 .gd-api-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .gd-copy-btn{
-  border:1px solid var(--gd-line);border-radius:8px;background:#fff;
-  color:#334155;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer;
+  border:1px solid var(--gd-line);border-radius:8px;background:var(--gd-btn-bg);
+  color:var(--gd-code-ink);font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer;
 }
+.gd-copy-btn:hover{background:var(--gd-btn-hover)}
 .gd-side-panel code{
   display:block;font-size:11px;line-height:1.4;word-break:break-all;
-  color:#334155;background:#f8fafc;border-radius:8px;padding:8px;
+  color:var(--gd-code-ink);background:var(--gd-code-bg);border-radius:8px;padding:8px;
   border:1px solid var(--gd-line);
 }
 .gd-schema-output{
@@ -265,24 +283,25 @@ if (is_readable($jsPath)) {
 .gd-field input{
   width:100%;min-height:38px;padding:8px 10px;
   border:1px solid var(--gd-line);border-radius:10px;
-  background:#fff;color:var(--gd-ink);font-size:12px;
+  background:var(--gd-field-bg);color:var(--gd-ink);font-size:12px;
 }
 .gd-field input:focus{outline:2px solid rgba(124,58,237,.25);border-color:rgba(124,58,237,.45)}
 .gd-field small{font-size:10px;color:var(--gd-muted);line-height:1.35}
 .gd-phone{position:relative}
 .gd-phone-browser{
   position:absolute;inset:0;z-index:20;
-  display:none;flex-direction:column;background:#fff;
+  display:none;flex-direction:column;background:#fff;color:#1e293b;
 }
 .gd-phone-browser.is-open{display:flex}
 .gd-phone-browser-bar{
   flex:0 0 auto;display:flex;align-items:center;gap:8px;
-  padding:8px 10px;background:#f8fafc;border-bottom:1px solid #e2e8f0;
+  padding:8px 10px;background:#f8fafc;border-bottom:1px solid #cbd5e1;
 }
 .gd-phone-browser-bar button{
-  border:0;border-radius:8px;background:#e2e8f0;color:#1e293b;
+  border:1px solid #cbd5e1;border-radius:8px;background:#e2e8f0;color:#1e293b;
   font-size:11px;font-weight:800;padding:6px 8px;cursor:pointer;
 }
+.gd-phone-browser-bar button:hover{background:#cbd5e1}
 .gd-phone-browser-title{
   flex:1;min-width:0;font-size:11px;font-weight:700;color:#475569;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -290,6 +309,17 @@ if (is_readable($jsPath)) {
 .gd-phone-browser iframe{
   flex:1 1 auto;width:100%;min-height:0;border:0;background:#fff;display:block;
 }
+/* Dark phone theme: in-app browser follows the phone's data-theme */
+.gd-phone-screen[data-theme="dark"] .gd-phone-browser{background:#0f172a;color:#e2e8f0}
+.gd-phone-screen[data-theme="dark"] .gd-phone-browser-bar{
+  background:#1e293b;border-bottom-color:rgba(148,163,184,.28);
+}
+.gd-phone-screen[data-theme="dark"] .gd-phone-browser-bar button{
+  background:#0f172a;color:#e2e8f0;border-color:rgba(148,163,184,.28);
+}
+.gd-phone-screen[data-theme="dark"] .gd-phone-browser-bar button:hover{background:#334155}
+.gd-phone-screen[data-theme="dark"] .gd-phone-browser-title{color:#e2e8f0}
+.gd-phone-screen[data-theme="dark"] .gd-phone-browser iframe{background:#0f172a;color-scheme:dark}
 .gd-phone-browser-fallback{display:none!important}
 .gd-photo{
   position:absolute;inset:0;z-index:25;
@@ -448,6 +478,7 @@ if (is_readable($jsPath)) {
      data-dashboard-url="<?= htmlspecialchars($dashboardUrl ?? '', ENT_QUOTES, 'UTF-8') ?>"
      data-grid-api-url="<?= htmlspecialchars($gridApi, ENT_QUOTES, 'UTF-8') ?>"
      data-user-id="<?= (int) ($userId ?? 0) ?>"
+     data-grid-id="<?= htmlspecialchars((string) ($gridId ?? ''), ENT_QUOTES, 'UTF-8') ?>"
      data-csrf-name="<?= htmlspecialchars($csrfTokenName ?? '', ENT_QUOTES, 'UTF-8') ?>"
      data-csrf-hash="<?= htmlspecialchars($csrfHash ?? '', ENT_QUOTES, 'UTF-8') ?>">
   <section class="gd-shell">
@@ -456,6 +487,7 @@ if (is_readable($jsPath)) {
       <div class="gd-title-block">
         <span>Network Experience</span>
         <h1>
+          <img id="gdToolbarEfactorLogo" src="https://efactor.tech/assets/images/efactor-logo.png" data-logo-light="https://efactor.tech/assets/images/efactor-logo.png" data-logo-dark="https://efactor.tech/assets/images/efactor-logo_light.png" alt="eFactor" style="height:34px">
           <img id="gdToolbarLogo" src="https://efactor.tech/assets/images/GRID_Logo.png" data-logo-light="https://efactor.tech/assets/images/GRID_Logo.png" data-logo-dark="https://efactor.tech/assets/images/dark_grid.png" alt="GRID">
           <span>Grid Dashboard</span>
         </h1>
@@ -562,7 +594,8 @@ window.GRID_DASHBOARD_BOOT = {
   gridApiUrl: <?= json_encode($gridApi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
   professionalSpaceUrl: <?= json_encode($proUrlValue, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
   circleConnectUrl: <?= json_encode($circleUrlValue, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
-  userId: <?= (int) ($userId ?? 0) ?>
+  userId: <?= (int) ($userId ?? 0) ?>,
+  gridId: <?= json_encode((string) ($gridId ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
 };
 </script>
 <script src="<?= htmlspecialchars($gridSduiJs, ENT_QUOTES, 'UTF-8') ?>"></script>
@@ -577,11 +610,13 @@ window.GRID_DASHBOARD_BOOT = {
   var dashboardUrl = String(root.getAttribute('data-dashboard-url') || '/');
   var gridApiUrl = String(root.getAttribute('data-grid-api-url') || '');
   var userId = parseInt(root.getAttribute('data-user-id') || '0', 10) || 0;
+  var gridId = String(root.getAttribute('data-grid-id') || '').trim();
   var csrfName = String(root.getAttribute('data-csrf-name') || '');
   var csrfHash = String(root.getAttribute('data-csrf-hash') || '');
   var boot = window.GRID_DASHBOARD_BOOT || {};
   var currentSchema = boot.schema || null;
   var currentBrowserUrl = '';
+  if (!gridId && boot.gridId) gridId = String(boot.gridId || '').trim();
 
   var WEB_THEME_KEY = 'gdWebDashboardTheme';
 
@@ -630,7 +665,7 @@ window.GRID_DASHBOARD_BOOT = {
 
   function syncBrandLogos(theme) {
     var dark = theme === 'dark';
-    var nodes = root.querySelectorAll('.ahp-gn-logo, #gdToolbarLogo');
+    var nodes = root.querySelectorAll('.ahp-gn-logo, #gdToolbarLogo, #gdToolbarEfactorLogo, img[data-logo-light][data-logo-dark]');
     for (var i = 0; i < nodes.length; i++) {
       var img = nodes[i];
       var next = dark ? (img.getAttribute('data-logo-dark') || '') : (img.getAttribute('data-logo-light') || '');
@@ -1204,8 +1239,69 @@ window.GRID_DASHBOARD_BOOT = {
     }
   }
 
+  /**
+   * Circle Connect QR contract (developer 1:1 scan):
+   * .../grid-chat/connect?mode=circle&grid_id={dynamic}
+   * Patches existing shareQr values only — no new schema keys.
+   */
+  function enforceCircleConnectQr(payload) {
+    if (!payload || !payload.schema) return payload;
+    var gid = String(payload.grid_id || gridId || boot.gridId || '').trim();
+    if (!gid || /^grid-chat$/i.test(gid) || !/^[A-Za-z0-9_-]{1,80}$/.test(gid)) {
+      return payload;
+    }
+    gridId = gid;
+    root.setAttribute('data-grid-id', gid);
+    var circleUrl = 'https://efactor.tech/index.php/grid-chat/connect?mode=circle&grid_id=' + encodeURIComponent(gid);
+    try {
+      if (window.location && /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname || '')) {
+        // Keep public scan URL — phones cannot open localhost from a QR.
+      }
+    } catch (e) {}
+
+    function patchShare(share) {
+      if (!share || typeof share !== 'object') return share;
+      var byMode = (share.qrImageUrlsByMode && typeof share.qrImageUrlsByMode === 'object')
+        ? share.qrImageUrlsByMode
+        : {};
+      var template = String(share.qrImageUrlTemplate || '');
+      var circleImage = byMode.circle || '';
+      if (template && (template.indexOf('{data}') >= 0 || template.indexOf('{payload}') >= 0)) {
+        circleImage = template
+          .replace('{data}', encodeURIComponent(circleUrl))
+          .replace('{payload}', encodeURIComponent(circleUrl))
+          .replace('{mode}', encodeURIComponent('circle'));
+      } else if (!circleImage) {
+        circleImage = 'https://efactor.tech/v8/qr_image.php?data=' + encodeURIComponent(circleUrl) + '&mode=circle&size=200';
+      }
+      byMode.circle = circleImage;
+      share.qrImageUrlsByMode = byMode;
+      if (String(share.selectedMode || '').toLowerCase() === 'circle') {
+        share.qrPayload = circleUrl;
+        if ('data' in share) share.data = circleUrl;
+        if ('qrImageUrl' in share) share.qrImageUrl = circleImage;
+        if ('imageUrl' in share) share.imageUrl = circleImage;
+        if ('image' in share) share.image = circleImage;
+      }
+      return share;
+    }
+
+    if (payload.schema.components && payload.schema.components['grid-share-qr']) {
+      payload.schema.components['grid-share-qr'] = patchShare(payload.schema.components['grid-share-qr']);
+    }
+    if (payload.schema.content && payload.schema.content.shareQr) {
+      payload.schema.content.shareQr = patchShare(payload.schema.content.shareQr);
+    }
+    if (payload.content && payload.content.shareQr) {
+      payload.content.shareQr = patchShare(payload.content.shareQr);
+    }
+    payload.grid_id = gid;
+    return payload;
+  }
+
   function applyPayload(payload) {
     if (!payload || !payload.schema) return;
+    payload = enforceCircleConnectQr(payload);
     currentSchema = payload.schema;
     if (payload.gridApiUrl) {
       gridApiUrl = payload.gridApiUrl;

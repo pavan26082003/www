@@ -1,5 +1,15 @@
 <?= $this->extend('layouts/sd_auth') ?>
 <?= $this->section('content') ?>
+<script>
+(function(){var d=document,r=d.documentElement,mq=window.matchMedia?window.matchMedia('(prefers-color-scheme: dark)'):null,forced=null;try{var q=new URLSearchParams(window.location.search).get('theme');if(q==='light'||q==='dark')forced=q}catch(e){}
+function pick(){return forced||(mq&&!mq.matches?'light':'dark')}
+function logos(){var t=r.getAttribute('data-theme')==='light'?'light':'dark',a=d.querySelectorAll('img[data-logo-light][data-logo-dark]'),i,s;for(i=0;i<a.length;i++){s=a[i].getAttribute('data-logo-'+t);if(s&&a[i].getAttribute('src')!==s)a[i].setAttribute('src',s)}}
+function apply(t){t=t==='light'?'light':'dark';if(r.getAttribute('data-theme')!==t)r.setAttribute('data-theme',t);r.style.colorScheme=t;logos();try{window.dispatchEvent(new CustomEvent('eftheme',{detail:{theme:t}}))}catch(e){}}
+apply(pick());
+if(window.MutationObserver){new MutationObserver(logos).observe(r,{attributes:true,attributeFilter:['data-theme']});var po=new MutationObserver(logos);po.observe(d,{childList:true,subtree:true});d.addEventListener('DOMContentLoaded',function(){po.disconnect();logos()})}else{d.addEventListener('DOMContentLoaded',logos)}
+if(mq&&!forced){var ch=function(e){apply(e.matches?'dark':'light')};if(mq.addEventListener)mq.addEventListener('change',ch);else if(mq.addListener)mq.addListener(ch)}
+window.efTheme={set:apply,logos:logos,current:function(){return r.getAttribute('data-theme')}}})();
+</script>
 <?php
 $signupApi = [
     'createUser' => site_url('sd-signup/register'),
@@ -100,6 +110,43 @@ button,input{font:inherit}
 }
 @media(prefers-reduced-motion:reduce){.ef-card{animation:none}}
 </style>
+<style>
+/* eFactor theme: dark chrome is the default, light overrides follow */
+html{background:#0B1220}body{background:#0B1220}.ef-page{background:linear-gradient(135deg,#0B1220,#162033)}
+html[data-theme="light"]{background:#E8EDF2;--ef-panel:rgba(255,255,255,.9);--ef-line:rgba(32,41,64,.2);--ef-text:#141C2E;--ef-muted:rgba(32,41,64,.78);--ef-danger:#B91C1C}
+html[data-theme="light"] body{background:#E8EDF2}
+html[data-theme="light"] .ef-page{background:linear-gradient(135deg,#E8EDF2,#F5F5F5)}
+html[data-theme="light"] .ef-shell{background-image:linear-gradient(160deg,rgba(255,255,255,.84),rgba(232,237,242,.92)),url("<?= base_url('assets/images/efactor-ecosystem.jpg') ?>")}
+html[data-theme="light"] .ef-shell::before{background:linear-gradient(to bottom,rgba(255,255,255,.12),rgba(255,255,255,.10) 36%,rgba(232,237,242,.45))}
+@media(min-width:431px){html[data-theme="light"] .ef-shell{box-shadow:0 32px 80px rgba(32,41,64,.16),0 0 0 1px rgba(32,41,64,.14)}}
+html[data-theme="light"] .ef-back{color:#202940;background:rgba(255,255,255,.78);box-shadow:0 8px 22px rgba(32,41,64,.12)}
+html[data-theme="light"] .ef-card{box-shadow:0 20px 50px rgba(32,41,64,.16),inset 0 1px 0 rgba(255,255,255,.9)}
+html[data-theme="light"] .ef-title{color:#141C2E}
+html[data-theme="light"] .ef-label{color:#2A3550}
+html[data-theme="light"] .ef-req{color:#991B1B;background:#FEE2E2;border-color:rgba(185,28,28,.35)}
+html[data-theme="light"] .ef-input{border-color:rgba(32,41,64,.24);background:#fff;box-shadow:none}
+html[data-theme="light"] .ef-input:focus-within{border-color:#202940;background:#fff;box-shadow:0 0 0 4px rgba(32,41,64,.14)}
+html[data-theme="light"] .ef-input.has-error{border-color:#DC2626;background:#FEF2F2}
+html[data-theme="light"] .ef-icon,html[data-theme="light"] .ef-toggle{color:#3B4660}
+html[data-theme="light"] .ef-control{color:#141C2E}
+html[data-theme="light"] .ef-control::placeholder{color:#64748B}
+html[data-theme="light"] .ef-otp-box{border-color:rgba(32,41,64,.28);background:#fff;color:#141C2E}
+html[data-theme="light"] .ef-otp-box:focus{border-color:#202940;box-shadow:0 0 0 3px rgba(32,41,64,.14)}
+html[data-theme="light"] .ef-send-otp{color:#202940;border-color:rgba(32,41,64,.45);background:rgba(32,41,64,.06)}
+html[data-theme="light"] .ef-badge-progress{color:#075985;background:#E0F2FE;border-color:rgba(14,116,144,.4)}
+html[data-theme="light"] .ef-badge-success{color:#166534;background:#DCFCE7;border-color:rgba(22,101,52,.4)}
+html[data-theme="light"] .ef-badge-danger{color:#991B1B;background:#FEE2E2;border-color:rgba(185,28,28,.4)}
+html[data-theme="light"] .ef-verify-otp.is-verified{color:#166534;background:#DCFCE7;border-color:rgba(22,101,52,.4)}
+html[data-theme="light"] .ef-meter{background:rgba(32,41,64,.14)}
+html[data-theme="light"] .ef-terms{color:#1F2937}
+html[data-theme="light"] .ef-terms input{accent-color:#202940;color-scheme:light}
+html[data-theme="light"] .ef-link{color:#202940}
+html[data-theme="light"] .ef-submit{border-color:rgba(32,41,64,.3);box-shadow:0 12px 26px rgba(32,41,64,.24)}
+html[data-theme="light"] .ef-divider::before,html[data-theme="light"] .ef-divider::after{background:rgba(32,41,64,.18)}
+html[data-theme="light"] .ef-social{color:#202940;border-color:rgba(32,41,64,.2);background:#fff;box-shadow:none}
+html[data-theme="light"] .ef-otp-status{color:#15803D}
+html[data-theme="light"] .ef-alert-danger{color:#991B1B;border-color:rgba(185,28,28,.35);background:#FEE2E2}
+</style>
 
 
 <div class="ef-page">
@@ -109,7 +156,7 @@ button,input{font:inherit}
     </a>
     <div class="ef-scroll" id="signupScroll">
       <main class="ef-card" aria-labelledby="signupTitle">
-        <div class="ef-logo"><img src="https://efactor.tech/assets/images/efactor-logo_light.png" alt="Efactor"></div>
+        <div class="ef-logo"><img src="https://efactor.tech/assets/images/efactor-logo_light.png" data-logo-light="https://efactor.tech/assets/images/efactor-logo.png" data-logo-dark="https://efactor.tech/assets/images/efactor-logo_light.png" alt="Efactor"></div>
         <div class="ef-heading-wrap">
           <h1 class="ef-title" id="signupTitle">Get Started</h1>
           <p class="ef-subtitle">Create your secure Efactor account</p>
@@ -293,7 +340,10 @@ document.addEventListener('DOMContentLoaded', function () {
     var score = scorePassword(password.value);
     var widths = ['0%', '20%', '40%', '60%', '80%', '100%'];
     var labels = ['Password strength', 'Very weak', 'Weak', 'Fair', 'Strong', 'Excellent'];
-    var colors = ['rgba(255,255,255,.18)', '#EF4444', '#F97316', '#F59E0B', '#22C55E', '#16A34A'];
+    var light = document.documentElement.getAttribute('data-theme') === 'light';
+    var colors = light
+      ? ['', '#B91C1C', '#C2410C', '#B45309', '#15803D', '#166534']
+      : ['', '#EF4444', '#F97316', '#F59E0B', '#22C55E', '#16A34A'];
     meterBar.style.width = widths[score];
     meterBar.style.background = colors[score];
     strengthLabel.textContent = labels[score];
@@ -646,6 +696,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   updateMeter();
   syncCreateButton();
+  window.addEventListener('eftheme', updateMeter);
 
   var narrow = window.matchMedia('(max-width: 430px)');
   var scroll = document.getElementById('signupScroll');

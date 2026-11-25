@@ -637,8 +637,104 @@ class DeviceUiDisplaySanitizer
 
         $schema = self::ensureLiveStateContract($schema);
         $schema = self::enrichMissingInfoFromSchema($schema);
+        $schema = self::stripLeakedProtocolBracketText($schema);
 
         return $schema;
+    }
+
+    /**
+     * sno_asperui / item_values are protocol tables. A concatenated bracket
+     * string such as [00][01] or [000000003C6E..][000001..] must not be copied
+     * into a caption or the control's initial value. The tables themselves stay.
+     */
+    public static function stripLeakedProtocolBracketText(array $schema): array
+    {
+        self::stripLeakedProtocolBracketNode($schema);
+
+        return $schema;
+    }
+
+    private static function stripLeakedProtocolBracketNode(array &$node, $depth = 0): void
+    {
+        if ($depth > 80) {
+            return;
+        }
+        foreach ($node as $key => &$child) {
+            if (self::isProtocolChoiceListKey($key)) {
+                continue;
+            }
+            if (is_array($child)) {
+                if (self::isScalarChoiceList($key, $child)) {
+                    continue;
+                }
+                self::stripLeakedProtocolBracketNode($child, $depth + 1);
+                continue;
+            }
+            if (!is_string($child) || !self::isLeakedDisplayKey($key) || !self::isBracketOptionList($child)) {
+                continue;
+            }
+            if (self::isFrameDescriptionKey($key)) {
+                $child = self::fallbackFrameDescription($node, (string) $key);
+                continue;
+            }
+            $child = '';
+        }
+        unset($child);
+    }
+
+    private static function isProtocolChoiceListKey($key): bool
+    {
+        return in_array((string) $key, [
+            'sno_asperui', 'item_values', 'asperui', 'asperui_values',
+            'snoAsperui', 'asperuiValues',
+        ], true);
+    }
+
+    /**
+     * Choice lists are scalar tokens. Widget `items` are nodes and still get walked.
+     */
+    private static function isScalarChoiceList($key, array $list): bool
+    {
+        if ((string) $key !== 'items') {
+            return false;
+        }
+        foreach ($list as $item) {
+            if (is_array($item)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static function isLeakedDisplayKey($key): bool
+    {
+        return in_array((string) $key, [
+            'label', 'fieldLabel', 'componentLabel', 'title', 'text', 'subtitle',
+            'default_name', 'value', 'initialValue', 'displayValue', 'fieldValue',
+            'default', 'hintText', 'name',
+            'Field_description', 'field_description', 'field_name',
+        ], true);
+    }
+
+    private static function isFrameDescriptionKey($key): bool
+    {
+        return in_array((string) $key, ['Field_description', 'field_description', 'field_name'], true);
+    }
+
+    private static function fallbackFrameDescription(array $node, $key): string
+    {
+        foreach (['default_name', 'Field_description', 'field_description', 'field_name'] as $alt) {
+            if ($alt === $key || !isset($node[$alt]) || !is_string($node[$alt])) {
+                continue;
+            }
+            $text = trim($node[$alt]);
+            if ($text !== '' && !self::isBracketOptionList($text)) {
+                return $text;
+            }
+        }
+
+        return 'Data';
     }
 
     /**

@@ -120,7 +120,24 @@ $jsBundlePath = __DIR__ . '/react/dist/bundle.js';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
     <title>Grid — <?= htmlspecialchars($fullName) ?> (React App)</title>
+    <script>
+      (function () {
+        var theme = '';
+        try { theme = String(new URLSearchParams(window.location.search).get('theme') || '').toLowerCase(); } catch (e) {}
+        if (theme !== 'dark' && theme !== 'light') {
+          try { theme = String(localStorage.getItem('grid_theme') || '').toLowerCase(); } catch (e2) {}
+        }
+        if (theme !== 'dark' && theme !== 'light') {
+          try { theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch (e3) { theme = 'light'; }
+        }
+        document.documentElement.setAttribute('data-theme', theme);
+        if (theme === 'dark') document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -172,6 +189,11 @@ $jsBundlePath = __DIR__ . '/react/dist/bundle.js';
                 background-color: #f8fafc;
                 position: relative;
                 overflow: hidden;
+            }
+            html[data-theme="dark"] .g-loader-stage,
+            html.dark .g-loader-stage {
+                background-color: #0b1220;
+                color: #e2e8f0;
             }
             .g-ambient-radial {
                 position: absolute;

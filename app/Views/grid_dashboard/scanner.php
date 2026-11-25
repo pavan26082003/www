@@ -210,7 +210,9 @@
           var gridId = parsed.searchParams.get('grid_id') || parsed.searchParams.get('gridId') || '';
           var user = parsed.searchParams.get('user_id') || parsed.searchParams.get('userId') || '';
           if (gridId) next.searchParams.set('grid_id', gridId);
-          if (user) next.searchParams.set('user_id', user);
+          // Circle Connect developer contract: mode + grid_id only (1:1 chat).
+          // Professional still keeps user_id for profile open.
+          if (!isCircle && user) next.searchParams.set('user_id', user);
           if (token) next.searchParams.set('grid_sso', token);
           return next.toString();
         }

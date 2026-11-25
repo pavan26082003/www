@@ -231,41 +231,63 @@ class TrackApiModel extends Model
      */
     public function publishDemoBackgroundPolicy(): void
     {
-        $appId = 'efactor_field_tracker';
-        $tenantId = 'tenant_demo_001';
-        $row = $this->ensureTenantPolicy($appId, $tenantId, 'default_field_tracker');
-        if (!is_array($row)) {
-            return;
-        }
-
-        $desired = [
+        $this->ensureBackgroundEnabled('efactor_field_tracker', 'tenant_demo_001', [
             'enabled' => true,
             'interval_seconds' => 30,
             'distance_meters' => null,
             'mode' => 'interval',
-        ];
+        ], 2);
+    }
+
+    /**
+     * Ensure policy.background.enabled=true for any tenant (no schema change).
+     * Bumps version when background was missing/off so devices refetch (200 not 304).
+     *
+     * @param array<string, mixed>|null $desiredBackground
+     */
+    public function ensureBackgroundEnabled(
+        string $appId,
+        string $tenantId,
+        ?array $desiredBackground = null,
+        int $minVersion = 2
+    ): ?array {
+        $row = $this->ensureTenantPolicy($appId, $tenantId);
+        if (!is_array($row)) {
+            return null;
+        }
+
+        $desired = array_merge(self::defaultBackgroundPolicy(), is_array($desiredBackground) ? $desiredBackground : []);
+        $desired['enabled'] = true;
+
         $extra = $this->decodeJson($row['policy_json'] ?? null);
         if (!is_array($extra)) {
             $extra = [];
         }
         $current = is_array($extra['background'] ?? null) ? $extra['background'] : [];
         $version = (int) ($row['version'] ?? 1);
-        $matches = ($current['enabled'] ?? null) === true
-            && ($current['mode'] ?? null) === 'interval'
-            && array_key_exists('interval_seconds', $current)
-            && (int) ($current['interval_seconds'] ?? 0) === 30
-            && array_key_exists('distance_meters', $current)
-            && $current['distance_meters'] === null
-            && $version >= 2;
-        if ($matches) {
-            return;
+
+        $alreadyOn = (($current['enabled'] ?? false) === true || ($current['enabled'] ?? '') === 'true' || ($current['enabled'] ?? null) === 1)
+            && $version >= $minVersion;
+        if ($alreadyOn) {
+            // Keep any existing background knobs; only force enabled=true if somehow off.
+            if (($current['enabled'] ?? null) !== true) {
+                $extra['background'] = array_merge($desired, $current, ['enabled' => true]);
+                $this->updatePolicy((int) $row['id'], [
+                    'policy_json' => json_encode($extra),
+                    'version' => (string) max($version + 1, $minVersion),
+                ]);
+                return $this->getPolicyById((int) $row['id'], $appId, $tenantId);
+            }
+            return $row;
         }
 
-        $extra['background'] = $desired;
+        $extra['background'] = array_merge($desired, $current, ['enabled' => true]);
         $this->updatePolicy((int) $row['id'], [
             'policy_json' => json_encode($extra),
-            'version' => (string) max($version + 1, 2),
+            'version' => (string) max($version + 1, $minVersion),
         ]);
+
+        return $this->getPolicyById((int) $row['id'], $appId, $tenantId);
     }
 
     public function userExists(int $userId): bool

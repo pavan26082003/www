@@ -33,6 +33,7 @@
   display:none!important;
   flex-direction:column!important;
   background:#fff!important;
+  color:#0f172a!important;
 }
 .ahp-inapp-browser.is-open{display:flex!important;}
 .ahp-inapp-browser-bar{
@@ -71,6 +72,25 @@
   border:0!important;
   background:#fff!important;
   display:block!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-inapp-browser{
+  background:#0f172a!important;
+  color:#e2e8f0!important;
+  color-scheme:dark;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-inapp-browser-bar{
+  background:#1e293b!important;
+  border-bottom-color:rgba(148,163,184,.28)!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-inapp-browser-bar button{
+  background:#334155!important;
+  color:#e2e8f0!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-inapp-browser-title{
+  color:#cbd5e1!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-inapp-browser iframe{
+  background:#0f172a!important;
 }
 @media(max-width:980px){.edit-mode .ahp-workspace{grid-template-columns:1fr!important}.ahp-preview-column{padding:12px!important}.ahp-preview-head{max-width:calc(100vw - 24px)!important;flex-wrap:wrap!important}.ahp-preview-mount{min-height:calc(100vh - 160px)!important}}
 @media(max-width:430px){.ahp-preview-column{padding:0!important}.ahp-preview-head{display:none!important}.ahp-preview-mount{min-height:calc(100vh - 62px)!important}.ahp-phone{width:100vw!important;height:calc(100vh - 62px)!important;border-radius:0!important;padding:0!important}.ahp-phone-screen{border-radius:0!important}.ahp-phone-notch{display:none!important}}
@@ -3311,6 +3331,7 @@ button.ahp-profile-avatar .ahp-avatar-initials.ahp-is-hidden{
   display:none!important;
   flex-direction:column!important;
   background:#fff!important;
+  color:#0f172a!important;
 }
 .ahp-gn-browser.is-open{
   display:flex!important;
@@ -3351,6 +3372,25 @@ button.ahp-profile-avatar .ahp-avatar-initials.ahp-is-hidden{
   border:0!important;
   background:#fff!important;
   display:block!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-gn-browser{
+  background:#0f172a!important;
+  color:#e2e8f0!important;
+  color-scheme:dark;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-gn-browser-bar{
+  background:#1e293b!important;
+  border-bottom-color:rgba(148,163,184,.28)!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-gn-browser-bar button{
+  background:#334155!important;
+  color:#e2e8f0!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-gn-browser-title{
+  color:#cbd5e1!important;
+}
+.ahp-phone-screen[data-theme="dark"] .ahp-gn-browser iframe{
+  background:#0f172a!important;
 }
 .ahp-gn-stats{
   display:flex!important;
