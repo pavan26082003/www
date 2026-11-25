@@ -214,6 +214,10 @@ class GridWebSso
         if ($module === 'circle') {
             return 'grid-chat';
         }
+        // Explore center icon → existing Applications dashboard page.
+        if ($module === 'applications') {
+            return 'dashboard/applications';
+        }
         return '';
     }
 
@@ -261,6 +265,10 @@ class GridWebSso
         if (in_array($value, array('grid', 'professional', 'professional-space'), true)) {
             return 'professional';
         }
+        // Explore center icon → existing Applications dashboard page.
+        if (in_array($value, array('applications', 'explore', 'dashboard-applications', 'dashboard/applications'), true)) {
+            return 'applications';
+        }
         return '';
     }
 
@@ -283,6 +291,9 @@ class GridWebSso
             $path = is_array($parts) ? (string) ($parts['path'] ?? '') : '';
         }
         $path = '/' . ltrim($path, '/');
+        if (preg_match('~/(index\.php/)?dashboard/applications([/?#]|$)~', $path)) {
+            return 'applications';
+        }
         if (preg_match('~/(index\.php/)?grid([/?#]|$)~', $path)) {
             return 'professional';
         }
@@ -291,6 +302,9 @@ class GridWebSso
 
     public static function urlForModule(string $module): string
     {
+        if ($module === 'applications') {
+            return self::publicWebUrl('dashboard/applications');
+        }
         if ($module !== 'circle' && $module !== 'professional') {
             return '';
         }

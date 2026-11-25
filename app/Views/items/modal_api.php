@@ -16432,7 +16432,7 @@ $editFrameCount = $commandGetStatusEditLocked
     }
 
     /* Text UI configuration:
-       No. of Messages drives exactly how many message inputs are shown. */
+       No. of Contents drives exactly how many message inputs are shown. */
     .text-message-inline-editor[hidden],
     .text-message-count-hint[hidden],
     .ui-text-multiple-preview[hidden] {
@@ -16511,7 +16511,7 @@ $editFrameCount = $commandGetStatusEditLocked
     }
 
     /* Keep the existing Text preview design, but repeat the same input
-       appearance when No. of Messages is greater than one. */
+       appearance when No. of Contents is greater than one. */
     .ui-text-multiple-preview {
       display: grid;
       gap: 7px;
@@ -17324,7 +17324,7 @@ $editFrameCount = $commandGetStatusEditLocked
 
     #modalFieldForm .field-basic-row {
       display: grid !important;
-      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
       gap: 9px !important;
       margin: 0 !important;
     }
@@ -17368,6 +17368,81 @@ $editFrameCount = $commandGetStatusEditLocked
 
     .field-config-choice-panel {
       padding: 11px 12px;
+    }
+
+    #modalFieldForm .field-config-schedule-panel {
+      margin-top: 10px;
+    }
+
+    #modalFieldForm .schedule-yes-no {
+      max-width: 360px;
+    }
+
+    #modalFieldForm .schedule-details {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    #modalFieldForm #scheduleDetails {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+      padding: 14px;
+      background: #f0f9f8;
+      border: 1px solid #c8e4df;
+      border-radius: 14px;
+      align-items: start;
+    }
+    #modalFieldForm #scheduleDetails .form-group { margin: 0; min-width: 0; }
+    #modalFieldForm #scheduleDetails label { font-size: 0.78rem; color: #225951; margin-bottom: 8px; }
+    #modalFieldForm #scheduleDetails :is(input, select) {
+      min-height: 48px; border: 1px solid #a9cfc8; border-radius: 10px;
+      background: #fff; font-size: 0.95rem; font-weight: 600;
+      box-shadow: none; padding: 10px 12px; color: #183b36;
+    }
+    #modalFieldForm #scheduleDetails :is(input, select):focus {
+      border-color: #159d91; outline: 2px solid #a9e1d8; outline-offset: 1px;
+    }
+    #modalFieldForm #scheduleDetails .schedule-minute-hint { display: block; margin-top: 5px; color: #526c68; font-size: 0.7rem; }
+    #modalFieldForm .schedule-details[hidden] {
+      display: none !important;
+    }
+
+    #modalFieldForm .schedule-details label {
+      display: block;
+      margin-bottom: 5px;
+      color: #3e4b67;
+      font-size: 0.68rem;
+      font-weight: 800;
+    }
+
+    #modalFieldForm .schedule-details input,
+    #modalFieldForm .schedule-details select {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid #cfd8e6;
+      border-radius: 9px;
+      padding: 0.5rem 0.65rem;
+      color: #26324b;
+      background: #fff;
+      font-size: 0.75rem;
+    }
+
+    #modalFieldForm .field-config-schedule-panel .field-setup-hint {
+      display: block;
+      margin-top: 8px;
+      color: #77869e;
+      font-size: 0.64rem;
+    }
+
+    #scheduleChoiceButtons .field-choice-button.active {
+      border-color: #159d91 !important;
+      color: #117d76 !important;
+      background: #e7f8f5 !important;
+    }
+
+    @media (max-width: 720px) {
+      #modalFieldForm .schedule-details { grid-template-columns: 1fr; }
     }
 
     .field-choice-buttons {
@@ -20131,6 +20206,7 @@ $editFrameCount = $commandGetStatusEditLocked
     /* Field Configuration uses custom cards/buttons. Keep compatibility selects logic-only. */
     #fUiType,
     #fNotificationEnable,
+    #fScheduleEnable,
     #fUiInOut {
       position: absolute !important;
       width: 1px !important;
@@ -20150,6 +20226,7 @@ $editFrameCount = $commandGetStatusEditLocked
 
     #fUiType + .ef-custom-select,
     #fNotificationEnable + .ef-custom-select,
+    #fScheduleEnable + .ef-custom-select,
     #fUiInOut + .ef-custom-select {
       display: none !important;
     }
@@ -20184,6 +20261,31 @@ $editFrameCount = $commandGetStatusEditLocked
       box-shadow: 0 5px 13px rgba(92, 55, 28, 0.24) !important;
     }
   </style>
+<style id="scheduleReferenceV4">
+#modalFieldForm #scheduleChoicePanel { background:#fff !important; border:1px solid #e8e8e8 !important; border-radius:18px !important; padding:16px !important; box-shadow:none !important; }
+#modalFieldForm #scheduleChoicePanel .field-config-section-title { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+#modalFieldForm #scheduleChoicePanel .field-config-section-icon { display:grid !important; place-items:center; width:40px; height:40px; flex:0 0 40px; border-radius:8px; color:white; }
+#modalFieldForm #scheduleChoicePanel .field-config-section-title strong { font-size:16px !important; font-weight:600 !important; color:#202020 !important; }
+#modalFieldForm #scheduleChoicePanel .field-config-section-title small { font-size:13px !important; font-weight:400 !important; color:#666 !important; }
+#modalFieldForm #scheduleChoiceButtons { display:flex !important; gap:4px; width:auto; max-width:none; margin:0 0 14px; }
+#modalFieldForm #scheduleChoiceButtons .field-choice-button { flex:0 0 auto !important; width:auto !important; min-width:52px; min-height:32px; padding:6px 16px !important; border:0 !important; border-radius:999px !important; background:transparent !important; color:#777 !important; font-size:13px !important; box-shadow:none !important; }
+#modalFieldForm #scheduleChoiceButtons .field-choice-button.active { background:#f0f0f0 !important; color:#171717 !important; }
+#modalFieldForm #scheduleDetails { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.6fr) !important; gap:14px; padding:12px; margin:0; background:#f2f8f7 !important; border:0 !important; border-radius:14px !important; }
+#modalFieldForm #scheduleDetails[hidden] { display:none !important; }
+#modalFieldForm #scheduleDetails .form-group { margin:0; min-width:0; }
+#modalFieldForm #scheduleDetails label { display:block; color:#606866 !important; font-size:14px !important; font-weight:500 !important; margin-bottom:12px; }
+#modalFieldForm #scheduleDetails .schedule-clock-grid { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) minmax(0,1fr); gap:8px; align-items:start; }
+#modalFieldForm #scheduleDetails .schedule-clock-grid > div { min-width:0; }
+#modalFieldForm #scheduleDetails select { appearance:none !important; -webkit-appearance:none !important; display:block !important; width:100% !important; min-width:0 !important; height:40px !important; min-height:40px !important; padding:8px 28px 8px 16px !important; border:1px solid #cbd5d2 !important; border-radius:999px !important; background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23778280' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center !important; color:#202827 !important; font-size:14px !important; font-weight:400 !important; box-shadow:none !important; }
+#modalFieldForm #scheduleDetails select option { background:white; color:#202827; }
+#modalFieldForm #scheduleDetails select:focus-visible, #modalFieldForm #scheduleChoiceButtons button:focus-visible { outline:2px solid #159d91 !important; outline-offset:2px; }
+#modalFieldForm #scheduleDetails .schedule-clock-grid small { display:block; text-align:center; color:#666; margin-top:5px; font-size:13px; font-weight:400; }
+#modalFieldForm #scheduleDetails .schedule-clock-colon { line-height:40px; font-weight:600; color:#303a38; }
+#modalFieldForm #scheduleDetails select[aria-invalid="true"] { border-color:#dc2626 !important; }
+#modalFieldForm #scheduleTimeHelp:empty { display:none; }
+@media(max-width:600px){ #modalFieldForm #scheduleDetails {grid-template-columns:minmax(0,1fr) !important;} }
+@media(max-width:420px){ #modalFieldForm #scheduleChoicePanel {padding:10px !important;} #modalFieldForm #scheduleDetails {padding:10px; } #modalFieldForm #scheduleDetails .schedule-clock-grid {gap:4px;} #modalFieldForm #scheduleDetails select {padding-left:8px !important;padding-right:20px !important;background-position:right 5px center !important;font-size:12px !important;} }
+</style>
 </head>
 
 <body>
@@ -21358,6 +21460,15 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
               <small class="field-setup-hint" id="fieldNameHint">Name is based on the Multiple UI selection.</small>
             </div>
 
+            <div class="form-group" id="fieldAliasGroup">
+              <label class="control-label" for="fAliasName"><i class="fas fa-tag"></i> Alias Name</label>
+              <select id="fAliasName">
+                <option value="No" selected>No</option>
+                <option value="Yes">Yes</option>
+              </select>
+              <small class="field-setup-hint">Enable or disable Alias Name; the original Name remains unchanged.</small>
+            </div>
+
             <div class="form-group">
               <label class="control-label" for="fDataType"><i class="fas fa-database"></i> Data Type</label>
               <select id="fDataType">
@@ -21520,6 +21631,51 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
           </section>
         </div>
 
+        <section class="field-config-panel field-config-choice-panel form-group field-config-schedule-panel" id="scheduleChoicePanel">
+          <div class="field-config-section-title">
+            <span class="field-config-section-icon" style="background:linear-gradient(135deg,#159d91,#4fbac5)"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="16" height="16" rx="3"/><path d="M7 3v4M15 3v4M3 10h16"/><circle cx="17" cy="17" r="5" fill="#159d91"/><path d="M17 14v3l2 1"/></svg></span>
+            <div>
+              <strong>Time Scheduling</strong>
+              <small>Configure the scheduled day and time.</small>
+            </div>
+          </div>
+          <div class="field-choice-buttons two schedule-yes-no" id="scheduleChoiceButtons" role="group" aria-label="Enable time scheduling">
+            <button type="button" class="field-choice-button yes-choice" data-schedule-value="Yes" aria-pressed="false">Yes</button>
+            <button type="button" class="field-choice-button no-choice" data-schedule-value="No" aria-pressed="true">No</button>
+          </div>
+          <select id="fScheduleEnable" class="field-reference-native-control" aria-label="Time Scheduling Enable">
+            <option value="Yes">Yes</option>
+            <option value="No" selected>No</option>
+          </select>
+          <div id="scheduleDetails" class="schedule-details" hidden>
+            <div class="form-group" id="scheduleDayGroup">
+              <label for="fScheduleDay">Schedule Day</label>
+              <select id="fScheduleDay">
+                <option value="">Select Day</option>
+                <option value="Every day">Every day</option>
+                <option value="Monday">Monday</option>
+                <option value="Tuesday">Tuesday</option>
+                <option value="Wednesday">Wednesday</option>
+                <option value="Thursday">Thursday</option>
+                <option value="Friday">Friday</option>
+                <option value="Saturday">Saturday</option>
+                <option value="Sunday">Sunday</option>
+              </select>
+            </div>
+            <div class="form-group" id="scheduleTimeGroup">
+              <label for="fScheduleHour">Scheduled Time</label>
+              <input type="hidden" id="fScheduleTime" />
+              <div class="schedule-clock-grid">
+                <div><select id="fScheduleHour" aria-label="Hours"><option value="">HH</option><option value="01">01</option><option value="02">02</option><option value="03">03</option><option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select><small>Hours</small></div>
+                <span class="schedule-clock-colon" aria-hidden="true">:</span>
+                <div><select id="fScheduleMinute" aria-label="Minutes"><option value="">MM</option><option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option><option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option><option value="50">50</option><option value="51">51</option><option value="52">52</option><option value="53">53</option><option value="54">54</option><option value="55">55</option><option value="56">56</option><option value="57">57</option><option value="58">58</option><option value="59">59</option></select><small>Minutes</small></div>
+                <div><select id="fSchedulePeriod" aria-label="AM or PM"><option value="">AM/PM</option><option value="AM">AM</option><option value="PM">PM</option></select><small>Period</small></div>
+              </div>
+            </div>
+          </div>
+          <small class="field-setup-hint" id="scheduleTimeHelp"></small>
+        </section>
+
         <div class="form-group field-dynamic-group" id="messageFieldGroup" hidden>
           <label class="control-label" for="fMessage"><i class="fas fa-message"></i> Message</label>
           <input type="text" id="fMessage" placeholder="Enter message" />
@@ -21660,7 +21816,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
               </div>
 
               <!-- Text UI:
-                   No. of Messages in fAsperUi creates exactly N message inputs.
+                   No. of Contents in fAsperUi creates exactly N message inputs.
                    fUiValues remains the real backend field and stores the
                    generated messages as comma-separated values, e.g. 22,dd,aa. -->
               <div class="text-message-inline-editor" id="textMessageInlineEditor" hidden>
@@ -21669,7 +21825,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
 
               <small class="text-message-count-hint" id="textMessageCountHint" hidden>
                 <i class="fas fa-message"></i>
-                <span>Enter No. of Messages first. The same number of Message fields will be created automatically.</span>
+                <span>Enter No. of Contents first. The same number of Message fields will be created automatically.</span>
               </small>
 
               <small class="field-setup-hint" id="dropdownUiValuesHint" hidden>
@@ -24220,10 +24376,10 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
             dataType: "",
             valueDef: "",
             // Push Button shows only Preset Names in the UI Configuration popup.
-            // Keep the existing hidden UI value compatibility default.
+            // Fixed wire values for the two Push Button states.
             asperui: "false,true",
-            sno_asperui: "1",
-            asperuivalue: "1",
+            sno_asperui: "0,1",
+            asperuivalue: "00,01",
           };
         }
 
@@ -24888,7 +25044,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
         //   As Per UI = 3  -> value numbers 1, 2, 3.
         if (/^\d+$/.test(raw)) {
           const count = Number.parseInt(raw, 10);
-          return Number.isFinite(count) && count > 0 ? count : 0;
+          return Number.isSafeInteger(count) && count > 0 && count <= 1000 ? count : 0;
         }
 
         // Backward compatibility for old saved rows that may contain 1,2,3.
@@ -25140,7 +25296,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
 
         if (/^\d+$/.test(raw)) {
           const count = Number.parseInt(raw, 10);
-          return Number.isFinite(count) && count > 0 ? count : 0;
+          return Number.isSafeInteger(count) && count > 0 && count <= 1000 ? count : 0;
         }
         return 0;
       }
@@ -25223,7 +25379,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
           if (hint) {
             hint.hidden = false;
             hint.innerHTML =
-              '<i class="fas fa-circle-info"></i><span>Enter No. of Messages first. Example: <strong>3</strong> creates Message 1, Message 2 and Message 3.</span>';
+              '<i class="fas fa-circle-info"></i><span>Enter No. of Contents first. Example: <strong>3</strong> creates Message 1, Message 2 and Message 3.</span>';
           }
           renderMessageUiLiveDemo();
           return;
@@ -25255,7 +25411,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
         if (hint) {
           hint.hidden = false;
           hint.innerHTML =
-            `<i class="fas fa-circle-check"></i><span>No. of Messages = <strong>${count}</strong>. Enter all ${count} message${count === 1 ? "" : "s"} below. They are stored as comma-separated values.</span>`;
+            `<i class="fas fa-circle-check"></i><span>No. of Contents = <strong>${count}</strong>. Enter all ${count} message${count === 1 ? "" : "s"} below. They are stored as comma-separated values.</span>`;
         }
 
         if (focusIndex >= 0) {
@@ -25266,44 +25422,15 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
       }
 
       function configureTextMessageControls(uiType) {
-        const normalizedType = String(uiType || "").trim().toLowerCase();
-        const isText = normalizedType === "text";
-        const asperUiInput = document.getElementById("fAsperUi");
-        const uiValuesInput = document.getElementById("fUiValues");
+        const isText = String(uiType || "").trim().toLowerCase() === "text";
         const editor = document.getElementById("textMessageInlineEditor");
         const hint = document.getElementById("textMessageCountHint");
-
-        if (!asperUiInput || !uiValuesInput) return;
-
-        // Text / Enter Text keep the existing preview, but Mix and Mix Values
-        // are no longer visible inputs. Keep fAsperUi / fUiValues in the DOM so
-        // older saved records can still restore their preview/backend payload.
         if (editor) editor.hidden = true;
         if (hint) hint.hidden = true;
-
-        if (!isDropdownUiType(normalizedType)) {
-          uiValuesInput.hidden = false;
-          uiValuesInput.removeAttribute("aria-hidden");
-          uiValuesInput.readOnly = false;
-        }
-
         if (!isText) return;
-
-        asperUiInput.hidden = false;
-        asperUiInput.readOnly = false;
-        asperUiInput.placeholder = "Enter Mix";
-        asperUiInput.setAttribute("inputmode", "numeric");
-        asperUiInput.setAttribute("pattern", "[0-9]*");
-        asperUiInput.removeAttribute("aria-busy");
-        asperUiInput.classList.remove("backend-value-loading");
-
-        // Backward compatibility: keep the old numeric count behavior in Mix,
-        // while Mix Values remains the single comma-separated backend value.
-        if (!getTextMessageCount() && String(uiValuesInput.value || "").trim()) {
-          const existingValues = getTextMessageValues();
-          asperUiInput.value = String(Math.max(1, existingValues.length));
-        }
-
+        const values = document.getElementById("fUiValues");
+        if (values && /[\r\n]/.test(values.value)) values.value = values.value.replace(/\r\n?|\n/g, ",");
+        configureDropdownUiControls("dropdown");
         renderMessageUiLiveDemo();
       }
 
@@ -25448,7 +25575,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
               .filter((item) => String(item || "").trim() !== "").length;
             previewHelp.innerHTML = textMessageCount > 0
               ? `<i class="fas fa-circle-check"></i><span>${completeCount} of ${textMessageCount} Text message${textMessageCount === 1 ? "" : "s"} configured. All messages are stored; the existing preview shows only Message 1.</span>`
-              : '<i class="fas fa-circle-info"></i><span>Enter No. of Messages first, then enter each Text message.</span>';
+              : '<i class="fas fa-circle-info"></i><span>Enter No. of Contents first, then enter each Text message.</span>';
           } else {
             previewHelp.innerHTML = hasValue
               ? '<i class="fas fa-circle-check"></i><span>Message preview is ready. Edit Message or Command to change the displayed value.</span>'
@@ -25568,7 +25695,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
               : isDropdownUiType(normalizedType)
                 ? "Enter the No. of Contents (for example 3), then select 1, 2, 3 inside List of Contents and enter Fan, AC, Phone. Test the Dropdown preview."
                 : normalizedType === "text"
-                  ? "Enter Display Min and Display Max, then check the existing Text preview below."
+                  ? "Enter the No. of Contents and each Content, then configure Display Min and Display Max."
                 : normalizedType === "console"
                   ? "Paste or enter multiline data in Message or Command and check the live Console preview below."
                 : normalizedType === "enter text"
@@ -25663,7 +25790,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
           }
         }
 
-        if (isDropdownUiType(uiType)) {
+        if (isDropdownUiType(uiType) || String(uiType).trim().toLowerCase() === "text") {
           const asPerUi = document.getElementById("fAsperUi");
           const uiValues = document.getElementById("fUiValues");
           const uiValueEditor = document.getElementById("dropdownUiValueEditor");
@@ -25672,7 +25799,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
 
           if (count < 1) {
             invalid.push(asPerUi);
-            customMessage = "Enter the No. of Contents for the Dropdown, for example 3.";
+            customMessage = "Enter the No. of Contents, for example 3.";
           } else if (
             mappings.length !== count ||
             mappings.some((item) => !String(item.label || "").trim())
@@ -25957,7 +26084,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
         // Text and Enter Text no longer expose Mix in the UI Configuration popup.
         // Keep fAsperUi in the DOM/backend payload for compatibility, but hide
         // its visible field. Dropdown and preset-based controls still show it.
-        const showAsperField = usesPresetNames || isDropdown;
+        const showAsperField = usesPresetNames || isDropdown || isText;
 
         // Preserve the existing backend key fAsperUi, but give it a clear
         // UI-specific meaning:
@@ -25965,13 +26092,13 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
         // Button = Preset Names
         // Push Button = Preset Names only
         // Dropdown = No. of Contents
-        // Text = No. of Messages
+        // Text = No. of Contents
         if (asperUiGroup) asperUiGroup.hidden = !showAsperField;
 
         if (label) {
           label.innerHTML = usesPresetNames
             ? '<i class="fas fa-wand-magic-sparkles"></i> Preset Names'
-            : isDropdown
+            : (isDropdown || isText)
               ? '<i class="fas fa-hashtag"></i> No. of Contents'
               : (isText || isEnterText)
                 ? '<i class="fas fa-layer-group"></i> Mix'
@@ -26101,17 +26228,17 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
         // fAsperUi in the DOM for backend/edit compatibility, but hide the
         // whole value-input row for Text and Enter Text.
         if (uiValuesGroup) {
-          uiValuesGroup.hidden = isPushButton || isText || isEnterText;
+          uiValuesGroup.hidden = isPushButton || isEnterText;
         }
         if (uiFieldsGrid) {
-          uiFieldsGrid.hidden = isText || isEnterText;
+          uiFieldsGrid.hidden = isEnterText;
           uiFieldsGrid.classList.toggle("push-button-preset-only", isPushButton);
         }
 
         if (uiValuesLabel) {
           uiValuesLabel.innerHTML = needsFunctioningNames
             ? '<i class="fas fa-list"></i> Functioning Names'
-            : isDropdown
+            : (isDropdown || isText)
               ? '<i class="fas fa-list"></i> List of Contents'
               : (isText || isEnterText)
                 ? '<i class="fas fa-list"></i> Mix Values'
@@ -26142,9 +26269,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
           }
         } else if (isPushButton) {
           // Hidden compatibility value only; Push Button has no Functioning Names field.
-          if (!String(uiValuesInput.value || "").trim()) {
-            uiValuesInput.value = "1";
-          }
+          uiValuesInput.value = "00,01";
           uiValuesInput.removeAttribute("data-toggle-two-values");
         } else {
           uiValuesInput.placeholder = isDropdown
@@ -26345,7 +26470,73 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
         }
       }
 
+      function normalizeFieldScheduleTime(value) {
+        const time = String(value || "").trim();
+        return /^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(time) ? time.slice(0, 5) : "";
+      }
+
+      function setFieldScheduleClock(value) {
+        const time = normalizeFieldScheduleTime(value);
+        const hour = document.getElementById("fScheduleHour");
+        const minute = document.getElementById("fScheduleMinute");
+        const period = document.getElementById("fSchedulePeriod");
+        const h = Number(time.slice(0, 2));
+        hour.value = time ? String(h % 12 || 12).padStart(2, "0") : "";
+        minute.value = time ? time.slice(3, 5) : "";
+        period.value = time ? (h < 12 ? "AM" : "PM") : "";
+        document.getElementById("fScheduleTime").value = time;
+      }
+
+      function readFieldScheduleClock() {
+        const h = document.getElementById("fScheduleHour").value;
+        const m = document.getElementById("fScheduleMinute").value;
+        const p = document.getElementById("fSchedulePeriod").value;
+        const valid = /^(0[1-9]|1[0-2])$/.test(h) && /^[0-5]\d$/.test(m) && /^(AM|PM)$/.test(p);
+        const time = valid ? String(Number(h) % 12 + (p === "PM" ? 12 : 0)).padStart(2, "0") + ":" + m : "";
+        document.getElementById("fScheduleTime").value = time;
+        return time;
+      }
+
+      function syncFieldScheduleControls() {
+        const select = document.getElementById("fScheduleEnable");
+        const enabled = select?.value === "Yes";
+        const details = document.getElementById("scheduleDetails");
+        const day = document.getElementById("fScheduleDay");
+        const time = document.getElementById("fScheduleTime");
+        if (details) details.hidden = !enabled;
+        if (day) day.disabled = !enabled;
+        if (time) time.disabled = !enabled;
+        ["fScheduleHour", "fScheduleMinute", "fSchedulePeriod"].forEach(id => {
+          const control = document.getElementById(id);
+          if (control) control.disabled = !enabled;
+        });
+        document.querySelectorAll("[data-schedule-value]").forEach((button) => {
+          const active = button.dataset.scheduleValue === (select?.value || "No");
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+      }
+
+      function restoreFieldSchedulingInputs(existing = {}) {
+        const alias = document.getElementById("fAliasName");
+        const enabled = document.getElementById("fScheduleEnable");
+        const day = document.getElementById("fScheduleDay");
+        const time = document.getElementById("fScheduleTime");
+        if (alias) {
+          const savedAlias = String(existing.aliasName ?? existing.alias_name ?? "").trim().toLowerCase();
+          alias.value = savedAlias && savedAlias !== "no" ? "Yes" : "No";
+        }
+        if (enabled) {
+          const saved = String(existing.scheduleEnabled ?? existing.schedule_enabled ?? "No");
+          enabled.value = saved.toLowerCase() === "yes" ? "Yes" : "No";
+        }
+        if (day) day.value = existing.scheduleDay ?? existing.schedule_day ?? "";
+        setFieldScheduleClock(existing.scheduleTime ?? existing.schedule_time ?? "");
+        syncFieldScheduleControls();
+      }
+
       function syncFieldReferenceControls() {
+        syncFieldScheduleControls();
         const notificationSelect = document.getElementById("fNotificationEnable");
         document
           .querySelectorAll("[data-notification-value]")
@@ -26434,6 +26625,24 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
           });
         });
 
+        document.querySelectorAll("[data-schedule-value]").forEach((button) => {
+          if (button.dataset.bound === "1") return;
+          button.dataset.bound = "1";
+          button.addEventListener("click", function () {
+            const select = document.getElementById("fScheduleEnable");
+            const day = document.getElementById("fScheduleDay");
+            const time = document.getElementById("fScheduleTime");
+            if (!select) return;
+            select.value = this.dataset.scheduleValue || "No";
+            if (select.value === "No") {
+              if (day) day.value = "";
+              setFieldScheduleClock("");
+            }
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+            syncFieldReferenceControls();
+          });
+        });
+
         document.querySelectorAll("[data-ui-inout-value]").forEach((button) => {
           if (button.dataset.bound === "1") return;
           button.dataset.bound = "1";
@@ -26470,6 +26679,19 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
         if (notificationSelect && notificationSelect.dataset.referenceBound !== "1") {
           notificationSelect.dataset.referenceBound = "1";
           notificationSelect.addEventListener("change", syncFieldReferenceControls);
+        }
+
+        ["fScheduleHour", "fScheduleMinute", "fSchedulePeriod"].forEach(id => {
+          const control = document.getElementById(id);
+          if (control && control.dataset.clockBound !== "1") {
+            control.dataset.clockBound = "1";
+            control.addEventListener("change", readFieldScheduleClock);
+          }
+        });
+        const scheduleSelect = document.getElementById("fScheduleEnable");
+        if (scheduleSelect && scheduleSelect.dataset.referenceBound !== "1") {
+          scheduleSelect.dataset.referenceBound = "1";
+          scheduleSelect.addEventListener("change", syncFieldReferenceControls);
         }
 
         const uiInOutSelect = document.getElementById("fUiInOut");
@@ -26708,6 +26930,10 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
           "bitSize",
           "name",
           "fieldName",
+          "aliasName",
+          "scheduleEnabled",
+          "scheduleDay",
+          "scheduleTime",
           "fieldDescription",
           "dataType",
           "valueDefinition",
@@ -26870,6 +27096,10 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
                   : 1,
                 name_1: value.name || value.fieldName || "",
                 fieldName_1: value.name || value.fieldName || "",
+                aliasName_1: value.aliasName || "",
+                scheduleEnabled_1: value.scheduleEnabled || "No",
+                scheduleDay_1: value.scheduleEnabled === "Yes" ? (value.scheduleDay || "") : "",
+                scheduleTime_1: value.scheduleEnabled === "Yes" ? (value.scheduleTime || "") : "",
                 fieldDescription_1: labels[key] || "",
                 dataType_1: value.dataType || "",
                 valueDefinition_1: value.valueDef || "",
@@ -26903,6 +27133,10 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
               bitSize: String(numberOfBytes * 8),
               name: field.name || field.fieldName || "",
               fieldName: field.name || field.fieldName || "",
+              aliasName: field.aliasName || "",
+              scheduleEnabled: field.scheduleEnabled || "No",
+              scheduleDay: field.scheduleEnabled === "Yes" ? (field.scheduleDay || "") : "",
+              scheduleTime: field.scheduleEnabled === "Yes" ? (field.scheduleTime || "") : "",
               fieldDescription: labels[key] || "",
               dataType: field.dataType || "",
               valueDefinition: field.valueDef || "",
@@ -27282,6 +27516,10 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
               row?.err_name,
               bitwiseNames,
             )],
+            ["Alias Name", value(row?.aliasName, row?.alias_name)],
+            ["Time Scheduling", value(row?.scheduleEnabled)],
+            ["Scheduled Day", value(row?.scheduleDay)],
+            ["Scheduled Time", value(row?.scheduleTime)],
             ["Description", value(row?.fieldDescription, row?.description)],
             ["Byte Range", range(value(row?.startBytePosition), value(row?.endBytePosition))],
             ["Bit Range", range(bitStart, bitEnd)],
@@ -28533,6 +28771,10 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
             row?.[`fieldName${suffix}`] ||
             row?.[`name${suffix}`] ||
             "",
+          aliasName: readRowValue(row, `aliasName${suffix}`) || row?.[`aliasName${suffix}`] || "",
+          scheduleEnabled: readRowValue(row, `scheduleEnabled${suffix}`) || row?.[`scheduleEnabled${suffix}`] || "No",
+          scheduleDay: readRowValue(row, `scheduleDay${suffix}`) || row?.[`scheduleDay${suffix}`] || "",
+          scheduleTime: normalizeFieldScheduleTime(readRowValue(row, `scheduleTime${suffix}`) || row?.[`scheduleTime${suffix}`] || ""),
           notificationEnable:
             readRowValue(row, `notificationEnable${suffix}`) ||
             readRowValue(row, `notifEnable${suffix}`) ||
@@ -30706,6 +30948,10 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
 
       function isFieldConfigurationComplete(configuration) {
         if (!configuration || typeof configuration !== "object") return false;
+        if (configuration.scheduleEnabled === "Yes") {
+          const validDays = ["Every day", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+          if (!validDays.includes(configuration.scheduleDay) || !normalizeFieldScheduleTime(configuration.scheduleTime)) return false;
+        }
         return (
           Boolean(configuration.dataType) &&
           Boolean(configuration.valueDef) &&
@@ -32688,6 +32934,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
         const existing =
           fieldDescriptions[frameIdx]?.[currentModalByteKey] || {};
         syncFieldNameByMultipleUi(existing);
+        restoreFieldSchedulingInputs(existing);
         document.getElementById("fDataType").value =
           existing.dataType || "";
         document.getElementById("fValueDef").value =
@@ -32719,7 +32966,9 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
             notificationSelect.value = "";
           }
         }
-        document.getElementById("fAsperUi").value = existing.asperui ?? existing.asperUi ?? "";
+        document.getElementById("fAsperUi").value = isDropdownUiType(existing.uiType)
+          ? normalizeDropdownAsperUi(existing.asperui ?? existing.asperUi ?? "")
+          : (existing.asperui ?? existing.asperUi ?? "");
         document.getElementById("fUiSerialNo").value = existing.sno_asperui ?? existing.uiSerialNo ?? "";
         const byteUiValuesInput = document.getElementById("fUiValues");
         if (byteUiValuesInput) {
@@ -32782,6 +33031,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
           currentModalByteKey
           ] || {};
         syncFieldNameByMultipleUi(existing);
+        restoreFieldSchedulingInputs(existing);
         document.getElementById("fDataType").value =
           existing.dataType || "";
         document.getElementById("fValueDef").value =
@@ -32813,7 +33063,9 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
             notificationSelect.value = "";
           }
         }
-        document.getElementById("fAsperUi").value = existing.asperui ?? existing.asperUi ?? "";
+        document.getElementById("fAsperUi").value = isDropdownUiType(existing.uiType)
+          ? normalizeDropdownAsperUi(existing.asperui ?? existing.asperUi ?? "")
+          : (existing.asperui ?? existing.asperUi ?? "");
         document.getElementById("fUiSerialNo").value = existing.sno_asperui ?? existing.uiSerialNo ?? "";
         const partitionUiValuesInput = document.getElementById("fUiValues");
         if (partitionUiValuesInput) {
@@ -32881,6 +33133,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
           document.getElementById("fValueDef"),
           document.getElementById("fUiType"),
           document.getElementById("fNotificationEnable"),
+          document.getElementById("fScheduleEnable"),
           document.getElementById("fUiInOut"),
         ];
         const invalidControls = [];
@@ -32892,6 +33145,17 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
         requiredSelects.forEach((control) => {
           if (!control.value) invalidControls.push(control);
         });
+
+        if (document.getElementById("fScheduleEnable")?.value === "Yes") {
+          const dayInput = document.getElementById("fScheduleDay");
+          const timeInput = document.getElementById("fScheduleTime");
+          const validDays = ["Every day", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+          if (!validDays.includes(dayInput?.value || "")) invalidControls.push(dayInput);
+          if (!readFieldScheduleClock()) {
+            const missing = ["fScheduleHour", "fScheduleMinute", "fSchedulePeriod"].map(id => document.getElementById(id)).find(control => !control.value);
+            invalidControls.push(missing || document.getElementById("fScheduleHour"));
+          }
+        }
 
         const selectedUiType = document.getElementById("fUiType")?.value || "";
         const displayMinInput = document.getElementById("fDisplayMin");
@@ -32917,7 +33181,7 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
 
         /* Dropdown popup: No. of Contents defines the count; every generated
            Content No. (1..N) must have one Content in List of Contents. */
-        if (isDropdownUiType(selectedUiType)) {
+        if (isDropdownUiType(selectedUiType) || String(selectedUiType).trim().toLowerCase() === "text") {
           const dropdownCount = getDropdownUiCount(asperUiInput?.value || "");
           const dropdownMappings = getDropdownUiMappings();
           const dropdownUiValueEditor = document.getElementById("dropdownUiValueEditor");
@@ -33177,15 +33441,16 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
       const dropdownUiValueIndex = document.getElementById("dropdownUiValueIndex");
       dropdownUiValueIndex?.addEventListener("change", function () {
         const selectedUiType = document.getElementById("fUiType")?.value || "";
-        if (!isDropdownUiType(selectedUiType)) return;
+        if (!isDropdownUiType(selectedUiType) && String(selectedUiType).trim().toLowerCase() !== "text") return;
         selectDropdownUiValue(this.value, true);
       });
 
       const dropdownUiValueEditor = document.getElementById("dropdownUiValueEditor");
       dropdownUiValueEditor?.addEventListener("input", function () {
         const selectedUiType = document.getElementById("fUiType")?.value || "";
-        if (!isDropdownUiType(selectedUiType)) return;
+        if (!isDropdownUiType(selectedUiType) && String(selectedUiType).trim().toLowerCase() !== "text") return;
         updateSelectedDropdownUiValue();
+        if (String(selectedUiType).trim().toLowerCase() === "text") renderMessageUiLiveDemo();
       });
 
       document.getElementById("dropdownUiValueSummary")?.addEventListener("click", function (event) {
@@ -33649,21 +33914,37 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
           const defaultValueInput = document.getElementById("fDefaultValue");
           if (defaultValueInput) defaultValueInput.value = fieldName;
 
+          const serialType = String(document.getElementById("fUiType").value).trim().toLowerCase();
+          const asPerUi = document.getElementById("fAsperUi").value.trim();
+          if (serialType === "push button") document.getElementById("fUiValues").value = "00,01";
+          const serialCount = ["text", "dropdown"].includes(serialType)
+            ? getDropdownUiCount(asPerUi)
+            : ["toggle switch", "button", "push button"].includes(serialType)
+              ? parseDropdownCsv(asPerUi).length : 0;
+          document.getElementById("fUiSerialNo").value = Array.from({length: serialCount}, (_, i) => String(i)).join(",");
+          const persistedAsPerUi = serialType === "dropdown"
+            ? Array.from({length: serialCount}, (_, i) => String(i + 1)).join(",")
+            : asPerUi;
+          const schedulingEnabled = document.getElementById("fScheduleEnable").value === "Yes";
           const configuration = {
             name: fieldName,
             fieldName: fieldName,
             field_name: fieldName,
+            aliasName: document.getElementById("fAliasName").value.trim(),
+            scheduleEnabled: schedulingEnabled ? "Yes" : "No",
+            scheduleDay: schedulingEnabled ? document.getElementById("fScheduleDay").value : "",
+            scheduleTime: schedulingEnabled ? normalizeFieldScheduleTime(document.getElementById("fScheduleTime").value) : "",
             dataType: document.getElementById("fDataType").value,
             valueDef: document.getElementById("fValueDef").value,
             defaultvalue: fieldName,
             defaultValue: fieldName,
             default_value: fieldName,
             uiType: document.getElementById("fUiType").value,
-            asperui: document.getElementById("fAsperUi").value.trim(),
+            asperui: persistedAsPerUi,
             sno_asperui: document.getElementById("fUiSerialNo").value.trim(),
             asperuivalue: document.getElementById("fUiValues").value.trim(),
             // Compatibility aliases retained for older saved browser data.
-            asperUi: document.getElementById("fAsperUi").value.trim(),
+            asperUi: persistedAsPerUi,
             uiSerialNo: document.getElementById("fUiSerialNo").value.trim(),
             uiValues: document.getElementById("fUiValues").value.trim(),
             message: isMessagePreviewUiType(document.getElementById("fUiType").value)
@@ -34682,7 +34963,8 @@ How to partition: use the + markers on the timeline. First click a + to cut, the
       '#voiceCommandEnableSelect',
       '#fUiType',
       '#fNotificationEnable',
-      '#fUiInOut'
+      '#fUiInOut',
+      '#fScheduleEnable', '#fScheduleDay', '#fScheduleHour', '#fScheduleMinute', '#fSchedulePeriod'
     ].join(',');
 
     const state = {

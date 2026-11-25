@@ -86,6 +86,8 @@ class model_apiform extends Model
             if (!is_array($allData)) {
                 throw new \Exception('Invalid API configuration JSON.');
             }
+
+            $this->apiTreePreflightFieldSchedules($allData);
     
            // TEMP FIX: Do not use CI transaction here because it is rolling back silently.
         // We are using explicit insert checks below for each table.
@@ -237,8 +239,51 @@ class model_apiform extends Model
             }
     
       
-    
+        $this->autoSyncDeviceUiSchemaAfterApiChange(
+            $this->apiTreeCleanValue($this->apiTreeArrayValue($mainData, 'modelname'))
+        );
+
         return $configId;
+        }
+
+        /**
+         * After API create/update/delete, refresh the stored device UI schema so
+         * api_schema / operate frames pick up new values without a Studio re-save.
+         */
+        private function autoSyncDeviceUiSchemaAfterApiChange($modelName)
+        {
+            $modelName = trim((string) $modelName);
+            if ($modelName === '') {
+                return;
+            }
+
+            try {
+                if (!class_exists(\App\Models\View_page_model::class, false)) {
+                    $candidates = [
+                        APPPATH . 'Models/view_page_model.php',
+                        APPPATH . 'Models/View_page_model.php',
+                    ];
+                    foreach ($candidates as $file) {
+                        if (is_file($file)) {
+                            require_once $file;
+                            break;
+                        }
+                    }
+                }
+                if (!class_exists(\App\Models\View_page_model::class, false)) {
+                    return;
+                }
+                $pageModel = new \App\Models\View_page_model();
+                if (method_exists($pageModel, 'autoPersistDeviceUiSchema')) {
+                    $pageModel->autoPersistDeviceUiSchema($modelName, '');
+                }
+            } catch (\Throwable $exception) {
+                log_message(
+                    'error',
+                    'Auto device-ui schema sync after API change failed for '
+                    . $modelName . ': ' . $exception->getMessage()
+                );
+            }
         }
 
         public function getApiTreeSaveCheck($configId)
@@ -1515,6 +1560,10 @@ class model_apiform extends Model
             'name' => $field['name'] ?? '',
             'fieldName' => $field['name'] ?? '',
             'field_name' => $field['name'] ?? '',
+            'aliasName' => $field['alias_name'] ?? '',
+            'scheduleEnabled' => $field['schedule_enabled'] ?? 'No',
+            'scheduleDay' => $field['schedule_day'] ?? '',
+            'scheduleTime' => substr((string) ($field['schedule_time'] ?? ''), 0, 5),
             'fieldDescription' => $field['field_description'] ?? '',
             'dataType' => $field['data_type'] ?? '',
             'valueDefinition' => $field['value_definition'] ?? '',
@@ -1548,6 +1597,10 @@ class model_apiform extends Model
             'name_1' => $field['name'] ?? '',
             'fieldName_1' => $field['name'] ?? '',
             'field_name_1' => $field['name'] ?? '',
+            'aliasName_1' => $field['alias_name'] ?? '',
+            'scheduleEnabled_1' => $field['schedule_enabled'] ?? 'No',
+            'scheduleDay_1' => $field['schedule_day'] ?? '',
+            'scheduleTime_1' => substr((string) ($field['schedule_time'] ?? ''), 0, 5),
             'fieldDescription_1' => $field['field_description'] ?? '',
             'dataType_1' => $field['data_type'] ?? '',
             'valueDefinition_1' => $field['value_definition'] ?? '',
@@ -1578,6 +1631,8 @@ class model_apiform extends Model
             if (!$configId) {
                 return $this->saveApiTreeConfig($mainData, $allData, $user_id);
             }
+
+            $this->apiTreePreflightFieldSchedules($allData);
     
             $existing = $this->db->table('api_product_configs')
                 ->where('id', $configId)
@@ -1715,6 +1770,12 @@ class model_apiform extends Model
                     }
                 }
             }
+
+            $syncModel = $this->apiTreeCleanValue($this->apiTreeArrayValue($mainData, 'modelname'));
+            if ($syncModel === '') {
+                $syncModel = (string) ($existing['model_name'] ?? '');
+            }
+            $this->autoSyncDeviceUiSchemaAfterApiChange($syncModel);
     
             return $configId;
         }
@@ -1777,8 +1838,13 @@ class model_apiform extends Model
             $deleteConfig->delete();
     
             $this->db->transComplete();
+
+            $ok = $this->db->transStatus();
+            if ($ok) {
+                $this->autoSyncDeviceUiSchemaAfterApiChange((string) ($config['model_name'] ?? ''));
+            }
     
-            return $this->db->transStatus();
+            return $ok;
         }
 
         /**
@@ -1803,6 +1869,119 @@ class model_apiform extends Model
 
             $configId = (int) $row['config_id'];
             return $configId > 0 ? $configId : null;
+        }
+
+        /**
+         * Read per-field display alias and weekly time schedule from frontend
+         * rows (both bytewise and bitwise). Do not modify the protocol Name.
+         */
+        private function apiTreeFieldScheduleValues($row, $frameGroup)
+        {
+            $prefixes = $this->apiTreePrefixes($frameGroup);
+            $alias = $this->apiTreeCleanValue(
+                $this->apiTreePrefixedValue($row, $prefixes, 'aliasName')
+                ?? $this->apiTreePrefixedValue($row, $prefixes, 'alias_name')
+            );
+            // Legacy nonempty display aliases are treated as enabled on resave.
+            $alias = ($alias !== null && trim($alias) !== '' && strtolower(trim($alias)) !== 'no') ? 'Yes' : 'No';
+
+            $enabled = $this->apiTreeCleanValue(
+                $this->apiTreePrefixedValue($row, $prefixes, 'scheduleEnabled')
+                ?? $this->apiTreePrefixedValue($row, $prefixes, 'schedule_enabled')
+            );
+            $enabled = $enabled === null ? 'No' : ucfirst(strtolower($enabled));
+            if (!in_array($enabled, array('Yes', 'No'), true)) {
+                throw new \InvalidArgumentException('Time Scheduling must be Yes or No.');
+            }
+
+            $day = null;
+            $time = null;
+            if ($enabled === 'Yes') {
+                $day = $this->apiTreeCleanValue(
+                    $this->apiTreePrefixedValue($row, $prefixes, 'scheduleDay')
+                    ?? $this->apiTreePrefixedValue($row, $prefixes, 'schedule_day')
+                );
+                $time = $this->apiTreeCleanValue(
+                    $this->apiTreePrefixedValue($row, $prefixes, 'scheduleTime')
+                    ?? $this->apiTreePrefixedValue($row, $prefixes, 'schedule_time')
+                );
+                if (!in_array($day, array(
+                    'Every day', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+                    'Friday', 'Saturday', 'Sunday'
+                ), true)) {
+                    throw new \InvalidArgumentException('Choose a valid scheduling day.');
+                }
+                if ($time === null || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/', $time)) {
+                    throw new \InvalidArgumentException('Scheduling time must use HH:MM (24-hour format).');
+                }
+                // Accept older saved seconds, but persist minute precision only.
+                $time = substr($time, 0, 5) . ':00';
+            }
+            return array(
+                'alias_name' => $alias,
+                'schedule_enabled' => $enabled,
+                'schedule_day' => $day,
+                'schedule_time' => $time
+            );
+        }
+
+        /**
+         * Fail safely before editing existing rows if the SQL migration is
+         * missing, or the submitted JSON contains an invalid schedule.
+         * This deliberately runs before replaceApiTreeConfig deletes frames.
+         */
+        private function apiTreePreflightFieldSchedules($allData)
+        {
+            $columns = array_flip($this->db->getFieldNames('api_frame_fields'));
+            foreach (array('alias_name', 'schedule_enabled', 'schedule_day', 'schedule_time') as $column) {
+                if (!isset($columns[$column])) {
+                    throw new \RuntimeException(
+                        'Missing api_frame_fields.' . $column . '. Apply the EFACTOR Field Scheduling SQL migration before saving.'
+                    );
+                }
+            }
+
+            foreach (array('commands' => 'command', 'responses' => 'response', 'errors' => 'error') as $key => $group) {
+                $frames = isset($allData[$key]) && is_array($allData[$key]) ? $allData[$key] : array();
+                foreach ($frames as $frame) {
+                    if (!is_array($frame)) continue;
+                    $rows = isset($frame['rows']) && is_array($frame['rows']) ? $frame['rows'] : array();
+                    foreach ($rows as $row) {
+                        if (!is_array($row)) continue;
+                        $this->apiTreeFieldScheduleValues($row, $group);
+                        $bits = isset($row['bitwise']) && is_array($row['bitwise']) ? $row['bitwise'] : array();
+                        foreach ($bits as $bitRow) {
+                            if (is_array($bitRow)) $this->apiTreeFieldScheduleValues($bitRow, $group);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Persist one-based dropdown option keys, accepting old numeric counts.
+        private function apiTreeDropdownAsPerUi($row, $prefixes)
+        {
+            $value = $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'asperui'));
+            $type = strtolower(trim((string) $this->apiTreePrefixedValue($row, $prefixes, 'uiType')));
+            if ($type !== 'dropdown') return $value;
+            $serials = $this->apiTreeGenerateUiSerialNo($row, $prefixes);
+            if ($serials === null) return null;
+            return implode(',', range(1, count(explode(',', $serials))));
+        }
+
+        // Generate zero-based serials from the configured UI options, not the legacy default.
+        private function apiTreeGenerateUiSerialNo($row, $prefixes)
+        {
+            $type = strtolower(trim((string) $this->apiTreePrefixedValue($row, $prefixes, 'uiType')));
+            $asPerUi = trim((string) $this->apiTreePrefixedValue($row, $prefixes, 'asperui'));
+            if (in_array($type, array('text', 'dropdown'), true)) {
+                $count = ctype_digit($asPerUi) ? (int) $asPerUi : count(array_filter(array_map('trim', explode(',', $asPerUi)), 'strlen'));
+            } elseif (in_array($type, array('toggle switch', 'button', 'push button'), true)) {
+                $count = count(array_filter(array_map('trim', explode(',', $asPerUi)), 'strlen'));
+            } else {
+                return null;
+            }
+            return $count > 0 && $count <= 1000 ? implode(',', range(0, $count - 1)) : null;
         }
 
         private function insertApiTreeField($frameId, $parentFieldId, $fieldLevel, $row, $rowSequence, $subFieldSequence, $frameGroup, $configId = null)
@@ -1880,6 +2059,8 @@ class model_apiform extends Model
                 }
             }
     
+            $scheduleData = $this->apiTreeFieldScheduleValues($row, $frameGroup);
+
             $data = array(
                 'frame_id'              => $frameId,
                 'parent_field_id'       => $parentFieldId,
@@ -1915,6 +2096,10 @@ class model_apiform extends Model
                     'error_name_1'
                 ))),
 
+                'alias_name'            => $scheduleData['alias_name'],
+                'schedule_enabled'      => $scheduleData['schedule_enabled'],
+                'schedule_day'          => $scheduleData['schedule_day'],
+                'schedule_time'         => $scheduleData['schedule_time'],
                 'field_description'     => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'fieldDescription')),
                 'data_type'             => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'dataType')),
                 'value_definition'      => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'valueDefinition')),
@@ -1926,9 +2111,11 @@ class model_apiform extends Model
     
                 'ui_type'               => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'uiType')),
                 'ui_id'                 => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'uiId')),
-                'as_per_ui'             => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'asperui')),
-                'ui_serial_no'          => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'sno_asperui')),
-                'ui_values'             => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'asperuivalue')),
+                'as_per_ui'             => $this->apiTreeDropdownAsPerUi($row, $prefixes),
+                'ui_serial_no'          => $this->apiTreeGenerateUiSerialNo($row, $prefixes),
+                'ui_values'             => strtolower(trim((string) $this->apiTreePrefixedValue($row, $prefixes, 'uiType'))) === 'push button'
+                    ? '00,01'
+                    : $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'asperuivalue')),
                 'ui_page_no'            => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'uiPageNo')),
                 'ui_description_in_out' => $this->apiTreeCleanValue($this->apiTreePrefixedValue($row, $prefixes, 'uiDescriptionInOut')),
     

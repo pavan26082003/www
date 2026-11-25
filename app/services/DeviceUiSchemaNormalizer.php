@@ -123,6 +123,14 @@ class DeviceUiSchemaNormalizer
         $schema = self::repairPublishedFrames($schema);
         $schema = self::applyCardStyles($schema, $report);
         $schema = self::normalizeControlContracts($schema);
+        // Get Status: response starts collapsed; command toggles state.getStatusResponse.*.open.
+        $schema = self::applyGetStatusRevealContract($schema);
+        // Brand/info title = product/model identity — never live node nicknames.
+        $schema = self::applyDisplayModelIdentity($schema, $modelNo);
+        // Controls commit on change; hide footer Save Changes for all models.
+        $schema = self::applyImmediateCommitContract($schema);
+        // Slider shells follow theme (no forced light #F8FAFC box on dark UIs).
+        $schema = self::applySliderShellThemeContract($schema);
         // Rebuild missing multi-page hardware frames after controls are normalized.
         $schema = self::ensureDeviceConfigPagesFromControls($schema);
         // V2/legacy-safe: push richer deviceConfig/v2_node_details frames onto
@@ -184,8 +192,8 @@ class DeviceUiSchemaNormalizer
             $schema['meta'] = [];
         }
         // Authoritative build stamp for app gating. schemaBuildVersion mirrors it.
-        $schema['meta']['normalizerBuild'] = '2026-11-19.3';
-        $schema['meta']['schemaBuildVersion'] = '2026-11-19.3';
+        $schema['meta']['normalizerBuild'] = '2026-11-25.2';
+        $schema['meta']['schemaBuildVersion'] = '2026-11-25.2';
         $schema['meta']['writeContract'] = self::writeTransportContractDoc();
         // Linked Studio pages are the only screens. Drop device-only pages and
         // a second copy of the same page title before the app reads the schema.
@@ -3246,15 +3254,13 @@ class DeviceUiSchemaNormalizer
             : [];
 
         if ($usedV2Api) {
-            // V2 test node is the page list. Stored pages that the new API
-            // removed (old Home.operation, etc.) are not copied back in.
+            // Live V2 test node is the page/frame/value authority. Do not let a
+            // richer stale stored snapshot overwrite API value changes on shared
+            // page keys. Pages removed by the API are dropped (not merged back).
             $schema['node_details'] = $ordered;
             $schema['v2_node_details'] = $ordered;
             if (!empty($config)) {
-                $schema['deviceConfig'] = self::mergeDeviceConfigPages(
-                    $config,
-                    self::configLimitedToLivePages($existingConfig, $config)
-                );
+                $schema['deviceConfig'] = $config;
                 if (isset($schema['node_details'][0]) && is_array($schema['node_details'][0])) {
                     $schema['node_details'][0]['config'] = $schema['deviceConfig'];
                 }
@@ -6383,6 +6389,642 @@ class DeviceUiSchemaNormalizer
         unset($child);
     }
 
+    /**
+     * Full send-button props. Apps require action.type === "send".
+     */
+    private static function buildSendButtonProps($binding, $visible = true, $accentColor = '#2563EB')
+    {
+        $accent = trim((string) $accentColor);
+        if ($accent === '') {
+            $accent = '#2563EB';
+        }
+
+        return [
+            'visible' => (bool) $visible,
+            'label' => 'Send',
+            'icon' => 'send',
+            'size' => 32,
+            'borderRadius' => 9,
+            'backgroundColor' => $accent,
+            'color' => $accent,
+            'iconColor' => '#FFFFFF',
+            'iconSize' => 15,
+            'action' => [
+                'type' => 'send',
+                'binding' => (string) $binding,
+            ],
+        ];
+    }
+
+    /**
+     * Merge missing send-button fields without dropping existing keys.
+     */
+    private static function mergeSendButtonProps($existing, $binding, $visible = true, $accentColor = '#2563EB')
+    {
+        $full = self::buildSendButtonProps($binding, $visible, $accentColor);
+        if (!is_array($existing)) {
+            return $full;
+        }
+        foreach ($full as $key => $value) {
+            if (!array_key_exists($key, $existing) || $existing[$key] === null || $existing[$key] === '') {
+                $existing[$key] = $value;
+            }
+        }
+        if (!isset($existing['action']) || !is_array($existing['action'])) {
+            $existing['action'] = $full['action'];
+        } else {
+            $type = strtolower(trim((string) ($existing['action']['type'] ?? '')));
+            if ($type === '' || $type === 'update') {
+                // textField send affordance must be "send", never a bare update stub.
+                $existing['action']['type'] = 'send';
+            }
+            if (empty($existing['action']['binding'])) {
+                $existing['action']['binding'] = (string) $binding;
+            }
+        }
+        $existing['visible'] = array_key_exists('visible', $existing)
+            ? (bool) $existing['visible']
+            : (bool) $visible;
+
+        return $existing;
+    }
+
+    private static function isGetStatusParameterName($name)
+    {
+        $normalized = strtolower(trim(preg_replace('/[_-]+/', ' ', (string) $name)));
+
+        return $normalized !== '' && strpos($normalized, 'get status') !== false;
+    }
+
+    private static function getStatusRevealBinding(array $control)
+    {
+        $pageNo = trim((string) (isset($control['pageNo']) ? $control['pageNo'] : ''));
+        $name = trim((string) self::firstNonEmpty(
+            isset($control['parameterName']) ? $control['parameterName'] : null,
+            isset($control['parameter']) ? $control['parameter'] : null,
+            isset($control['label']) ? $control['label'] : null,
+            isset($control['name']) ? $control['name'] : null
+        ));
+        $slug = strtolower(trim(preg_replace('/[^a-zA-Z0-9]+/', '_', $pageNo . ':' . $name), '_'));
+        if ($slug === '') {
+            $slug = 'get_status';
+        }
+
+        return 'state.getStatusResponse.' . $slug . '.open';
+    }
+
+    private static function controlUiTypeSource(array $control)
+    {
+        $candidates = [
+            isset($control['protocolMeta']['ui_type_source']) ? $control['protocolMeta']['ui_type_source'] : null,
+            isset($control['protocolMeta']['source']) ? $control['protocolMeta']['source'] : null,
+            isset($control['meta']['ui_type_source']) ? $control['meta']['ui_type_source'] : null,
+            isset($control['uiTypeSource']) ? $control['uiTypeSource'] : null,
+            isset($control['apiUiSource']) ? $control['apiUiSource'] : null,
+        ];
+        foreach ($candidates as $value) {
+            $token = strtolower(trim((string) $value));
+            if ($token !== '') {
+                return $token;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Foundation Get Status contract for Flutter:
+     * - response controls start collapsed (visibleWhen + initiallyExpanded false)
+     * - command tap toggles state.getStatusResponse.*.open
+     * - state seeds open=false so the dropdown is closed on first paint
+     */
+    private static function applyGetStatusRevealContract(array $schema)
+    {
+        if (!isset($schema['controls']) || !is_array($schema['controls'])) {
+            return $schema;
+        }
+
+        $revealState = [];
+        foreach ($schema['controls'] as $index => $control) {
+            if (!is_array($control)) {
+                continue;
+            }
+            $paramName = self::firstNonEmpty(
+                isset($control['parameterName']) ? $control['parameterName'] : null,
+                isset($control['parameter']) ? $control['parameter'] : null,
+                isset($control['label']) ? $control['label'] : null,
+                isset($control['name']) ? $control['name'] : null
+            );
+            if (!self::isGetStatusParameterName($paramName)) {
+                continue;
+            }
+
+            $revealBinding = self::getStatusRevealBinding($control);
+            $pathParts = explode('.', $revealBinding);
+            // state.getStatusResponse.{slug}.open
+            if (count($pathParts) >= 4) {
+                $slug = $pathParts[2];
+                $revealState[$slug] = ['open' => false];
+            }
+
+            $source = self::controlUiTypeSource($control);
+            $writable = self::isWritableControl($control);
+
+            if (!isset($control['component']) || !is_array($control['component'])) {
+                $control['component'] = [];
+            }
+            if (!isset($control['component']['props']) || !is_array($control['component']['props'])) {
+                $control['component']['props'] = [];
+            }
+
+            if ($source === 'response' || (!$writable && $source !== 'command' && $source !== 'error')) {
+                // Response payload: collapsed until command reveals it.
+                if ($source === '' || $source === 'response') {
+                    $control['component']['props'] = array_merge($control['component']['props'], [
+                        'initiallyExpanded' => false,
+                        'collapsed' => true,
+                        'revealBinding' => $revealBinding,
+                        'visibleWhen' => $revealBinding . ' == true',
+                    ]);
+                }
+            }
+
+            if ($writable || $source === 'command') {
+                $revealEvent = [
+                    'event' => 'onTap',
+                    'action' => [
+                        'type' => 'update',
+                        'binding' => $revealBinding,
+                        'toggle' => true,
+                    ],
+                ];
+                $control['events'] = isset($control['events']) && is_array($control['events'])
+                    ? $control['events']
+                    : [];
+                $hasReveal = false;
+                foreach ($control['events'] as $ev) {
+                    if (!is_array($ev) || !isset($ev['action']) || !is_array($ev['action'])) {
+                        continue;
+                    }
+                    if (trim((string) ($ev['action']['binding'] ?? '')) === $revealBinding) {
+                        $hasReveal = true;
+                        break;
+                    }
+                }
+                if (!$hasReveal) {
+                    $control['events'][] = $revealEvent;
+                }
+                $control['component']['events'] = isset($control['component']['events'])
+                    && is_array($control['component']['events'])
+                    ? $control['component']['events']
+                    : [];
+                $hasComponentReveal = false;
+                foreach ($control['component']['events'] as $ev) {
+                    if (!is_array($ev) || !isset($ev['action']) || !is_array($ev['action'])) {
+                        continue;
+                    }
+                    if (trim((string) ($ev['action']['binding'] ?? '')) === $revealBinding) {
+                        $hasComponentReveal = true;
+                        break;
+                    }
+                }
+                if (!$hasComponentReveal) {
+                    $control['component']['events'][] = $revealEvent;
+                }
+                $control['component']['props'] = array_merge($control['component']['props'], [
+                    'revealsResponse' => true,
+                    'revealBinding' => $revealBinding,
+                    'initiallyExpanded' => false,
+                    'collapsed' => true,
+                ]);
+            }
+
+            $schema['controls'][$index] = $control;
+        }
+
+        if ($revealState !== []) {
+            if (!isset($schema['state']) || !is_array($schema['state'])) {
+                $schema['state'] = [];
+            }
+            $existing = isset($schema['state']['getStatusResponse']) && is_array($schema['state']['getStatusResponse'])
+                ? $schema['state']['getStatusResponse']
+                : [];
+            foreach ($revealState as $slug => $payload) {
+                if (!isset($existing[$slug]) || !is_array($existing[$slug])) {
+                    $existing[$slug] = $payload;
+                } elseif (!array_key_exists('open', $existing[$slug])) {
+                    $existing[$slug]['open'] = false;
+                }
+            }
+            $schema['state']['getStatusResponse'] = $existing;
+        }
+
+        // Mirror contract onto ParameterCard nodes in the widget tree.
+        if (isset($schema['ui']['widgetTree']) && is_array($schema['ui']['widgetTree'])
+            && isset($schema['controls']) && is_array($schema['controls'])) {
+            self::rewriteGetStatusWidgetTree($schema['ui']['widgetTree'], $schema['controls']);
+        }
+
+        return $schema;
+    }
+
+    private static function rewriteGetStatusWidgetTree(&$node, array $controls, $depth = 0)
+    {
+        if (!is_array($node) || $depth > 60) {
+            return;
+        }
+        $type = strtolower(trim((string) ($node['type'] ?? '')));
+        $binding = trim((string) (
+            $node['properties']['binding']
+            ?? $node['binding']
+            ?? $node['properties']['props']['binding']
+            ?? ''
+        ));
+        if (($type === 'parametercard' || $type === 'parametertile') && $binding !== '') {
+            foreach ($controls as $control) {
+                if (!is_array($control)) {
+                    continue;
+                }
+                if (trim((string) ($control['binding'] ?? '')) !== $binding) {
+                    continue;
+                }
+                $props = isset($control['component']['props']) && is_array($control['component']['props'])
+                    ? $control['component']['props']
+                    : [];
+                if (isset($props['visibleWhen'])) {
+                    $node['visibleWhen'] = $props['visibleWhen'];
+                    $node['expanded'] = false;
+                    if (!isset($node['properties']) || !is_array($node['properties'])) {
+                        $node['properties'] = [];
+                    }
+                    $node['properties']['visibleWhen'] = $props['visibleWhen'];
+                    $node['properties']['expanded'] = false;
+                    $node['properties']['initiallyExpanded'] = false;
+                    $node['properties']['collapsed'] = true;
+                    if (!isset($node['properties']['props']) || !is_array($node['properties']['props'])) {
+                        $node['properties']['props'] = [];
+                    }
+                    $node['properties']['props'] = array_merge($node['properties']['props'], [
+                        'visibleWhen' => $props['visibleWhen'],
+                        'initiallyExpanded' => false,
+                        'collapsed' => true,
+                        'revealBinding' => $props['revealBinding'] ?? null,
+                    ]);
+                }
+                if (!empty($props['revealsResponse'])) {
+                    if (!isset($node['properties']) || !is_array($node['properties'])) {
+                        $node['properties'] = [];
+                    }
+                    if (!isset($node['properties']['props']) || !is_array($node['properties']['props'])) {
+                        $node['properties']['props'] = [];
+                    }
+                    $node['properties']['props']['revealsResponse'] = true;
+                    $node['properties']['props']['revealBinding'] = $props['revealBinding'] ?? null;
+                    $node['properties']['initiallyExpanded'] = false;
+                    $node['properties']['collapsed'] = true;
+                    $node['expanded'] = false;
+                }
+                break;
+            }
+        }
+        foreach (['children', 'body', 'items', 'nodes'] as $listKey) {
+            if (!isset($node[$listKey]) || !is_array($node[$listKey])) {
+                continue;
+            }
+            foreach ($node[$listKey] as &$child) {
+                if (is_array($child)) {
+                    self::rewriteGetStatusWidgetTree($child, $controls, $depth + 1);
+                }
+            }
+            unset($child);
+        }
+    }
+
+    /**
+     * Prefer product/model identity for brand + info titles.
+     * Never publish live node nicknames (current_devicetype / hostnames) as the model name.
+     */
+    private static function applyDisplayModelIdentity(array $schema, $modelNo = '')
+    {
+        $modelNo = trim((string) $modelNo);
+        if ($modelNo === '') {
+            $modelNo = trim((string) (
+                $schema['meta']['app']['modelNo']
+                ?? $schema['meta']['modelNo']
+                ?? $schema['app']['modelNo']
+                ?? ''
+            ));
+        }
+
+        $product = '';
+        $brand = '';
+        $paths = [
+            ['deviceConfig', 'info'],
+            ['node_details', 0, 'config', 'info'],
+            ['v2_node_details', 0, 'config', 'info'],
+            ['state', 'device', 'config', 'info'],
+        ];
+        foreach ($paths as $path) {
+            $info = self::valueAtPath($schema, $path);
+            if (!is_array($info)) {
+                continue;
+            }
+            if ($product === '') {
+                $product = trim((string) self::firstNonEmpty(
+                    $info['product'] ?? null,
+                    $info['product_name'] ?? null,
+                    $info['model'] ?? null
+                ));
+            }
+            if ($brand === '') {
+                $brand = trim((string) ($info['brand'] ?? ''));
+            }
+        }
+        if ($product === '' && !empty($schema['meta']['app']['name'])) {
+            $product = trim((string) preg_replace('/\s+Control$/i', '', (string) $schema['meta']['app']['name']));
+        }
+        // Reject nicknames / device-type tokens that are not the catalog model.
+        if ($product !== '' && self::looksLikeNodeNickname($product, $modelNo)) {
+            $product = '';
+        }
+        $displayName = $product !== '' ? $product : ($modelNo !== '' ? $modelNo : 'Model UI');
+
+        $rewriteInfo = static function (array $info) use ($displayName, $modelNo, $brand) {
+            $currentName = trim((string) ($info['name'] ?? ''));
+            if ($currentName === '' || self::looksLikeNodeNickname($currentName, $modelNo)) {
+                $info['name'] = $displayName;
+            }
+            if (empty($info['product']) || self::looksLikeNodeNickname((string) $info['product'], $modelNo)) {
+                $info['product'] = $displayName;
+            }
+            if ($modelNo !== '') {
+                $info['model'] = $modelNo;
+            }
+            if ($brand !== '' && (empty($info['brand']) || self::looksLikeNodeNickname((string) $info['brand'], $modelNo))) {
+                $info['brand'] = $brand;
+            }
+
+            return $info;
+        };
+
+        if (isset($schema['deviceConfig']['info']) && is_array($schema['deviceConfig']['info'])) {
+            $schema['deviceConfig']['info'] = $rewriteInfo($schema['deviceConfig']['info']);
+        }
+        if (isset($schema['deviceConfig']['devices'][0]) && is_array($schema['deviceConfig']['devices'][0])) {
+            $deviceName = trim((string) ($schema['deviceConfig']['devices'][0]['name'] ?? ''));
+            if ($deviceName === '' || self::looksLikeNodeNickname($deviceName, $modelNo)) {
+                $schema['deviceConfig']['devices'][0]['name'] = $modelNo !== '' ? $modelNo : $displayName;
+            }
+        }
+        foreach (['node_details', 'v2_node_details'] as $detailsKey) {
+            if (!isset($schema[$detailsKey][0]['config']) || !is_array($schema[$detailsKey][0]['config'])) {
+                continue;
+            }
+            if (isset($schema[$detailsKey][0]['config']['info']) && is_array($schema[$detailsKey][0]['config']['info'])) {
+                $schema[$detailsKey][0]['config']['info'] = $rewriteInfo($schema[$detailsKey][0]['config']['info']);
+            }
+            if (isset($schema[$detailsKey][0]['config']['devices'][0]) && is_array($schema[$detailsKey][0]['config']['devices'][0])) {
+                $deviceName = trim((string) ($schema[$detailsKey][0]['config']['devices'][0]['name'] ?? ''));
+                if ($deviceName === '' || self::looksLikeNodeNickname($deviceName, $modelNo)) {
+                    $schema[$detailsKey][0]['config']['devices'][0]['name'] = $modelNo !== '' ? $modelNo : $displayName;
+                }
+            }
+        }
+        if (isset($schema['state']['device']['config']) && is_array($schema['state']['device']['config'])) {
+            if (isset($schema['state']['device']['config']['info']) && is_array($schema['state']['device']['config']['info'])) {
+                $schema['state']['device']['config']['info'] = $rewriteInfo($schema['state']['device']['config']['info']);
+            }
+        }
+
+        // Brand strip text node + state subtitle stay on model identity.
+        if (isset($schema['state']) && is_array($schema['state'])) {
+            $schema['state']['displayModelName'] = $displayName;
+            if ($modelNo !== '') {
+                $schema['state']['activePageSubtitle'] = $modelNo;
+            }
+        }
+        if (isset($schema['ui']['widgetTree']) && is_array($schema['ui']['widgetTree'])) {
+            self::rewriteBrandModelNodes($schema['ui']['widgetTree'], $displayName);
+        }
+
+        return $schema;
+    }
+
+    private static function looksLikeNodeNickname($value, $modelNo = '')
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return false;
+        }
+        $modelNo = trim((string) $modelNo);
+        if ($modelNo !== '' && strcasecmp($value, $modelNo) === 0) {
+            return false;
+        }
+        // Host-style nicknames: mirror_A38DE454, node_xxx, etc.
+        if (preg_match('/^(mirror|node|device|gw|gateway)[_-]/i', $value)) {
+            return true;
+        }
+        if (preg_match('/^[a-z]+_[A-F0-9]{4,}$/i', $value)) {
+            return true;
+        }
+        // Generic one-word device-type tokens that replace the model title.
+        if (preg_match('/^(fan|light|bulb|switch|plug|sensor|mirror|gateway|hub|camera|lock)$/i', $value)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static function rewriteBrandModelNodes(&$node, $displayName, $depth = 0)
+    {
+        if (!is_array($node) || $depth > 60) {
+            return;
+        }
+        $id = strtolower(trim((string) ($node['id'] ?? '')));
+        if ($id === 'brand_model') {
+            if (isset($node['properties']) && is_array($node['properties'])) {
+                $node['properties']['text'] = $displayName;
+                $node['properties']['textBinding'] = 'state.displayModelName';
+            }
+            if (isset($node['text'])) {
+                $node['text'] = $displayName;
+            }
+        }
+        foreach (['children', 'body', 'items', 'nodes'] as $listKey) {
+            if (!isset($node[$listKey]) || !is_array($node[$listKey])) {
+                continue;
+            }
+            foreach ($node[$listKey] as &$child) {
+                if (is_array($child)) {
+                    self::rewriteBrandModelNodes($child, $displayName, $depth + 1);
+                }
+            }
+            unset($child);
+        }
+    }
+
+    private static function valueAtPath(array $schema, array $path)
+    {
+        $cursor = $schema;
+        foreach ($path as $segment) {
+            if (!is_array($cursor) || !array_key_exists($segment, $cursor)) {
+                return null;
+            }
+            $cursor = $cursor[$segment];
+        }
+
+        return $cursor;
+    }
+
+    /**
+     * Hide footer Save Changes; controls commit immediately via onChanged/onValueCommitted/send.
+     */
+    private static function applyImmediateCommitContract(array $schema)
+    {
+        if (!isset($schema['settings']) || !is_array($schema['settings'])) {
+            $schema['settings'] = [];
+        }
+        if (!isset($schema['settings']['visibility']) || !is_array($schema['settings']['visibility'])) {
+            $schema['settings']['visibility'] = [];
+        }
+        $schema['settings']['visibility']['footerVisible'] = false;
+        if (!isset($schema['settings']['interaction']) || !is_array($schema['settings']['interaction'])) {
+            $schema['settings']['interaction'] = [];
+        }
+        $schema['settings']['interaction']['commitMode'] = 'immediate';
+        $schema['settings']['interaction']['autoSave'] = true;
+        if (isset($schema['settings']['layout']) && is_array($schema['settings']['layout'])) {
+            // Keep label for legacy readers but hide the footer affordance.
+            if (!isset($schema['settings']['layout']['buttonText']) || $schema['settings']['layout']['buttonText'] === '') {
+                $schema['settings']['layout']['buttonText'] = 'Save Changes';
+            }
+        }
+        if (isset($schema['mobileView']['footer']) && is_array($schema['mobileView']['footer'])) {
+            $schema['mobileView']['footer']['visible'] = false;
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Replace forced light slider shells with theme-aware transparent/card shells.
+     */
+    private static function applySliderShellThemeContract(array $schema)
+    {
+        $dark = false;
+        $card = '#FFFFFF';
+        $shell = '#F8FAFC';
+        $mode = strtolower(trim((string) (
+            $schema['theme']['themeMode']
+            ?? $schema['theme']['mode']
+            ?? $schema['state']['global']['themeMode']
+            ?? ''
+        )));
+        if ($mode === 'dark') {
+            $dark = true;
+        }
+        if (isset($schema['theme']['colors']) && is_array($schema['theme']['colors'])) {
+            if (!empty($schema['theme']['colors']['card'])) {
+                $card = (string) $schema['theme']['colors']['card'];
+            } elseif (!empty($schema['theme']['colors']['surface'])) {
+                $card = (string) $schema['theme']['colors']['surface'];
+            }
+            if (!empty($schema['theme']['colors']['background'])) {
+                $shell = (string) $schema['theme']['colors']['background'];
+            }
+        }
+        if (!$dark && isset($schema['theme']['colors']['background'])) {
+            $dark = self::colorLuminance((string) $schema['theme']['colors']['background']) < 160;
+        }
+        $containerBg = $dark ? 'transparent' : '#F8FAFC';
+        $inactiveTrack = $dark ? '#475569' : '#E2E8F0';
+
+        $patchProps = static function (array $props) use ($containerBg, $inactiveTrack, $dark, $card, $shell) {
+            if (isset($props['container']) && is_array($props['container'])) {
+                $bg = trim((string) ($props['container']['backgroundColor'] ?? ''));
+                if ($bg === '' || strcasecmp($bg, '#F8FAFC') === 0 || strcasecmp($bg, '#FFFFFF') === 0) {
+                    $props['container']['backgroundColor'] = $containerBg;
+                }
+                if ($dark && (strcasecmp((string) ($props['container']['backgroundColor'] ?? ''), '#FFFFFF') === 0
+                    || strcasecmp((string) ($props['container']['backgroundColor'] ?? ''), '#F8FAFC') === 0)) {
+                    $props['container']['backgroundColor'] = 'transparent';
+                }
+            } elseif (isset($props['min']) || isset($props['max']) || isset($props['trackGradient'])) {
+                $props['container'] = [
+                    'visible' => true,
+                    'backgroundColor' => $containerBg,
+                    'borderColor' => 'transparent',
+                    'borderWidth' => 0,
+                    'borderRadius' => 16,
+                    'padding' => 14,
+                ];
+            }
+            if ($dark) {
+                if (empty($props['inactiveTrackColor']) || strcasecmp((string) $props['inactiveTrackColor'], '#D9DEEB') === 0
+                    || strcasecmp((string) $props['inactiveTrackColor'], '#E2E8F0') === 0) {
+                    $props['inactiveTrackColor'] = $inactiveTrack;
+                }
+                if (empty($props['inactiveColor']) || strcasecmp((string) $props['inactiveColor'], '#D9DEEB') === 0) {
+                    $props['inactiveColor'] = $inactiveTrack;
+                }
+                if (isset($props['visual']) && is_array($props['visual'])) {
+                    $vbg = trim((string) ($props['visual']['background'] ?? ''));
+                    if ($vbg === '' || stripos($vbg, '248,250,252') !== false || stripos($vbg, '#F8FAFC') !== false) {
+                        $props['visual']['background'] = 'linear-gradient(180deg,' . $card . ' 0%,' . $shell . ' 100%)';
+                    }
+                }
+            }
+
+            return $props;
+        };
+
+        if (isset($schema['controls']) && is_array($schema['controls'])) {
+            foreach ($schema['controls'] as $i => $control) {
+                if (!is_array($control)) {
+                    continue;
+                }
+                $type = strtolower(str_replace(['_', '-'], '', (string) ($control['componentType'] ?? '')));
+                if ($type !== 'slider' && $type !== 'autotriggertimer') {
+                    $catalog = strtolower(str_replace(['_', '-'], '', (string) ($control['catalogComponentType'] ?? '')));
+                    if ($catalog !== 'autotriggertimer') {
+                        continue;
+                    }
+                }
+                if (isset($control['component']['props']) && is_array($control['component']['props'])) {
+                    $schema['controls'][$i]['component']['props'] = $patchProps($control['component']['props']);
+                }
+            }
+        }
+
+        if (isset($schema['ui']['widgetTree']) && is_array($schema['ui']['widgetTree'])) {
+            self::patchSliderShellNodes($schema['ui']['widgetTree'], $patchProps);
+        }
+
+        return $schema;
+    }
+
+    private static function patchSliderShellNodes(&$node, $patchProps, $depth = 0)
+    {
+        if (!is_array($node) || $depth > 60) {
+            return;
+        }
+        $type = strtolower(trim((string) ($node['type'] ?? '')));
+        if ($type === 'schemaslider' || $type === 'slider') {
+            if (isset($node['properties']['props']) && is_array($node['properties']['props'])) {
+                $node['properties']['props'] = $patchProps($node['properties']['props']);
+            }
+            if (isset($node['props']) && is_array($node['props'])) {
+                $node['props'] = $patchProps($node['props']);
+            }
+        }
+        foreach ($node as &$child) {
+            if (is_array($child)) {
+                self::patchSliderShellNodes($child, $patchProps, $depth + 1);
+            }
+        }
+        unset($child);
+    }
+
     private static function normalizeControlContracts(array $schema)
     {
         if (!isset($schema['controls']) || !is_array($schema['controls'])) {
@@ -6457,12 +7099,23 @@ class DeviceUiSchemaNormalizer
                         $control['component']['props'] = [];
                     }
                     // Send button is only for writable text fields (Rule 3).
+                    // Apps reject the stub {visible,label} shape — always publish
+                    // action.type=send + binding (same contract as Studio/PHP builders).
                     if ($writable) {
                         $control['uiParts'] = ['textField', 'sendButton'];
-                        $control['component']['props']['sendButton'] = [
-                            'visible' => true,
-                            'label' => 'Send',
-                        ];
+                        $binding = trim((string) (isset($control['binding']) ? $control['binding'] : ''));
+                        if ($binding === '') {
+                            $binding = 'device.parameters.' . trim(preg_replace('/[^a-zA-Z0-9]+/', '_', $id), '_');
+                        }
+                        $existingSend = (isset($control['component']['props']['sendButton'])
+                            && is_array($control['component']['props']['sendButton']))
+                            ? $control['component']['props']['sendButton']
+                            : [];
+                        $control['component']['props']['sendButton'] = self::mergeSendButtonProps(
+                            $existingSend,
+                            $binding,
+                            true
+                        );
                     } else {
                         $control['uiParts'] = ['textField'];
                         unset($control['component']['props']['sendButton']);
@@ -6528,6 +7181,23 @@ class DeviceUiSchemaNormalizer
                     $control['component']['props']['interactive'] = $writable;
                     if (!$writable) {
                         unset($control['component']['props']['sendButton']);
+                    } elseif (($type === 'textfield' || $type === 'entertext' || $wanted === 'textField')
+                        && (isset($control['component']['props']['sendButton']) || $wanted === 'textField')) {
+                        // Repair legacy stubs even when rightAccessory was already textField.
+                        $binding = trim((string) (isset($control['binding']) ? $control['binding'] : ''));
+                        if ($binding === '') {
+                            $binding = 'device.parameters.' . trim(preg_replace('/[^a-zA-Z0-9]+/', '_', $id), '_');
+                        }
+                        $existingSend = (isset($control['component']['props']['sendButton'])
+                            && is_array($control['component']['props']['sendButton']))
+                            ? $control['component']['props']['sendButton']
+                            : [];
+                        $control['component']['props']['sendButton'] = self::mergeSendButtonProps(
+                            $existingSend,
+                            $binding,
+                            true
+                        );
+                        $control['uiParts'] = ['textField', 'sendButton'];
                     }
                 }
             }

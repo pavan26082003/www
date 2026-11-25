@@ -1053,6 +1053,13 @@
             "active": false
         },
         {
+            "id": "applications",
+            "icon": "fa-layer-group",
+            "label": "Explore",
+            "active": false,
+            "elevated": true
+        },
+        {
             "id": "grid",
             "icon": "fa-border-all",
             "label": "Grid",

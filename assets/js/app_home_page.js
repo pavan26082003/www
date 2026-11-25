@@ -1100,6 +1100,7 @@
     layout.bottomNav = [
       { id: 'home', icon: 'fa-home', label: 'Home' },
       { id: 'devices', icon: 'fa-th', label: 'IoT' },
+      { id: 'applications', icon: 'fa-layer-group', label: 'Explore', elevated: true },
       { id: target, icon: targetMeta.icon, label: targetMeta.label },
       { id: 'profile', icon: 'fa-user', label: 'Profile' }
     ].map(function (item) {
@@ -1108,7 +1109,9 @@
         if (prev.label != null && String(prev.label).trim() !== '') item.label = String(prev.label).trim();
         if (prev.icon != null && String(prev.icon).trim() !== '') item.icon = normalizeFaIcon(prev.icon);
       }
-      return Object.assign({}, item, { active: item.id === activeId });
+      // Applications opens a WebView — never mark it as the active tab route.
+      var isActive = item.id === 'applications' ? false : (item.id === activeId);
+      return Object.assign({}, item, { active: isActive });
     });
   }
 
@@ -4390,6 +4393,13 @@
     }
   }
 
+  function resolveApplicationsPreviewUrl() {
+    var fromCfg = String((cfg && cfg.applicationsPageUrl) || '').trim();
+    if (fromCfg && /^https?:\/\//i.test(fromCfg)) return fromCfg;
+    // AppWebEntry SSO handoff → dashboard/applications (same path the phone app uses).
+    return 'https://efactor.tech/index.php/app-web-entry/open?to=applications';
+  }
+
   function renderBottomNav() {
     normalizeBottomNav();
     var nav = document.getElementById('ahpBottomNav');
@@ -4399,9 +4409,16 @@
     nav.style.setProperty('--ahp-nav-active', t.navActiveColor || '#3b82f6');
     nav.innerHTML = layout.bottomNav.map(function (item) {
       var icon = normalizeFaIcon(item.icon);
-      var isActive = item.id === activeId || (!!item.active && activeId === item.id);
+      var isApps = item.id === 'applications' || !!item.elevated;
+      var isActive = !isApps && (item.id === activeId || (!!item.active && activeId === item.id));
+      var label = isApps ? 'Explore' : String(item.label || '');
+      if (isApps) {
+        return '<button type="button" class="ahp-nav-item ahp-nav-item-elevated" data-nav="' + esc(item.id) + '" aria-label="Explore">' +
+          '<span class="ahp-nav-elevated-orb"><i class="fas ' + esc(icon) + '"></i></span>' +
+          '<span class="ahp-nav-elevated-label">' + esc(label) + '</span></button>';
+      }
       return '<button type="button" class="ahp-nav-item' + (isActive ? ' active' : '') + '" data-nav="' + esc(item.id) + '">' +
-        '<i class="fas ' + esc(icon) + '"></i><span>' + esc(item.label) + '</span></button>';
+        '<i class="fas ' + esc(icon) + '"></i><span>' + esc(label) + '</span></button>';
     }).join('');
     bindNavClicks();
   }
@@ -4414,7 +4431,15 @@
       var item = e.target.closest('[data-nav]');
       if (!item) return;
       e.preventDefault();
-      switchPage(item.getAttribute('data-nav'));
+      var navId = item.getAttribute('data-nav');
+      // Explore center icon opens the existing Applications web page in-app.
+      if (navId === 'applications') {
+        if (!openInAppBrowser(resolveApplicationsPreviewUrl(), 'Explore')) {
+          showToast('In-app browser unavailable');
+        }
+        return;
+      }
+      switchPage(navId);
     });
   }
 

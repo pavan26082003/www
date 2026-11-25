@@ -5,16 +5,16 @@ namespace App\Models;
 class AppHomePageModel
 {
     /**
-     * Bottom navigation is the same four slots for every user: Home, IoT, Grid, Profile.
-     * The third slot is not configurable. Older per-user values (alerts, reports, rooms, …)
-     * are ignored so one saved layout cannot swap Grid for Alerts.
+     * Bottom navigation is the same five slots for every user:
+     * Home, IoT, Applications (elevated center), Grid, Profile.
+     * Older per-user mid-slot values (alerts, reports, rooms, …) are ignored.
      */
     public const BOTTOM_NAV_CATEGORY_DEFAULT = 'grid';
 
     public const BOTTOM_NAV_CATEGORY_TARGETS = ['grid'];
 
     /**
-     * Third slot is always Grid. Saved per-user targets are not applied.
+     * Legacy category slot always resolves to Grid. Saved per-user targets are not applied.
      */
     public static function normalizeBottomNavCategoryTarget($value): string
     {
@@ -22,7 +22,7 @@ class AppHomePageModel
     }
 
     /**
-     * Force Home / IoT / Grid / Profile onto a layout, ignoring any saved third-slot target.
+     * Force Home / IoT / Applications / Grid / Profile onto a layout.
      *
      * @param array<string, mixed> $layout
      * @return array<string, mixed>
@@ -36,7 +36,7 @@ class AppHomePageModel
         $layout['bottomNavCategoryTarget'] = self::BOTTOM_NAV_CATEGORY_DEFAULT;
         $canonical = self::buildCanonicalBottomNav(self::BOTTOM_NAV_CATEGORY_DEFAULT, $active);
 
-        // Keep the fixed 4 tabs, but preserve user label/icon edits from the studio.
+        // Keep the fixed tabs, but preserve user label/icon edits from the studio.
         $byId = array();
         if (!empty($layout['bottomNav']) && is_array($layout['bottomNav'])) {
             foreach ($layout['bottomNav'] as $item) {
@@ -69,11 +69,9 @@ class AppHomePageModel
         return $layout;
     }
 
-    /** Canonical four-slot bottom nav (Home, IoT, Grid, Profile) for every user. */
+    /** Canonical five-slot bottom nav (Home, IoT, Applications, Grid, Profile) for every user. */
     public static function buildCanonicalBottomNav(string $categoryTarget, string $activePage = 'home'): array
     {
-        $target = self::BOTTOM_NAV_CATEGORY_DEFAULT;
-        $slot = array('icon' => 'fa-border-all', 'label' => 'Grid');
         $activePage = strtolower(trim($activePage));
         if ($activePage === 'settings') {
             $activePage = 'profile';
@@ -85,7 +83,8 @@ class AppHomePageModel
         return array(
             array('id' => 'home', 'icon' => 'fa-home', 'label' => 'Home', 'active' => $activePage === 'home'),
             array('id' => 'devices', 'icon' => 'fa-th', 'label' => 'IoT', 'active' => $activePage === 'devices'),
-            array('id' => $target, 'icon' => $slot['icon'], 'label' => $slot['label'], 'active' => $activePage === $target),
+            array('id' => 'applications', 'icon' => 'fa-layer-group', 'label' => 'Explore', 'active' => false, 'elevated' => true),
+            array('id' => 'grid', 'icon' => 'fa-border-all', 'label' => 'Grid', 'active' => $activePage === 'grid'),
             array('id' => 'profile', 'icon' => 'fa-user', 'label' => 'Profile', 'active' => $activePage === 'profile'),
         );
     }
@@ -148,10 +147,11 @@ class AppHomePageModel
             'homeTemplate' => 'default',
             'cards' => $this->getDefaultStarterCards(),
             'activePage' => 'home',
-            // Same four tabs for every user. Saved layouts cannot replace Grid.
+            // Same five tabs for every user (Applications is the elevated center slot).
             'bottomNav' => array(
                 array('id' => 'home', 'icon' => 'fa-home', 'label' => 'Home', 'active' => true),
                 array('id' => 'devices', 'icon' => 'fa-th', 'label' => 'IoT', 'active' => false),
+                array('id' => 'applications', 'icon' => 'fa-layer-group', 'label' => 'Explore', 'active' => false, 'elevated' => true),
                 array('id' => 'grid', 'icon' => 'fa-border-all', 'label' => 'Grid', 'active' => false),
                 array('id' => 'profile', 'icon' => 'fa-user', 'label' => 'Profile', 'active' => false),
             ),
@@ -1075,6 +1075,8 @@ class AppHomePageModel
 
             $schema = $this->attachGridDataSource($this->normalizeSmartphoneBreakpoints($data), $userId);
             $schema = $this->prepareRatingOpenUrlForClient($schema, $userId);
+            $schema = $this->prepareApplicationsOpenUrlForClient($schema, $userId);
+            $schema = $this->prepareExploreNavItemForClient($schema);
             $schema = $this->attachProfilePhotoOptions($schema, $userId);
             $schema = $this->applyAccountAppearanceToSchema($schema, $userId);
 
@@ -1085,13 +1087,15 @@ class AppHomePageModel
             if (is_array($data) && class_exists(\App\Libraries\GridSduiSchemaBuilder::class)) {
                 $data = \App\Libraries\GridSduiSchemaBuilder::omitDisallowedGridExploreComponents($data);
             }
-            // Still attach photo + rating open-url so Account avatar tap works even when
-            // other live enrich steps failed. Does not change saved schema_json shape.
+            // Still attach photo + rating + applications open-url so Account / Applications
+            // taps work even when other live enrich steps failed. Does not change saved schema_json shape.
             try {
                 $data = $this->prepareRatingOpenUrlForClient($data, $userId);
+                $data = $this->prepareApplicationsOpenUrlForClient($data, $userId);
+                $data = $this->prepareExploreNavItemForClient($data);
                 $data = $this->attachProfilePhotoOptions($data, $userId);
             } catch (\Throwable $enrichErr) {
-                log_message('error', 'App home photo/rating fallback enrich failed for user_id=' . $userId . ': ' . $enrichErr->getMessage());
+                log_message('error', 'App home photo/rating/applications fallback enrich failed for user_id=' . $userId . ': ' . $enrichErr->getMessage());
             }
             return $data;
         }
@@ -1610,6 +1614,163 @@ class AppHomePageModel
         $last = count($parts) > 1 ? mb_substr((string) $parts[count($parts) - 1], 0, 1) : '';
 
         return strtoupper($first . $last);
+    }
+
+    /**
+     * Ensure Explore center nav item keeps label + elevated appearance hints.
+     * Does not rename item ids / actionIds / routeIds (schema contract unchanged).
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    public function prepareExploreNavItemForClient(array $schema): array
+    {
+        $appearance = array(
+            'backgroundColor' => '#2563eb',
+            'backgroundColorLight' => '#2563eb',
+            'backgroundColorDark' => '#2563eb',
+            'iconColor' => '#ffffff',
+            'iconColorLight' => '#ffffff',
+            'iconColorDark' => '#ffffff',
+            'labelColor' => '#2563eb',
+            'size' => 'large',
+            'iconSize' => 28,
+            'diameter' => 58,
+            'elevated' => true,
+            'shape' => 'circle',
+        );
+
+        if (isset($schema['navigation']['items']) && is_array($schema['navigation']['items'])) {
+            foreach ($schema['navigation']['items'] as $i => $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $id = (string) ($item['id'] ?? '');
+                $routeId = (string) ($item['routeId'] ?? '');
+                $slot = (string) ($item['slot'] ?? '');
+                if ($id !== 'nav-applications' && $routeId !== 'applications' && $slot !== 'applications') {
+                    continue;
+                }
+                $schema['navigation']['items'][$i]['label'] = 'Explore';
+                $schema['navigation']['items'][$i]['iconToken'] = $item['iconToken'] ?? 'layers';
+                $schema['navigation']['items'][$i]['elevated'] = true;
+                $schema['navigation']['items'][$i]['variant'] = 'elevated';
+                $schema['navigation']['items'][$i]['style'] = 'elevatedCenter';
+                $schema['navigation']['items'][$i]['hideLabel'] = false;
+                $schema['navigation']['items'][$i]['appearance'] = array_merge(
+                    is_array($item['appearance'] ?? null) ? $item['appearance'] : array(),
+                    $appearance
+                );
+            }
+        }
+
+        if (isset($schema['components']['main-bottom-navigation']) && is_array($schema['components']['main-bottom-navigation'])) {
+            $nav =& $schema['components']['main-bottom-navigation'];
+            $nav['elevatedItemId'] = 'nav-applications';
+            $nav['centerItemId'] = 'nav-applications';
+            if (!isset($nav['appearance']) || !is_array($nav['appearance'])) {
+                $nav['appearance'] = array();
+            }
+            $nav['appearance']['elevatedItemBackgroundColor'] = '#2563eb';
+            $nav['appearance']['elevatedItemIconColor'] = '#ffffff';
+            $nav['appearance']['elevatedItemDiameter'] = 58;
+            unset($nav);
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Keep navigate-applications / open-applications as open-url (same keys).
+     * Refresh ?grid_sso= so the phone WebView opens dashboard/applications signed in.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    public function prepareApplicationsOpenUrlForClient(array $schema, int $userId): array
+    {
+        if ($userId < 1) {
+            return $schema;
+        }
+
+        if (!isset($schema['actionRegistry']) || !is_array($schema['actionRegistry'])) {
+            return $schema;
+        }
+
+        $applicationsUrl = $this->publicApplicationsPageUrl($userId);
+        $actionIds = array('navigate-applications', 'open-applications');
+        foreach ($actionIds as $actionId) {
+            $action = $schema['actionRegistry'][$actionId] ?? null;
+            if (!is_array($action)) {
+                $action = array();
+            }
+
+            $action['type'] = 'open-url';
+            $action['url'] = $applicationsUrl;
+            $action['route'] = $applicationsUrl;
+            $action['title'] = 'Explore';
+            $action['openIn'] = $action['openIn'] ?? 'inAppWebView';
+            if (!isset($action['webView']) || !is_array($action['webView'])) {
+                $action['webView'] = array();
+            }
+            $action['webView'] = array_merge(array(
+                'javaScriptEnabled' => true,
+                'sharedCookies' => true,
+                'clearCache' => false,
+                'showAppBar' => false,
+                'showToolbar' => false,
+                'hideAppBar' => true,
+                'displayMode' => 'fullscreen',
+            ), $action['webView']);
+            if (!isset($action['destination']) || !is_array($action['destination'])) {
+                $action['destination'] = array();
+            }
+            $action['destination']['url'] = $applicationsUrl;
+            $action['destination']['openIn'] = $action['destination']['openIn'] ?? 'inAppWebView';
+            $action['destination']['title'] = 'Explore';
+            $action['destination']['sharedCookies'] = true;
+            $action['destination']['showAppBar'] = false;
+            $action['destination']['showToolbar'] = false;
+            $action['destination']['hideAppBar'] = true;
+
+            $schema['actionRegistry'][$actionId] = $action;
+            if (isset($schema['actions']) && is_array($schema['actions'])) {
+                $schema['actions'][$actionId] = $action;
+            }
+        }
+
+        return $schema;
+    }
+
+    /**
+     * Explore (Applications) WebView URL.
+     * Uses the existing AppWebEntry SSO handoff (same as Grid) so the phone WebView
+     * keeps the session cookie, then lands on dashboard/applications signed in.
+     * Never joins onto /v8/api_creation.php (JSON, not HTML).
+     */
+    public function publicApplicationsPageUrl(int $userId = 0): string
+    {
+        if (class_exists(\App\Libraries\GridWebSso::class)) {
+            $url = \App\Libraries\GridWebSso::publicWebUrl(\App\Libraries\GridWebSso::ENTRY_PATH);
+            if ($url === '') {
+                $url = 'https://efactor.tech/index.php/app-web-entry/open';
+            }
+            $url .= (strpos($url, '?') === false ? '?' : '&') . 'to=' . rawurlencode('applications');
+            if ($userId > 0) {
+                $sso = \App\Libraries\GridWebSso::issue($userId);
+                if ($sso !== '') {
+                    $url = \App\Libraries\GridWebSso::appendToken($url, $sso);
+                }
+            }
+            return $url;
+        }
+
+        $url = $this->publicAppHomeWebUrl('dashboard/applications');
+        if ($url === '' || stripos($url, 'dashboard/applications') === false) {
+            $url = 'https://efactor.tech/index.php/dashboard/applications';
+        }
+
+        return $url;
     }
 
     /**
@@ -2632,6 +2793,7 @@ class AppHomePageModel
         // Same web Rating UI (stars + comment). Clean public URL + optional SSO.
         // Never join onto /v8/api_creation.php (that returns JSON, not HTML).
         $ratingPageUrl = $this->publicRatingPageUrl($userId);
+        $applicationsPageUrl = $this->publicApplicationsPageUrl($userId);
 
         $accountAppearance = 'system';
         if (class_exists(\App\Libraries\AppAppearance::class)) {
@@ -2648,6 +2810,7 @@ class AppHomePageModel
             'schemaApiUrl' => $this->getSchemaApiUrl($userId),
             'apiBase' => $this->publicAppHomeApiBaseUrl(),
             'ratingPageUrl' => $ratingPageUrl,
+            'applicationsPageUrl' => $applicationsPageUrl,
             'profilePhotoPageUrl' => $this->publicProfilePhotoPageUrl($userId),
             'filesBase' => rtrim(base_url('files'), '/'),
             'iotApiUrl' => $iotApiUrl,

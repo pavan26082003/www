@@ -26,7 +26,7 @@ class View_page_model extends Model
      * Bump when Device UI schema generator / normalizer output shape changes.
      * Stale models auto-rebuild on next getDeviceUiSchema / API fetch.
      */
-    private const DEVICE_UI_SCHEMA_BUILD_VERSION = '2026-11-14.6';
+    private const DEVICE_UI_SCHEMA_BUILD_VERSION = '2026-11-25.2';
 
     public function __construct()
     {
@@ -5076,6 +5076,14 @@ private function deviceUiMappingFingerprint($modelno)
             continue;
         }
         $api = is_array($row['api'] ?? null) ? $row['api'] : [];
+        $frame = isset($api['frame']) && is_array($api['frame']) ? $api['frame'] : null;
+        $frameDigest = '';
+        if ($frame !== null) {
+            $encodedFrame = json_encode($frame, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $frameDigest = $encodedFrame === false ? '' : hash('sha256', $encodedFrame);
+        }
+        // Include value/UI fields so API edits (asperui, defaults, wires) trigger
+        // schema auto-sync without requiring a Studio re-save.
         $rows[] = [
             'page_no' => trim((string) ($row['page_no'] ?? '')),
             'page_name' => trim((string) ($row['page_name'] ?? '')),
@@ -5087,6 +5095,14 @@ private function deviceUiMappingFingerprint($modelno)
             'ui_type' => $api['ui_type'] ?? null,
             'ui_type_source' => $api['ui_type_source'] ?? null,
             'access' => $api['access'] ?? null,
+            'default' => $api['default'] ?? null,
+            'items' => $api['items'] ?? null,
+            'item_values' => $api['item_values'] ?? null,
+            'sno_asperui' => $api['sno_asperui'] ?? null,
+            'minimum' => $api['minimum'] ?? null,
+            'maximum' => $api['maximum'] ?? null,
+            'step' => $api['step'] ?? null,
+            'frame_digest' => $frameDigest,
         ];
     }
 
@@ -11479,10 +11495,18 @@ private function applyDeviceUiLiveProductToNodeConfig(array $config, array $live
     $modelno = trim((string) $modelno);
     $requestedNodeId = trim((string) $nodeId);
     $nodeId = $requestedNodeId !== '' ? $requestedNodeId : trim((string) ($live['node_id'] ?? ''));
-    $deviceName = trim((string) ($live['current_devicetype'] ?? ''));
-    if ($deviceName === '') {
-        $deviceName = trim((string) ($live['device_name'] ?? ''));
+    // Live nicknames (current_devicetype / device_name like "fan" or "mirror_XXXX")
+    // must NOT replace the model identity on the brand card / info.name.
+    $liveDeviceTypeLabel = trim((string) ($live['current_devicetype'] ?? ''));
+    if ($liveDeviceTypeLabel === '') {
+        $liveDeviceTypeLabel = trim((string) ($live['device_name'] ?? ''));
     }
+    $productDisplayName = trim((string) ($live['product_name'] ?? ''));
+    $modelNumber = trim((string) ($live['model_number'] ?? ''));
+    if ($modelNumber === '') {
+        $modelNumber = $modelno;
+    }
+    $displayModelName = $productDisplayName !== '' ? $productDisplayName : $modelNumber;
     $deviceType = trim((string) ($live['device_type'] ?? ''));
     $type = $deviceType !== '' ? ('efactor.device.' . $deviceType) : 'efactor.device.';
     $mac = trim((string) ($live['mac'] ?? ''));
@@ -11496,7 +11520,7 @@ private function applyDeviceUiLiveProductToNodeConfig(array $config, array $live
 
     if (!isset($config['devices'][0]) || !is_array($config['devices'][0])) {
         $config['devices'] = [[
-            'name' => $deviceName !== '' ? $deviceName : $modelno,
+            'name' => $modelNumber !== '' ? $modelNumber : $modelno,
             'total_pages' => null,
             'attributes' => [],
             'Device Id' => $nodeId,
@@ -11507,8 +11531,10 @@ private function applyDeviceUiLiveProductToNodeConfig(array $config, array $live
     }
 
     $device = $config['devices'][0];
-    if ($deviceName !== '') {
-        $device['name'] = $deviceName;
+    // Keep devices[0].name on model identity — never overwrite with live nicknames.
+    $existingDeviceName = trim((string) ($device['name'] ?? ''));
+    if ($existingDeviceName === '' || strcasecmp($existingDeviceName, $liveDeviceTypeLabel) === 0) {
+        $device['name'] = $modelNumber !== '' ? $modelNumber : $modelno;
     }
     $device['Device Id'] = $nodeId;
     $device['primary'] = !empty($device['primary']) ? $device['primary'] : 'power';
@@ -11553,11 +11579,10 @@ private function applyDeviceUiLiveProductToNodeConfig(array $config, array $live
                 continue;
             }
             $childDevice = $config['devices'][0];
-            $childName = trim((string) ($child['current_devicetype'] ?? ''));
-            $childDevice['name'] = $childName !== '' ? $childName : $childDevice['name'];
+            $childModel = $this->deviceUiNonEmptyString($child['model_number'] ?? '');
+            $childDevice['name'] = $childModel !== '' ? $childModel : ($childDevice['name'] ?? $modelno);
             $childDevice['Device Id'] = $childId;
             $childDevice['Need_Help'] = $this->deviceUiNodeDetailsOrigin() . '/v8/call_services.php?node_id=' . rawurlencode($childId);
-            $childModel = $this->deviceUiNonEmptyString($child['model_number'] ?? '');
             if ($childModel !== '') {
                 $childBrand = $this->resolveDeviceUiBrandLogoAsset($childModel, $childId);
                 if (!empty($childBrand['url']) && !$this->deviceUiIsPlaceholderValue($childBrand['url'])) {
@@ -11577,11 +11602,14 @@ private function applyDeviceUiLiveProductToNodeConfig(array $config, array $live
     }
 
     $info = isset($config['info']) && is_array($config['info']) ? $config['info'] : [];
-    unset($info['product'], $info['brand']);
+    $brandName = trim((string) ($live['brand_name'] ?? ''));
     $info = array_merge($info, array_filter([
         'fw_version' => '1.5.1',
-        'model' => $live['model_number'] ?? $modelno,
-        'name' => $deviceName !== '' ? $deviceName : ($info['name'] ?? $modelno),
+        'model' => $modelNumber !== '' ? $modelNumber : $modelno,
+        // Product/model title for the brand card — never live nicknames.
+        'name' => $displayModelName !== '' ? $displayModelName : ($info['name'] ?? $modelno),
+        'product' => $displayModelName !== '' ? $displayModelName : ($info['product'] ?? null),
+        'brand' => $brandName !== '' ? $brandName : ($info['brand'] ?? null),
         'type' => ($live['module_type'] ?? '') !== '' ? $live['module_type'] : ($info['type'] ?? 'IOT'),
         'product_type' => ($live['product_type'] ?? '') !== '' ? $live['product_type'] : ($info['product_type'] ?? 'IOT'),
         'SSID' => ($live['ssid'] ?? '') !== '' ? $live['ssid'] : ($info['SSID'] ?? null),
@@ -11594,6 +11622,13 @@ private function applyDeviceUiLiveProductToNodeConfig(array $config, array $live
     ], static function ($value) {
         return $value !== '';
     }));
+    // Force display identity even when a prior nickname was merged in.
+    $info['name'] = $displayModelName !== '' ? $displayModelName : ($modelNumber !== '' ? $modelNumber : $modelno);
+    $info['product'] = $info['name'];
+    $info['model'] = $modelNumber !== '' ? $modelNumber : $modelno;
+    if ($brandName !== '') {
+        $info['brand'] = $brandName;
+    }
     if (($live['sim_based'] ?? 'false') === 'true') {
         $info['SIM_Activation_Request'] = $live['SIM_Activation_Request'];
     }
@@ -11680,11 +11715,12 @@ private function applyDeviceUiNodeIdentity(array $config, $modelno, $nodeId)
     $config['devices'][0] = $device;
 
     $info = isset($config['info']) && is_array($config['info']) ? $config['info'] : [];
-    unset($info['product'], $info['brand']);
     $config['info'] = array_merge([
         'fw_version' => null,
         'model' => $modelno,
         'name' => $info['name'] ?? $modelno,
+        'product' => $info['product'] ?? ($info['name'] ?? $modelno),
+        'brand' => $info['brand'] ?? null,
         'type' => 'IOT',
         'product_type' => 'IOT',
         'SSID' => $info['SSID'] ?? null,

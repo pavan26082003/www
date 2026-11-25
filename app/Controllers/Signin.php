@@ -74,7 +74,8 @@ class Signin extends App_Controller {
         $path = $this->stripIndexPhpPrefixes($path);
 
         $check = strtolower(explode('?', $path, 2)[0]);
-        if (!preg_match('#^(grid|grid-chat)(/|$)#', $check)) {
+        // Grid / Grid-chat / Explore (dashboard/applications) webview return paths.
+        if (!preg_match('#^(grid|grid-chat|dashboard/applications)(/|$)#', $check)) {
             return null;
         }
 
@@ -323,13 +324,14 @@ function authenticate() {
         app_redirect($this->buildSigninReturnUrl($posted_redirect));
     }
 
-    // Grid / Grid-chat webview handoff: always prefer the safe relative app path.
-    $gridPath = $this->resolveGridAppRedirectPath($posted_redirect);
-    if ($gridPath === null && isset($_REQUEST['redirect'])) {
-        $gridPath = $this->resolveGridAppRedirectPath((string) $_REQUEST['redirect']);
+    // Grid / Grid-chat / Explore (dashboard/applications) webview handoff.
+    // Prefer the broader SSO return allow-list so Explore does not drop to a blank login loop.
+    $returnPath = $this->resolveAppSsoReturnPath($posted_redirect);
+    if ($returnPath === null && isset($_REQUEST['redirect'])) {
+        $returnPath = $this->resolveAppSsoReturnPath((string) $_REQUEST['redirect']);
     }
-    if ($gridPath !== null) {
-        app_redirect($gridPath);
+    if ($returnPath !== null) {
+        app_redirect($returnPath);
     }
 
     // Non-grid redirect (legacy): only allow same-app relative paths.

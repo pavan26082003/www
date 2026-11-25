@@ -283,7 +283,7 @@ $default_ui_theme = [
     'buttonTarget' => 'save',
     'brandVisible' => '1',
     'heroVisible' => '0',
-    'footerVisible' => '1',
+    'footerVisible' => '0',
     'pageNavigatorVisible' => '1',
     'nameCardVisible' => '0',
     'deviceMode' => 'mobile',
@@ -17277,7 +17277,10 @@ if (!function_exists('view_ui_icon')) {
             kicker: sliderVisual.label,
             container: {
               visible: true,
-              backgroundColor: '#F8FAFC',
+              // Theme-aware shell — never force light #F8FAFC on dark previews/apps.
+              backgroundColor: (sliderVisual.background && String(sliderVisual.background).indexOf('linear-gradient') === -1)
+                ? sliderVisual.background
+                : (isStudioDarkTheme() ? 'transparent' : '#F8FAFC'),
               borderColor: 'transparent',
               borderWidth: 0,
               borderRadius: 16,
@@ -18711,14 +18714,15 @@ if (!function_exists('view_ui_icon')) {
               if (variantConfig.variant === 'timer' || sliderCatalogType === 'autoTriggerTimer') {
                 Object.assign(controlRecord.component.props, buildTimerSliderLabelStyleProps());
               }
-              // Drop switch-like leftovers that survived a prior Get Status projection.
-              delete controlRecord.component.props.activeTrackColor;
-              delete controlRecord.component.props.inactiveTrackColor;
-              delete controlRecord.component.props.activeThumbColor;
-              delete controlRecord.component.props.inactiveThumbColor;
+              // Drop switch-only leftovers. Keep slider track colors / thumb colors.
               delete controlRecord.component.props.checked;
               delete controlRecord.component.props.trueValues;
               delete controlRecord.component.props.falseValues;
+              if (controlRecord.component.props.activeThumbColor != null && controlRecord.component.props.thumbColor == null) {
+                // Only strip switch thumb aliases when a slider thumbColor is absent.
+                delete controlRecord.component.props.activeThumbColor;
+                delete controlRecord.component.props.inactiveThumbColor;
+              }
             }
           }
 
@@ -19435,6 +19439,43 @@ if (!function_exists('view_ui_icon')) {
       });
     }
 
+    function looksLikeNodeNickname(value) {
+      const text = String(value || '').trim();
+      if (!text) return false;
+      if (modelNo && String(modelNo).toLowerCase() === text.toLowerCase()) return false;
+      if (/^(mirror|node|device|gw|gateway)[_-]/i.test(text)) return true;
+      if (/^[a-z]+_[A-F0-9]{4,}$/i.test(text)) return true;
+      if (/^(fan|light|bulb|switch|plug|sensor|mirror|gateway|hub|camera|lock)$/i.test(text)) return true;
+      return false;
+    }
+
+    function resolveDisplayModelName() {
+      const info = (deviceUiInfo && deviceUiInfo.info && typeof deviceUiInfo.info === 'object')
+        ? deviceUiInfo.info
+        : {};
+      const configInfo = (deviceUiInfo && deviceUiInfo.deviceConfig && deviceUiInfo.deviceConfig.info
+        && typeof deviceUiInfo.deviceConfig.info === 'object')
+        ? deviceUiInfo.deviceConfig.info
+        : {};
+      const candidates = [
+        info.product,
+        info.product_name,
+        configInfo.product,
+        configInfo.product_name,
+        info.name,
+        configInfo.name,
+        info.model,
+        configInfo.model,
+        modelNo
+      ];
+      for (let i = 0; i < candidates.length; i++) {
+        const value = String(candidates[i] == null ? '' : candidates[i]).trim();
+        if (!value || looksLikeNodeNickname(value)) continue;
+        return value;
+      }
+      return modelNo || 'Linked UI';
+    }
+
     function firstPresent() {
       for (let index = 0; index < arguments.length; index += 1) {
         const value = arguments[index];
@@ -19498,7 +19539,8 @@ if (!function_exists('view_ui_icon')) {
 
       return {
         deviceId: firstPresent(node.node_id, node.id, config.node_id, device['Device Id'], attributes['device id'], modelNo),
-        name: firstPresent(info.name, device.name, info.product, info.product_name, modelNo),
+        // Prefer catalog product/model identity — never live nicknames on device.name.
+        name: firstPresent(info.product, info.product_name, info.name, info.model, modelNo, device.name),
         type: firstPresent(info.type, info.product_type, device.type, info.model, attributes.model, 'Gateway'),
         network: firstPresent(info.SSID, info.ssid, info.Access_Point, info.access_point, attributes.model, 'Efactor'),
         firmware: firstPresent(info.fw_version, info.firmware_version, info.version, responseData && responseData.version, '—'),
@@ -26245,7 +26287,7 @@ if (!function_exists('view_ui_icon')) {
       const radius = n(currentTheme.borderRadius, 18);
       const borderWidth = n(currentTheme.borderSize, 1);
       const shadowAlpha = Math.max(0, Math.min(100, n(currentTheme.shadowStrength, 70))) / 1000;
-      const modelTitle = modelNo || 'Linked UI';
+      const modelTitle = resolveDisplayModelName() || modelNo || 'Linked UI';
       const linkedPagesText = pageData.length + ' linked page' + (pageData.length === 1 ? '' : 's');
 
       const controlsBundle = buildControlsSchema();
@@ -26483,7 +26525,8 @@ if (!function_exists('view_ui_icon')) {
       const buttonLabel = currentTheme.buttonText || 'Save Changes';
       const buttonHeight = n(currentTheme.buttonSize, 44);
       const buttonRadius = n(currentTheme.buttonRadius, 16);
-      const includeFooterSaveButton = previewIncludesFooterSaveButton() && String(currentTheme.footerVisible) !== '0';
+      // Foundation: controls commit immediately — never ship a footer Save Changes button.
+      const includeFooterSaveButton = false;
       const headerChrome = headerChromeFromTheme(currentTheme);
 
       const phoneShellColumnChildren = [
@@ -26584,7 +26627,9 @@ if (!function_exists('view_ui_icon')) {
                 borderRadius: 6
               }, []),
               node('column', 'brand_copy', { width: 'expanded', crossAxisAlignment: 'start', spacing: 2 }, {}, [
-                textNode('brand_model', modelTitle, textStyle(14, 900, currentTheme.textColor, 1.2), 1),
+                textNode('brand_model', modelTitle, textStyle(14, 900, currentTheme.textColor, 1.2), 1, {
+                  textBinding: 'state.displayModelName'
+                }),
                 textNode('brand_pages', linkedPagesText, textStyle(11, 700, currentTheme.mutedTextColor, 1.2), 1)
               ]),
               node('row', 'online_state', { spacing: 7, visibility: bool(currentTheme.showStatus) }, {}, [
@@ -27034,6 +27079,22 @@ if (!function_exists('view_ui_icon')) {
           wifiProvisioning: wifiProvisioning.state,
           online: getDeviceConnectivityState().online,
           onlineLabel: getDeviceConnectivityState().label,
+          displayModelName: modelTitle,
+          getStatusResponse: (function() {
+            const seeded = {};
+            (controlsBundle.controls || []).forEach(function(control) {
+              if (!control || !isGetStatusParameter(control.parameterName || control.parameter || control.label)) {
+                return;
+              }
+              const binding = getStatusRevealBinding(control);
+              const parts = String(binding || '').split('.');
+              // state.getStatusResponse.{slug}.open
+              if (parts.length >= 4) {
+                seeded[parts[2]] = { open: false };
+              }
+            });
+            return seeded;
+          })(),
           deviceConnectivity: {
             online: getDeviceConnectivityState().online,
             label: getDeviceConnectivityState().label,
@@ -27061,6 +27122,10 @@ if (!function_exists('view_ui_icon')) {
             pageNavigatorVisible: bool(currentTheme.pageNavigatorVisible),
             showHeaderIcons: bool(currentTheme.showHeaderIcons),
             showStatus: bool(currentTheme.showStatus)
+          },
+          interaction: {
+            commitMode: 'immediate',
+            autoSave: true
           },
           layout: {
             headerHeight: n(currentTheme.headerHeight, 72),
@@ -27259,6 +27324,7 @@ if (!function_exists('view_ui_icon')) {
             return {
               visible: bool(currentTheme.brandVisible),
               modelNo: modelNo,
+              displayModelName: modelTitle,
               showStatus: bool(currentTheme.showStatus),
               statusText: getDeviceConnectivityState().label,
               logoUrl: brandThemeDark ? brandDarkUrl : brandLightUrl,
@@ -27312,11 +27378,81 @@ if (!function_exists('view_ui_icon')) {
     };
 
     function markSchemaDirty() {
-      // Mark dirty only. Do not auto-rebuild the full Flutter schema on every UI tweak —
-      // that freezes Studio. Rebuild happens on Save / Skema / Copy / explicit generate.
+      // Mark dirty for cache invalidation, then debounce an auto-persist so Flutter
+      // receives Studio edits without requiring a manual Save Changes click.
       schemaCache.dirty = true;
       schemaCache.pretty = '';
       schemaCache.compact = '';
+      scheduleAutoSaveSchema();
+    }
+
+    let autoSaveSchemaTimer = null;
+    let autoSaveInFlight = false;
+    let autoSaveQueued = false;
+
+    function scheduleAutoSaveSchema() {
+      if (!modelNo || !saveThemeUrl) return;
+      window.clearTimeout(autoSaveSchemaTimer);
+      autoSaveSchemaTimer = window.setTimeout(function() {
+        runAutoSaveSchema();
+      }, 1600);
+    }
+
+    function runAutoSaveSchema() {
+      if (autoSaveInFlight) {
+        autoSaveQueued = true;
+        return;
+      }
+      autoSaveInFlight = true;
+      afterStudioPaint(function() {
+        let schema = null;
+        try {
+          schema = generateSchema({ forSave: true, force: true });
+        } catch (error) {
+          autoSaveInFlight = false;
+          setStudioStatus(error && error.message ? ('Auto-save failed: ' + error.message) : 'Auto-save failed.');
+          return;
+        }
+        if (!schema) {
+          autoSaveInFlight = false;
+          setStudioStatus('Auto-save skipped — schema generation failed.');
+          return;
+        }
+        const formData = new FormData();
+        formData.append('modelno', modelNo);
+        formData.append('theme_json', JSON.stringify(buildThemePayloadForSave()));
+        formData.append('schema_json', stringifySchemaSafe(schemaPayloadForSave(schema)));
+        formData.append('auto_save', '1');
+        setStudioStatus('Auto-saving…');
+        fetch(saveThemeUrl, {
+          method: 'POST',
+          body: formData,
+          credentials: 'same-origin',
+          redirect: 'manual',
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+        .then(parseSaveResponse)
+        .then(function(result) {
+          const saved = result.success === true || result.success === 1 || result.success === '1';
+          setStudioStatus(result.message || (saved ? 'Auto-saved.' : 'Auto-save failed.'));
+          if (saved) {
+            schemaCache.dirty = false;
+          }
+        })
+        .catch(function(error) {
+          setStudioStatus(error && error.message ? error.message : 'Auto-save failed. Please try again.');
+        })
+        .finally(function() {
+          autoSaveInFlight = false;
+          if (autoSaveQueued) {
+            autoSaveQueued = false;
+            scheduleAutoSaveSchema();
+          }
+        });
+      });
     }
 
     function stringifySchemaSafe(value, pretty) {

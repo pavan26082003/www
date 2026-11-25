@@ -78,7 +78,8 @@
     'fa-robot': 'devices',
     'fa-puzzle-piece': 'grid',
     'fa-cubes': 'grid',
-    'fa-layer-group': 'grid',
+    'fa-layer-group': 'layers',
+    'fa-layers': 'layers',
     'fa-bullseye': 'cube',
     'fa-leaf': 'bolt',
     'fa-sun': 'bolt',
@@ -161,7 +162,8 @@
     'chevron-right': 'chevronRight',
     appearance: 'moon',
     category: 'list',
-    help: 'circleQuestion'
+    help: 'circleQuestion',
+    layers: 'layers'
   };
 
   var WEB_ICON_NAMES = {
@@ -207,12 +209,14 @@
     'chevron-right': 'chevron-right',
     appearance: 'moon',
     category: 'list',
-    help: 'circle-question'
+    help: 'circle-question',
+    layers: 'layer-group'
   };
 
   var BOTTOM_NAV_CONTRACTS = {
     home: { routeId: 'home', actionId: 'navigate-home' },
     devices: { routeId: 'devices', actionId: 'navigate-devices' },
+    applications: { routeId: 'applications', actionId: 'navigate-applications' },
     category: { routeId: 'category', actionId: 'navigate-category' },
     grid: { routeId: 'grid', actionId: 'navigate-grid' },
     alerts: { routeId: 'alerts', actionId: 'navigate-alerts' },
@@ -224,23 +228,25 @@
   };
 
   /**
-   * The bottom navigation is the same four slots for every user: Home, IoT, Grid, Profile.
-   * Slot 3 is not configurable. Older saved layouts that stored Alerts (or Reports, Rooms, …)
-   * in that slot are ignored.
+   * Bottom navigation is the same five slots for every user:
+   * Home, IoT, Explore (elevated center → applications), Grid, Profile.
+   * Older saved layouts that stored Alerts/Reports/Rooms in a mid slot are ignored.
+   * Slot ids / actionIds stay unchanged (applications / navigate-applications).
    */
   var BOTTOM_NAV_SLOTS = [
     { slot: 'home', fixed: true, id: 'home', label: 'Home', iconToken: 'home' },
     { slot: 'iot', fixed: true, id: 'devices', label: 'IoT', iconToken: 'devices' },
+    { slot: 'applications', fixed: true, id: 'applications', label: 'Explore', iconToken: 'layers', elevated: true, hideLabel: false },
     { slot: 'grid', fixed: true, id: 'grid', label: 'Grid', iconToken: 'grid' },
     { slot: 'profile', fixed: true, id: 'profile', label: 'Profile', iconToken: 'profile' }
   ];
 
-  /** Third tab is always Grid. */
+  /** Grid remains the legacy category-slot default (not Applications). */
   var BOTTOM_NAV_CATEGORY_DEFAULT = 'grid';
 
   /**
    * Legacy destination labels. The published bottom nav does not read this map;
-   * slot 3 is always Grid.
+   * Applications is a fixed elevated center slot; Grid stays its own fixed slot.
    */
   var BOTTOM_NAV_CATEGORY_TARGETS = {
     grid: { label: 'Grid', iconToken: 'grid' },
@@ -251,12 +257,12 @@
     rooms: { label: 'Rooms', iconToken: 'rooms' }
   };
 
-  /** Third slot is always Grid. Saved per-user targets such as "alerts" are ignored. */
+  /** Legacy category slot always resolves to Grid. Saved per-user targets are ignored. */
   function resolveCategorySlotTarget() {
     return BOTTOM_NAV_CATEGORY_DEFAULT;
   }
 
-  /** Write Home / IoT / Grid / Profile onto the layout so snapshots match the nav contract. */
+  /** Write Home / IoT / Explore / Grid / Profile onto the layout so snapshots match the nav contract. */
   function applySharedBottomNav(layout) {
     layout = layout || {};
     var active = String(layout.activePage || 'home').trim().toLowerCase();
@@ -266,6 +272,7 @@
     layout.bottomNav = [
       { id: 'home', icon: 'fa-home', label: 'Home', active: active === 'home' },
       { id: 'devices', icon: 'fa-th', label: 'IoT', active: active === 'devices' },
+      { id: 'applications', icon: 'fa-layer-group', label: 'Explore', active: false, elevated: true },
       { id: 'grid', icon: 'fa-border-all', label: 'Grid', active: active === 'grid' },
       { id: 'profile', icon: 'fa-user', label: 'Profile', active: active === 'profile' }
     ];
@@ -276,6 +283,7 @@
   var NAV_ACTIONS = {
     home: 'navigate-home',
     devices: 'navigate-devices',
+    applications: 'navigate-applications',
     alerts: 'navigate-alerts',
     reports: 'navigate-reports',
     explore: 'navigate-reports',
@@ -284,9 +292,9 @@
   };
 
   /**
-   * Build the canonical four-slot bottom navigation. Home, IoT, Grid and Profile are
-   * fixed for every user. Labels and icons come from the slot contract, not from a
-   * saved per-user bottomNav, so every template publishes the same navigation.
+   * Build the canonical five-slot bottom navigation. Home, IoT, Applications, Grid and
+   * Profile are fixed for every user. Labels and icons come from the slot contract, not
+   * from a saved per-user bottomNav, so every template publishes the same navigation.
    */
   function buildBottomNavigationItems(layout, usedIcons, actionRegistry, routes, pages) {
     layout = layout || {};
@@ -307,7 +315,7 @@
       }
 
       usedIcons[defaults.iconToken] = true;
-      items.push({
+      var item = {
         id: 'nav-' + id,
         slot: slot.slot,
         fixed: !!slot.fixed,
@@ -315,7 +323,32 @@
         iconToken: defaults.iconToken,
         routeId: contract.routeId,
         actionId: contract.actionId
-      });
+      };
+      // Additive optional flags for the elevated Explore center button (existing item keys).
+      // Flutter must honor elevated + appearance to draw the large blue circle FAB.
+      if (defaults.elevated) {
+        item.elevated = true;
+        item.variant = 'elevated';
+        item.style = 'elevatedCenter';
+        item.hideLabel = defaults.hideLabel === true;
+        item.appearance = {
+          backgroundColor: '#2563eb',
+          backgroundColorLight: '#2563eb',
+          backgroundColorDark: '#2563eb',
+          iconColor: '#ffffff',
+          iconColorLight: '#ffffff',
+          iconColorDark: '#ffffff',
+          labelColor: '#2563eb',
+          size: 'large',
+          iconSize: 28,
+          diameter: 58,
+          elevated: true,
+          shape: 'circle'
+        };
+      } else if (defaults.hideLabel) {
+        item.hideLabel = true;
+      }
+      items.push(item);
     });
 
     return items;
@@ -2257,7 +2290,7 @@
   }
 
   var NAV_CHROME_BOTTOM = 136;
-  var TAB_ROUTE_IDS = ['home', 'devices', 'grid', 'profile', 'category', 'alerts', 'reports', 'rooms'];
+  var TAB_ROUTE_IDS = ['home', 'devices', 'applications', 'grid', 'profile', 'category', 'alerts', 'reports', 'rooms'];
 
   function buildBottomNavAppearance(theme) {
     theme = theme || {};
@@ -3616,9 +3649,20 @@
       });
     });
 
+    var applicationsOpenUrl = (function () {
+      // AppWebEntry SSO handoff → lands on dashboard/applications (same as Grid handoff).
+      var action = gridOpenUrlAction('https://efactor.tech/index.php/app-web-entry/open?to=applications');
+      action.title = 'Explore';
+      if (action.destination) action.destination.title = 'Explore';
+      return action;
+    })();
+
     var actionRegistry = {
       'navigate-home': { type: 'navigate', destination: { routeId: 'home' } },
       'navigate-devices': { type: 'host-action', actionId: 'open-iot' },
+      // Explore center icon → existing Applications web page (SSO refreshed server-side).
+      'navigate-applications': applicationsOpenUrl,
+      'open-applications': applicationsOpenUrl,
       'navigate-category': { type: 'navigate', destination: { routeId: 'category' } },
       'navigate-grid': { type: 'navigate', destination: { routeId: 'grid' } },
       'navigate-alerts': { type: 'navigate', destination: { routeId: 'alerts' } },
@@ -3836,7 +3880,14 @@
       persistAcrossRoutes: true,
       position: 'fixed',
       outsideScroll: true,
-      appearance: buildBottomNavAppearance(theme)
+      // Additive hints for hosts that elevate the Explore center item.
+      elevatedItemId: 'nav-applications',
+      centerItemId: 'nav-applications',
+      appearance: Object.assign({}, buildBottomNavAppearance(theme), {
+        elevatedItemBackgroundColor: '#2563eb',
+        elevatedItemIconColor: '#ffffff',
+        elevatedItemDiameter: 58
+      })
     };
 
     components['home-page'] = {
@@ -4075,13 +4126,14 @@
       emptyStateComponentId: 'alerts-empty'
     };
 
-    ['reports', 'rooms', 'add-device', 'grid-details', 'hrms'].forEach(function (pageKey) {
+    ['reports', 'rooms', 'add-device', 'grid-details', 'hrms', 'applications'].forEach(function (pageKey) {
       var titles = {
         reports: ['Reports', 'Usage, performance and activity reports'],
         rooms: ['Rooms', 'Organize and control devices by room'],
         'add-device': ['Add Device', 'Connect a device using QR, Wi-Fi or Bluetooth'],
         'grid-details': ['eFactor Grid', 'Share and connect'],
-        hrms: ['HRMS', 'Employees, attendance and payroll']
+        hrms: ['HRMS', 'Employees, attendance and payroll'],
+        applications: ['Explore', 'Open your eFactor applications']
       };
       var t = titles[pageKey] || [pageKey, ''];
       components[pageKey + '-page'] = {
@@ -4184,6 +4236,7 @@
     var routes = {
       home: { path: '/home', pageId: 'home' },
       devices: { path: '/devices', pageId: 'devices' },
+      applications: { path: '/applications', pageId: 'applications' },
       category: { path: '/category', pageId: 'category' },
       grid: { path: '/grid', pageId: 'grid' },
       alerts: { path: '/alerts', pageId: 'alerts' },
@@ -4225,6 +4278,7 @@
     var pages = {
       home: { id: 'home', routeId: 'home', rootComponentId: 'home-page', presentationStates: { loadingComponentId: 'home-loading', errorComponentId: 'home-error', offlineComponentId: 'offline-banner' } },
       devices: { id: 'devices', routeId: 'devices', rootComponentId: 'devices-page', presentationStates: { loadingComponentId: 'devices-loading', emptyComponentId: 'devices-empty', errorComponentId: 'devices-error', offlineComponentId: 'offline-banner' } },
+      applications: { id: 'applications', routeId: 'applications', rootComponentId: 'applications-page', presentationStates: { offlineComponentId: 'offline-banner' } },
       category: {
         id: 'category',
         routeId: 'category',
@@ -4275,6 +4329,7 @@
     usedIcons.refresh = true;
     usedIcons.home = true;
     usedIcons.devices = true;
+    usedIcons.layers = true;
     usedIcons.alerts = true;
     usedIcons.reports = true;
     usedIcons.rooms = true;
@@ -5618,6 +5673,8 @@
           'devices.detailsSubtitle': 'Monitor and control this device',
           'navigation.home': 'Home',
           'navigation.devices': 'Devices',
+          'navigation.applications': 'Explore',
+          'navigation.grid': 'Grid',
           'navigation.alerts': 'Alerts',
           'navigation.reports': 'Reports',
           'navigation.rooms': 'Rooms',
@@ -5680,6 +5737,8 @@
           'home.liveAlerts': 'Live Alerts',
           'navigation.home': 'Home',
           'navigation.devices': 'Devices',
+          'navigation.applications': 'Explore',
+          'navigation.grid': 'Grid',
           'navigation.alerts': 'Alerts',
           'navigation.reports': 'Reports',
           'navigation.rooms': 'Rooms',
@@ -6188,6 +6247,53 @@
     return '/index.php/app-home-page/rating';
   }
 
+  /**
+   * Explore center icon URL. Prefers server cfg (AppWebEntry + grid_sso).
+   * Final destination after handoff is dashboard/applications.
+   */
+  function resolveApplicationsPageUrl(cfg) {
+    cfg = cfg || {};
+    var url = String(cfg.applicationsPageUrl || '').trim();
+    if (url && /^https?:\/\//i.test(url) && (
+      url.indexOf('dashboard/applications') !== -1
+      || url.indexOf('app-web-entry') !== -1
+      || /[?&]to=(applications|explore)\b/i.test(url)
+    )) {
+      return url;
+    }
+    return 'https://efactor.tech/index.php/app-web-entry/open?to=applications';
+  }
+
+  function applicationsOpenUrlAction(cfg) {
+    var url = resolveApplicationsPageUrl(cfg);
+    var webView = {
+      javaScriptEnabled: true,
+      sharedCookies: true,
+      clearCache: false,
+      showAppBar: false,
+      showToolbar: false,
+      hideAppBar: true,
+      displayMode: 'fullscreen'
+    };
+    return {
+      type: 'open-url',
+      url: url,
+      route: url,
+      title: 'Explore',
+      openIn: 'inAppWebView',
+      webView: webView,
+      destination: {
+        url: url,
+        openIn: 'inAppWebView',
+        title: 'Explore',
+        sharedCookies: true,
+        showAppBar: false,
+        showToolbar: false,
+        hideAppBar: true
+      }
+    };
+  }
+
   function buildScopedState(layout, cfg) {
     var theme = (layout && layout.theme) || {};
     cfg = cfg || {};
@@ -6420,6 +6526,9 @@
     out['open-grid'] = { type: 'host-action', actionId: 'open-grid' };
     out['open-grid-module'] = { type: 'navigate', destination: { routeId: 'grid' } };
     out['navigate-grid'] = { type: 'navigate', destination: { routeId: 'grid' } };
+    // Explore center icon → AppWebEntry SSO → dashboard/applications (in-app WebView).
+    out['navigate-applications'] = applicationsOpenUrlAction(cfg);
+    out['open-applications'] = out['navigate-applications'];
 
     out['profile-edit'] = { type: 'navigate', destination: { routeId: 'profile-edit' } };
     // Same open-url WebView shape as Rating — avatar tap opens the photo sheet in-app.
@@ -7774,6 +7883,8 @@
 
     actionRegistry['navigate-devices'] = { type: 'host-action', actionId: 'open-iot' };
     actionRegistry['open-iot-app'] = { type: 'host-action', actionId: 'open-iot' };
+    actionRegistry['navigate-applications'] = applicationsOpenUrlAction(cfg);
+    actionRegistry['open-applications'] = actionRegistry['navigate-applications'];
 
     var assets = ensureSchemaAssets(base.assets || {}, layout, cfg);
     var allowedAssetDomains = buildAllowedAssetDomains(assets, cfg);

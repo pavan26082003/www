@@ -7,11 +7,13 @@
 
   /**
    * The bottom navigation is identical for every user and every template:
-   * Home, IoT, Grid, Profile. Templates must not restyle, reorder, or replace Grid.
+   * Home, IoT, Explore (elevated center), Grid, Profile.
+   * Templates must not restyle, reorder, or replace these slots.
    */
   var CANONICAL_BOTTOM_NAV = [
     { id: 'home', icon: 'fa-home', label: 'Home', active: true },
     { id: 'devices', icon: 'fa-th', label: 'IoT', active: false },
+    { id: 'applications', icon: 'fa-layer-group', label: 'Explore', active: false, elevated: true },
     { id: 'grid', icon: 'fa-border-all', label: 'Grid', active: false },
     { id: 'profile', icon: 'fa-user', label: 'Profile', active: false }
   ];

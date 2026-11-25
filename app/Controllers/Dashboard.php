@@ -1158,6 +1158,17 @@ public function user_verification() {
     return view('dashboards/user_verification');
 }
 
+/**
+ * Explore center icon destination: /dashboard/applications
+ * Opened from the SDUI open-url WebView after AppWebEntry SSO handoff.
+ * Reuses the existing authenticated dashboard UI — no duplicate layout.
+ * Session comes from Security_Controller (including optional ?grid_sso=).
+ */
+public function applications()
+{
+    return $this->index();
+}
+
 public function openNas()
 {
     /*
